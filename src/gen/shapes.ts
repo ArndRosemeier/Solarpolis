@@ -148,3 +148,29 @@ export class Shape {
     };
   }
 }
+
+/**
+ * An icosphere: the icosahedron's 20 faces split `subdivisions` times (20 · 4ⁿ triangles), its points on the unit
+ * sphere, faces counter-clockwise seen from outside. Neighbouring faces share their points.
+ */
+export function icosphere(subdivisions: number): { verts: Vec3[]; faces: [number, number, number][] } {
+  const t = (1 + Math.sqrt(5)) / 2;
+  const unit = (x: number, y: number, z: number): Vec3 => { const l = Math.hypot(x, y, z); return [x / l, y / l, z / l]; };
+  const verts: Vec3[] = [[-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0], [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t], [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]].map(([x, y, z]) => unit(x, y, z));
+  let faces: [number, number, number][] = [[0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11], [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8], [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9], [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]];
+  for (let n = 0; n < subdivisions; n++) {
+    const mid = new Map<number, number>();
+    const half = (a: number, b: number): number => {
+      const k = a < b ? a * 65536 + b : b * 65536 + a;
+      let i = mid.get(k);
+      if (i === undefined) {
+        i = verts.length;
+        verts.push(unit(verts[a][0] + verts[b][0], verts[a][1] + verts[b][1], verts[a][2] + verts[b][2]));
+        mid.set(k, i);
+      }
+      return i;
+    };
+    faces = faces.flatMap(([a, b, c]) => { const ab = half(a, b), bc = half(b, c), ca = half(c, a); return [[a, ab, ca], [b, bc, ab], [c, ca, bc], [ab, bc, ca]] as [number, number, number][]; });
+  }
+  return { verts, faces };
+}

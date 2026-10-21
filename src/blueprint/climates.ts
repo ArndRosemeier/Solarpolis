@@ -41,6 +41,30 @@ export type FloorLayer = (typeof FLOOR_LAYERS)[number];
 export const COVER_FORMS = ['grass', 'dry-grass'] as const;
 export type CoverForm = (typeof COVER_FORMS)[number];
 
+/** The things that lie on the ground (`gen/stones.ts`, `buildFallenWood` in `gen/trees.ts`). */
+export const DEBRIS_FORMS = ['stone', 'log', 'branch'] as const;
+export type DebrisForm = (typeof DEBRIS_FORMS)[number];
+
+/**
+ * Things lying on the ground: stones where the ground is gravel, rock or bare earth, fallen trunks and branches on the
+ * floor of woods, as many as their floor layer's share of the ground. Seen as far as their size allows (not just near
+ * the eye, like cover): a boulder from kilometres, a pebble from a few metres.
+ */
+export interface DebrisSpec {
+  name: string;
+  form: DebrisForm;
+  /** The floor layer it lies on. */
+  on: FloorLayer;
+  /** Size range (m): a stone's height above the ground, a trunk's or branch's length. */
+  height: readonly [number, number];
+  /** Distance between neighbours where the layer covers the ground whole (m). */
+  spacing: number;
+  /** Fallen wood: the tree it fell from (its bark and girth). */
+  wood?: PlantForm;
+  /** Stones: how much moss grows on their tops (0 … 1). Their colour is the climate's rock. */
+  moss?: number;
+}
+
 /**
  * Ground cover: small plants that grow wherever their floor layer does, as densely as the layer's share of the ground
  * there (the meadow's grass, the heath's tussocks; a few tufts where grass shows between the leaves of a wood). Drawn
@@ -93,6 +117,8 @@ export interface Climate {
   edges: number;
   /** Ground cover over the biomes' floors. */
   cover: readonly CoverSpec[];
+  /** What lies on the ground: stones, fallen wood. */
+  debris: readonly DebrisSpec[];
   /** Bare ground: rock on steep slopes, sand at the waterline, the lake's bed. */
   rock: Rgb;
   shore: Rgb;
@@ -117,6 +143,16 @@ export const CLIMATES: Readonly<Record<string, Climate>> = {
       { name: 'meadow grass', form: 'grass', on: 'grass', height: [0.25, 0.55], spacing: 0.4, color: [0.16, 0.31, 0.08] },
       { name: 'heath tussocks', form: 'dry-grass', on: 'dry grass', height: [0.2, 0.45], spacing: 0.5, color: [0.27, 0.23, 0.11] },
     ],
+    debris: [
+      { name: 'pebbles', form: 'stone', on: 'gravel', height: [0.04, 0.14], spacing: 0.9, moss: 0.1 },
+      { name: 'field stones', form: 'stone', on: 'dirt', height: [0.08, 0.3], spacing: 5, moss: 0.3 },
+      { name: 'stones', form: 'stone', on: 'rock', height: [0.15, 0.6], spacing: 2.5, moss: 0.35 },
+      { name: 'boulders', form: 'stone', on: 'rock', height: [0.8, 2.4], spacing: 11, moss: 0.45 },
+      { name: 'fallen oaks', form: 'log', wood: 'oak', on: 'litter', height: [4, 10], spacing: 26 },
+      { name: 'oak branches', form: 'branch', wood: 'oak', on: 'litter', height: [1.2, 3.5], spacing: 7 },
+      { name: 'fallen pines', form: 'log', wood: 'pine', on: 'needles', height: [6, 14], spacing: 30 },
+      { name: 'pine branches', form: 'branch', wood: 'pine', on: 'needles', height: [1, 2.5], spacing: 8 },
+    ],
     rock: [0.28, 0.26, 0.22],
     shore: [0.42, 0.38, 0.27],
     bed: [0.18, 0.2, 0.16],
@@ -136,6 +172,15 @@ export const CLIMATES: Readonly<Record<string, Climate>> = {
     ],
     cover: [
       { name: 'dry grass', form: 'dry-grass', on: 'dry grass', height: [0.25, 0.6], spacing: 0.45, color: [0.34, 0.28, 0.11] },
+    ],
+    debris: [
+      { name: 'pebbles', form: 'stone', on: 'gravel', height: [0.04, 0.16], spacing: 0.7, moss: 0 },
+      { name: 'field stones', form: 'stone', on: 'dirt', height: [0.08, 0.35], spacing: 3.5, moss: 0.05 },
+      { name: 'stones', form: 'stone', on: 'rock', height: [0.15, 0.7], spacing: 2, moss: 0.05 },
+      { name: 'boulders', form: 'stone', on: 'rock', height: [0.8, 2.8], spacing: 9, moss: 0.08 },
+      { name: 'holm oak branches', form: 'branch', wood: 'holm-oak', on: 'litter', height: [1, 3], spacing: 8 },
+      { name: 'fallen pines', form: 'log', wood: 'stone-pine', on: 'needles', height: [5, 11], spacing: 34 },
+      { name: 'pine branches', form: 'branch', wood: 'stone-pine', on: 'needles', height: [1, 2.5], spacing: 9 },
     ],
     rock: [0.36, 0.32, 0.26],
     shore: [0.5, 0.45, 0.33],

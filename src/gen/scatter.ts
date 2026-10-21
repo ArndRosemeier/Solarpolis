@@ -15,9 +15,13 @@
  * Ground cover (the climate's `cover`: grass tufts) is planted the same way, but where its floor layer is, as densely
  * as the layer's share of the ground (`coverChance`), and drawn at the first two levels only, out to `COVER_FADE`
  * metres; past them the floor's own texture is the cover.
+ *
+ * Debris (the climate's `debris`: stones, fallen trunks and branches) lies on its floor layer the same way, but is drawn
+ * at all three levels, seen as far as its size makes it more than a pixel or two (`debrisUnit`). It lies along the
+ * ground: each one carries the ground's slope under it, which its kind shears it by.
  */
 import { hash3f, deriveSeed } from '@futuremagic/core';
-import { FLOOR_LAYERS, fromWorld, toWorld, wrapAngle, type CoverSpec, type PlantSpec, type Vec3 } from '../blueprint';
+import { FLOOR_LAYERS, fromWorld, toWorld, wrapAngle, type CoverSpec, type DebrisSpec, type PlantSpec, type Vec3 } from '../blueprint';
 import { TREE_HEIGHT, type Ecology } from './ecology';
 import { horizonAt } from './horizon';
 import { bytesOf } from './shapes';
@@ -47,6 +51,14 @@ export const COVER_GRID = 2;
 
 /** A plant's sight unit (m): its greatest height, but never less than a small tree's, so shrubs are seen too. */
 export const unit = (spec: PlantSpec): number => Math.max(spec.height[1], 6);
+
+/** How thick a piece of debris is for its size: a stone is as thick as it is high; trunks and branches are long and thin. */
+export const DEBRIS_GIRTH = { stone: 1, log: 0.1, branch: 0.04 } as const;
+/**
+ * Debris's sight unit (m): a dozen times its apparent size (the root of its length times its thickness), so its last
+ * level (out to 60 units) ends where it is a pixel or two across: a pebble at a hundred metres, a boulder at kilometres.
+ */
+export const debrisUnit = (spec: DebrisSpec): number => 12 * spec.height[1] * Math.sqrt(DEBRIS_GIRTH[spec.form]);
 /** Plant cells: the smallest and largest side (m). */
 const CELL_MIN = 16;
 const CELL_MAX = 512;
@@ -54,11 +66,13 @@ const CELL_MAX = 512;
 /** One plant of the climate: the biome it grows in (or the floor layer, for cover), its spec, its index in `plantsOf`. */
 export interface Species {
   id: number;
-  /** The biome it grows in; -1 for ground cover. */
+  /** The biome it grows in; -1 for ground cover and debris. */
   biome: number;
-  /** Ground cover: its floor layer's index in FLOOR_LAYERS; -1 for a biome's plant. */
+  /** Ground cover and debris: its floor layer's index in FLOOR_LAYERS; -1 for a biome's plant. */
   on: number;
-  spec: PlantSpec | CoverSpec;
+  /** What it is: a biome's plant, ground cover, or debris (which lies along the slope). */
+  what: 'plant' | 'cover' | 'debris';
+  spec: PlantSpec | CoverSpec | DebrisSpec;
   /** Per level it is drawn at (all of `LEVELS`, or the first two for cover): the side of its cells (m), and its bands (m from the eye: fade in x..y, out z..w). */
   cell: number[];
   band: [number, number, number, number][];
@@ -86,12 +100,15 @@ export function plantsOf(ecology: Ecology): Species[] {
       const u = unit(spec);
       const band = LEVELS.map((l) => l.fade.map((f) => f * u) as [number, number, number, number]);
       if (spec.height[1] >= TREE_HEIGHT) [band[LEVELS.length - 1][2], band[LEVELS.length - 1][3]] = woods;
-      out.push({ id: out.length, biome, on: -1, spec, cell: cellsFor(band), band, seen: band[LEVELS.length - 1][3] });
+      out.push({ id: out.length, biome, on: -1, what: 'plant', spec, cell: cellsFor(band), band, seen: band[LEVELS.length - 1][3] });
     }
   });
-  for (const spec of ecology.climate.cover) {
-    const band = COVER_FADE.map((f) => [...f] as [number, number, number, number]);
-    out.push({ id: out.length, biome: -1, on: FLOOR_LAYERS.indexOf(spec.on), spec, cell: cellsFor(band), band, seen: band[band.length - 1][3] });
+  const onFloor = (what: 'cover' | 'debris', spec: CoverSpec | DebrisSpec, band: [number, number, number, number][]) =>
+    out.push({ id: out.length, biome: -1, on: FLOOR_LAYERS.indexOf(spec.on), what, spec, cell: cellsFor(band), band, seen: band[band.length - 1][3] });
+  for (const spec of ecology.climate.cover) onFloor('cover', spec, COVER_FADE.map((f) => [...f] as [number, number, number, number]));
+  for (const spec of ecology.climate.debris) {
+    const u = debrisUnit(spec);
+    onFloor('debris', spec, LEVELS.map((l) => l.fade.map((f) => f * u) as [number, number, number, number]));
   }
   return out;
 }
@@ -166,7 +183,10 @@ export interface PlantCell {
   key: CellKey;
   /** World position of the cell's origin (float64). */
   origin: Vec3;
-  /** Per shape: x, y, z (relative to the origin), height (m), turn about up (radians), `PLANT_STRIDE` floats per plant. */
+  /**
+   * Per shape: x, y, z (relative to the origin), height (m), turn about up (radians), and for debris the ground's slope
+   * under it (rise per metre toward +θ and toward +z, in its upright frame; 0 for plants), `PLANT_STRIDE` floats each.
+   */
   instances: Float32Array[];
   count: number;
   /** The terrain's horizon angles at the cell's middle (`horizonAt`): the cell's plants see the sunline past them. */
@@ -174,7 +194,9 @@ export interface PlantCell {
 }
 
 /** Floats per plant in `PlantCell.instances`. */
-export const PLANT_STRIDE = 5;
+export const PLANT_STRIDE = 7;
+/** The steepest slope debris is sheared to (rise per metre); steeper ground is cliff, where it rests on a ledge. */
+const MAX_TILT = 1.5;
 
 /** Plant one cell: every lattice spot of the plant whose plant stands inside it. */
 export function plantCell(ecology: Ecology, plants: readonly Species[], k: CellKey): PlantCell {
@@ -208,7 +230,8 @@ export function plantCell(ecology: Ecology, plants: readonly Species[], k: CellK
       }
       const p = toWorld(profile, { theta: pt, s: ps, h: ground });
       const shape = Math.min(shapes - 1, Math.floor(f(5) * shapes));
-      lists[shape].push(p[0] - origin[0], p[1] - origin[1], p[2] - origin[2], spec.height[0] + (spec.height[1] - spec.height[0]) * f(3), f(4) * 2 * Math.PI);
+      const [tx, tz] = sp.what === 'debris' ? tiltAt(ecology, pt, ps, p) : [0, 0];
+      lists[shape].push(p[0] - origin[0], p[1] - origin[1], p[2] - origin[2], spec.height[0] + (spec.height[1] - spec.height[0]) * f(3), f(4) * 2 * Math.PI, tx, tz);
     }
   }
   const instances = lists.map((l) => new Float32Array(l));
@@ -250,6 +273,24 @@ export function coverChance(ecology: Ecology, layer: number): (theta: number, s:
 /** Bytes a planted cell holds (memory watchdog). */
 export function cellBytes(c: PlantCell): number {
   return bytesOf(c.instances);
+}
+
+/**
+ * The ground's slope at a ground point `p` (world) in the frame a plant stands in there (up toward the axis, x around
+ * it, z along it): how far the ground rises per metre along x and along z, half a metre either way.
+ */
+function tiltAt(ecology: Ecology, theta: number, s: number, p: Vec3): [number, number] {
+  // The frame `plantFrame` (render/materials.ts) stands a plant in: x = (up.y, −up.x, 0), z the axis.
+  const t = ecology.terrain, { profile } = t.habitat, d = 0.5;
+  const r = Math.max(Math.hypot(p[0], p[1]), 1e-6), up: Vec3 = [-p[0] / r, -p[1] / r, 0], side: Vec3 = [up[1], -up[0], 0];
+  const rise = (dir: Vec3, th0: number, s0: number, th1: number, s1: number): number => {
+    const a = toWorld(profile, { theta: th0, s: s0, h: t.heightAt(th0, s0) }), b = toWorld(profile, { theta: th1, s: s1, h: t.heightAt(th1, s1) });
+    const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2];
+    const run = dx * dir[0] + dy * dir[1] + dz * dir[2], lift = dx * up[0] + dy * up[1] + dz * up[2];
+    return Math.abs(run) < 1e-6 ? 0 : Math.max(-MAX_TILT, Math.min(MAX_TILT, lift / run));
+  };
+  const dth = d / Math.max(profile.at(s).r, 1e-6), s0 = Math.max(0, s - d), s1 = Math.min(profile.length, s + d);
+  return [rise(side, theta - dth, s, theta + dth, s), rise([0, 0, 1], theta, s0, theta, s1)];
 }
 
 /** How steep the ground is at a point (0 flat … 1 a wall), from its height a step either way. */

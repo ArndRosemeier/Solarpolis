@@ -9,7 +9,8 @@ import { makeEcology, type Ecology } from '../gen/ecology';
 import { buildPatch, type GroundPatch } from '../gen/patch';
 import { buildTile, makeLayout, type TileKey, type TileLayout, type TileMesh } from '../gen/tiles';
 import { plantCell, plantsOf, type CellKey, type PlantCell, type Species } from '../gen/scatter';
-import { buildTree, LITE_DETAIL, type TreeModel } from '../gen/trees';
+import { buildFallenWood, buildTree, LITE_DETAIL, type FallenWood, type TreeModel } from '../gen/trees';
+import { buildStone, type StoneModel } from '../gen/stones';
 import { barkAtlas, type BarkAtlas } from '../gen/foliage';
 import type { CoverForm, PlantForm, Rgb } from '../blueprint';
 import { buildTuft, type TuftModel } from '../gen/grass';
@@ -25,6 +26,8 @@ export type GenRequest =
   | { kind: 'plants'; params: HabitatParams; key: CellKey }
   | { kind: 'tree'; params: HabitatParams; form: PlantForm; variant: number }
   | { kind: 'tuft'; params: HabitatParams; form: CoverForm; color: Rgb; variant: number }
+  | { kind: 'stone'; params: HabitatParams; color: Rgb; moss: number; variant: number }
+  | { kind: 'fallen'; params: HabitatParams; form: PlantForm; piece: 'log' | 'branch'; variant: number }
   | { kind: 'foliage'; params: HabitatParams }
   | { kind: 'floor'; params: HabitatParams; layer: number }
   | { kind: 'hull'; params: HabitatParams; part: string; key: DetailKey };
@@ -34,6 +37,8 @@ export type GenAnswer =
   | { kind: 'plants'; cell: PlantCell }
   | { kind: 'tree'; full: TreeModel; lite: TreeModel }
   | { kind: 'tuft'; tuft: TuftModel }
+  | { kind: 'stone'; stone: StoneModel }
+  | { kind: 'fallen'; fallen: FallenWood }
   | { kind: 'foliage'; bark: BarkAtlas; leaves: Uint8Array }
   | { kind: 'floor'; layer: number; albedo: Uint8Array; relief: Uint8Array; mean: [number, number, number] }
   | { kind: 'hull'; partTile: PartTile }
@@ -88,6 +93,14 @@ self.onmessage = (e: MessageEvent<GenRequest>) => {
     }
     if (req.kind === 'tuft') {
       post({ kind: 'tuft', tuft: buildTuft(req.form, req.color, derive(req.params).seed, req.variant) });
+      return;
+    }
+    if (req.kind === 'stone') {
+      post({ kind: 'stone', stone: buildStone(req.color, req.moss, derive(req.params).seed, req.variant) });
+      return;
+    }
+    if (req.kind === 'fallen') {
+      post({ kind: 'fallen', fallen: buildFallenWood(req.form, req.piece, derive(req.params).seed, req.variant) });
       return;
     }
     if (req.kind === 'hull') {

@@ -37,7 +37,7 @@ for (const form of COVER_FORMS) {
 for (const { name, params } of MATRIX) {
   test(`grass (${name}): cover grows where its floor layer is, as densely as the layer covers the ground`, () => {
     const h = derive(params), eco = makeEcology(makeTerrain(h)), plants = plantsOf(eco), { profile } = h;
-    const cover = plants.filter((p) => p.on >= 0);
+    const cover = plants.filter((p) => p.what === 'cover');
     assert.equal(cover.length, eco.climate.cover.length, 'every cover of the climate');
     const s = (profile.floorStart + profile.floorEnd) / 2, eye = toWorld(profile, { theta: 1, s, h: 1.7 });
     for (const sp of cover) {
@@ -91,5 +91,5 @@ test('grass: no grass on bare rock, at the waterline or on the lake bed; dry gra
   const r = profile.at(m.s).r;
   assert.ok(grass(m.theta + (m.way[0] * 20) / r, m.s + m.way[1] * 20) > 0.6, 'thick grass 20 m in');
   const med = makeEcology(makeTerrain(derive(withParams({ climate: 'mediterranean' }))));
-  assert.deepEqual(plantsOf(med).filter((p) => p.on >= 0).map((p) => p.spec.form), ['dry-grass']);
+  assert.deepEqual(plantsOf(med).filter((p) => p.what === 'cover').map((p) => p.spec.form), ['dry-grass']);
 });
