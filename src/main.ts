@@ -232,9 +232,16 @@ toPlace('Into the nearest vineyard', 0, (eco, t, s) => {
   return { theta: row.theta + (half * Math.sin(row.turn)) / r, s: row.s - (half * Math.cos(row.turn)) / cos, way: [Math.cos(row.turn), Math.sin(row.turn)] };
 });
 debug.add({
-  label: 'Before the Vine face, out on the floor', group: 'Go', run: () => {
+  label: 'Fly: the Vine face from over the floor', group: 'Go', run: () => {
+    // Floating over the floor before the face, looking at its lower terraces (where gravity is about 0.75 of the floor's).
     const v = view(), t = v?.ecology?.terrain, foot = t && vineFaceFoot(t);
-    if (v && t && foot) v.goTo(foot.theta, foot.s - t.habitat.radius * 0.3, 0);
+    if (!v || !t || !foot) return;
+    const P = t.habitat.profile, R = t.habitat.radius;
+    let s = foot.s;
+    while (s < P.length && P.at(s).r > R * 0.75) s += 10;
+    const eye = toWorld(P, { theta: foot.theta, s: foot.s - R * 0.25, h: 150 }), at = toWorld(P, { theta: foot.theta, s, h: t.heightAt(foot.theta, s) });
+    const d = Math.hypot(at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]);
+    v.floatAt(eye, [(at[0] - eye[0]) / d, (at[1] - eye[1]) / d, (at[2] - eye[2]) / d]);
   },
 });
 /** A few metres before the nearest of the climate's first debris that `pick` chooses, facing it. */
