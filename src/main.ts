@@ -3,7 +3,7 @@
  * the Blueprint Lab (design a habitat), Inside (walk in it) or Outside (the habitat in its orbit, with Earth, the Moon,
  * the Sun and the stars). The two views are WebGPU only.
  */
-import { nearestWood } from './gen/ecology';
+import { nearestFloor, nearestWood, type Ecology, type Found } from './gen/ecology';
 import './app/style.css';
 import { el } from './app/dom';
 import { TitleCard } from './app/title';
@@ -14,7 +14,6 @@ import { BlueprintLab } from './lab/blueprintLab';
 import { GraphicsUnavailable } from '@futuremagic/stage';
 import { InteriorView } from './render/view';
 import { OutsideView } from './render/outside';
-import { EYE_HEIGHT } from './world/walker';
 import type { Habitat } from './blueprint';
 
 const app = document.getElementById('app')!;
@@ -154,20 +153,22 @@ debug.add({ label: 'Log the parameters and the derived habitat', group: 'Habitat
 const view = (): InteriorView | null => insideSlot.view, outsideView = (): OutsideView | null => outsideSlot.view;
 debug.addInfo(() => view()?.info() ?? 'inside: not started');
 const go = (label: string, s: (h: NonNullable<typeof lab.habitat>) => number): void => debug.add({
-  label, group: 'Go', run: () => { const h = lab.habitat, v = view(); if (v && h) v.walker.at = { theta: v.walker.at.theta, s: s(h), h: EYE_HEIGHT }; },
+  label, group: 'Go', run: () => { const h = lab.habitat, v = view(); if (v && h) v.goTo(v.walker.at.theta, s(h)); },
 });
-const toWood = (label: string, back: number): void => debug.add({
+/** Go to a place the ecology finds, `back` metres short of where it starts (negative: that far in), facing it. */
+const toPlace = (label: string, back: number, find: (eco: Ecology, theta: number, s: number) => Found | null): void => debug.add({
   label, group: 'Go', run: () => {
     const v = view(), eco = v?.ecology, at = v?.walker.at;
-    const w = eco && at && nearestWood(eco, at.theta, at.s);
+    const w = eco && at && find(eco, at.theta, at.s);
     if (!v || !eco || !w) return;
     const r = Math.max(eco.terrain.habitat.profile.at(w.s).r, 1);
-    v.walker.at = { theta: w.theta - (w.way[0] * back) / r, s: w.s - w.way[1] * back, h: EYE_HEIGHT };
-    v.walker.heading = Math.atan2(-w.way[0], w.way[1]); // facing the wood (walker.step: forward is +s, -θ)
+    // Facing it (walker.step: forward is +s, -θ).
+    v.goTo(w.theta - (w.way[0] * back) / r, w.s - w.way[1] * back, Math.atan2(-w.way[0], w.way[1]));
   },
 });
-toWood('Before the nearest wood', 40);
-toWood('Into the nearest wood', -30);
+toPlace('Before the nearest wood', 40, (eco, t, s) => nearestWood(eco, t, s));
+toPlace('Into the nearest wood', -30, (eco, t, s) => nearestWood(eco, t, s));
+toPlace('Into the nearest meadow', -30, (eco, t, s) => nearestFloor(eco, t, s, eco.climate.cover[0]?.on ?? 'grass'));
 go('The middle of the floor', (h) => (h.profile.floorStart + h.profile.floorEnd) / 2);
 go('The foot of the wild endcap', (h) => h.profile.floorStart + 20);
 go('Halfway up the wild endcap', (h) => h.profile.floorStart / 2);

@@ -11,7 +11,8 @@ import { buildTile, makeLayout, type TileKey, type TileLayout, type TileMesh } f
 import { plantCell, plantsOf, type CellKey, type PlantCell, type Species } from '../gen/scatter';
 import { buildTree, LITE_DETAIL, type TreeModel } from '../gen/trees';
 import { barkAtlas, type BarkAtlas } from '../gen/foliage';
-import type { PlantForm } from '../blueprint';
+import type { CoverForm, PlantForm, Rgb } from '../blueprint';
+import { buildTuft, type TuftModel } from '../gen/grass';
 import { leafAtlas } from './leaves';
 import { groundLayer } from '../gen/groundTex';
 import { makeSkin, type Skin } from '../gen/skin';
@@ -23,6 +24,7 @@ export type GenRequest =
   | { kind: 'patch'; params: HabitatParams; theta: number; s: number; size: number; cell: number }
   | { kind: 'plants'; params: HabitatParams; key: CellKey }
   | { kind: 'tree'; params: HabitatParams; form: PlantForm; variant: number }
+  | { kind: 'tuft'; params: HabitatParams; form: CoverForm; color: Rgb; variant: number }
   | { kind: 'foliage'; params: HabitatParams }
   | { kind: 'floor'; params: HabitatParams; layer: number }
   | { kind: 'hull'; params: HabitatParams; part: string; key: DetailKey };
@@ -31,6 +33,7 @@ export type GenAnswer =
   | { kind: 'patch'; patch: GroundPatch }
   | { kind: 'plants'; cell: PlantCell }
   | { kind: 'tree'; full: TreeModel; lite: TreeModel }
+  | { kind: 'tuft'; tuft: TuftModel }
   | { kind: 'foliage'; bark: BarkAtlas; leaves: Uint8Array }
   | { kind: 'floor'; layer: number; albedo: Uint8Array; relief: Uint8Array; mean: [number, number, number] }
   | { kind: 'hull'; partTile: PartTile }
@@ -81,6 +84,10 @@ self.onmessage = (e: MessageEvent<GenRequest>) => {
     if (req.kind === 'tree') {
       const seed = derive(req.params).seed;
       post({ kind: 'tree', full: buildTree(req.form, seed, req.variant), lite: buildTree(req.form, seed, req.variant, LITE_DETAIL) });
+      return;
+    }
+    if (req.kind === 'tuft') {
+      post({ kind: 'tuft', tuft: buildTuft(req.form, req.color, derive(req.params).seed, req.variant) });
       return;
     }
     if (req.kind === 'hull') {

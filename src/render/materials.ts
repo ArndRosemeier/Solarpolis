@@ -340,12 +340,17 @@ export function setFoliage(bark: { color: Uint8Array; normal: Uint8Array }, leav
 }
 
 /**
- * Where a plant's vertex goes: the instance (`plant`: foot relative to the mesh, height; `turn`) stands toward the axis
- * wherever it is, turned and scaled; the air sways it (Scale's vegWind: a slow sway and gusts growing with the square
- * of the vertex's `wind` weight, a quicker shiver, leaves fluttering along their normals). An instance outside the
- * mesh's band is folded away. Returns the position node and the frame for normals.
+ * Whether the cell's mesh is the last level of what it draws (ground cover's light tufts): past its band it sinks
+ * plants into the ground rather than handing them over (`userData.sink`, 0 or 1).
  */
-function plantVertex(flutter: number, seed: Node<'float'> = float(0)) {
+const plantSink = uniform(0).onObjectUpdate(({ object }) => (object?.userData.sink as number | undefined) ?? 0);
+
+/**
+ * A plant instance (`plant`: foot relative to the mesh, height; `turn`): where it stands, its frame (it stands toward
+ * the axis wherever it is, turned about up), and how much of it its mesh draws: an instance outside the mesh's band is
+ * folded away, or sunk into the ground past the last level's.
+ */
+function plantFrame() {
   const inst = attribute<'vec4'>('plant', 'vec4'), turn = attribute<'float'>('turn', 'float');
   const foot = modelWorldMatrix.mul(vec4(inst.xyz, 1)).xyz;
   const world = foot.add(view.eye);
@@ -359,10 +364,23 @@ function plantVertex(flutter: number, seed: Node<'float'> = float(0)) {
   const away = foot.length();
   const pick = hash(inst.x.mul(13.7).add(inst.z.mul(7.1)).add(inst.y.mul(3.3)));
   const into = smoothstep(plantBand.x, plantBand.y, away), out = smoothstep(plantBand.z, plantBand.w, away);
-  const keep = step(pick, into.mul(1.0001)).mul(step(out, pick));
-  const h = inst.w.mul(keep);
-  // The air: phase from where the plant stands; the shapes were made for trees of about 14 m.
+  const keep = step(pick, into.mul(1.0001)).mul(mix(step(out, pick), float(1).sub(out), plantSink));
+  // Where the air's phase comes from: where the plant stands.
   const ph = world.x.mul(0.137).add(world.z.mul(0.213)).add(world.y.mul(0.11));
+  /** A local direction and a local normal into the frame. */
+  const turned = (v: Node<'vec3'>): Node<'vec3'> => ax.mul(v.x).add(up.mul(v.y)).add(az.mul(v.z));
+  return { inst, world, up, side, axis, keep, ph, turned };
+}
+
+/**
+ * Where a plant's vertex goes: its instance's frame (`plantFrame`), scaled to its height; the air sways it (Scale's
+ * vegWind: a slow sway and gusts growing with the square of the vertex's `wind` weight, a quicker shiver, leaves
+ * fluttering along their normals). Returns the position node and the frame for normals.
+ */
+function plantVertex(flutter: number, seed: Node<'float'> = float(0)) {
+  const { inst, keep, ph, turned } = plantFrame();
+  const h = inst.w.mul(keep);
+  // The air: the shapes were made for trees of about 14 m.
   const t = time;
   const gust = float(0.55).add(sin(t.mul(0.37).add(ph.mul(0.5))).mul(sin(t.mul(0.23).add(ph.mul(0.9)).add(1.3))).mul(0.45));
   const s = gust.add(0.35).mul(0.5);
@@ -375,9 +393,8 @@ function plantVertex(flutter: number, seed: Node<'float'> = float(0)) {
   const swayAcross = sin(t.mul(1.8).add(bp.mul(0.8)).add(1.7)).mul(s).mul(w2).mul(w).mul(0.13 / 14);
   let local: Node<'vec3'> = p.add(vec3(swayAlong, swayAlong.mul(swayAlong).mul(-0.12 * 14), swayAcross));
   if (flutter) local = local.add(normalLocal.mul(sin(t.mul(9).add(seed.mul(40)).add(bp.mul(2))).mul(flutter * 0.05 / 14).mul(s).mul(w)));
-  const scaled = local.mul(h);
-  const position = inst.xyz.add(ax.mul(scaled.x)).add(up.mul(scaled.y)).add(az.mul(scaled.z));
-  const normal = varying(normalize(ax.mul(normalLocal.x).add(up.mul(normalLocal.y)).add(az.mul(normalLocal.z))));
+  const position = inst.xyz.add(turned(local.mul(h)));
+  const normal = varying(normalize(turned(normalLocal)));
   return { position, normal };
 }
 
@@ -450,6 +467,30 @@ export const HULL = kind('hull', ['position', 'normal', 'color', 'kind', 'wind',
   return m;
 });
 
+/**
+ * Ground cover (gen/grass.ts; gen/scatter.ts plants it where its floor layer is): tufts of blades in vertex colours,
+ * both sides, lit like the ground under them with a little light through the blades. They take shadows, cast none. The
+ * air bends them: waves roll along the axis (the habitat's air drifts that way), in gusts, and each blade shivers.
+ */
+export const GRASS = kind('grass', ['position', 'normal', 'color', 'wind', 'plant'], { cast: false, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial({ side: DoubleSide });
+  const { inst, world, up, side, axis, keep, ph, turned } = plantFrame();
+  const h = inst.w.mul(keep), t = time;
+  const w = attribute<'float'>('wind', 'float'), w2 = w.mul(w), p = positionLocal;
+  const wave = sin(t.mul(1.7).sub(world.z.mul(0.4)).add(sin(ph).mul(0.8))).mul(0.5).add(0.5);
+  const gust = sin(t.mul(0.31).add(world.z.mul(0.05))).mul(0.5).add(0.5);
+  const shiver = sin(t.mul(7.3).add(ph.mul(13)).add(dot(p, vec3(19, 7, 23))));
+  const bend = float(0.2).add(wave.mul(gust).mul(0.8));
+  // Metres: the tip bends a fifth of the tuft's height in a full gust, the way the air goes, and shivers across it.
+  const push = axis.mul(0.85).add(side.mul(0.5)).mul(bend.mul(0.2)).add(side.mul(shiver.mul(0.03))).mul(w2).mul(h);
+  // A bent blade dips: about the square of how far it leans over its height.
+  const dip = push.dot(push).div(max(h, 0.05)).mul(0.5);
+  m.positionNode = inst.xyz.add(turned(p.mul(h))).add(push).sub(up.mul(dip));
+  const n = varying(normalize(turned(normalLocal)));
+  m.colorNode = throughAir(vertexColor().rgb.mul(sunlit(plantHorizon, normalize(n), 0.5)));
+  return m;
+});
+
 /** The game's own attributes on the Stage's warm-up stand-ins (StageOptions.attribute): no morph, open horizons. */
 export function standInAttribute(g: BufferGeometry, name: string): boolean {
   if (name === 'morph') g.setAttribute('morph', new Float32BufferAttribute(new Array(9).fill(0), 3));
@@ -491,5 +532,5 @@ export const BALL = kind('ball', ['position', 'normal'], { cast: true, receive: 
 
 /** Every kind, for the Stage's warm-up. */
 export function allKinds(): readonly Kind[] {
-  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL];
+  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS];
 }

@@ -37,6 +37,28 @@ export interface PlantSpec {
 export const FLOOR_LAYERS = ['grass', 'dry grass', 'litter', 'needles', 'dirt', 'gravel', 'sand', 'rock'] as const;
 export type FloorLayer = (typeof FLOOR_LAYERS)[number];
 
+/** The forms ground cover is grown in (`gen/grass.ts`): tufts of blades, green or dry. */
+export const COVER_FORMS = ['grass', 'dry-grass'] as const;
+export type CoverForm = (typeof COVER_FORMS)[number];
+
+/**
+ * Ground cover: small plants that grow wherever their floor layer does, as densely as the layer's share of the ground
+ * there (the meadow's grass, the heath's tussocks; a few tufts where grass shows between the leaves of a wood). Drawn
+ * near the eye only; farther out the floor layer's texture is the cover.
+ */
+export interface CoverSpec {
+  name: string;
+  form: CoverForm;
+  /** The floor layer it grows on. */
+  on: FloorLayer;
+  /** Full-grown height range (m). */
+  height: readonly [number, number];
+  /** Distance between neighbouring tufts where the layer covers the ground whole (m). */
+  spacing: number;
+  /** Linear RGB of its blades, about its floor's colour seen from a few metres, so the tufts melt into the ground. */
+  color: Rgb;
+}
+
 export interface BiomeSpec {
   name: string;
   /**
@@ -69,6 +91,8 @@ export interface Climate {
   patch: number;
   /** How sharp the edges between patches are (1 soft … 12 hedge-sharp); designed land has clear edges. */
   edges: number;
+  /** Ground cover over the biomes' floors. */
+  cover: readonly CoverSpec[];
   /** Bare ground: rock on steep slopes, sand at the waterline, the lake's bed. */
   rock: Rgb;
   shore: Rgb;
@@ -89,6 +113,10 @@ export const CLIMATES: Readonly<Record<string, Climate>> = {
       { name: 'pinewood', color: [0.08, 0.042, 0.02], vary: 0.08, moisture: [0.15, 0.7], height: [0.12, 0.6], slope: 0.8, share: 1, plants: [{ name: 'pine', form: 'pine', height: [16, 28], spacing: 7 }], floor: { needles: 1, dirt: 0.12 } },
       { name: 'heath', color: [0.2, 0.17, 0.09], vary: 0.15, moisture: [0, 0.32], height: [0.3, 1], slope: 0.85, share: 1, plants: [{ name: 'heather', form: 'heather', height: [0.4, 1], spacing: 2.5 }, { name: 'juniper', form: 'juniper', height: [3, 7], spacing: 25 }], floor: { 'dry grass': 0.6, dirt: 0.4, gravel: 0.25 } },
     ],
+    cover: [
+      { name: 'meadow grass', form: 'grass', on: 'grass', height: [0.25, 0.55], spacing: 0.4, color: [0.16, 0.31, 0.08] },
+      { name: 'heath tussocks', form: 'dry-grass', on: 'dry grass', height: [0.2, 0.45], spacing: 0.5, color: [0.27, 0.23, 0.11] },
+    ],
     rock: [0.28, 0.26, 0.22],
     shore: [0.42, 0.38, 0.27],
     bed: [0.18, 0.2, 0.16],
@@ -105,6 +133,9 @@ export const CLIMATES: Readonly<Record<string, Climate>> = {
       { name: 'holm oak', color: [0.08, 0.048, 0.022], vary: 0.08, moisture: [0.4, 0.9], height: [0, 0.35], slope: 0.7, share: 0.8, plants: [{ name: 'holm oak', form: 'holm-oak', height: [8, 15], spacing: 9 }, { name: 'myrtle', form: 'evergreen-shrub', height: [1.5, 3], spacing: 8 }], floor: { litter: 1, dirt: 0.3 } },
       { name: 'maquis', color: [0.1, 0.13, 0.06], vary: 0.15, moisture: [0.1, 0.5], height: [0.15, 0.8], slope: 0.85, share: 1, plants: [{ name: 'rosemary and cistus', form: 'evergreen-shrub', height: [0.6, 2], spacing: 3 }], floor: { dirt: 0.6, gravel: 0.4, 'dry grass': 0.3 } },
       { name: 'umbrella pines', color: [0.11, 0.07, 0.03], vary: 0.1, moisture: [0.2, 0.6], height: [0.1, 0.5], slope: 0.6, share: 0.7, plants: [{ name: 'stone pine', form: 'stone-pine', height: [12, 20], spacing: 14 }], floor: { needles: 1, 'dry grass': 0.3 } },
+    ],
+    cover: [
+      { name: 'dry grass', form: 'dry-grass', on: 'dry grass', height: [0.25, 0.6], spacing: 0.45, color: [0.34, 0.28, 0.11] },
     ],
     rock: [0.36, 0.32, 0.26],
     shore: [0.5, 0.45, 0.33],

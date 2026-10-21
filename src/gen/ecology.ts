@@ -12,7 +12,7 @@
  * parkland does. Pure and continuous like the terrain: any point, in any order, gives the same answer.
  */
 import { Noise, deriveSeed, smoothstep } from '@futuremagic/core';
-import { FLOOR_LAYERS, climateOf, toWorld, type BiomeSpec, type Climate } from '../blueprint';
+import { FLOOR_LAYERS, climateOf, toWorld, type BiomeSpec, type Climate, type FloorLayer } from '../blueprint';
 import type { Terrain } from './terrain';
 import { canopyColor } from './trees';
 
@@ -189,15 +189,21 @@ export function makeEcology(terrain: Terrain): Ecology {
   return { terrain, climate, biomesAt, moistureAt, colorAt };
 }
 
+/** A place found by `nearestWood` or `nearestFloor`, and the way there from where the search began. */
+export interface Found {
+  theta: number;
+  s: number;
+  /** A unit step in metres along θ·r and s. */
+  way: [number, number];
+}
+
 /**
- * The nearest closed wood from a point (crowns covering at least `cover` of the ground), searched along rays out to
- * `reach` metres: where it starts, and the way there (a unit step in metres along θ·r and s). For the debug menu's
- * "Go" entries and for tests.
+ * The nearest point from (θ, s) where `score` (of the biomes' shares there) reaches `least`, searched along rays out to
+ * `reach` metres: where it starts, and the way there. Water does not count.
  */
-export function nearestWood(ecology: Ecology, theta: number, s: number, reach = 3000, cover = 0.5): { theta: number; s: number; way: [number, number] } | null {
-  const { profile } = ecology.terrain.habitat;
-  const woods = ecology.climate.biomes.map(canopyOf), shares = new Float32Array(woods.length);
-  let best: { theta: number; s: number; way: [number, number]; d: number } | null = null;
+function searchOut(ecology: Ecology, theta: number, s: number, score: (shares: Float32Array) => number, least: number, reach: number): Found | null {
+  const { profile } = ecology.terrain.habitat, shares = new Float32Array(ecology.climate.biomes.length);
+  let best: (Found & { d: number }) | null = null;
   for (let k = 0; k < 24; k++) {
     const a = (2 * Math.PI * k) / 24, way: [number, number] = [Math.cos(a), Math.sin(a)];
     for (let d = 10; d < (best?.d ?? reach); d += 10) {
@@ -206,11 +212,23 @@ export function nearestWood(ecology: Ecology, theta: number, s: number, reach = 
       const pt = theta + (way[0] * d) / Math.max(profile.at(ps).r, 1);
       const h = ecology.terrain.heightAt(pt, ps);
       if (ecology.terrain.standAt(pt, ps) > h + 0.05) continue;
-      ecology.biomesAt(pt, ps, h, 0, shares);
-      let c = 0;
-      for (let b = 0; b < woods.length; b++) c += shares[b] * woods[b].cover;
-      if (c >= cover) { best = { theta: pt, s: ps, way, d }; break; }
+      if (score(ecology.biomesAt(pt, ps, h, 0, shares)) >= least) { best = { theta: pt, s: ps, way, d }; break; }
     }
   }
   return best && { theta: best.theta, s: best.s, way: best.way };
+}
+
+/**
+ * The nearest closed wood from a point (crowns covering at least `cover` of the ground), searched out to `reach`
+ * metres. For the debug menu's "Go" entries and for tests.
+ */
+export function nearestWood(ecology: Ecology, theta: number, s: number, reach = 3000, cover = 0.5): Found | null {
+  const woods = ecology.climate.biomes.map(canopyOf);
+  return searchOut(ecology, theta, s, (shares) => woods.reduce((c, w, b) => c + shares[b] * w.cover, 0), cover, reach);
+}
+
+/** The nearest ground whose biomes' floors are at least `share` of a floor layer (a meadow: grass), out to `reach` metres. */
+export function nearestFloor(ecology: Ecology, theta: number, s: number, layer: FloorLayer, reach = 3000, share = 0.8): Found | null {
+  const floors = ecology.climate.biomes.map((b) => (b.floor[layer] ?? 0) / (Object.values(b.floor).reduce((a, x) => a + (x ?? 0), 0) || 1));
+  return searchOut(ecology, theta, s, (shares) => floors.reduce((c, f, b) => c + shares[b] * f, 0), share, reach);
 }

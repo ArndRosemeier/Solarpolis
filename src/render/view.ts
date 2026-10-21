@@ -435,6 +435,18 @@ export class InteriorView {
     f.update({ feet: toView(eye, feet), up, front, speed, anim: { move } }, this.frameDt, this.time);
   }
 
+  /**
+   * Jump on foot to (θ, s), facing `heading` (the debug menu's Go entries): the body is taken away and stands up again
+   * there once the physics has the ground under it, or it would carry the walker straight back.
+   */
+  goTo(theta: number, s: number, heading?: number): void {
+    this.flyer = null;
+    this.physics?.removeCharacter();
+    this.character = null;
+    this.walker.place(theta, s, heading);
+    this.standUp();
+  }
+
   /** Take off from where the walker stands, or land under the flyer. */
   toggleFlying(): void {
     if (this.flyer) {
