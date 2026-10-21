@@ -98,3 +98,16 @@ button { font: inherit; color: inherit; }
 .inside-note { position: absolute; left: 16px; right: 16px; top: 12px; margin: 0; }
 .inside-note:empty { display: none; }
 .inside-hint { position: absolute; left: 16px; bottom: 12px; margin: 0; color: #fffc; text-shadow: 0 1px 2px #000a; font-size: 12.5px; pointer-events: none; }
+
+/* ---- title ---- */
+/* The name above the habitat and Start below it: every shot keeps the habitat in the middle of the frame. */
+.title-card { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 10px; padding: 7vh 16px 6vh; pointer-events: none; opacity: var(--fade, 0); text-align: center; }
+.title-top, .title-bottom { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.title-card[hidden] { display: none; }
+.title-name { margin: 0; font-size: clamp(36px, 8vw, 88px); letter-spacing: 0.32em; text-transform: uppercase; font-weight: 300; color: #fff; text-shadow: 0 2px 24px #000c; padding-left: 0.32em; }
+.title-line { margin: 0; color: #fffc; font-size: clamp(13px, 2vw, 16px); text-shadow: 0 1px 6px #000c; }
+.title-start { pointer-events: auto; font: inherit; font-size: 16px; letter-spacing: 0.12em; padding: 10px 34px; border-radius: 999px; border: 1px solid #fff8; background: #0006; color: #fff; cursor: pointer; }
+.title-start:hover, .title-start:focus-visible { background: #fff2; border-color: #fff; }
+.title-hint { margin: 0; color: #fff9; font-size: 12px; text-shadow: 0 1px 4px #000c; }
+.inside.titled .inside-hint { display: none; }
+.top h1 { cursor: pointer; }

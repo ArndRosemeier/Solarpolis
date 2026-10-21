@@ -61,7 +61,7 @@
   },
   {
     "key": "idiom: [.s .theta] in solarpolis/render/view.ts + solarpolis/world/flyer.ts + solarpolis/world/walker.ts",
-    "reason": "(θ, s) is the interior's surface coordinate (blueprint frame.ts); reading both fields of a point is how every user of it starts, not a copied procedure. It crossed the idiom threshold only because more files made the names rarer."
+    "reason": "(\u03b8, s) is the interior's surface coordinate (blueprint frame.ts); reading both fields of a point is how every user of it starts, not a copied procedure. It crossed the idiom threshold only because more files made the names rarer."
   },
   {
     "key": "same name: core/rng.ts#hash32 + solarpolis/render/hullShaders.ts#hash32",
@@ -98,5 +98,9 @@
   {
     "key": "same name: solarpolis/render/necklace.ts#follow + solarpolis/render/terrain.ts#follow",
     "reason": "Both are a view's per-frame follow(eye, ...): the terrain tiles and the ring's habitats each update what they draw around the eye. Same role, different content."
+  },
+  {
+    "key": "same name: solarpolis/render/outside.ts#frame + solarpolis/render/view.ts#frame",
+    "reason": "Each view's per-frame step handed to the shared FrameLoop (render/surface.ts); the loop is the seam, the steps draw different worlds."
   }
 ]

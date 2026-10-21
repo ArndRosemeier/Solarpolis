@@ -20,7 +20,7 @@ import { OPEN_SKY } from '../gen/horizon';
 import { EMISSION_SAMPLES, SUNLINE_STEPS } from '../world/sunline';
 import { HAZE_STEPS } from '../world/air';
 import { skyDome, starColor, starVertex } from './skyShaders';
-import { hardwareColor, radiatorColor, skinColor } from './hullShaders';
+import { flameColor, hardwareColor, radiatorColor, skinColor } from './hullShaders';
 
 /** The air's look, shared by every kind (uniforms: changing them never builds a shader). */
 export const air = {
@@ -263,6 +263,13 @@ export const HARDWARE = kind('hardware', ['position', 'normal', 'color'], { cast
   return m;
 });
 
+/** A torch's exhaust plume (hullShaders.ts, `flameColor`): glowing plasma added on top. Position, normal. */
+export const FLAME = kind('flame', ['position', 'normal'], { cast: false, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial({ side: DoubleSide, transparent: true, blending: AdditiveBlending, depthWrite: false });
+  m.colorNode = flameColor();
+  return m;
+});
+
 /** The game's own attributes on the Stage's warm-up stand-ins (StageOptions.attribute): no morph, open horizons. */
 export function standInAttribute(g: BufferGeometry, name: string): boolean {
   if (name === 'morph') g.setAttribute('morph', new Float32BufferAttribute(new Array(9).fill(0), 3));
@@ -274,7 +281,7 @@ export function standInAttribute(g: BufferGeometry, name: string): boolean {
 
 /** The kinds of the view outside, for its Stage's warm-up (windows will add them to the interior's). */
 export function outsideKinds(): readonly Kind[] {
-  return [SKY, STARS, SKIN, RADIATOR, HARDWARE];
+  return [SKY, STARS, SKIN, RADIATOR, HARDWARE, FLAME];
 }
 
 /** Things the physics moves (for now the debug menu's test balls): one colour, lit by the sunline, through the air. */

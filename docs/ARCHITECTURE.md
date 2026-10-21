@@ -51,6 +51,8 @@ Each row is a question you will have while coding, and the one place that answer
 | How do rotations and poses compose? | `Mat3`, `Pose`, `compose`, `invert`, `rotX`, `rotZ` (`pose.ts`). |
 | What does the sky hold from a point (Sun, Earth, Moon, eclipses)? | `skyFrom(space, frame, eye, t)` → `SkyView` (`sky.ts`): directions, sizes, body axes, `sunlight` (share of the Sun's disc not hidden); `sunlightFrom(sun, earth, moon)` for any point given the centres relative to it. |
 | How does the camera fly outside? | `SpaceFlyer` (`flyer.ts`): float64 eye in one frame, speed a share of the clearance to the nearest body, never closer than `MIN_CLEARANCE`, never beyond `MAX_RANGE`. |
+| What does a ship look like? | `torchShip(ShipParams)` → `ShipShape` (`ship.ts`): parts along the ship's x axis (drive exit at 0, nose at `length`), the plume's length and radius. `TORCH_SHIP` is the title flight's. |
+| How is the title flight framed? | `attractLoop(space, start, keepOut, shipLength)` → `Cinema.at(elapsed)` (`cinema.ts`): eye, target, up, fov, the ship's pose and throttle, the title's fade, shot by shot, every distance in outer radii. `chooseStart` picks the moment (habitat in sunlight, Earth gibbous behind it). |
 | Where are the stars, how bright, what colour? | `decodeStars(bytes)` (`stars.ts`) on `public/sky/stars.bin` (Hipparcos to magnitude 8, J2000 ecliptic directions, flux relative to the Sun). `calendarOf(jd)` turns a date back into the calendar. |
 
 ## Drawing (`src/render`)
@@ -69,7 +71,8 @@ Each row is a question you will have while coding, and the one place that answer
 | What is drawn outside? | `OutsideView` (`outside.ts`): the sky dome (`SKY`: Sun, Earth, Moon per pixel), the stars (`STARS`), and every habitat of the ring through `NecklaceView` (`necklace.ts`): meshes when near (`SKIN`, `RADIATOR`, `HARDWARE` from `hullGeometry` in `hull.ts`, each mesh's skin in `userData.skin` via `skinUniforms`), glints through the STARS kind when far. Shader pieces: `skyShaders.ts` (the `outside` uniforms) and `hullShaders.ts`; kinds listed by `outsideKinds()`. |
 | How bright is it outside, and how do eyes follow? | `exposureFor(meterable, rays, darkest)` and `adapt` (`exposure.ts`): units where sunlit white paper is 1, anchored to the light in view (`ANCHOR_LEVEL`); the `outside.exposure` uniform scales every outside kind, and `DISPLAY_CAP` (`skyShaders.ts`) keeps exposed light inside the half-float frame. |
 | What do the 3D views share (frame loop, held keys, canvas size, right-drag looking, drawing a frame)? | `FrameLoop` (frame loop and the keys held while shown), `moveKeys`, `runFrames`, `fitCanvas`, `dragToLook`, `draw(stage)` (`surface.ts`). Each view is a `PageView` in `main.ts`'s `ViewSlot`. |
-| How do I turn arrays into a mesh geometry? | `meshGeometry(index, attributes)` (`geometry.ts`). |
+| How do I turn arrays into a mesh geometry? | `meshGeometry(index, attributes)` (`geometry.ts`). Surfaces of revolution and boxes (habitats from outside, ships): `ShapeBuilder` (`band`, `box`, `build`) in the same file. |
+| How is a ship drawn? | `shipGeometry(shape)` (`ship.ts`): the body as HARDWARE (an albedo per part), the plume as FLAME (additive; `userData.flame` sets length and throttle). The title's ship is placed by `OutsideView` (`startAttract`, `stopAttract`). |
 | What is drawn inside? | `InteriorView` (`view.ts`): terrain tiles, sunline, the player's body, the walker's or the flyer's camera (`toggleFlying`, key F; on foot `zoom(deltaY)`, the mouse wheel, glides from the eyes out to behind the player). |
 | How is a person drawn? | An Actors `Figure` (`render/actors/figure.ts`, ported from Dunfinity): `Figure.load(look)`, `update({ feet, up, front, speed, anim }, dt, time)` stands it on the curved floor; `FigureAnimator` (`animator.ts`) plays the pack's clips per move state. The pack: `HUMAN_PACK`, `packFetch`, `humanCatalog()` (`pack.ts`; served and built under /actors/ by the `actorsPack` Vite plugin, fetched by `tools/actors/pack.mjs`). Looks: `playerLook(seed)` (`looks.ts`). |
 | What time is it in the habitat? | `InteriorView.time` (clock s since the first dawn), advanced by frame time × `timeScale`; the debug menu's Time group changes it. Nothing reads the wall clock. |
@@ -96,6 +99,7 @@ Each row is a question you will have while coding, and the one place that answer
 | Where do developer tools go? | The debug menu: `debug.add`, `debug.addInfo` (`debug.ts`, made in `main.ts`). |
 | What version is this, and what changed? | `VERSION`, `whatsNewButton` (`whatsNew.ts`), from `CHANGELOG.md` (`changelog.ts`). |
 | How do habitat parameters go into and out of a URL? | `habitatFromUrl`, `habitatToUrl`, `URL_FIELDS` (`params.ts`). |
+| Where does the page open, and how does it get there again? | The title (`TitleCard`, `title.ts`) over the Outside view playing `startAttract`; `showTab('title' \| 'lab' \| 'inside' \| 'outside')` in `main.ts`, with `?view=` for the others. The header's name goes back to the title. |
 | How do I make a DOM element? | `el(tag, className, text)` (`dom.ts`). |
 
 ## Planned

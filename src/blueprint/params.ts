@@ -89,6 +89,8 @@ export interface ExteriorShape {
   mastLength: number;
   /** Berth arms on the spindle. */
   berthArms: number;
+  /** Torch ships cut their drive this far out (in outer radii): their exhaust would scorch the skin. */
+  keepOut: number;
   /** Edge of one skin panel (m): the solar skin is a grid of panels this size around and along the drum. */
   panel: number;
   /** A repair campaign renews a patch of the skin this many panels around and along at once. */
