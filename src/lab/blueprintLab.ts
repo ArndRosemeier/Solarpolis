@@ -151,7 +151,9 @@ export class BlueprintLab {
       ['Sunlight collected', si(h.sunlight, 'W')],
       ['Solar power', si(h.solarPower, 'W')],
       ['Light the floor needs', si(h.lightPower, 'W')],
-      ['Radiators needed', `${(h.radiatorArea / 1e6).toFixed(0)} km² of fin faces, ${h.radiatorToEndcaps.toFixed(1)}× the endcaps`],
+      ['Heat released inside', si(h.heat, 'W')],
+      ['Radiators needed', `${(h.radiatorArea / 1e6).toFixed(0)} km² of radiating faces, ${h.radiatorToEndcaps.toFixed(1)}× the endcaps`],
+      ['Radiator brims', `${h.exterior.brimsPerEnd} per end, out to ${km(h.exterior.brims[0].tip)} (tips at ${h.exterior.brimTipSpeed.toFixed(0)} m/s)`],
       ['Population', `${h.population.toLocaleString('en')} (${h.density.toFixed(0)} per km²)`],
     ];
     this.table.replaceChildren(...rows.map(([k, v]) => {
@@ -168,18 +170,28 @@ function svg<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string,
   return e;
 }
 
-/** A to-scale longitudinal section: the axis across the middle, both halves of the interior, the endcap slopes. */
+/** A to-scale longitudinal section: the axis across the middle, both halves of the interior, the endcap slopes, and the outside (radiator brims, dock spindle, mast). */
 function sectionSvg(h: Habitat): SVGSVGElement {
-  const W = 760, pad = 12, outer = h.layers.outer;
-  const scale = (W - 2 * pad) / h.length;
-  const H = Math.max(80, 2 * outer * scale + 2 * pad);
+  const e = h.exterior;
+  const W = 760, pad = 12, outer = h.layers.outer, reach = Math.max(outer, ...e.brims.map((b) => b.tip));
+  const z0 = e.mast.from, z1 = e.spindle.to;
+  const scale = (W - 2 * pad) / (z1 - z0);
+  const H = Math.max(80, 2 * reach * scale + 2 * pad);
   const cy = H / 2;
   const s = svg('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Section through the habitat along its axis' });
-  const X = (z: number): number => pad + z * scale;
+  const X = (z: number): number => pad + (z - z0) * scale;
   const shell = Math.max(2, (outer - h.radius) * scale);
+  // The spindle and mast on the axis, drawn at least two pixels thick.
+  const hub = Math.max(1, e.spindle.radius * scale);
+  s.append(svg('rect', { x: X(e.spindle.from), y: cy - hub, width: (e.spindle.to - e.spindle.from) * scale, height: 2 * hub, class: 'sec-spindle' }));
+  s.append(svg('line', { x1: X(e.mast.from), y1: cy, x2: X(e.mast.to), y2: cy, class: 'sec-mast' }));
   for (const side of [-1, 1]) {
-    // The hull and everything under the floor, at least two pixels so it stays visible.
-    s.append(svg('rect', { x: X(0), y: side < 0 ? cy - h.radius * scale - shell : cy + h.radius * scale, width: h.length * scale, height: shell, class: 'sec-shell' }));
+    // The hull and everything under the floor, at least two pixels so it stays visible; the endcap faces as well.
+    s.append(svg('rect', { x: X(e.wildFace), y: side < 0 ? cy - h.radius * scale - shell : cy + h.radius * scale, width: (e.portFace - e.wildFace) * scale, height: shell, class: 'sec-shell' }));
+    for (const b of e.brims) {
+      const bw = Math.max(1.5, b.thickness * scale);
+      s.append(svg('rect', { x: X(b.z) - bw / 2, y: side < 0 ? cy - b.tip * scale : cy + b.inner * scale, width: bw, height: (b.tip - b.inner) * scale, class: 'sec-brim' }));
+    }
     const pts: string[] = [];
     for (let i = 0; i <= 400; i++) {
       const p = h.profile.at((h.profile.length * i) / 400);
@@ -194,7 +206,7 @@ function sectionSvg(h: Habitat): SVGSVGElement {
   const wild = svg('text', { x: X(0) + 4, y: H - 4, class: 'sec-label' });
   wild.textContent = 'wild end';
   const port = svg('text', { x: X(h.length) - 4, y: H - 4, class: 'sec-label', 'text-anchor': 'end' });
-  port.textContent = 'port end, dock hub';
+  port.textContent = 'port end, dock spindle';
   s.append(label, wild, port);
   return s;
 }

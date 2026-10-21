@@ -7,7 +7,7 @@ import type { Habitat } from './derive';
 export type Severity = 'invalid' | 'unusual';
 
 export interface Finding {
-  id: 'spin' | 'hull' | 'hull-thick' | 'axis-air' | 'haze' | 'heat' | 'light' | 'layers' | 'population' | 'sunline' | 'relief';
+  id: 'spin' | 'hull' | 'hull-thick' | 'axis-air' | 'haze' | 'heat' | 'light' | 'layers' | 'population' | 'sunline' | 'relief' | 'brims';
   severity: Severity;
   message: string;
 }
@@ -38,6 +38,11 @@ export function validate(h: Habitat): Finding[] {
   const axisAir = h.pressureAt(0) / p.air.floorPressure;
   if (axisAir < FLYABLE_AXIS_PRESSURE) out.push({ id: 'axis-air', severity: 'unusual', message: `the axis has ${pct(axisAir)} of the floor's air pressure: too thin for the flyable sky ocean` });
   if (2 * h.radius > HAZE_DIAMETER) out.push({ id: 'haze', severity: 'unusual', message: `at ${km(2 * h.radius)} across, the far side fades into the haze` });
+  const ex = h.exterior;
+  if (!ex.fits) out.push({ id: 'brims', severity: 'invalid', message: `${p.exterior.maxBrims} brims per end out to ${p.exterior.brimReach}× the radius cannot shed ${(h.heat / 1e9).toFixed(1)} GW: allow more or wider brims, or run the radiators hotter` });
+  else if (ex.brimsPerEnd > 1) out.push({ id: 'brims', severity: 'unusual', message: `needs ${ex.brimsPerEnd} stacked radiator brims per end: they shape the habitat's look` });
+  const bm = p.exterior.brimMaterial;
+  if (ex.brimStress > bm.strength / bm.safetyFactor) out.push({ id: 'brims', severity: 'invalid', message: `the brim tips move at ${ex.brimTipSpeed.toFixed(0)} m/s: more than the brim material can hold together` });
   if (h.radiatorToEndcaps > BIG_FINS) out.push({ id: 'heat', severity: 'unusual', message: `radiators need ${h.radiatorToEndcaps.toFixed(1)}× the endcap area: large fins shape the habitat's look` });
   if (h.sunlight < h.lightPower) out.push({ id: 'light', severity: 'invalid', message: `collects ${(h.sunlight / 1e9).toFixed(1)} GW of sunlight but its floor needs ${(h.lightPower / 1e9).toFixed(1)} GW of light: add collectors` });
   const stack = h.layers.hull - h.layers.surface;
