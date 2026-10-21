@@ -107,6 +107,11 @@ export interface ExteriorShape {
   drones: { trackEvery: number; spacing: number; size: number; speed: number };
   /** Antennas: how many dishes the spindle's tip carries, and the largest one's diameter as a multiple of `hubRadius`. */
   antennas: { count: number; dish: number };
+  /**
+   * What a panel is made of up close: solar modules about `module` m a side (each panel holds a whole number of them
+   * around and along), each a grid of cells about `cell` m a side. Light collectors hold lenses in the cells' place.
+   */
+  parts: { module: number; cell: number };
 }
 
 export interface HabitatParams {

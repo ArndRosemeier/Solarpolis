@@ -9,12 +9,28 @@ import { makeEcology, type Ecology } from '../gen/ecology';
 import { buildPatch, type GroundPatch } from '../gen/patch';
 import { buildTile, makeLayout, type TileKey, type TileLayout, type TileMesh } from '../gen/tiles';
 import { plantCell, plantsOf, type CellKey, type PlantCell, type Species } from '../gen/scatter';
+import { makeSkin, type Skin } from '../gen/skin';
+import { buildHullTile, type HullTile, type HullTileKey } from '../gen/hullDetail';
 
 export type GenRequest =
   | { kind: 'tile'; params: HabitatParams; key: TileKey }
   | { kind: 'patch'; params: HabitatParams; theta: number; s: number; size: number; cell: number }
-  | { kind: 'plants'; params: HabitatParams; key: CellKey };
-export type GenAnswer = { kind: 'tile'; tile: TileMesh } | { kind: 'patch'; patch: GroundPatch } | { kind: 'plants'; cell: PlantCell } | { error: string };
+  | { kind: 'plants'; params: HabitatParams; key: CellKey }
+  | { kind: 'hull'; params: HabitatParams; key: HullTileKey };
+export type GenAnswer =
+  | { kind: 'tile'; tile: TileMesh }
+  | { kind: 'patch'; patch: GroundPatch }
+  | { kind: 'plants'; cell: PlantCell }
+  | { kind: 'hull'; hullTile: HullTile }
+  | { error: string };
+
+/** The skin needs only the blueprint, not the terrain: hull tiles never wait for the interior to be made. */
+let skinCached: { json: string; skin: Skin } | null = null;
+function skinFor(params: HabitatParams): Skin {
+  const json = JSON.stringify(params);
+  if (skinCached?.json !== json) skinCached = { json, skin: makeSkin(derive(params)) };
+  return skinCached.skin;
+}
 
 let cached: { json: string; terrain: Terrain; ecology: Ecology; layout: TileLayout; plants: Species[] } | null = null;
 
@@ -31,8 +47,13 @@ function terrainFor(params: HabitatParams): { terrain: Terrain; ecology: Ecology
 self.onmessage = (e: MessageEvent<GenRequest>) => {
   try {
     const req = e.data;
-    const { terrain, ecology, layout, plants } = terrainFor(req.params);
     const post = (answer: GenAnswer, transfer: Transferable[]): void => (self as unknown as DedicatedWorkerGlobalScope).postMessage(answer, transfer);
+    if (req.kind === 'hull') {
+      const tile = buildHullTile(skinFor(req.params), req.key), g = tile.glass, p = tile.parts;
+      post({ kind: 'hull', hullTile: tile }, [g.positions, g.normals, g.grid, g.index, p.positions, p.normals, p.colors, p.index].map((a) => a.buffer));
+      return;
+    }
+    const { terrain, ecology, layout, plants } = terrainFor(req.params);
     if (req.kind === 'patch') {
       const patch = buildPatch(terrain, req.theta, req.s, req.size, req.cell);
       post({ kind: 'patch', patch }, [patch.positions.buffer, patch.index.buffer]);
