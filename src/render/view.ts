@@ -36,9 +36,19 @@ const PATCH_EDGE = 0.4;
 const BALL_GEOMETRY = new SphereGeometry(0.25, 20, 14).deleteAttribute('uv');
 /** Clock seconds per real second by default: a day in about 24 minutes, so the sun is seen to travel. */
 const DAY_SPEED = 60;
-/** The third-person camera: how far behind the player's head, and how far above it (m). */
-const CHASE_BACK = 3.5;
+/**
+ * The camera on foot, set with the mouse wheel: from the player's eyes (0) out to `CHASE_FAR` metres behind the head,
+ * rising to `CHASE_UP` above it by `CHASE_RISE` metres back. The nearest view from behind is `CHASE_NEAR`; one notch
+ * further in goes back to the eyes. A notch moves it by a share (`CHASE_STEP` per unit of `deltaY`), and it glides
+ * there (`CHASE_GLIDE`, 1/s). The body shows once the camera is `HEAD_CLEAR` behind the eyes.
+ */
+const CHASE_NEAR = 1.2;
+const HEAD_CLEAR = 0.3;
+const CHASE_FAR = 12;
 const CHASE_UP = 0.4;
+const CHASE_RISE = 3.5;
+const CHASE_STEP = 0.003;
+const CHASE_GLIDE = 10;
 /** The layer the player's body is drawn on: the shadow map always sees it, the camera only from behind. */
 const BODY_LAYER = 1;
 
@@ -75,7 +85,9 @@ export class InteriorView {
   private jump = false;
   /** The player's body (an Actors human), once loaded, and whether the camera looks at it from behind. */
   private figure: Figure | null = null;
-  thirdPerson = false;
+  /** How far behind the head the camera wants to be, and where it is on its way (m). */
+  private chaseGoal = 0;
+  private chase = 0;
   private norm = 1;
   private readonly balls = new Map<number, Mesh>();
   /** The last dropped ball: where it was let go (θ) and from how high, and how far it landed behind, once it has. */
@@ -329,17 +341,27 @@ export class InteriorView {
   private current(): View {
     if (this.flyer) return this.flyer.view();
     const v = this.walker.view();
-    if (!this.thirdPerson) return v;
+    if (this.chase < 0.01) return v;
     // From behind and a little above the head, looking the same way; never under the ground.
-    let eye = v3madd(v3madd(v.eye, v.look, -CHASE_BACK), v.up, CHASE_UP);
+    const d = this.chase;
+    let eye = v3madd(v3madd(v.eye, v.look, -d), v.up, CHASE_UP * Math.min(1, d / CHASE_RISE));
     const at = fromWorld(this.habitat.profile, ...eye), floor = this.terrain.standAt(at.theta, at.s) + 0.3;
     if (at.h < floor) eye = toWorld(this.habitat.profile, { ...at, h: floor });
     return { eye, look: v.look, up: v.up };
   }
 
-  /** Switch between the player's eyes and a camera behind them. */
-  toggleThirdPerson(): void {
-    this.thirdPerson = !this.thirdPerson;
+  /** Move the camera on foot out (positive) or in by wheel steps (`WheelEvent.deltaY`). */
+  zoom(deltaY: number): void {
+    if (deltaY === 0) return;
+    if (this.chaseGoal === 0) { if (deltaY > 0) this.chaseGoal = CHASE_NEAR; return; }
+    const to = this.chaseGoal * Math.exp(deltaY * CHASE_STEP);
+    this.chaseGoal = to < CHASE_NEAR * 0.95 ? 0 : Math.min(CHASE_FAR, to);
+  }
+
+  /** Glide the camera toward where the wheel put it. */
+  private glide(dt: number): void {
+    this.chase += (this.chaseGoal - this.chase) * Math.min(1, CHASE_GLIDE * dt);
+    if (Math.abs(this.chase - this.chaseGoal) < 1e-3) this.chase = this.chaseGoal;
   }
 
   /** Light the player's body where it stands and pose it for the frame (relative to the camera's eye). */
@@ -349,9 +371,9 @@ export class InteriorView {
     const centre = this.flyer || !c ? eye : v3madd(this.walker.feetAt(), c.up, HUMAN.height / 2);
     shineOn(this.habitat, this.terrain, this.emission, emissionMean(this.emission), air.skyLight.value, this.norm, centre, eye);
     if (!f) return;
-    // On foot the body is always there and casts its shadow; the camera sees it only from behind (BODY_LAYER).
+    // On foot the body is always there and casts its shadow; the camera sees it once it is out of the head (BODY_LAYER).
     f.object.visible = !!c && !this.flyer;
-    if (this.thirdPerson) this.camera.layers.enable(BODY_LAYER); else this.camera.layers.disable(BODY_LAYER);
+    if (this.chase >= HEAD_CLEAR) this.camera.layers.enable(BODY_LAYER); else this.camera.layers.disable(BODY_LAYER);
     if (!c || !f.object.visible) return;
     const feet = this.walker.feetAt(), up = c.up;
     const v = c.velocity, flat = v3madd(v, up, -v3dot(v, up)), speed = Math.hypot(...flat);
@@ -385,10 +407,14 @@ export class InteriorView {
     window.addEventListener('keydown', (e) => {
       if (!this.running) return;
       if (e.code === 'KeyF' && !e.repeat) this.toggleFlying();
-      if (e.code === 'KeyV' && !e.repeat) this.toggleThirdPerson();
       if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) this.jump = true; }
       this.keys.add(e.code);
     });
+    // The wheel moves the camera on foot between the player's eyes and behind them (flying has no body).
+    this.canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      if (this.running && !this.flyer) this.zoom(e.deltaY);
+    }, { passive: false });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('blur', () => this.keys.clear());
   }
@@ -405,6 +431,7 @@ export class InteriorView {
 
   private frame(dt: number): void {
     this.frameDt = dt;
+    this.glide(dt);
     const k = this.keys;
     const forward = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
     const right = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0);
