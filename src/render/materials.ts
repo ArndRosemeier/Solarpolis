@@ -227,7 +227,7 @@ export const GROUND = kind('ground', ['position', 'normal', 'color', 'morph', 'h
   // Close up, the floor's own surface (groundShaders.ts): grass, litter, sand, rock, resolving as the eye comes near.
   const away = positionWorld.sub(cameraPosition).length();
   // Rock in beds, tones and lichen (groundShaders.ts), where the floor is rock.
-  const base = rockFromAfar(vertexColor().rgb, floorShare('rock'), worldPosition());
+  const base = rockFromAfar(vertexColor().rgb, floorShare('rock'), worldPosition(), normalize(normalWorld));
   const floorUp = floorSurface(base, normalize(normalWorld));
   // From afar, crowns and the gaps between them, clumps and glades (groundShaders.ts, docs/far-view.md).
   const fromAfar = woodsFromAfar(base, canopy.rgb, horizon.z, horizon.w, worldPosition());

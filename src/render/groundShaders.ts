@@ -226,33 +226,38 @@ export function setRockBeds(terraceStep: number): void {
  * slanting bands, never as rings around the axis.
  */
 const DIP = new Vector3(0.8, 0.45, 0.4).normalize();
-/** Each bed's tone against the rock's own colour: dark and warm, plain, pale and cool; their mean over the beds is 1. */
-const BED_TONES: [number, number, [number, number, number]][] = [[0, 0.35, [0.66, 0.6, 0.52]], [0.35, 0.75, [1, 1, 1]], [0.75, 1, [1.3, 1.3, 1.36]]];
-const BED_MEAN = BED_TONES.map(([a, b, t]) => (b - a) * (t[0] + t[1] + t[2]) / 3).reduce((x, y) => x + y, 0);
+/** Beds come in packages of this many, each package one tone: darker and warmer, plain, paler and cooler. */
+const PACKAGE = 4;
+const BED_TONES: [number, [number, number, number]][] = [[0.35, [0.8, 0.74, 0.66]], [0.4, [1, 1, 1]], [0.25, [1.16, 1.16, 1.22]]];
+const BED_MEAN = BED_TONES.reduce((sum, [share, t]) => sum + share * (t[0] + t[1] + t[2]) / 3, 0);
 /** Lichen on rock: how much of it a patch holds on average, and its colour against the rock's grey. */
 const LICHEN_MEAN = 0.2;
 const LICHEN = vec3(0.95, 1.05, 0.62);
 
 /**
  * Rock from afar (GROUND, where the floor is rock: the `rock` share, docs/far-view.md): the climate's one rock colour
- * becomes beds of darker, warmer and paler stone, folded and dipping across the slope, broad tones over many beds, and
- * lichen in patches. Each scale gives way to its mean as the footprint grows (`footprint`), so rock seen across the
- * habitat keeps the light it has close up.
+ * becomes packages of darker, warmer and paler beds, folded and dipping across the slope and showing where the rock is
+ * steep (on ledges they weather to one surface), broad tones over many beds, and lichen in patches. Each scale gives
+ * way to its mean as the footprint grows (`footprint`), so rock seen across the habitat keeps the light it has close up.
  */
-export function rockFromAfar(color: Node<'vec3'>, rock: Node<'float'>, world: Node<'vec3'>): Node<'vec3'> {
+export function rockFromAfar(color: Node<'vec3'>, rock: Node<'float'>, world: Node<'vec3'>, normal: Node<'vec3'>): Node<'vec3'> {
   const { shown } = footprint();
   const bed = rockBed;
-  // The beds: the dip, folded at the scale of a dozen beds.
-  const u = dot(world, vec3(DIP.x, DIP.y, DIP.z)).div(bed).add(mx_noise_float(world.div(bed.mul(14))).mul(2.5));
+  // The beds: the dip, folded at two scales.
+  const fold = mx_noise_float(world.div(bed.mul(20))).mul(6).add(mx_noise_float(world.div(bed.mul(7)).add(vec3(2.3, 9.1, 4.7))).mul(1.5));
+  const u = dot(world, vec3(DIP.x, DIP.y, DIP.z)).div(bed).add(fold);
   const toneOf = (k: Node<'float'>): Node<'vec3'> => {
-    const h = cellHash(vec3(k, 7, 3)).x;
-    let t: Node<'vec3'> = vec3(...BED_TONES[0][2]);
-    for (const [from, , tone] of BED_TONES.slice(1)) t = select(h.greaterThan(from), vec3(...tone), t);
-    return t;
+    const pack = cellHash(vec3(floor(k.div(PACKAGE)), 7, 3)).x, own = cellHash(vec3(k, 1, 5)).x.sub(0.5).mul(0.12).add(1);
+    let t: Node<'vec3'> = vec3(...BED_TONES[0][1]), from = BED_TONES[0][0];
+    for (const [share, tone] of BED_TONES.slice(1)) { t = select(pack.greaterThan(from), vec3(...tone), t); from += share; }
+    return t.mul(own);
   };
-  const k = floor(u), seam = smoothstep(0.82, 1, fract(u));
+  const k = floor(u), seam = smoothstep(0.8, 1, fract(u));
   const beds = mix(toneOf(k), toneOf(k.add(1)), seam).div(BED_MEAN);
-  const layered = mix(vec3(1), beds, shown(bed.mul(1.5)));
+  // Steep rock shows its beds; a ledge's top is one weathered surface. Up is toward the axis.
+  const up = vec3(world.x, world.y, 0).normalize().negate();
+  const steep = smoothstep(0.15, 0.6, float(1).sub(dot(normal, up)));
+  const layered = mix(vec3(1), beds, shown(bed.mul(1.5)).mul(steep));
   // Broad tones over thirty beds: warmer where darker.
   const broad = mx_noise_float(world.div(bed.mul(30)).add(vec3(5.3, 1.7, 8.1))).mul(shown(bed.mul(30)));
   const tones = vec3(broad.mul(0.25).add(1), broad.mul(0.2).add(1), broad.mul(0.12).add(1));
