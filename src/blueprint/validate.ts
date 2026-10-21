@@ -55,8 +55,8 @@ export function validate(h: Habitat): Finding[] {
     out.push({ id: 'day', severity: 'invalid', message: 'the day needs a length > 0, daylight and night between 0 and 1, a bright stretch wider than 0 and a base share from 0 to 1' });
   }
   const rl = p.relief, floor = h.profile.floorEnd - h.profile.floorStart;
-  if (!(rl.hills >= 0 && rl.terraceStep > 0) || (rl.ringLake && !(rl.ringLake.width > 0 && rl.ringLake.depth > 0 && rl.ringLake.width < floor / 2)))
-    out.push({ id: 'relief', severity: 'invalid', message: 'the relief needs hills ≥ 0, a terrace step > 0, and a ring lake narrower than half the floor' });
+  if (!(rl.hills >= 0 && rl.terraceStep > 0 && rl.massif >= 0) || (rl.ringLake && !(rl.ringLake.width > 0 && rl.ringLake.depth > 0 && rl.ringLake.width < floor / 2)))
+    out.push({ id: 'relief', severity: 'invalid', message: 'the relief needs hills ≥ 0, a terrace step > 0, a massif ≥ 0, and a ring lake narrower than half the floor' });
   const rv = rl.rivers;
   if (rv && !(Number.isInteger(rv.count) && rv.count >= 0 && rv.width > 0 && rv.depth > 0 && rv.width < (rl.ringLake?.width ?? Infinity)))
     out.push({ id: 'relief', severity: 'invalid', message: 'rivers need a whole count ≥ 0, a width and depth > 0, and to be narrower than the lake they run into' });
@@ -69,8 +69,8 @@ export function validate(h: Habitat): Finding[] {
   if (!climateOf(p.climate)) out.push({ id: 'climate', severity: 'invalid', message: `no climate "${p.climate}" in the catalogue (${Object.keys(CLIMATES).join(', ')})` });
   if (!cultureOf(p.culture)) out.push({ id: 'culture', severity: 'invalid', message: `no culture "${p.culture}" in the catalogue (${Object.keys(CULTURES).join(', ')})` });
   const pl = p.plan;
-  if (!(Number.isInteger(pl.valleys) && pl.valleys >= 1 && pl.reserve >= 0 && pl.reserve <= 0.9 && pl.districtPeople > 0 && pl.entranceSpacing > 0))
-    out.push({ id: 'plan', severity: 'invalid', message: 'the land plan needs a whole number of valleys ≥ 1, a reserve from 0 to 0.9 of the floor, and districts and entrance spacing > 0' });
+  if (!(Number.isInteger(pl.valleys) && pl.valleys >= 1 && pl.reserve >= 0 && pl.reserve <= 0.9 && pl.districtPeople > 0 && pl.entranceSpacing > 0 && Math.abs(pl.spiral) <= Math.PI / 2))
+    out.push({ id: 'plan', severity: 'invalid', message: 'the land plan needs a whole number of valleys ≥ 1, a reserve from 0 to 0.9 of the floor, districts and entrance spacing > 0, and a spiral of at most a quarter turn' });
   if (!(p.population >= 0)) out.push({ id: 'population', severity: 'invalid', message: 'the population must not be negative' });
   return out;
 }

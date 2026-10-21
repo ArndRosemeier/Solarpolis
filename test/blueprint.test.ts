@@ -39,7 +39,7 @@ test('blueprint: the layers stack outward in order, living layer slightly heavie
 
 test('blueprint: validity flags each limit, and refuses only what cannot exist', () => {
   const ids = (p: Parameters<typeof withParams>[0]) => validate(derive(withParams(p))).map((f) => `${f.severity}:${f.id}`);
-  assert.deepEqual(ids({ radius: 150, length: 1000, hubRadius: 5, sunlineRadius: 2, relief: { hills: 5, ringLake: null, terraceStep: 10, rivers: null }, clouds: null }), ['unusual:spin']);
+  assert.deepEqual(ids({ radius: 150, length: 1000, hubRadius: 5, sunlineRadius: 2, relief: { hills: 5, ringLake: null, terraceStep: 10, massif: 10, rivers: null }, clouds: null }), ['unusual:spin']);
   assert.deepEqual(ids({ hubRadius: 10 }), ['invalid:sunline'], 'the sunline ends in the hub, so it is thinner');
   assert.ok(ids({ radius: 20000, length: 60000 }).includes('invalid:hull'));
   assert.ok(ids({ radius: 20000, length: 60000, hull: { density: 1600, strength: 6e9, safetyFactor: 1.5 } }).includes('unusual:axis-air'));

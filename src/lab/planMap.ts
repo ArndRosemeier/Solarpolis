@@ -65,7 +65,7 @@ function colorAt(plan: Plan, theta: number, s: number, out: number[]): number {
       c = c.map((v) => v * (0.92 + 0.12 * toSummit)) as unknown as Rgb;
     }
   } else if (s > profile.floorEnd) {
-    const face = plan.faceAt(theta);
+    const face = plan.faceAt(theta, s);
     c = FACE_COLORS[face.kind].map((v) => v * (0.82 + 0.06 * band)) as unknown as Rgb;
     id = 2000 + face.index * 10 + band;
   } else if (plan.lake && Math.abs(s - plan.lake.s) < plan.lake.halfWidth) {

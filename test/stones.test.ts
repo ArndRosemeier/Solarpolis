@@ -99,7 +99,7 @@ for (const { name, params } of MATRIX) {
     assert.ok(checked > 0, 'some debris checked');
     errors.sort((a, b) => a - b);
     const at = (q: number) => errors[Math.floor(q * (errors.length - 1))];
-    assert.ok(at(0.5) < 0.03 && at(0.9) < 0.15, `a metre off, the ground is ${at(0.5).toFixed(3)} m (median), ${at(0.9).toFixed(3)} m (90 %) from where the slope says`);
+    process.stderr.write("Q " + at(0.5).toFixed(3) + " " + at(0.9).toFixed(3) + "\n"); assert.ok(at(0.5) < 0.03 && at(0.9) < 0.15, `a metre off, the ground is ${at(0.5).toFixed(3)} m (median), ${at(0.9).toFixed(3)} m (90 %) from where the slope says`);
   });
 }
 
