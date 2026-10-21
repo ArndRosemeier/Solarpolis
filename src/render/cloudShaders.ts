@@ -10,7 +10,7 @@
  * same field shades the land below (`cloudShade`).
  */
 import { Vector2, type Node } from 'three/webgpu';
-import { Fn, Loop, abs, clamp, min, dot, exp, float, max, mx_fractal_noise_float, pow, select, smoothstep, sqrt, uniform, vec2, vec3 } from 'three/tsl';
+import { Break, Fn, If, Loop, abs, ceil, clamp, int, min, dot, exp, float, max, mx_fractal_noise_float, pow, select, smoothstep, sqrt, uniform, vec2, vec3 } from 'three/tsl';
 import { band } from './shaderMath';
 import { coverThreshold, type CloudSpan, type CloudState } from '../world/clouds';
 
@@ -36,10 +36,12 @@ const cloud = {
 
 /** How widely the field's values spread (their standard deviation): four octaves of MaterialX noise. */
 const FIELD_SPREAD = 0.3;
-/** Samples along a line of sight through one crossing of the layer. */
-const STEPS = 18;
+/** One sample per this share of the layer's thickness along a line of sight, within these bounds. */
+const STEP = 0.1;
+const MIN_STEPS = 8;
+const MAX_STEPS = 40;
 /** Field over the threshold for a column the layer's whole thickness tall. */
-const COLUMN = 0.3;
+const COLUMN = 0.6;
 /** Extinction in a cloud (1/m): light gets about this far into one. */
 const SIGMA = 0.012;
 /** How deep in a cloud the sunline's light from above is down to a third (m), and what is left below any depth. */
@@ -128,10 +130,14 @@ export function cloudMarch(eye: V3, d: V3, D: F, far: boolean, jitter: F): Node<
       b0 = select(crossed, clamp(hole.far, max(into, 0), D), D);
     }
     const lenA = max(a1.sub(a0), 0), lenB = max(b1.sub(b0), 0);
-    const dt = lenA.add(lenB).div(STEPS);
-    const thick = cloud.base.sub(cloud.top);
+    // Samples by the length marched (a grazing line crosses kilometres of the layer), so every line sees the clouds
+    // in about the same detail; and none once the clouds ahead are opaque.
+    const thick = cloud.base.sub(cloud.top), total = lenA.add(lenB);
+    const n = clamp(ceil(total.div(thick.mul(STEP))), MIN_STEPS, MAX_STEPS);
+    const dt = total.div(n);
     const T = float(1).toVar(), L = float(0).toVar();
-    Loop(STEPS, ({ i }: { i: Node<'int'> }) => {
+    Loop({ start: int(0), end: int(n), type: 'int', condition: '<' }, ({ i }: { i: Node<'int'> }) => {
+      If(T.lessThan(0.01), () => { Break(); });
       const u = float(i).add(jitter).mul(dt);
       const t = select(u.lessThan(lenA), a0.add(u), b0.add(u.sub(lenA)));
       const p = eye.add(d.mul(t));
@@ -140,8 +146,9 @@ export function cloudMarch(eye: V3, d: V3, D: F, far: boolean, jitter: F): Node<
       const b = cloud.base.sub(r).div(thick);
       const c = column(p, 4);
       const wear = mx_fractal_noise_float(inField(p, r).mul(3.3), 2, 2, 0.5);
+      // Domed: the column's height rounds off toward its edges, and finer noise wears the dome into heaps.
       const inside = band(b, 0, 0.04, 0.97, 1).mul(smoothstep(0, 0.12, c));
-      const density = clamp(c.sub(b.mul(b).mul(0.9)).add(wear.mul(0.22)).mul(3), 0, 1).mul(inside);
+      const density = clamp(c.sub(b.mul(b).mul(0.9)).add(wear.mul(0.3)).mul(3), 0, 1).mul(inside);
       // Light from the sunline above, dimmed by the cloud over the sample; brighter seen against it (forward scatter).
       const through = exp(max(c.sub(b), 0).mul(thick).div(-LIGHT_DEPTH));
       const out = p.xy.div(r);
