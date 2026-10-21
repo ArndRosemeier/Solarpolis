@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.039 — Render requests are not lost
+
+- Behind the scenes: the render PC's watcher renders a request at the commit it saw and keeps a request that was pushed again meanwhile; only one watcher can run at a time.
+
 ## v0.038 — Ships at the spindle
 
 - The spindle now has traffic. Torch ships and laser-sail freighters (sail folded in its drum) sit at the berth arms, nose on the docking collar, and others come and go.
