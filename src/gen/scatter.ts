@@ -208,9 +208,11 @@ export function cellsNear(ecology: Ecology, sp: Species, level: Level, eye: Vec3
   const { profile } = ecology.terrain.habitat;
   const at = fromWorld(profile, eye[0], eye[1], eye[2]);
   const [, , , far] = sp.band[level], near = from, cell = sp.cell[level], tall = sp.tall;
-  // Too high above the ground to see any of this plant at this level: none.
-  if (at.h - tall > far) return [];
-  const reach = Math.sqrt(Math.max(0, far * far - Math.max(0, at.h - tall) ** 2)) + cell;
+  // Too high above the ground to see any of this plant at this level: none. Above the ground under the eye, not above
+  // the profile: on a hill the eye stands that much higher over the profile, and its plants with it.
+  const ground = ecology.terrain.heightAt(at.theta, at.s), above = Math.max(0, at.h - ground - tall);
+  if (above > far) return [];
+  const reach = Math.sqrt(Math.max(0, far * far - above * above)) + cell;
   const out: NearCell[] = [];
   const j0 = Math.max(0, Math.floor((at.s - reach) / cell)), j1 = Math.min(Math.ceil(profile.length / cell) - 1, Math.floor((at.s + reach) / cell));
   for (let j = j0; j <= j1; j++) {
@@ -224,7 +226,8 @@ export function cellsNear(ecology: Ecology, sp: Species, level: Level, eye: Vec3
       if (seenCol.has(i)) continue;
       seenCol.add(i);
       const k: CellKey = { species: sp.id, level, j, i }, b = cellBounds(ecology, sp, k);
-      const c = toWorld(profile, { theta: (b.theta0 + b.theta1) / 2, s: (b.s0 + b.s1) / 2, h: 0 });
+      // On the ground under the eye: the cells it stands among are about as high, a far one's rise or fall is small to its distance.
+      const c = toWorld(profile, { theta: (b.theta0 + b.theta1) / 2, s: (b.s0 + b.s1) / 2, h: ground });
       // The nearest and farthest anything in it can be: the middle, give or take half its diagonal and the tallest plant.
       const mid = Math.hypot(c[0] - eye[0], c[1] - eye[1], c[2] - eye[2]), give = Math.hypot(b.s1 - b.s0, (b.theta1 - b.theta0) * r) / 2 + tall;
       if (mid - give < far && mid + give > near) out.push({ key: k, near: Math.max(0, mid - give), far: mid + give });
