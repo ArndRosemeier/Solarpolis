@@ -297,7 +297,7 @@ export function plantCell(ecology: Ecology, plants: readonly Species[], k: CellK
 /** Debris at least this tall (m, the smallest of its kind) stands out of the snow: boulders, not stones. */
 const OUT_OF_SNOW = 0.8;
 /** The share of boulders the snow buries above the snow line: the rest stand out of it. */
-const BURIED = 0.85;
+const BURIED = 0.97;
 
 /**
  * Whether the Mountain's snow keeps a plant or a stone off a point (gen/snow.ts, by gravity: the snow line's band),
