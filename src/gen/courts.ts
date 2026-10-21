@@ -3,21 +3,22 @@
  * digs each one, gen/terrain.ts `courts`). By day a court reads as a hollow of stone in the land; the city's light
  * will rise out of it at night. Each one, in its own frame (x along the axis, y around, z up from its dug floor):
  *
- * - a paved floor, and a wall lining the dug edge from it up to the rim, its top a stone walk round the court, railed
- *   on the drop;
+ * - a floor paved in rings round a light well (glass over the city below, a stone seat round it), and a wall lining
+ *   the dug edge from it up to the rim: a darker plinth, pilasters, a coping, its top a stone walk railed on the drop;
  * - two stairs curving down along the wall from a landing at the rim's lowest point, one each way (one alone where
  *   two would not fit);
- * - on the far side, where the wall is highest, the portal: a stone frame with bronze lift doors, lamps beside it;
+ * - on the far side, where the wall is highest, the portal: a stone frame rising through the walk, bronze lift doors,
+ *   lamps beside it;
  * - stone benches along the wall's foot.
  *
  * The stone is the district's (`STYLE_STONE`: each style builds its courts its own way), and a district that let its
- * land go keeps its courts without railings. Sizes come from the court (its radius and depth, `courtOf` in
+ * land go keeps its courts without railings, slabs missing from their paving. Sizes come from the court (its radius and depth, `courtOf` in
  * gen/plan.ts) and the handrail; steps follow gravity (`riserAt`). Courts stream in tiles over the floor (a
  * `detailTree` grid; `courtTilesFor`, `buildCourtTile`): far, mid and near detail by a tile's size; `courtSolids`
  * gives the physics the courts near a point, and `courtTopAt` what people stand on. Pure.
  */
 import { fromWorld, toWorld, wrapAngle, type DistrictStyle, type Habitat, type Vec3 } from '../blueprint';
-import { v3dot } from '@futuremagic/core';
+import { Rng, deriveSeed, v3dot } from '@futuremagic/core';
 import type { PlacedCourt, Terrain } from './terrain';
 import { planOf } from './plan';
 import { kept } from './kept';
@@ -38,6 +39,12 @@ const PART = {
   door: 2.4, high: 2.8, pilaster: 0.45, project: 0.4, lintel: 0.55,
   /** Benches: length, depth, seat height. */
   bench: 2.6, deep: 0.45, seat: 0.42,
+  /** The wall: its darker plinth's height, the coping's overhang and thickness; pilasters' spacing, width and depth. */
+  plinth: 0.6, over: 0.15, thick: 0.22, spacing: 7, pier: 0.55, proud: 0.18,
+  /** The light well in the middle: its glass (a share of the court's radius) set this far down, the seat round it. */
+  well: 0.13, sink: 0.05, kerb: 0.55,
+  /** The paving's rings and slabs across; the share of slabs gone where the land was let go. */
+  ring: 2.6, slab: 3, gone: 0.22,
 };
 
 /** Rim samples round a court. */
@@ -73,6 +80,7 @@ export interface CourtStep {
 /** Everything about one court, in its frame. Angles from +x (along the axis) toward +y (around). */
 export interface CourtLayout {
   habitat: Habitat;
+  seed: number;
   court: PlacedCourt;
   handrail: number;
   style: DistrictStyle | null;
@@ -94,6 +102,9 @@ export interface CourtLayout {
   portal: { angle: number; width: number; high: number };
   /** Bench angles. */
   benches: number[];
+  /** The light well's glass radius, and the seat round it. */
+  well: number;
+  kerb: number;
 }
 
 /** The rim's height over a court's dug floor at an angle (between its samples). */
@@ -167,7 +178,7 @@ function layCourt(t: Terrain, index: number): CourtLayout | null {
   const end = (dir: number): number => stairs.find((st) => st.dir === dir)?.steps.at(-1)?.a1 ?? (dir > 0 ? landing.a1 : landing.a0);
   const used: [number, number] = [end(-1), end(1)];
   const l: CourtLayout = {
-    habitat: h, court: c, handrail: hr, style: planOf(h).districtAt(c.theta, c.s)?.style ?? null, rim, inner, face, outer, pave, coping,
+    habitat: h, seed: deriveSeed(h.seed, 'court', index), court: c, handrail: hr, well: c.radius * PART.well, kerb: PART.kerb * hr, style: planOf(h).districtAt(c.theta, c.s)?.style ?? null, rim, inner, face, outer, pave, coping,
     landing, stairs, used, portal: { angle: 0, width: PART.door * hr, high: 0 }, benches: [],
   };
   // The portal where the wall is highest, clear of the stairs.
@@ -220,15 +231,23 @@ export function buildCourt(l: CourtLayout, detail: CourtDetail): Shape {
   const far = detail === 'far', near = detail === 'near', solid = detail === 'solid', round = ROUND[detail];
   const bury = -PART.bury * hr;
   sh.finish = look.finish;
-  // The paving, the wall's face and the walk over it, all the way round.
-  sh.arc(l.pave, l.face, l.pave, 0, 1, 0, 0, TAU, round, stone);
-  const ring = arc(0, TAU, round);
+  paving(sh, l, detail, stone);
+  // The wall all the way round: a darker plinth, its face, the coping over it (not over the landing, which is flush
+  // with the walk), the walk on top, its outer lip into the ground.
+  const ring = arc(0, TAU, round), plinth = l.pave + PART.plinth * hr, over = PART.over * hr, thick = PART.thick * hr, dark = shade(stone, 0.72);
   for (let i = 0; i + 1 < ring.length; i++) {
-    const a = ring[i], b = ring[i + 1], wa = walkAt(l, a), wb = walkAt(l, b);
-    sh.wall(l.face, a, b, bury, wa, bury, wb, true, stone);
-    sh.faceToward(polar(l.face, a, wa), polar(l.face, b, wb), polar(l.outer, b, wb), polar(l.outer, a, wa), [0, 0, 1], stone);
+    const a = ring[i], b = ring[i + 1], wa = walkAt(l, a), wb = walkAt(l, b), lip = !solid && !within((a + b) / 2, l.landing.a0, l.landing.a1);
+    sh.wall(l.face, a, b, bury, plinth, bury, plinth, true, dark);
+    sh.wall(l.face, a, b, plinth, lip ? wa - thick : wa, plinth, lip ? wb - thick : wb, true, stone);
+    const inner = lip ? l.face - over : l.face;
+    if (lip) {
+      sh.wall(inner, a, b, wa - thick, wa, wb - thick, wb, true, stone);
+      sh.faceToward(polar(inner, a, wa - thick), polar(inner, b, wb - thick), polar(l.face, b, wb - thick), polar(l.face, a, wa - thick), [0, 0, -1], stone);
+    }
+    sh.faceToward(polar(inner, a, wa), polar(inner, b, wb), polar(l.outer, b, wb), polar(l.outer, a, wa), [0, 0, 1], stone);
     if (!solid) sh.wall(l.outer, a, b, rimAt(l, a) - PART.lip * hr, wa, rimAt(l, b) - PART.lip * hr, wb, false, stone);
   }
+  if (!far && !solid) pilasters(sh, l, stone);
   // The landing and the stairs, as blocks against the wall: their tops, their open sides, the riser down from each.
   const tread = (s: CourtStep, next: number, dir: number, top: boolean): void => {
     const pts = arc(s.a0, s.a1, round * 4);
@@ -269,6 +288,59 @@ export function buildCourt(l: CourtLayout, detail: CourtDetail): Shape {
   return sh;
 }
 
+/** A colour darkened (or lightened) by a factor. */
+const shade = (c: RGB, k: number): RGB => [c[0] * k, c[1] * k, c[2] * k];
+
+/** Whether angle a lies within `margin` (rad) of any of the angles given. */
+const nearAny = (a: number, at: readonly number[], margin: number): boolean => at.some((b) => within(a, b - margin, b + margin));
+
+/**
+ * The floor: the light well in the middle (glass over the city below, crossed by bronze ribs, a stone seat round it),
+ * then rings of slabs out to the wall, every other ring a shade darker. Where the land was let go, slabs are missing.
+ */
+function paving(sh: CourtShape, l: CourtLayout, detail: CourtDetail, stone: RGB): void {
+  const hr = l.handrail, round = ROUND[detail], far = detail === 'far', o = l.well, k = o + l.kerb, glass = l.pave - PART.sink * hr;
+  const seat = l.pave + PART.seat * hr, was = sh.finish;
+  sh.finish = FINISH.ceramic;
+  sh.arc(glass, o, glass, 0, 1, 0, 0, TAU, round, LANTERN);
+  sh.finish = was;
+  for (const [a, b] of pairs(arc(0, TAU, round))) {
+    sh.wall(o, a, b, glass, seat, glass, seat, true, stone);
+    sh.wall(k, a, b, l.pave, seat, l.pave, seat, false, stone);
+  }
+  sh.arc(seat, k, seat, o, 1, 0, 0, TAU, round, stone);
+  if (!far) {
+    sh.finish = FINISH.bronze;
+    for (const a of [0, Math.PI / 2]) sh.block([0, 0, glass + 0.03 * hr], [Math.cos(a), Math.sin(a), 0], [-Math.sin(a), Math.cos(a), 0], [0, 0, 1], [o, 0.05 * hr, 0.03 * hr], BRONZE, true);
+    sh.finish = was;
+  }
+  if (far) { sh.arc(l.pave, l.face, l.pave, k, 1, 0, 0, TAU, round, stone); return; }
+  const rings = Math.max(1, Math.round((l.face - k) / (PART.ring * hr))), rng = new Rng(l.seed), gaps = l.style === 'let-go' && detail === 'near';
+  for (let i = 0; i < rings; i++) {
+    const r0 = k + ((l.face - k) * i) / rings, r1 = k + ((l.face - k) * (i + 1)) / rings, col = i % 2 ? shade(stone, 0.9) : stone;
+    const n = Math.max(6, Math.round((TAU * r1) / (PART.slab * hr))), step = Math.max(1, Math.ceil(round / n));
+    for (let j = 0; j < n; j++) {
+      if (gaps && rng.chance(PART.gone)) continue;
+      sh.arc(l.pave, r1, l.pave, r0, 1, 0, (j / n) * TAU, ((j + 1) / n) * TAU, step, col);
+    }
+  }
+}
+
+/** Consecutive pairs of a list. */
+const pairs = <T>(xs: readonly T[]): [T, T][] => xs.slice(1).map((x, i) => [xs[i], x]);
+
+/** Pilasters up the wall's face, under the coping: clear of the stairs, the portal and the benches. */
+function pilasters(sh: Shape, l: CourtLayout, stone: RGB): void {
+  const hr = l.handrail, n = Math.max(8, Math.round((TAU * l.face) / (PART.spacing * hr))), half = (PART.pier * hr) / 2, d = PART.proud * hr;
+  const clear = (PART.door / 2 + PART.pilaster + PART.pier) * hr / l.face, bench = (PART.bench / 2 + PART.pier) * hr / l.face;
+  for (let k = 0; k < n; k++) {
+    const a = l.portal.angle + ((k + 0.5) / n) * TAU;
+    if (within(a, l.used[0] - clear, l.used[1] + clear) || nearAny(a, [l.portal.angle], clear) || nearAny(a, l.benches, bench)) continue;
+    const top = Math.min(walkAt(l, a - half / l.face), walkAt(l, a + half / l.face)) - PART.thick * hr, z0 = l.pave + PART.plinth * hr;
+    sh.block(polar(l.face - d / 2 + 0.01 * hr, a, (z0 + top) / 2), [-Math.sin(a), Math.cos(a), 0], [-Math.cos(a), -Math.sin(a), 0], [0, 0, 1], [half, d / 2 + 0.01 * hr, (top - z0) / 2], stone, true);
+  }
+}
+
 /** A stair from afar: a flight at a time, one block from its first top to its last. */
 function coarse(steps: readonly CourtStep[]): CourtStep[] {
   const out: CourtStep[] = [];
@@ -288,9 +360,12 @@ function portal(sh: Shape, l: CourtLayout, detail: CourtDetail, stone: RGB): voi
     const x = (x0 + x1) / 2, y = (y0 + y1) / 2;
     sh.block([foot[0] + ex[0] * x + ey[0] * y, foot[1] + ex[1] * x + ey[1] * y, z0 + (za + zb) / 2], ex, ey, [0, 0, 1], [(x1 - x0) / 2, (y1 - y0) / 2, (zb - za) / 2], col);
   };
-  const w = p.width / 2, pw = PART.pilaster * hr, pr = PART.project * hr, top = p.high + PART.lintel * hr, was = sh.finish;
-  for (const s of [-1, 1]) box(s < 0 ? -w - pw : w, s < 0 ? -w : w + pw, -pr, pr, 0, top, stone);
-  box(-w - pw * 1.3, w + pw * 1.3, -pr, pr * 1.3, p.high, top, stone);
+  // The frame rises through the walk above it, so the way down shows from the land around.
+  const w = p.width / 2, pw = PART.pilaster * hr, pr = PART.project * hr, was = sh.finish;
+  const crown = Math.max(p.high + PART.lintel * hr, walkAt(l, a) - z0 + 1.2 * hr), cap = 0.25 * hr;
+  for (const s of [-1, 1]) box(s < 0 ? -w - pw : w, s < 0 ? -w : w + pw, -pr, pr, 0, crown, stone);
+  box(-w, w, -pr * 0.8, pr * 0.8, p.high, crown, stone);
+  box(-w - pw * 1.3, w + pw * 1.3, -pr * 1.25, pr * 1.25, crown, crown + cap, stone);
   sh.finish = FINISH.bronze;
   if (detail === 'far') {
     box(-w, w, -pr / 2, 0.02 * hr, 0, p.high, BRONZE);
@@ -329,6 +404,8 @@ export function courtTop(l: CourtLayout, x: number, y: number): number | null {
     if (within(a, l.landing.a0, l.landing.a1)) return l.landing.top;
     for (const st of l.stairs) for (const s of st.steps) if (within(a, Math.min(s.a0, s.a1), Math.max(s.a0, s.a1))) return s.top;
   }
+  if (r < l.well) return l.pave - PART.sink * l.handrail;
+  if (r < l.well + l.kerb) return l.pave + PART.seat * l.handrail;
   return l.pave;
 }
 

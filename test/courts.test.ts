@@ -93,9 +93,11 @@ for (const { name, params } of MATRIX) {
     if (!courtGridOf(t)) return;
     const l = courtLayoutOf(t, 0)!, c = l.court;
     const at = (r: number, a: number, z = 0) => fromWorld(h.profile, ...courtWorld(h, c, [Math.cos(a) * r, Math.sin(a) * r, z]));
-    const mid = at(0, 0), walk = at((l.face + l.outer) / 2, l.portal.angle), land = at((l.inner + l.face) / 2, (l.landing.a0 + l.landing.a1) / 2);
+    const mid = at((l.well + l.kerb + l.face) / 2, l.portal.angle), well = at(0, 0), walk = at((l.face + l.outer) / 2, l.portal.angle), land = at((l.inner + l.face) / 2, (l.landing.a0 + l.landing.a1) / 2);
     const near = (x: number | null, y: number): boolean => x !== null && Math.abs(x - y) < l.handrail * 0.02;
     assert.ok(near(courtTopAt(t, mid.theta, mid.s), c.floor + l.pave), 'on the paving');
+    const glass = courtTopAt(t, well.theta, well.s);
+    assert.ok(glass !== null && glass > c.floor && glass < c.floor + l.pave, 'on the light well\'s glass, over the dug floor');
     assert.ok(near(courtTopAt(t, walk.theta, walk.s), c.floor + rimAt(l, l.portal.angle) + l.coping), 'on the walk');
     assert.ok(near(courtTopAt(t, land.theta, land.s), c.floor + l.landing.top), 'on the landing');
     assert.equal(landmarkTopAt(t, mid.theta, mid.s), courtTopAt(t, mid.theta, mid.s), 'the view stands people on it');
