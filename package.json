@@ -13,7 +13,8 @@
     "test": "node tools/guards/guards.mjs && node --import tsx --test --experimental-test-isolation=none --test-concurrency=1 --test-reporter=./tools/ci/budget-reporter.mjs --test-reporter-destination=stdout \"test/*.test.ts\" \"tools/**/*.test.mjs\"",
     "test:slow": "node --import tsx --test \"test/slow/**/*.slow.test.ts\"",
     "dup": "node tools/duplicate-candidates/find-duplicate-candidates.mjs",
-    "repeated": "node tools/repeated-code/find-repeated-code.mjs"
+    "repeated": "node tools/repeated-code/find-repeated-code.mjs",
+    "shots": "node scripts/shots/shots.mjs"
   },
   "dependencies": {
     "@actors/core": "https://github.com/ArndRosemeier/Actors/releases/download/v0.5.0/actors-core-0.5.0.tgz",
@@ -28,6 +29,7 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@types/three": "^0.186.0",
+    "playwright-core": "^1.64.1",
     "tsx": "^4.23.15",
     "typescript": "~5.9.0",
     "vite": "^8.3.1"
