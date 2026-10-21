@@ -268,18 +268,19 @@ export function select(terrain: Terrain, layout: TileLayout, eye: Vec3, pixelsPe
 /**
  * Keeps the tiles a view uses within its share of the cache's bytes: after each frame the view reports the bytes of
  * the built tiles it drew or kept, and while they are over `high` of the budget the selection's pixel error is let
- * grow (`scale`, ×1.25 a frame), coarser tiles standing in; well under (`low`) it eases back to 1. Whatever the ground
+ * grow (`scale`, ×1.05 a frame: small steps, so it stops near what the view needs), coarser tiles standing in; under
+ * `low` it eases back to 1. Coarser by ×1.05 is about 10 % fewer tiles, so the gap between the two holds it still. Whatever the ground
  * (a cliff's error does not shrink as tiles split), the view's memory stays bounded, and nothing is evicted that a
  * view still uses.
  */
 export class LodBudget {
   /** Multiplies the selection's `maxPixels`. */
   scale = 1;
-  constructor(readonly bytes: number, private readonly high = 0.75, private readonly low = 0.5, private readonly most = 64) {}
+  constructor(readonly bytes: number, private readonly high = 0.8, private readonly low = 0.6, private readonly most = 64) {}
 
   /** After a frame: the bytes of the built tiles the view drew or kept. Returns the scale for the next frame. */
   update(used: number): number {
-    if (used > this.bytes * this.high) this.scale = Math.min(this.most, this.scale * 1.25);
+    if (used > this.bytes * this.high) this.scale = Math.min(this.most, this.scale * 1.05);
     else if (used < this.bytes * this.low && this.scale > 1) this.scale = Math.max(1, this.scale / 1.02);
     return this.scale;
   }

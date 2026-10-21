@@ -296,8 +296,8 @@ test('tiles: a view over its bytes is drawn coarser until it fits, and eases bac
   const used = (): number => { const sel = select(t, layout, eye, PX_PER_RAD, 2 * budget.scale, fit); return (sel.draw.length + sel.keep.length) * TILE; };
   assert.ok(used() > budget.bytes, 'the view needs more than the budget at full detail');
   let now = used();
-  for (let f = 0; f < 30 && now > budget.bytes * 0.75; f++) { budget.update(now); now = used(); }
-  assert.ok(budget.scale > 1 && now <= budget.bytes * 0.75, `scale ${budget.scale.toFixed(2)}: ${(now / 1048576).toFixed(0)} MB`);
+  for (let f = 0; f < 80 && now > budget.bytes * 0.8; f++) { budget.update(now); now = used(); }
+  assert.ok(budget.scale > 1 && now <= budget.bytes * 0.8, `scale ${budget.scale.toFixed(2)}: ${(now / 1048576).toFixed(0)} MB`);
   for (let f = 0; f < 400; f++) budget.update(0);
   assert.equal(budget.scale, 1);
 });
