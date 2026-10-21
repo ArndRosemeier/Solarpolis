@@ -9,7 +9,7 @@ import { toView, type Habitat } from '../blueprint';
 import { makeTerrain, type Terrain } from '../gen/terrain';
 import { Walker } from '../world/walker';
 import { WorkerPool } from '../workers/pool';
-import { SUNLINE, air, allKinds, view } from './materials';
+import { SUNLINE, air, allKinds, standInAttribute, view } from './materials';
 import { TerrainView, describeLayout } from './terrain';
 
 /** Running is this many times the walking speed. */
@@ -44,7 +44,7 @@ export class InteriorView {
     // Reversed depth: from a blade of grass at the feet to the far endcap tens of kilometres away, in one view.
     v.renderer = (await createRenderer(v.canvas, { backends: 'webgpu', depth: 'reversed' })).renderer;
     v.scene.background = new Color(...(air.haze.value as Color).toArray());
-    v.stage = new Stage(v.renderer, v.scene, v.camera, { kinds: allKinds });
+    v.stage = new Stage(v.renderer, v.scene, v.camera, { kinds: allKinds, attribute: standInAttribute });
     v.place();
     await v.stage.warmUp();
     await v.build();
