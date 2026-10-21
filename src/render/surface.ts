@@ -6,6 +6,32 @@
 import type { PerspectiveCamera, WebGPURenderer } from 'three/webgpu';
 import type { Stage } from '@futuremagic/stage';
 
+/**
+ * A view's frame loop and the keys held down while it is shown: `set(true)` starts calling `frame(dt)` every
+ * animation frame, `set(false)` stops it and lets go of every key. `onKey` sees each key press while it runs.
+ */
+export class FrameLoop {
+  running = false;
+  readonly keys = new Set<string>();
+
+  constructor(private readonly frame: (dt: number) => void, onKey: (e: KeyboardEvent) => void = () => {}) {
+    window.addEventListener('keydown', (e) => {
+      if (!this.running) return;
+      onKey(e);
+      this.keys.add(e.code);
+    });
+    window.addEventListener('keyup', (e) => this.keys.delete(e.code));
+    window.addEventListener('blur', () => this.keys.clear());
+  }
+
+  set(on: boolean): void {
+    const was = this.running;
+    this.running = on;
+    if (!on) this.keys.clear();
+    else if (!was) runFrames(() => this.running, this.frame);
+  }
+}
+
 /** Call `frame(dt)` every animation frame while `on()` holds; dt in seconds, at most 0.1. */
 export function runFrames(on: () => boolean, frame: (dt: number) => void): void {
   let last = performance.now();
@@ -56,4 +82,14 @@ export function dragToLook(canvas: HTMLCanvasElement, drag: (dx: number, dy: num
 export function draw(stage: Stage): void {
   stage.frame();
   stage.renderer.render(stage.scene, stage.camera);
+}
+
+/** What the movement keys held down ask for: W A S D or the arrows, E or Space up, Q or C down, Shift faster. */
+export function moveKeys(k: ReadonlySet<string>): { forward: number; right: number; up: number; fast: boolean } {
+  return {
+    forward: (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0),
+    right: (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0),
+    up: (k.has('KeyE') || k.has('Space') ? 1 : 0) - (k.has('KeyQ') || k.has('KeyC') ? 1 : 0),
+    fast: k.has('ShiftLeft') || k.has('ShiftRight'),
+  };
 }

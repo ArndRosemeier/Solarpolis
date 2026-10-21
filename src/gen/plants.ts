@@ -7,7 +7,7 @@
  * middle, so a crown shades as one soft mass the way a tree does from a distance, while its outline stays broken.
  * Pure (no three.js): built once at load, in a worker or the main thread.
  */
-import { Rng, deriveSeed, v3cross as cross } from '@futuremagic/core';
+import { Rng, deriveSeed, v3cross as cross, v3norm as norm } from '@futuremagic/core';
 import type { PlantForm, PlantSpec, Rgb } from '../blueprint';
 
 export interface PlantMesh {
@@ -220,11 +220,6 @@ const FORMS: Record<PlantForm, FormBuilder> = {
 
 function sphereRadii(rng: Rng, r: number): V3 {
   return [r * rng.range(0.85, 1.15), r * rng.range(0.7, 0.95), r * rng.range(0.85, 1.15)];
-}
-
-function norm(v: V3): V3 {
-  const l = Math.hypot(v[0], v[1], v[2]) || 1;
-  return [v[0] / l, v[1] / l, v[2] / l];
 }
 
 

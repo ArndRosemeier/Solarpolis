@@ -88,7 +88,7 @@ test('sky: Earth hides the Sun around local midnight near the equinox, for about
 });
 
 test('exposure: full Earth in view sets it near 0.6, a sunlit hull against black keeps its highlights, empty sky opens the eyes', async () => {
-  const { exposureFor, adapt, KEY, DARKEST, HIGHLIGHT_LEVEL } = await import('../src/render/exposure');
+  const { exposureFor, adapt, KEY, DARKEST, HIGHLIGHT_LEVEL, ANCHOR_LEVEL } = await import('../src/render/exposure');
   const s = makeSpace(REFERENCE_SPACE);
   // Local noon at the equinox: the Sun behind the eye, Earth full.
   const t0 = tOf(s, 3026, 3, 20);
@@ -101,17 +101,36 @@ test('exposure: full Earth in view sets it near 0.6, a sunlit hull against black
   const sky = skyFrom(s, s.home.orbitFrame, [0, 0, 0], t);
   const toEarth = sky.earth.center.map((c) => c / Math.hypot(...sky.earth.center)) as Vec3;
   const away = toEarth.map((c) => -c) as Vec3;
-  near(exposureFor({ sky, hull: null, earthshine: 0 }, [toEarth], DARKEST.plain), KEY / 0.3, 0.05, 'exposure on full Earth (albedo 0.3)');
+  near(exposureFor({ sky, hulls: [], earthshine: 0 }, [toEarth], DARKEST.plain), KEY / 0.3, 0.05, 'exposure on full Earth (albedo 0.3)');
   // One ray in five on a hull lit face-on by the Sun (seen from the Sun's side), the rest black: the hull sets it.
-  const sun = sky.sunDir, back = v3scale(sun, -1), hull = { center: v3scale(back, 1e5), axis: [0, 0, 1] as Vec3, radius: 4000, halfLength: 15000 };
+  const sun = sky.sunDir, back = v3scale(sun, -1), hull = { center: v3scale(back, 1e5), axis: [0, 0, 1] as Vec3, radius: 4000, halfLength: 15000, albedo: 0.08 };
   const pole: Vec3 = [0, 0, 1];
   const rays: Vec3[] = [back, pole, pole, pole, pole];
-  const lit = exposureFor({ sky: { ...sky, sunlight: 1 }, hull, earthshine: 0 }, rays, DARKEST.plain);
-  near(lit, HIGHLIGHT_LEVEL / 0.08, 0.5, 'the sunlit hull sets the exposure');
-  const dark = exposureFor({ sky: { ...sky, sunlight: 0 }, hull: null, earthshine: 0 }, [away], DARKEST.plain);
+  const lit = exposureFor({ sky: { ...sky, sunlight: 1 }, hulls: [hull], earthshine: 0 }, rays, DARKEST.plain);
+  near(lit, Math.min(HIGHLIGHT_LEVEL / 0.08, ANCHOR_LEVEL), 1e-6, 'the sunlight on the hull sets the exposure: a dark hull stays dark');
+  const dark = exposureFor({ sky: { ...sky, sunlight: 0 }, hulls: [], earthshine: 0 }, [away], DARKEST.plain);
   near(dark, KEY / DARKEST.plain, 1e-6 * KEY / DARKEST.plain, 'eyes open to their limit');
   // Adapting: a second in the light gets most of the way; the dark takes longer.
   const target = KEY / 0.3;
   assert.ok(Math.abs(Math.log(adapt(1e3, target, 1) / target)) < 0.25 * Math.log(1e3 / target), 'quick into the light');
   assert.ok(adapt(1, dark, 1) < 0.5 * dark, 'slow into the dark');
+});
+
+test('heroic stars: without the Sun in view a magnitude-0 star peaks at HEROIC_PEAK; with it, the eyes\' own exposure', async () => {
+  const { starExposure, sunInView, HEROIC_PEAK, STAR_SIGMA, PERIPHERY } = await import('../src/render/exposure');
+  for (const omega of [1e-7, 1.2e-6, 1e-5]) {
+    const e = starExposure(2.5, omega, 0);
+    const peak = ((fluxOfMagnitude(0) * Math.PI) / omega / (2 * Math.PI * STAR_SIGMA * STAR_SIGMA)) * e;
+    assert.ok(Math.abs(peak / HEROIC_PEAK - 1) < 1e-9);
+    assert.equal(starExposure(1e12, omega, 0), 1e12);
+    assert.equal(starExposure(2.5, omega, 1), 2.5);
+    assert.equal(starExposure(2.5, omega, 0, false), 2.5);
+    const half = starExposure(2.5, omega, 0.5);
+    assert.ok(Math.abs(half - Math.sqrt(2.5 * e)) < 1e-6 * half);
+  }
+  assert.equal(sunInView(0.3, 0.5, 1), 1);
+  assert.equal(sunInView(0.5 * PERIPHERY, 0.5, 1), 0);
+  assert.equal(sunInView(0.3, 0.5, 0), 0);
+  const mid = sunInView(0.5 * (1 + PERIPHERY) / 2, 0.5, 1);
+  assert.ok(mid > 0.45 && mid < 0.55);
 });

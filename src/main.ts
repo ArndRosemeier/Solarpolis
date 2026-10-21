@@ -5,6 +5,7 @@
  */
 import './app/style.css';
 import { el } from './app/dom';
+import { TitleCard } from './app/title';
 import { DebugMenu } from './app/debug';
 import { MemoryWatchdog, browserHeap, thisDeviceBudget, type PressureLevel } from './app/memory';
 import { VERSION, whatsNewButton } from './app/whatsNew';
@@ -23,7 +24,9 @@ const header = el('header', 'top');
 const tabs = el('nav', 'tabs');
 const labTab = el('button', 'tab on', 'Blueprint'), insideTab = el('button', 'tab', 'Inside'), outsideTab = el('button', 'tab', 'Outside');
 tabs.append(labTab, insideTab, outsideTab);
-header.append(el('h1', '', 'Solarpolis'), tabs, whatsNewButton());
+const home = el('h1', '', 'Solarpolis');
+home.title = 'Back to the title';
+header.append(home, tabs, whatsNewButton());
 app.append(header);
 
 // ---- the memory watchdog --------------------------------------------------------------------------
@@ -42,7 +45,7 @@ const lab = new BlueprintLab(new URLSearchParams(location.search), (query) => {
   // The Lab owns the habitat's fields; the open view rides along.
   const q = new URLSearchParams(query);
   const open = new URLSearchParams(location.search).get('view');
-  if (open === 'inside' || open === 'outside') q.set('view', open);
+  if (open === 'inside' || open === 'outside' || open === 'lab') q.set('view', open);
   const all = q.toString();
   history.replaceState(null, '', all ? `?${all}` : location.pathname);
 });
@@ -93,33 +96,49 @@ const insideSlot = new ViewSlot('Hold the right mouse button to look around · W
   memory.track('player body', () => v.bodyBytes());
   return v;
 });
-const outsideSlot = new ViewSlot('Hold the right mouse button to swing around · wheel to come closer · 1 habitat, 2 Earth, 3 Moon', 'Building the sky…', 'sky maps and stars', (h) => OutsideView.create(h));
+const outsideSlot = new ViewSlot('Hold the right mouse button to swing around · wheel to come closer · 1 habitat, 2 Earth, 3 Moon, 4 nearest neighbour · F to fly (W A S D, E up, Q down, Shift faster)', 'Building the sky…', 'sky maps and stars', (h) => OutsideView.create(h));
 // The views fill the window below the header, whatever height the header wraps to.
 const fit = (): void => { for (const s of [insideSlot, outsideSlot]) s.box.style.setProperty('--top', `${header.getBoundingClientRect().bottom}px`); };
 new ResizeObserver(fit).observe(header);
 let starting: Promise<void> | null = null;
 
-type Tab = 'lab' | 'inside' | 'outside';
+// The title: the Outside view flying its attract loop, with the card over it. It is where the page opens.
+const title = new TitleCard(() => showTab('inside'));
+outsideSlot.box.append(title.root);
+
+type Tab = 'title' | 'lab' | 'inside' | 'outside';
 function showTab(which: Tab): void {
   labTab.classList.toggle('on', which === 'lab');
   insideTab.classList.toggle('on', which === 'inside');
   outsideTab.classList.toggle('on', which === 'outside');
   lab.root.hidden = which !== 'lab';
+  const titled = which === 'title';
+  title.show(titled);
+  outsideSlot.box.classList.toggle('titled', titled);
   for (const [tab, slot] of [['inside', insideSlot], ['outside', outsideSlot]] as const) {
-    slot.box.hidden = which !== tab;
-    if (which === tab) starting = (starting ?? Promise.resolve()).then(() => slot.show());
+    const on = which === tab || (titled && tab === 'outside');
+    slot.box.hidden = !on;
+    if (on) starting = (starting ?? Promise.resolve()).then(() => slot.show());
     else slot.view?.setRunning(false);
   }
+  starting = (starting ?? Promise.resolve()).then(async () => {
+    const v = outsideSlot.view;
+    if (!v) return;
+    v.onTitle = titled ? (x) => title.fade(x) : null;
+    if (titled && !v.attracting) await v.startAttract();
+    else if (!titled && v.attracting) v.stopAttract();
+  });
   const q = new URLSearchParams(location.search);
-  if (which !== 'lab') q.set('view', which); else q.delete('view');
+  if (which !== 'title') q.set('view', which); else q.delete('view');
   const query = q.toString();
   history.replaceState(null, '', query ? `?${query}` : location.pathname);
 }
+home.addEventListener('click', () => showTab('title'));
 labTab.addEventListener('click', () => showTab('lab'));
 insideTab.addEventListener('click', () => showTab('inside'));
 outsideTab.addEventListener('click', () => showTab('outside'));
 const opened = new URLSearchParams(location.search).get('view');
-if (opened === 'inside' || opened === 'outside') showTab(opened);
+showTab(opened === 'inside' || opened === 'outside' || opened === 'lab' ? opened : 'title');
 
 // ---- the debug menu ------------------------------------------------------------------------------
 debug.addInfo(() => `Solarpolis ${VERSION}`);
@@ -147,9 +166,10 @@ const nextSpeed = (speeds: number[], now: number): number => speeds[(speeds.inde
 debug.add({ label: 'Clock speed: ×60 → ×600 → paused → real time', group: 'Time', run: () => { const v = view(); if (v) v.timeScale = nextSpeed([60, 600, 0, 1], v.timeScale); } });
 debug.add({ label: 'Two hours later', group: 'Time', run: () => view()?.skip(7200) });
 debug.addInfo(() => outsideView()?.info() ?? 'outside: not started');
-debug.add({ label: 'Clock speed outside: ×60 → ×3600 → paused → real time', group: 'Outside', run: () => { const v = outsideView(); if (v) v.timeScale = nextSpeed([60, 3600, 0, 1], v.timeScale); } });
+debug.add({ label: 'Clock speed outside: real time → ×60 → ×3600 → paused', group: 'Outside', run: () => { const v = outsideView(); if (v) v.timeScale = nextSpeed([1, 60, 3600, 0], v.timeScale); } });
 debug.add({ label: 'Six hours later', group: 'Outside', run: () => outsideView()?.skip(6 * 3600) });
 debug.add({ label: "Jump to Earth's next shadow on the habitat", group: 'Outside', run: () => { const v = outsideView(); if (v && !v.nextShadow()) console.log('no shadow within a year'); } });
+debug.add({ label: 'Heroic stars (toggle): off shows them as true eyes would', group: 'Outside', run: () => { const v = outsideView(); if (v) v.heroicStars = !v.heroicStars; } });
 debug.add({ label: 'Night eyes augmentation (toggle): the eyes open far enough for the stars', group: 'Outside', run: () => { const v = outsideView(); if (v) v.nightEyes = !v.nightEyes; } });
 debug.addInfo(() => view()?.physicsLine() ?? '');
 debug.add({ label: 'Drop a ball from 20 m', group: 'Physics', run: () => void view()?.dropBall(20) });

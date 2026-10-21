@@ -150,6 +150,7 @@ export class BlueprintLab {
       ['Rubble padding', `${h.paddingThickness.toFixed(1)} m, ${(h.paddingMass / 1e12).toFixed(2)} billion t`],
       ['Sunlight collected', si(h.sunlight, 'W')],
       ['Solar power', si(h.solarPower, 'W')],
+      ['Light collectors', `${(h.collectorShare * 100).toFixed(0)}% of the skin, piping ${si(h.params.pipedLight * h.lightPower, 'W')} of sunlight to the sunline`],
       ['Light the floor needs', si(h.lightPower, 'W')],
       ['Heat released inside', si(h.heat, 'W')],
       ['Radiators needed', `${(h.radiatorArea / 1e6).toFixed(0)} km² of radiating faces, ${h.radiatorToEndcaps.toFixed(1)}× the endcaps`],

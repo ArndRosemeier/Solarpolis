@@ -20,7 +20,8 @@ import { sunShadow } from './lights';
 import { OPEN_SKY } from '../gen/horizon';
 import { EMISSION_SAMPLES, SUNLINE_STEPS } from '../world/sunline';
 import { HAZE_STEPS } from '../world/air';
-import { hullColor, skyDome, starColor, starVertex } from './skyShaders';
+import { skyDome, starColor, starVertex } from './skyShaders';
+import { flameColor, hardwareColor, radiatorColor, skinColor } from './hullShaders';
 
 /** The air's look, shared by every kind (uniforms: changing them never builds a shader). */
 export const air = {
@@ -239,10 +240,34 @@ export const STARS = kind('stars', ['position', 'color', 'corner'], { cast: fals
   return m;
 });
 
-/** A habitat's hull from outside: drum, endcap faces, brims, mast and the despun spindle. Position, normal, color. */
-export const HULL = kind('hull', ['position', 'normal', 'color'], { cast: false, receive: false }, () => {
+/**
+ * A habitat from outside (hullShaders.ts): the drum's solar skin, its panel patchwork drawn per pixel from the mesh's
+ * `userData.skin`. Position, normal.
+ */
+export const SKIN = kind('skin', ['position', 'normal'], { cast: false, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial();
+  m.colorNode = skinColor();
+  return m;
+});
+
+/** The radiators: endcap faces and brims, both sides (`userData.skin` sizes their strips). Position, normal. */
+export const RADIATOR = kind('radiator', ['position', 'normal'], { cast: false, receive: false }, () => {
   const m = new MeshBasicNodeMaterial({ side: DoubleSide });
-  m.colorNode = hullColor();
+  m.colorNode = radiatorColor();
+  return m;
+});
+
+/** Plain hardware outside: the spindle, its berth arms, the mast. Position, normal, color (albedo). */
+export const HARDWARE = kind('hardware', ['position', 'normal', 'color'], { cast: false, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial();
+  m.colorNode = hardwareColor();
+  return m;
+});
+
+/** A torch's exhaust plume (hullShaders.ts, `flameColor`): glowing plasma added on top. Position, normal. */
+export const FLAME = kind('flame', ['position', 'normal'], { cast: false, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial({ side: DoubleSide, transparent: true, blending: AdditiveBlending, depthWrite: false });
+  m.colorNode = flameColor();
   return m;
 });
 
@@ -303,7 +328,7 @@ export function plantInstances(g: BufferGeometry, data: Float32Array): void {
 
 /** The kinds of the view outside, for its Stage's warm-up (windows will add them to the interior's). */
 export function outsideKinds(): readonly Kind[] {
-  return [SKY, STARS, HULL];
+  return [SKY, STARS, SKIN, RADIATOR, HARDWARE, FLAME];
 }
 
 /** Things the physics moves (for now the debug menu's test balls): one colour, lit by the sunline, through the air. */

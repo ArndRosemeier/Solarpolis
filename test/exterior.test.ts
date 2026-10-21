@@ -6,17 +6,19 @@ import { derive, validate, isValid, withParams, MATRIX, REFERENCE } from '../src
 const near = (got: number, want: number, rel: number, what: string): void =>
   assert.ok(Math.abs(got - want) <= Math.abs(want) * rel, `${what}: got ${got}, want ${want} ± ${rel * 100}%`);
 
-test('exterior: the reference sheds 203 GW through one brim per end, 5.9 km out', () => {
+test('exterior: the reference sheds 130 GW through one brim per end, 5.0 km out', () => {
   const h = derive(REFERENCE);
-  near(h.heat / 1e9, 203, 0.01, 'heat released inside (GW)');
+  near(h.heat / 1e9, 130, 0.01, 'heat released inside (GW)');
   near(h.heat, h.solarPower + REFERENCE.pipedLight * h.lightPower, 1e-12, 'electricity plus piped light');
   assert.equal(h.exterior.brimsPerEnd, 1);
-  near(h.exterior.brims[0].tip / 1000, 5.9, 0.02, 'brim tip radius (km)');
+  near(h.exterior.brims[0].tip / 1000, 5.0, 0.02, 'brim tip radius (km)');
 });
 
-test('exterior: more piped light means more heat inside and wider brims', () => {
+test('exterior: piping more light in trades solar cells for collectors, so less heat is released inside and the brims shrink', () => {
   const lo = derive(withParams({ pipedLight: 0 })), hi = derive(withParams({ pipedLight: 1 }));
-  assert.ok(hi.heat > lo.heat && hi.exterior.brims[0].tip > lo.exterior.brims[0].tip);
+  assert.equal(lo.collectorShare, 0);
+  assert.ok(hi.collectorShare > 0.5 && hi.solarPower < lo.solarPower);
+  assert.ok(hi.heat < lo.heat && hi.exterior.brims[0].tip < lo.exterior.brims[0].tip);
 });
 
 test('exterior: brims that cannot shed the heat, or fly apart, make the habitat invalid', () => {

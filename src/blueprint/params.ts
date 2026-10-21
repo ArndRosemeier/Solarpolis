@@ -89,6 +89,16 @@ export interface ExteriorShape {
   mastLength: number;
   /** Berth arms on the spindle. */
   berthArms: number;
+  /** Torch ships cut their drive this far out (in outer radii): their exhaust would scorch the skin. */
+  keepOut: number;
+  /** Edge of one skin panel (m): the solar skin is a grid of panels this size around and along the drum. */
+  panel: number;
+  /** A repair campaign renews a patch of the skin this many panels around and along at once. */
+  campaign: { around: number; along: number };
+  /** Mean working life of a skin panel (years): the older a repair campaign, the more of its panels were swapped since. */
+  panelLife: number;
+  /** Share of the solar panels that are starfloor windows: rooms in the living layer looking out through the hull. */
+  starfloors: number;
 }
 
 export interface HabitatParams {
@@ -124,6 +134,8 @@ export interface HabitatParams {
   lightTarget: number;
   /** Share of the sunline's light that is sunlight piped in from the collectors (0–1); the rest is made from electricity. */
   pipedLight: number;
+  /** Share of the visible sunlight falling on a collector strip that reaches the sunline through the light pipes (0–1). */
+  collectorEfficiency: number;
   /** The endcap radiators: emissivity and working temperature (K). */
   radiator: { emissivity: number; temperature: number };
   /** Radius of the non-rotating dock hub at the port end's axis (m). The wild end climbs to the axis itself. */

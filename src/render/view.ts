@@ -25,7 +25,7 @@ import { densityFalloff, seenMid } from '../world/air';
 import { TerrainView, describeLayout } from './terrain';
 import { PlantView } from './plants';
 import { makeEcology } from '../gen/ecology';
-import { dragToLook, draw, fitCanvas, runFrames } from './surface';
+import { FrameLoop, dragToLook, draw, fitCanvas, moveKeys } from './surface';
 
 /** Running is this many times the walking speed. */
 const RUN = 8;
@@ -68,8 +68,10 @@ export class InteriorView {
   private sunline: Mesh | null = null;
   /** In the air, or null on foot. */
   private flyer: Flyer | null = null;
-  private keys = new Set<string>();
-  private running = false;
+  private readonly loop = new FrameLoop((dt) => this.frame(dt), (e) => {
+    if (e.code === 'KeyF' && !e.repeat) this.toggleFlying();
+    if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) this.jump = true; }
+  });
   /** Travel speed multiplier from the debug menu. */
   boost = 1;
   /**
@@ -413,26 +415,16 @@ export class InteriorView {
       if (this.flyer) this.flyer.turn(dx * k, -dy * k);
       else this.walker.turn(dx * k, -dy * k);
     });
-    window.addEventListener('keydown', (e) => {
-      if (!this.running) return;
-      if (e.code === 'KeyF' && !e.repeat) this.toggleFlying();
-      if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) this.jump = true; }
-      this.keys.add(e.code);
-    });
     // The wheel moves the camera on foot between the player's eyes and behind them (flying has no body).
     this.canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
-      if (this.running && !this.flyer) this.zoom(e.deltaY);
+      if (this.loop.running && !this.flyer) this.zoom(e.deltaY);
     }, { passive: false });
-    window.addEventListener('keyup', (e) => this.keys.delete(e.code));
-    window.addEventListener('blur', () => this.keys.clear());
   }
 
   /** Start or stop drawing (the page shows one view at a time). */
   setRunning(on: boolean): void {
-    this.running = on;
-    if (!on) { this.keys.clear(); return; }
-    runFrames(() => this.running, (dt) => this.frame(dt));
+    this.loop.set(on);
   }
 
   /** The last frame's time step (s), for posing the body. */
@@ -441,12 +433,9 @@ export class InteriorView {
   private frame(dt: number): void {
     this.frameDt = dt;
     this.glide(dt);
-    const k = this.keys;
-    const forward = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
-    const right = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0);
-    const run = this.boost * (k.has('ShiftLeft') || k.has('ShiftRight') ? RUN : 1);
+    const { forward, right, up, fast } = moveKeys(this.loop.keys);
+    const run = this.boost * (fast ? RUN : 1);
     if (this.flyer) {
-      const up = (k.has('KeyE') || k.has('Space') ? 1 : 0) - (k.has('KeyQ') || k.has('KeyC') ? 1 : 0);
       this.flyer.boost = run;
       this.flyer.step({ forward, right, up }, dt);
     } else {
