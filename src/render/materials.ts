@@ -231,10 +231,10 @@ export const GROUND = kind('ground', ['position', 'normal', 'color', 'morph', 'h
   const floorUp = floorSurface(base, normalize(normalWorld));
   // From afar, crowns and the gaps between them, clumps and glades (groundShaders.ts, docs/far-view.md).
   const fromAfar = woodsFromAfar(base, canopy.rgb, horizon.z, horizon.w, worldPosition());
-  // The Mountain's snow over both (groundShaders.ts, gen/snow.ts): it smooths the floor's relief where it lies.
+  // The Mountain's snow over both (groundShaders.ts, gen/snow.ts): where it lies, its own dunes take the floor's relief.
   const geometric = normalize(normalWorld);
   const snow = snowOver(mix(floorUp.color, fromAfar, far), geometric, worldPosition());
-  const ground = snow.color, surface = normalize(mix(floorUp.normal, geometric, snow.cover));
+  const ground = snow.color, surface = normalize(mix(floorUp.normal, snow.normal, snow.cover));
   // Under the woods past the shadow map's reach, the crowns' shade on average (`crownsClosed`): the floor stays in
   // the shade the near trees cast, and the canopy seen from afar keeps its sunlit tops.
   const beyond = smoothstep(SHADOW_HALF * 0.6, SHADOW_HALF * 0.9, away).mul(float(1).sub(far));

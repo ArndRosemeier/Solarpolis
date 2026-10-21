@@ -14,7 +14,7 @@
  */
 import { DataArrayTexture, Vector3, type Node } from 'three/webgpu';
 import { filtered } from './textures';
-import { Fn, If, abs, attribute, clamp, dFdx, dFdy, exp, float, floor, int, length, log, max, min, mix, mx_noise_float, fract, dot, vec4, normalize, positionWorld, pow, select, smoothstep, sqrt, texture, uniform, uniformArray, vec2, vec3 } from 'three/tsl';
+import { Fn, If, abs, attribute, clamp, dFdx, dFdy, exp, float, floor, int, length, log, max, min, mix, mx_noise_float, mx_noise_vec3, fract, dot, vec4, normalize, positionWorld, pow, select, smoothstep, sqrt, texture, uniform, uniformArray, vec2, vec3 } from 'three/tsl';
 import { FLOOR_LAYERS, type FloorLayer, type HabitatParams } from '../blueprint';
 import type { WorkerPool } from '../workers/pool';
 import { GROUND_LAYERS, GROUND_TEX } from '../gen/groundTex';
@@ -304,22 +304,38 @@ export function setSnow(f: SnowField): void {
 }
 /** Up close the snow's edge breaks into patches about this wide (m); drifts grey it over this (m); ripples (m). */
 const SNOW_PATCH = 9, SNOW_DRIFT = 40, SNOW_RIPPLE = 0.7;
+/** The snow's own relief: wind-built dunes (m across, and how far they tilt the surface) and the ridges on them. */
+const SNOW_DUNE = 22, DUNE_TILT = 0.35, SNOW_RIDGE = 1.6, RIDGE_TILT = 0.2;
 
 /**
  * Snow over the ground (GROUND, after its near and far looks are blended, so both get the same snow): `ground` its
  * colour, `normal` the surface's (the geometric one, not the floor's relief), `world` the point. Where it lies is
  * gen/snow.ts's rule, here with the line's edge ragged over the band and broken into patches up close; each pattern
  * gives way to its mean as the footprint grows (`footprint`), so the snowfield across the habitat holds the snow the
- * CPU counts with. Returns the colour and how much snow covers the point (for the normal: snow smooths the relief).
+ * CPU counts with. Returns the colour, how much snow covers the point, and the snow's surface (its own dunes and ridges
+ * over the geometric normal, for the light: snow smooths the floor's relief and makes its own).
  */
-export function snowOver(ground: Node<'vec3'>, normal: Node<'vec3'>, world: Node<'vec3'>): { color: Node<'vec3'>; cover: Node<'float'> } {
+export function snowOver(ground: Node<'vec3'>, normal: Node<'vec3'>, world: Node<'vec3'>): { color: Node<'vec3'>; cover: Node<'float'>; normal: Node<'vec3'> } {
   // Footprints first: derivatives are only defined outside the branch.
   const { shown } = footprint();
   const showEdge = shown(snowBand.mul(1.2)), showPatch = shown(float(SNOW_PATCH)), showDrift = shown(float(SNOW_DRIFT)), showRipple = shown(float(SNOW_RIPPLE));
+  const showDune = shown(float(SNOW_DUNE)), showRidge = shown(float(SNOW_RIDGE));
   const r = length(world.xy);
+  const near = world.z.lessThan(snowSide).and(r.lessThan(snowLine.add(snowBand.mul(2))));
+  // The snow's surface: dunes and the ridges on them tilt it, so the light shows its shape. A tilt from afar averages
+  // out, so each fades by its footprint like the colours.
+  const surface = Fn(() => {
+    const out = vec3(normal).toVar();
+    If(near, () => {
+      const tilt = mx_noise_vec3(world.div(SNOW_DUNE).add(vec3(1.7, 4.4, 9.2))).mul(showDune.mul(DUNE_TILT))
+        .add(mx_noise_vec3(world.div(SNOW_RIDGE).add(vec3(6.1, 0.3, 2.8))).mul(showRidge.mul(RIDGE_TILT)));
+      out.assign(normalize(normal.add(tilt.sub(normal.mul(dot(tilt, normal))))));
+    });
+    return out;
+  })() as unknown as Node<'vec3'>;
   const packed = Fn(() => {
     const out = vec4(ground, 0).toVar();
-    If(world.z.lessThan(snowSide).and(r.lessThan(snowLine.add(snowBand.mul(2)))), () => {
+    If(near, () => {
       // The line, ragged over the band: from afar a torn edge, never a ring around the axis.
       const ragged = mx_noise_float(world.div(snowBand.mul(1.2))).mul(0.7).add(mx_noise_float(world.div(snowBand.mul(0.4)).add(vec3(3.1, 7.7, 1.9))).mul(0.3));
       const cover = float(1).sub(smoothstep(snowLine.sub(snowBand), snowLine.add(snowBand), r.add(ragged.mul(snowBand).mul(showEdge))));
@@ -340,5 +356,5 @@ export function snowOver(ground: Node<'vec3'>, normal: Node<'vec3'>, world: Node
     });
     return out;
   })() as unknown as Node<'vec4'>;
-  return { color: packed.xyz, cover: packed.w };
+  return { color: packed.xyz, cover: packed.w, normal: surface };
 }
