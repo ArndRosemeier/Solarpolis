@@ -89,7 +89,7 @@ export function makeProfile(R: number, L: number, hubRadius: number, endcaps: { 
     const span = ss[i + 1] - ss[i];
     const t = span > 0 ? (c - ss[i]) / span : 0;
     let nz = nzs[i] + (nzs[i + 1] - nzs[i]) * t, nr = nrs[i] + (nrs[i + 1] - nrs[i]) * t;
-    const len = Math.hypot(nz, nr) || 1;
+    const len = Math.sqrt(nz * nz + nr * nr) || 1;
     nz /= len; nr /= len;
     return { s: c, z: zs[i] + (zs[i + 1] - zs[i]) * t, r: rs[i] + (rs[i + 1] - rs[i]) * t, nz, nr };
   };

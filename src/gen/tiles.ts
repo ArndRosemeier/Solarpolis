@@ -367,7 +367,7 @@ export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): Til
       const up = w + W * 3, dn = w - W * 3;
       const bx = world[up] - world[dn], by = world[up + 1] - world[dn + 1], bz = world[up + 2] - world[dn + 2];
       let nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx;
-      const len = Math.hypot(nx, ny, nz);
+      const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
       const theta = b.theta0 + i * dT;
       // Where the grid collapses (a tile touching the axis), fall back to the profile's normal.
       const air = groundNormal(profile, theta, s);
@@ -492,7 +492,7 @@ export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): Til
       const ex = p[0] - (world[c[0]] + world[c[1]] + world[c[2]] + world[c[3]]) / 4;
       const ey = p[1] - (world[c[0] + 1] + world[c[1] + 1] + world[c[2] + 1] + world[c[3] + 1]) / 4;
       const ez = p[2] - (world[c[0] + 2] + world[c[1] + 2] + world[c[2] + 2] + world[c[3] + 2]) / 4;
-      error = Math.max(error, Math.hypot(ex, ey, ez));
+      error = Math.max(error, Math.sqrt(ex * ex + ey * ey + ez * ez));
     }
   }
   // A tile that has children never claims to be finer than its cells can show at all.

@@ -304,7 +304,7 @@ export function makeTerrain(h: Habitat): Terrain {
     const list = filed.get(cellOf(Math.floor((turn(theta) / (2 * Math.PI)) * columns), Math.floor(s / cell)));
     if (!list) return null;
     for (const at of list) {
-      const a = theta - at.court.theta, d = Math.hypot((a - 2 * Math.PI * Math.round(a / (2 * Math.PI))) * R, s - at.court.s);
+      const a = theta - at.court.theta, du = (a - 2 * Math.PI * Math.round(a / (2 * Math.PI))) * R, ds = s - at.court.s, d = Math.sqrt(du * du + ds * ds);
       if (d < at.reach) return { at, distance: d };
     }
     return null;

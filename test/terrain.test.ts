@@ -286,16 +286,14 @@ test('tiles: children built while a sibling is not are kept, not drawn', () => {
   for (const k of kids.slice(1)) assert.ok(keep.has(keyId(k)) && !draw.has(keyId(k)), keyId(k));
 });
 
-test('tiles: nothing built yet means the roots are wanted first; a tile builds within its budget', () => {
+// How fast a tile builds is timed in the slow suite (test/slow/terrain.slow.test.ts), warmed up first: a runner's speed
+// varies 1.6× from one CI run to the next, which a timing here could not tell from a slowdown (Arnd, 2026-10-21).
+test('tiles: nothing built yet means the roots are wanted first', () => {
   const h = derive(MATRIX[0].params);
-  const t = makeTerrain(h), eco = makeEcology(t), layout = makeLayout(t);
+  const t = makeTerrain(h), layout = makeLayout(t);
   const sel = select(t, layout, [h.radius - 2, 0, h.length / 2], PX_PER_RAD, 2, () => undefined);
   assert.equal(sel.draw.length, 0);
   assert.equal(sel.want.length, roots(layout).length);
-  const t0 = performance.now();
-  for (let i = 0; i < 5; i++) buildTile(eco, layout, { band: 3, column: i, level: 2, i: 1, j: 1 });
-  const ms = (performance.now() - t0) / 5;
-  assert.ok(ms < 40, `${ms.toFixed(1)} ms per tile`);
 });
 
 test('tiles: from high up a flat floor still splits until its cells are a few pixels (the far view)', () => {

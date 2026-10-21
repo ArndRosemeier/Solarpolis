@@ -8,6 +8,7 @@ Arnd (2026-10-21): "A CI limitation to 2 minutes. Don't want to get all dev time
 - **Budgets per test, per file and for the whole suite** (`tools/ci/budget.json`). The budget reporter (`tools/ci/budget-reporter.mjs`) fails the run when any is crossed, so a slow test is caught on the PR that adds it, long before the cap is reached.
 - **Cost report**: each PR's step summary compares its test timings with main's last green run (`tools/ci/suite-diff.mjs`).
 - **Slow tests live in `test/slow/`** and run with `npm run test:slow`, locally or on demand, never in the PR check.
+- **No wall-clock timings in the PR check.** GitHub's runners differ about 1.6× in speed from run to run, so a millisecond limit there fails at random. Timings (such as a ground tile's 40 ms) live in the slow suite, measured warm (Arnd, 2026-10-21).
 
 ## When a budget is crossed
 
