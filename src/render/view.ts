@@ -450,6 +450,17 @@ export class InteriorView {
     this.standUp();
   }
 
+  /**
+   * Float at a point (world, m) looking along `look`, as the flyer (the crossing into the Hub hands over here). Up is
+   * the flyer's: toward the axis, so the point should be off the axis itself.
+   */
+  floatAt(eye: Vec3, look: Vec3): void {
+    this.physics?.removeCharacter();
+    this.character = null;
+    const r = Math.hypot(eye[0], eye[1]), up: Vec3 = r > 0 ? [-eye[0] / r, -eye[1] / r, 0] : [1, 0, 0];
+    this.flyer = new Flyer(this.habitat.profile, { eye, look, up }, this.terrain.standAt);
+  }
+
   /** Take off from where the walker stands, or land under the flyer. */
   toggleFlying(): void {
     if (this.flyer) {

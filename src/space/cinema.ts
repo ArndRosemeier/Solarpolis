@@ -11,6 +11,9 @@
  *
  * 4. Above the ship, looking down the corridor past its nose: the still spindle grows in front of the turning endcap.
  * 5. Close on the berth: the nose meets the collar, a soft jolt as it latches.
+ * 6. The passenger's eyes, floating down the spindle's still bore, through the bearing's seal into the sleeve that
+ *    turns with the habitat; the air there carries them into the spin, so the walls around begin to turn less fast
+ *    than the stars in its window. Light ahead: the Hub.
  *
  * Each shot plays at real speed; the clock jumps at the cuts, so nothing moves faster than it would (the real
  * approach takes many minutes).
@@ -19,6 +22,7 @@
  * largest habitat. Positions are in the home habitat's orbit frame (its centre at the origin), float64. Pure.
  */
 import { v3add, v3cross, v3dot, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
+import type { Habitat } from '../blueprint';
 import type { Space } from './space';
 import { skyFrom } from './sky';
 import { beforeBerth, berthOf, guestShip, guestVisit, shipAt, type Visit } from './traffic';
@@ -38,7 +42,7 @@ export const LIT_FROM = 0.55;
 export const LIT_TO = 0.85;
 
 export interface Frame {
-  shot: 0 | 1 | 2 | 3 | 4;
+  shot: 0 | 1 | 2 | 3 | 4 | 5;
   /** Seconds into the shot, and the shot's length. */
   time: number;
   length: number;
@@ -154,11 +158,18 @@ export function attractLoop(space: Space, start: number, keepOut: number, shipLe
 }
 
 /** The arrival's shot lengths (s): shot 4 down the corridor, shot 5 at the berth. */
-export const ARRIVAL_SHOTS = [15, 10] as const;
+export const ARRIVAL_SHOTS = [15, 10, 15] as const;
+export const ARRIVAL = ARRIVAL_SHOTS[0] + ARRIVAL_SHOTS[1] + ARRIVAL_SHOTS[2];
 /** Shot 4 starts with the ship this far up its corridor (outer radii; at most half its coast, where it slows). */
 const SHOT4_UP = 1.5;
 /** Shot 5 starts this long before the ship berths (s); the rest of it is the latch and the jolt. */
 const SHOT5_BEFORE = 7;
+/** Shot 6: this long after the berth (s; through the lock and along the arm), floating at this pace (m/s), the bearing
+ * passed this share of the way through the shot. The air in the sleeve brings a passenger up to the spin in SPIN_UP s. */
+const SHOT6_AFTER = 90;
+const DRIFT = 1;
+const BEARING_AT = 0.45;
+export const SPIN_UP = 60;
 
 export interface ArrivalFrame extends Frame {
   /** The clock time this frame shows (s since the space's epoch). */
@@ -182,10 +193,23 @@ export function arrival(space: Space, after: number): Arrival {
   // Shot 5 looks from the sunlit side of the arm, so the ship's flank in it is lit.
   const sun = space.frames.direction(skyFrom(space, p.orbitFrame, [0, 0, 0], guest.docked).sunDir, p.orbitFrame, p.spindleFrame, guest.docked);
   const across = v3cross([0, 0, 1], radial), side = v3dot(across, sun) >= 0 ? across : v3scale(across, -1);
+  // Shot 6, in the spindle's frame: a third of the way out from the axis, down the bore at DRIFT, the bearing passed
+  // BEARING_AT of the way through (sooner or later where the bore is short), then turning with the air.
+  const b = h.exterior.spindle.bore, T = ARRIVAL_SHOTS[2];
+  const z0 = Math.min(b.to - b.radius, b.bearing + BEARING_AT * T * DRIFT), z1 = Math.max(b.from + 1.5 * b.radius, b.bearing - (1 - BEARING_AT) * T * DRIFT);
+  const crossing = (time: number): ArrivalFrame => {
+    const clock = guest.docked + SHOT6_AFTER + time, z = z0 + (z1 - z0) * (time / T);
+    // Seconds since the bearing, and how far the air has turned the passenger round the axis since (rad).
+    const since = Math.max(0, time - (T * (z0 - b.bearing)) / (z0 - z1));
+    const a = (h.spin * Math.min(since, SPIN_UP) ** 2) / (2 * SPIN_UP) + h.spin * Math.max(0, since - SPIN_UP);
+    const r = b.radius / 3, out: Vec3 = [Math.cos(a), Math.sin(a), 0];
+    const eye: Vec3 = [out[0] * r, out[1] * r, z], target: Vec3 = [0, 0, z - 20 * b.radius];
+    return { shot: 5, time, length: T, eye: toOrbit(eye, clock), target: toOrbit(target, clock), up: dirOrbit(v3scale(out, -1), clock), fov: 70, ship: null, title: 0, clock };
+  };
   return {
     guest,
     at(elapsed: number): ArrivalFrame | null {
-      if (elapsed < 0 || elapsed >= ARRIVAL_SHOTS[0] + ARRIVAL_SHOTS[1]) return null;
+      if (elapsed < 0 || elapsed >= ARRIVAL) return null;
       if (elapsed < ARRIVAL_SHOTS[0]) {
         // Shot 4: behind the ship, above its back (toward the axis) and out to its sunlit side, looking past its nose
         // at the spindle: the ship in three-quarter view, low and to one side of the frame.
@@ -195,6 +219,7 @@ export function arrival(space: Space, after: number): Arrival {
         const target: Vec3 = [0, 0, h.exterior.spindle.arms.z];
         return { shot: 3, time: elapsed, length: ARRIVAL_SHOTS[0], eye: toOrbit(eye, clock), target: toOrbit(target, clock), up: dirOrbit(s.up, clock), fov: 50, ship: null, title: 0, clock };
       }
+      if (elapsed >= ARRIVAL_SHOTS[0] + ARRIVAL_SHOTS[1]) return crossing(elapsed - ARRIVAL_SHOTS[0] - ARRIVAL_SHOTS[1]);
       // Shot 5: beside the arm's tip, a little out along it, the collar in the middle; a soft jolt as it latches.
       const time = elapsed - ARRIVAL_SHOTS[0], clock = guest.docked - SHOT5_BEFORE + time, since = clock - guest.docked;
       const jolt = since > 0 ? 0.03 * B * Math.exp(-3 * since) * Math.sin(4 * Math.PI * since) : 0;
@@ -203,4 +228,14 @@ export function arrival(space: Space, after: number): Arrival {
       return { shot: 4, time, length: ARRIVAL_SHOTS[1], eye: toOrbit(eye, clock), target: toOrbit(target, clock), up: dirOrbit([0, 0, 1], clock), fov: 45, ship: null, title: 0, clock };
     },
   };
+}
+
+/**
+ * Where the passenger floats out of the bore into the Hub, in the habitat's frame (m): just inside the port end,
+ * halfway between the sunline and the Hub's rim (the bore lies on the axis, inside the sunline's radius, so the way out
+ * of it comes out beside the light), looking down the sunline to the wild end. The Inside view takes over here.
+ */
+export function hubView(h: Habitat): { eye: Vec3; look: Vec3 } {
+  const { hubRadius, sunlineRadius } = h.params, r = (hubRadius + sunlineRadius) / 2;
+  return { eye: [r, 0, h.exterior.spindle.bore.from - (hubRadius - sunlineRadius) / 2], look: [0, 0, -1] };
 }
