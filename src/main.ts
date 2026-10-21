@@ -18,12 +18,13 @@ import { OutsideView } from './render/outside';
 import { hubView } from './space';
 import { fromWorld, toWorld, type DebrisSpec, type Habitat } from './blueprint';
 import { nearestOf, plantsOf, type Level } from './gen/scatter';
-import { frameOf, landmarksOf, placeAt, type Landmark } from './gen/landmarks';
+import { frameOf, landmarksOf, placeAt, type Hut, type Pavilion } from './gen/landmarks';
 import { plantingsOf, type Grove } from './gen/planted';
 import type { Terrain } from './gen/terrain';
 import { outOfPlace } from './gen/shapes';
 import { landformOf } from './gen/plan';
 import { pavilionPlan } from './gen/pavilion';
+import { hutPlan } from './gen/summitHut';
 import { legShapesOf, liftStairOf, onLeg, rampOf, stairTopAt, type LiftStair } from './gen/liftStair';
 
 const app = document.getElementById('app')!;
@@ -290,9 +291,9 @@ function inView<T>(pick: (t: Terrain) => T | undefined): { v: InteriorView; x: T
   const v = view(), t = v?.ecology?.terrain, x = t && pick(t);
   return v && x ? { v, x } : null;
 }
-/** The landmarks (gen/landmarks.ts): the first one, and where its parts are. */
-const firstLandmark = (): { v: InteriorView; l: Landmark } | null => {
-  const f = inView((t) => landmarksOf(t)[0]);
+/** The landmarks (gen/landmarks.ts): the pavilion, and where its parts are. */
+const firstLandmark = (): { v: InteriorView; l: Pavilion } | null => {
+  const f = inView((t) => landmarksOf(t).find((l): l is Pavilion => l.kind === 'pavilion'));
   return f && { v: f.v, l: f.x };
 };
 debug.add({
@@ -322,6 +323,33 @@ const overPavilion = (label: string, out: number, up: number): void => debug.add
 });
 overPavilion('Fly: by the pavilion', 2.2, 1.4);
 overPavilion('Fly: the pavilion from afar', 14, 5);
+/** The summit hut on the Mountain's cliff (gen/summitHut.ts). */
+const summitHut = (): { v: InteriorView; l: Hut; h: Habitat } | null => {
+  const f = inView((t) => landmarksOf(t).find((l): l is Hut => l.kind === 'hut')), h = lab.habitat;
+  return f && h ? { v: f.v, l: f.x, h } : null;
+};
+debug.add({
+  label: 'To the summit hut: on its terrace, looking down the cylinder', group: 'Go', run: () => {
+    const f = summitHut();
+    if (!f) return;
+    const q = hutPlan(f.l.handrail, f.l.scale), at = fromWorld(f.h.profile, ...outOfPlace(frameOf(f.h, f.l), [q.length + q.terrace / 2, 0, 0.05]));
+    f.v.goTo(at.theta, at.s, f.l.facing);
+  },
+});
+/** Float off the hut: `out` hut lengths out along its x, `side` across, `up` over its floor, looking at the hall. */
+const byHut = (label: string, out: number, side: number, up: number): void => debug.add({
+  label, group: 'Go', run: () => {
+    const f = summitHut();
+    if (!f) return;
+    const q = hutPlan(f.l.handrail, f.l.scale), fr = frameOf(f.h, f.l);
+    const eye = outOfPlace(fr, [q.reach * out, q.reach * side, q.reach * up]), at = outOfPlace(fr, [q.length * 0.6, 0, q.eaves * 0.5]);
+    const d = Math.hypot(at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]);
+    f.v.floatAt(eye, [(at[0] - eye[0]) / d, (at[1] - eye[1]) / d, (at[2] - eye[2]) / d]);
+  },
+});
+byHut('Fly: by the summit hut', 1.5, -0.9, 0.25);
+byHut('Fly: under the summit hut, its struts and corbels', 1.1, 0.5, -0.6);
+byHut('Fly: the summit hut from afar', 14, -6, 3);
 /** The founders' grove (gen/planted.ts). */
 const grove = (): { v: InteriorView; g: Grove } | null => {
   const f = inView((t) => plantingsOf(t).groves[0]);

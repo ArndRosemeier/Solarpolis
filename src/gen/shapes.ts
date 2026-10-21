@@ -5,7 +5,7 @@
  *
  * Every face is flat-shaded and counter-clockwise seen from the side its normal points to.
  */
-import { v3dot, v3sub, type Vec3 } from '@futuremagic/core';
+import { v3cross, v3dot, v3norm, v3sub, type Vec3 } from '@futuremagic/core';
 
 /** Bytes some typed arrays hold (a built tile's, for the memory watchdog). */
 export const bytesOf = (arrays: readonly ArrayBufferView[]): number => arrays.reduce((n, a) => n + a.byteLength, 0);
@@ -94,6 +94,11 @@ export class Shape {
     const base = this.vertices;
     for (const p of [a, b, c, d]) this.put(p, n, col);
     this.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  }
+
+  /** A flat quad from its four corners, counter-clockwise seen from its front: its normal from them (the diagonals' cross). */
+  face(a: Vec3, b: Vec3, c: Vec3, d: Vec3, col?: RGB): void {
+    this.quad(a, b, c, d, v3norm(v3cross(v3sub(c, a), v3sub(d, b))), col);
   }
 
   /**
