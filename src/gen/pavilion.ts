@@ -2,7 +2,8 @@
  * The assembly pavilion on the ring lake (gen/landmarks.ts places it): the civic centre where the habitat meets for
  * festivals and assemblies, built in the round. From the middle outward:
  *
- * - an open pool of lake water under the roof's oculus, so the sunline shines down onto water at the heart of it;
+ * - an open pool of lake water under the roof's wide oculus (a well of daylight over the speaking floor, as in the
+ *   Pantheon), so the sunline shines down onto water at the heart of it;
  * - the speaking floor around the pool, in stone;
  * - seating in the round, rows rising outward, cut by four passages (two of them to the bridges) and climbed by four
  *   stairs; on the outside a sloping skirt down to the deck;
@@ -91,7 +92,7 @@ export function pavilionPlan(p: Pavilion): PavilionPlan {
     radius: R, handrail: hr, deck, slab: Math.max(hr * 0.45, R * 0.006),
     pool, floor, stand, skirt: stand + standH * 0.35, rows, riser, tread,
     ring, columns, column: Math.max(hr * 0.25, R * 0.007),
-    eaves: deck + Math.max(R * 0.26, standH + hr * 4), reach: R * 1.06, oculus: R * 0.13, rise: R * 0.2, shell: Math.max(hr * 0.35, R * 0.01),
+    eaves: deck + Math.max(R * 0.26, standH + hr * 4), reach: R * 1.06, oculus: R * 0.24, rise: R * 0.2, shell: Math.max(hr * 0.35, R * 0.01),
     bridge, passage: bridge * 1.2, stair: hr * 1.3,
     pier: Math.max(hr * 0.3, R * 0.005), span: Math.max(hr * 6, R * 0.16), depth: p.depth,
   };
