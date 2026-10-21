@@ -237,6 +237,16 @@ export function makeEcology(terrain: Terrain): Ecology {
       c0 += ((g[0] + rk[0]) / 2 - c0) * gravel; c1 += ((g[1] + rk[1]) / 2 - c1) * gravel; c2 += ((g[2] + rk[2]) / 2 - c2) * gravel;
       c0 += (bd[0] - c0) * bed; c1 += (bd[1] - c1) * bed; c2 += (bd[2] - c2) * bed;
     }
+    // An entrance's court (gen/plan.ts, `courtOf`): its floor laid in gravel and stone, no crowns over it or its ring.
+    const court = terrain.courtAt(theta, s);
+    let ring = 0;
+    if (court) {
+      const paved = 1 - smoothstep(court.court.radius * 0.95, court.court.radius, court.distance);
+      ring = 1 - paved;
+      const rk = climate.rock, sh = climate.shore;
+      gravel = Math.max(gravel, paved);
+      c0 += ((sh[0] + rk[0]) / 2 - c0) * paved; c1 += ((sh[1] + rk[1]) / 2 - c1) * paved; c2 += ((sh[2] + rk[2]) / 2 - c2) * paved;
+    }
     if (lake && Math.abs(s - lake.s) < lake.halfWidth + reach) {
       // Sand at the waterline, the lake's bed below it (only by the lake: terraces elsewhere dip below its level too).
       const below = lake.level - height;
@@ -280,7 +290,7 @@ export function makeEcology(terrain: Terrain): Ecology {
     }
     if (!canopy && !wood) return;
     // The woods over it: crowns cover their biome's share of the point (rock and water hold none).
-    const bare = (1 - rock) * (1 - Math.max(gravel, bed));
+    const bare = (1 - rock) * (1 - Math.max(gravel, bed)) * (court ? 1 - ring : 1);
     let cover = 0, tall = 0, apart = 0, k0 = 0, k1 = 0, k2 = 0;
     for (let b = 0; b < count; b++) {
       const w = shares[b] * woods[b].cover * bare;

@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MATRIX, derive, toWorld } from '../src/blueprint';
-import { CIRQUE, GATE_TERRACES, HORN, makeTerrain } from '../src/gen/terrain';
+import { CIRQUE, FLOOR_VALLEYS, GATE_TERRACES, HORN, makeTerrain } from '../src/gen/terrain';
 import { makeEcology } from '../src/gen/ecology';
+import { COURT, courtOf, planOf } from '../src/gen/plan';
 import { slopeAt } from '../src/gen/scatter';
 import { makeLayout, roots, bounds, buildTile, select, children, parent, keyId, cellSize, spheres, LodBudget, splitsAround, splitAround, packRelief, unpackRelief, CELL_PIXELS, RISE_RANGE, TILE_CELLS, type TileKey, type TileFit, type TileLayout, type TileMesh } from '../src/gen/tiles';
 
@@ -41,7 +42,7 @@ for (const { name, params } of MATRIX) {
       assert.ok(Math.abs(t.heightAt(theta, s) - t.heightAt(theta + 2 * Math.PI, s)) < 1e-6, 'no seam at θ = 2π');
       const g = t.heightAt(theta, s);
       // The endcaps' landforms add at most a spur, its crags and the horn above, and the cirque's floor below.
-      const above = Math.max(rl.hills, rl.terraceStep) * 1.2 + rl.massif * (2.7 + HORN.height * 1.15) + 0.5;
+      const above = Math.max(rl.hills * (1 + FLOOR_VALLEYS.ridge), rl.terraceStep) * 1.2 + rl.massif * (2.7 + HORN.height * 1.15) + 0.5;
       const below = (rl.ringLake?.depth ?? 0) + Math.max(rl.terraceStep, 1) + (rl.massif * CIRQUE.depth) / 0.2 + 0.5;
       assert.ok(g <= above && g >= -below, `height ${g} at ${s}`);
     }
@@ -54,6 +55,44 @@ for (const { name, params } of MATRIX) {
         assert.equal(t.standAt(theta, lake.s), lake.level, 'one stands (swims) on the water');
       }
     } else assert.equal(t.lake, null);
+  });
+
+  test(`terrain (${name}): each entrance digs its court: a level floor under the ground, a steep wall up to the rim`, () => {
+    const R = h.radius, plan = planOf(h);
+    const courts = plan.sites.filter((k) => k.kind === 'entrance').slice(0, 12).map((k) => courtOf(h, k));
+    if (!params.landmarks) { assert.ok(courts.every((c) => c === null)); return; }
+    assert.ok(courts.length > 0);
+    for (const c of courts) {
+      if (!c) continue;
+      const floor = t.heightAt(c.theta, c.s), at = (d: number, a: number) => t.heightAt(c.theta + (d * Math.cos(a)) / R, c.s + d * Math.sin(a));
+      let rim = 0;
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * 2 * Math.PI;
+        assert.ok(Math.abs(at(c.radius * COURT.floor * 0.9, a) - floor) < 1e-6, 'the floor is level');
+        // At the rim the court meets the ground: no step.
+        assert.ok(Math.abs(at(c.radius * 0.999, a) - at(c.radius * 1.001, a)) < c.depth * 0.05 + 0.01, 'no step at the rim');
+        rim += at(c.radius * 1.001, a) / 8;
+        assert.deepEqual(t.courtAt(c.theta + (c.radius * 0.5 * Math.cos(a)) / R, c.s + c.radius * 0.5 * Math.sin(a))?.court, { ...c, floor });
+      }
+      assert.ok(rim - floor > c.depth * 0.6, `the floor ${(rim - floor).toFixed(1)} m under the rim`);
+      // Its floor lies at least its depth under every point of the rim, and the terrain says where.
+      for (let i = 0; i < 16; i++) assert.ok(at(c.radius * 1.001, (i / 16) * 2 * Math.PI) - floor > c.depth * 0.95, 'no daylight downhill');
+      assert.ok(Math.abs(t.courts.find((k) => k.theta === c.theta && k.s === c.s)!.floor - floor) < 1e-9);
+    }
+  });
+
+  test(`terrain (${name}): the floor rises from each valley's middle to the ridges between valleys`, () => {
+    const P = h.profile, form = t.form, hills = params.relief.hills;
+    if (form.valleys < 2 || hills <= 0) return;
+    let ridge = 0, middle = 0, nr = 0, nm = 0;
+    for (let i = 0; i < 600; i++) {
+      const s = form.reserveEnd + ((i * 0.618034) % 1) * (P.floorEnd - form.reserveEnd), theta = i * 2.399963;
+      if (t.lake && Math.abs(s - t.lake.s) < t.lake.halfWidth * 3) continue;
+      const a = Math.abs(form.acrossAt(theta, s).across), g = t.heightAt(theta, s);
+      if (a > 0.85) { ridge += g; nr++; } else if (a < 0.15) { middle += g; nm++; }
+    }
+    assert.ok(nr > 10 && nm > 10);
+    assert.ok(ridge / nr - middle / nm > hills * FLOOR_VALLEYS.ridge * 0.6, `ridges ${(ridge / nr).toFixed(1)} m, valley middles ${(middle / nm).toFixed(1)} m`);
   });
 
   test(`terrain (${name}): the Mountain has spurs between its couloirs, a broad summit band, a horn at the head of the main valley, a level cirque`, () => {

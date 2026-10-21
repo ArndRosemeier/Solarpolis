@@ -19,7 +19,7 @@
 import { Noise, deriveSeed, smoothstep } from '@futuremagic/core';
 import { fromWorld, toWorld, type FaceKind, type Habitat, type Vec3 } from '../blueprint';
 import { carve, makeRivers, riverAt, valleyReach, type River, type RiverHit } from './rivers';
-import { landformOf, type Lake, type Landform } from './plan';
+import { COURT, courtOf, landformOf, planOf, type Court, type Lake, type Landform } from './plan';
 
 export type { Lake } from './plan';
 
@@ -38,6 +38,18 @@ export interface Terrain {
   standAt(theta: number, s: number): number;
   /** How deep a world point lies under the lake's surface (m); 0 or less where there is no water over it. */
   waterDepth(p: Vec3): number;
+  /**
+   * The entrance court near a point (gen/plan.ts, `courtOf`) and how far the point is from its middle (m), when it is
+   * within the court's radius and its clear ring (`COURT.clear` handrails); else null.
+   */
+  courtAt(theta: number, s: number): { court: PlacedCourt; distance: number } | null;
+  /** Every entrance's court, with the height of its floor. */
+  readonly courts: readonly PlacedCourt[];
+}
+
+/** A court as the terrain digs it: `floor` is its floor's height above the profile (m), `depth` under its lowest rim. */
+export interface PlacedCourt extends Court {
+  floor: number;
 }
 
 const DEG = Math.PI / 180;
@@ -56,6 +68,13 @@ export const GATE_TERRACES: Readonly<Record<FaceKind, { step: number; wander: nu
   water: { step: 0.5, wander: 2.5, tread: -3 * DEG, riser: 88 * DEG },
 };
 /** The Mountain's horn and cirque: where they stand (gravity, as a share of the floor's), their sizes in massifs. */
+/**
+ * The floor's valleys (gen/plan.ts, `acrossAt`): the ground rises from each valley's middle to the ridges between
+ * valleys by this many hill heights, and the hills on a valley's floor are this share of those on its ridges, so each
+ * valley is a long room with a broad meadow floor, its river down the middle, and rolling woods up its sides.
+ */
+export const FLOOR_VALLEYS = { ridge: 1.2, floor: 0.45 };
+
 export const HORN = { gravity: 0.25, radius: 3, height: 2 };
 export const CIRQUE = { gravity: 0.6, halfWidth: 2.5, depth: 2.5 };
 
@@ -225,7 +244,10 @@ export function makeTerrain(h: Habitat): Terrain {
     const f = onFloor(s);
     if (f > 0 && hills > 0) {
       const n = noise.fbm3(x / hillWave, y / hillWave, z / hillWave, 5);
-      let hill = hills * Math.pow(smoothstep(-0.25, 0.85, n), 1.6);
+      // Up a valley's sides to the ridge: the land rises, and the hills roll more than on the valley's floor.
+      const side = form.valleys > 1 ? smoothstep(0.15, 0.95, form.ridgeAt(theta, s)) : 0;
+      let hill = hills * Math.pow(smoothstep(-0.25, 0.85, n), 1.6) * (FLOOR_VALLEYS.floor + (1 - FLOOR_VALLEYS.floor) * side);
+      hill += hills * FLOOR_VALLEYS.ridge * side;
       const k = inLake(s);
       if (k !== null && lake) hill *= smoothstep(0, shore, -k * lake.halfWidth); // 0 at the water, full a shore away
       height += f * hill;
@@ -250,10 +272,61 @@ export function makeTerrain(h: Habitat): Terrain {
 
   const rivers = makeRivers(form, landAt);
   const reach = valleyReach(h);
+
+  // The entrances' courts, each with the level of its floor, filed in a grid over the unrolled floor by every cell its
+  // clear ring touches, so a point looks in one cell.
+  const clear = COURT.clear * (h.params.landmarks?.handrail ?? 0);
+  const courts: { court: PlacedCourt; floor: number; reach: number }[] = [];
+  for (const site of planOf(h).sites) {
+    const c = site.kind === 'entrance' ? courtOf(h, site) : null;
+    if (!c) continue;
+    // The floor lies its depth under the lowest ground on the rim, so it never opens to daylight downhill.
+    let low = landAt(c.theta, c.s);
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * 2 * Math.PI;
+      low = Math.min(low, landAt(c.theta + (c.radius * Math.cos(a)) / R, c.s + c.radius * Math.sin(a)));
+    }
+    const floor = low - c.depth;
+    courts.push({ court: { ...c, floor }, floor, reach: c.radius + clear });
+  }
+  const cell = Math.max(1, ...courts.map((c) => c.reach * 2)), columns = Math.max(1, Math.floor((2 * Math.PI * R) / cell));
+  const turn = (theta: number): number => theta - 2 * Math.PI * Math.floor(theta / (2 * Math.PI));
+  const cellOf = (column: number, row: number): number => row * columns + (((column % columns) + columns) % columns);
+  const filed = new Map<number, typeof courts>();
+  for (const c of courts) {
+    const u = (turn(c.court.theta) / (2 * Math.PI)) * columns, v = c.court.s / cell, w = c.reach / cell;
+    for (let row = Math.floor(v - w); row <= Math.floor(v + w); row++) for (let column = Math.floor(u - w); column <= Math.floor(u + w); column++) {
+      const key = cellOf(column, row), list = filed.get(key);
+      if (list) list.push(c); else filed.set(key, [c]);
+    }
+  }
+  const nearCourt = (theta: number, s: number): { at: (typeof courts)[number]; distance: number } | null => {
+    const list = filed.get(cellOf(Math.floor((turn(theta) / (2 * Math.PI)) * columns), Math.floor(s / cell)));
+    if (!list) return null;
+    for (const at of list) {
+      const a = theta - at.court.theta, d = Math.hypot((a - 2 * Math.PI * Math.round(a / (2 * Math.PI))) * R, s - at.court.s);
+      if (d < at.reach) return { at, distance: d };
+    }
+    return null;
+  };
+  const courtAt = (theta: number, s: number): { court: PlacedCourt; distance: number } | null => {
+    const near = nearCourt(theta, s);
+    return near ? { court: near.at.court, distance: near.distance } : null;
+  };
+  /** The ground dug for a court: its level floor, then a wall at least `COURT.wall` steep up to the ground at the rim. */
+  const dig = (ground: number, floor: number, radius: number, d: number): number => {
+    const inner = radius * COURT.floor;
+    if (d <= inner) return floor;
+    const t = (d - inner) / (radius - inner), up = ground - floor;
+    return up > 0 ? floor + up * Math.min(1, Math.max(t, ((d - inner) * Math.tan(COURT.wall)) / up)) : floor + up * t;
+  };
+
   const heightAt = (theta: number, s: number): number => {
     const g = landAt(theta, s);
     const hit = rivers.length ? riverAt(rivers, theta, s, reach) : null;
-    return hit ? carve(hit, hit.river.depth, g) : g;
+    const ground = hit ? carve(hit, hit.river.depth, g) : g;
+    const near = courts.length ? nearCourt(theta, s) : null;
+    return near && near.distance < near.at.court.radius ? dig(ground, near.at.floor, near.at.court.radius, near.distance) : ground;
   };
   const inRiver = (theta: number, s: number): RiverHit | null => {
     const hit = rivers.length ? riverAt(rivers, theta, s) : null;
@@ -273,5 +346,5 @@ export function makeTerrain(h: Habitat): Terrain {
     return surface > heightAt(at.theta, at.s) ? surface - at.h : 0;
   };
 
-  return { habitat: h, form, lake, rivers, riverAt: inRiver, heightAt, standAt, waterDepth };
+  return { habitat: h, form, lake, rivers, riverAt: inRiver, heightAt, standAt, waterDepth, courtAt, courts: courts.map((c) => c.court) };
 }

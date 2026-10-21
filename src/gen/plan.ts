@@ -138,6 +138,8 @@ export interface Landform {
   valleyAt(k: number, s: number): number;
   /** Where (θ, s) lies across the valleys: the nearest valley, and −1 … 1 from one ridge over its middle (0) to the next. */
   acrossAt(theta: number, s: number): { valley: number; across: number };
+  /** How far up its valley's side (θ, s) lies: |across|, 0 on the valley's middle line … 1 on the ridge (no allocation). */
+  ridgeAt(theta: number, s: number): number;
   /** The port face a point of the port endcap belongs to (the face of the valley it lies in). */
   faceAt(theta: number, s: number): Face;
   /** Where a planned river's middle line runs at s (θ), before it meanders. */
@@ -185,6 +187,26 @@ function faceKinds(n: number): FaceKind[] {
 /** A plan's site of a kind: the first (a landmark has one), or undefined. */
 export const siteOf = (plan: Plan, kind: SiteKind): Site | undefined => plan.sites.find((x) => x.kind === kind);
 
+/**
+ * An entrance's court: the hole the terrain digs for it, its floor level `depth` m under the lowest ground on its rim
+ * out to `COURT.floor` of its `radius`, then a wall at least `COURT.wall` steep up to the ground at the rim (the floor's
+ * height is the terrain's: `Terrain.courts`). The court's walls, stairs and floor are built by the landmarks
+ * (gen/landmarks.ts); trees and stones keep `COURT.clear` handrails off it.
+ */
+export interface Court {
+  theta: number;
+  s: number;
+  radius: number;
+  depth: number;
+}
+
+/** The courts' shape: the floor's share of the radius, the wall's least steepness, the depth and the clear ring in handrails. */
+export const COURT = { floor: 0.9, wall: (60 * Math.PI) / 180, depth: 3, clear: 2 };
+
+/** The court an entrance site digs, or null in a habitat built without landmarks (nothing to build its walls). */
+export const courtOf = (h: Habitat, site: Site): Court | null =>
+  h.params.landmarks ? { theta: site.theta, s: site.s, radius: site.size, depth: COURT.depth * h.params.landmarks.handrail } : null;
+
 /** The habitat's plan, made once per habitat and then kept (making one walks the whole floor). */
 export const planOf: (h: Habitat) => Plan = kept(makePlan);
 
@@ -224,18 +246,38 @@ export function makeLandform(h: Habitat): Landform {
   // most a sixth of the gap to its neighbour, in bends about two valley widths long).
   const phase = rng.range(0, gap);
   const bend = Math.max(gap * R * 2, 1);
-  const valleyAt = (k: number, s: number): number => phase + gap * k + (gap / 6) * wander.fbm2(s / bend, k * 7.31, 2) + twist(s);
-  const acrossAt = (theta: number, s: number): { valley: number; across: number } => {
+  // Each valley's wander, which bends over many kilometres, kept in a table along the profile (every height asks for
+  // it, a tile's horizons along s as much as its rows across): linear between points a two-thousandth of the length
+  // apart, far closer than it bends.
+  const STEPS = 2048, length = profile.length, wandered = new Float64Array((STEPS + 1) * N);
+  for (let i = 0; i <= STEPS; i++) for (let k = 0; k < N; k++) wandered[i * N + k] = (gap / 6) * wander.fbm2(((i / STEPS) * length) / bend, k * 7.31, 2);
+  const valleyAt = (k: number, s: number): number => {
+    const u = (Math.min(length, Math.max(0, s)) / length) * STEPS, i = Math.min(STEPS - 1, Math.floor(u)), f = u - i;
+    return phase + gap * k + wandered[i * N + k] * (1 - f) + wandered[(i + 1) * N + k] * f + twist(s);
+  };
+  // Where a point lies across the valleys, into `found` (no allocation: every height on the floor asks).
+  const lines = new Float64Array(N), found = { valley: 0, across: 0 };
+  const locate = (theta: number, s: number): void => {
+    for (let k = 0; k < N; k++) lines[k] = valleyAt(k, s);
     let best = 0, d = Infinity;
     for (let k = 0; k < N; k++) {
-      const t = wrap(theta - valleyAt(k, s));
+      const a = theta - lines[k], t = a - TURN * Math.round(a / TURN);
       if (Math.abs(t) < Math.abs(d)) { d = t; best = k; }
     }
-    if (N === 1) return { valley: 0, across: d / Math.PI };
+    found.valley = best;
+    if (N === 1) { found.across = d / Math.PI; return; }
     // The ridge lies halfway to the neighbouring valley on the point's side.
-    const next = (best + (d >= 0 ? 1 : N - 1)) % N;
-    const half = Math.abs(wrap(valleyAt(next, s) - valleyAt(best, s))) / 2;
-    return { valley: best, across: Math.max(-1, Math.min(1, d / half)) };
+    const next = (best + (d >= 0 ? 1 : N - 1)) % N, apart = lines[next] - lines[best];
+    const half = Math.abs(apart - TURN * Math.round(apart / TURN)) / 2;
+    found.across = Math.max(-1, Math.min(1, d / half));
+  };
+  const acrossAt = (theta: number, s: number): { valley: number; across: number } => {
+    locate(theta, s);
+    return { valley: found.valley, across: found.across };
+  };
+  const ridgeAt = (theta: number, s: number): number => {
+    locate(theta, s);
+    return Math.abs(found.across);
   };
 
   // The Gate's faces, one per valley, each centred where its valley meets the port wall.
@@ -289,7 +331,7 @@ export function makeLandform(h: Habitat): Landform {
 
   return {
     habitat: h, lake, reserveEnd, valleys: N, faces, mountain, rivers, phase, stairHalfWidth: R * 0.02,
-    careAt, gravityAt, bandAt, valleyAt, acrossAt, faceAt, routeOf, endcapAt,
+    careAt, gravityAt, bandAt, valleyAt, acrossAt, ridgeAt, faceAt, routeOf, endcapAt,
   };
 }
 
@@ -403,12 +445,14 @@ export function makePlan(h: Habitat): Plan {
   const perDistrict = Math.max(1, Math.round((circumference * worked) / districts.length / (spacing * spacing)));
   const nearRiver = (theta: number, s: number): boolean => rivers.some((r) => Math.abs(wrap(theta - routeOf(r, s))) * R < riverWidth * (3 + r.meander));
   const placed: Site[] = [];
-  const bin = new Map<string, Site[]>();
-  const keyOf = (theta: number, s: number): string => `${Math.floor(wrapAngle(theta) * R / spacing)},${Math.floor(s / spacing)}`;
+  // Entrances filed by a grid a spacing wide (around the axis, along it), so a new one checks only its neighbours.
+  const bin = new Map<number, Site[]>(), around = Math.ceil(circumference / spacing);
+  const keyOf = (i: number, j: number): number => j * around + (((i % around) + around) % around);
+  const columnOf = (theta: number): number => Math.floor((wrapAngle(theta) * R) / spacing);
   const tooClose = (theta: number, s: number): boolean => {
-    const [i, j] = keyOf(theta, s).split(',').map(Number), around = Math.ceil(circumference / spacing);
+    const i = columnOf(theta), j = Math.floor(s / spacing);
     for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) {
-      for (const o of bin.get(`${(((i + di) % around) + around) % around},${j + dj}`) ?? []) if (dist(o.theta, o.s, theta, s) < spacing * 0.6) return true;
+      for (const o of bin.get(keyOf(i + di, j + dj)) ?? []) if (dist(o.theta, o.s, theta, s) < spacing * 0.6) return true;
     }
     return false;
   };
@@ -416,13 +460,14 @@ export function makePlan(h: Habitat): Plan {
     const reach = Math.max(rowLength, colWidth * R);
     for (let n = 0, tries = 0; n < perDistrict && tries < perDistrict * 30; tries++) {
       const s = k.s + erng.range(-0.75, 0.75) * reach, theta = wrap(k.theta + (erng.range(-0.75, 0.75) * reach) / R);
-      if (districtAt(theta, s) !== k || nearRiver(theta, s) || tooClose(theta, s)) continue;
+      // The cheap checks first; each throw must pass them all.
       if (lake && Math.abs(s - lake.s) < lake.halfWidth + spacing * 0.15) continue;
+      if (tooClose(theta, s) || districtAt(theta, s) !== k || nearRiver(theta, s)) continue;
       const site: Site = { kind: 'entrance', theta, s, size: spacing * 0.025, facing: erng.range(0, TURN), district: k.id };
       k.entrances.push(site);
       placed.push(site);
-      const key = keyOf(theta, s);
-      bin.set(key, [...(bin.get(key) ?? []), site]);
+      const key = keyOf(columnOf(theta), Math.floor(s / spacing)), list = bin.get(key);
+      if (list) list.push(site); else bin.set(key, [site]);
       n++;
     }
     if (!k.entrances.length) {
@@ -472,11 +517,14 @@ export function makePlan(h: Habitat): Plan {
   const crossesLake = (a: { s: number }, b: { s: number }): boolean => !!lake && Math.min(a.s, b.s) < lake.s && Math.max(a.s, b.s) > lake.s;
   const n = nodes.length, inTree = new Uint8Array(n), cost = new Float64Array(n).fill(Infinity), from = new Int32Array(n).fill(-1);
   for (let i = 0; i < anchors.length; i++) { inTree[i] = 1; }
+  // Squared distances: the shortest net is the same for any measure that keeps their order, and a lake crossing costs
+  // a million times over either way.
+  const nt = Float64Array.from(nodes, (k) => k.theta), ns = Float64Array.from(nodes, (k) => k.s);
   const relax = (i: number): void => {
     for (let j = anchors.length; j < n; j++) {
       if (inTree[j]) continue;
-      const a = nodes[i], b = nodes[j];
-      const c = dist(a.theta, a.s, b.theta, b.s) * (crossesLake(a, b) ? 1e6 : 1);
+      const a = nt[j] - nt[i], u = (a - TURN * Math.round(a / TURN)) * R, v = ns[j] - ns[i];
+      const c = (u * u + v * v) * (crossesLake(nodes[i], nodes[j]) ? 1e12 : 1);
       if (c < cost[j]) { cost[j] = c; from[j] = i; }
     }
   };
