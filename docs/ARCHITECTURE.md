@@ -32,6 +32,16 @@ Each row is a question you will have while coding, and the one place that answer
 | How much light from the sunline reaches a point? | `irradiance(h, emission, p, n, towardPort, towardWild)` (`sunline.ts`), the reference of the shaders' sum; `sunlineEmission(h)` is the brightness along the axis (the day cycle will shape it), `sunlineNorm(h)` makes the mid floor 1. |
 | Where is the player, which way is up, where do they look? | `Walker` (`walker.ts`): position in (θ, s, h), heading and pitch → `view()` eye, look, up (up is the ground's normal). `startOf(profile)` is where a walk begins; the eye stands on a ground function (`terrain.standAt`). |
 
+## Space around the habitats (`src/space`, pure)
+
+| Question | The one way |
+|---|---|
+| What time is it in the sky? | The sim clock is seconds since `SpaceParams.epochJd`; `jdAt`, `julianDay`, `centuries` (`time.ts`). |
+| Where are the Sun, Earth and Moon, and which way does Earth face? | `earthAt`, `moonAt`, `moonFromEarthAt`, `earthAxesAt`, `eclipticAxesAt` (`ephemeris.ts`), J2000 ecliptic, metres. Physical constants of the real bodies live in `constants.ts`. |
+| How do I get a position from one frame to another? | `space.frames.position(p, from, to, t)`, `.direction`, `.relative` (`frames.ts`), float64, via the nearest common frame. Ids: `sun`, `earth`, `earth.fixed`, `moon`, `<habitat>.orbit`, `<habitat>.body` (the blueprint frame of `toWorld`). Then `toView` for the GPU. |
+| Which habitats exist, and where? | `makeSpace(params).habitats` from `necklace()` (`necklace.ts`): the geostationary ring, home first, neighbours seeded from the world seed. `REFERENCE_SPACE` (`reference.ts`). |
+| How do rotations and poses compose? | `Mat3`, `Pose`, `compose`, `invert`, `rotX`, `rotZ` (`pose.ts`). |
+
 ## Drawing (`src/render`)
 
 | Question | The one way |

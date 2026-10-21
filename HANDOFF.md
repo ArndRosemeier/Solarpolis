@@ -20,12 +20,13 @@ Where the work stands, for the next thread. Update it in the PR that changes it.
 3. Physics for the walker (Rapier, Coriolis), then Actors' humanoid bodies.
 4. Dunfinity can switch to `@futuremagic/stage` and drop its own copy (its own PR, in its own thread).
 
-## Proposals waiting for Arnd (from the outside plan, "Solarpolis: the outside": https://claude.ai/artifact/5aV6F3oGzxDapsjV59haXi)
+## The outside (plan "Solarpolis: the outside": https://claude.ai/artifact/5aV6F3oGzxDapsjV59haXi)
 
-- `frame.toView` takes positions in any frame of a float64 frame tree (heliocentric → Earth → orbit → habitat body → interior); the camera's anchor frame can change mid-shot.
-- `derive()`: radiators carry only the heat released inside (electricity used plus piped light), since the panels shed their own waste heat; about halves `radiatorArea`. A pure `exterior(habitat)` (radiator brims, despun spindle, outer profile).
-- Outside material kinds: SKY, PLANET, HULL, BRIM, HARDWARE, GLINT, WINDOW.
-- The interior generator places the starfloor rooms, the Hub lounge and the endcap ports.
+Arnd approved the whole plan on 2026-10-21: the reference habitat sits in the geostationary ring ("the Necklace"), its axis on the ecliptic pole; radiators are flat brims at the endcaps; the port hub is a despun spindle; ships fly on laser-pushed solar sails or fusion torches (habitats stay solar-only); Earth in 3026 looks like today with smaller, darker cities; the title is a live docking flight that ends in the Hub.
+
+- **Done (O1)**: `src/space`: clock, ephemeris of Sun, Earth and Moon, the float64 frame tree, the Necklace (`makeSpace`), tested against 2026 equinox, solstice and eclipses and over the whole `MATRIX`.
+- **Next (O2, outside thread)**: `derive()` heat fix (radiators carry only the heat released inside) and a pure `exterior(habitat)` (brims, spindle, outer profile).
+- **Later**: outside material kinds (SKY, PLANET, HULL, BRIM, HARDWARE, GLINT, WINDOW); the interior generator places starfloor rooms, the Hub lounge and endcap ports. `toView(eye, p)` stays the eye-relative step; positions from other frames go through `frames.position` first.
 
 ## News from Arnd
 
