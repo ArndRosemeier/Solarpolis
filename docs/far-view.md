@@ -13,6 +13,8 @@ The debug menu's **Go** group has viewpoints high over the land (`viewpoint` in 
 | `far-side` | Fly: halfway up, looking at the far side | 0.5 R up, looking across the axis |
 | `far-down` | Fly: high up, looking down | 0.6 R up, looking down ahead |
 | `far-tube` | Fly: near the axis at the wild end, looking along the tube | 0.9 R up at the foot of the wild endcap |
+| `far-endcap` | Fly: over the floor, looking up the wild endcap | 0.1 R up near the wild end, looking up its slope |
+| `far-tube-clear` | (as `far-tube`, clouds set to none) | to tell the air's glow from the clouds |
 | `far-meadow-up` | (Into the nearest meadow, then look up) | on foot, looking up at the far side |
 
 Ask for them on Arnd's PC: `git push origin HEAD:refs/heads/shots-req/<who>/far-low,far-across,far-side,far-down,far-tube,far-meadow-up` (scripts/shots/README.md).
@@ -47,9 +49,26 @@ PR "The interior from far away" (renders 20261021-165354-farview-before → 2026
 - **Woods from afar** (`woodsFromAfar`, render/groundShaders.ts): each tile point carries the crowns' cover and the trees' spacing (`horizon.zw`; WebGPU allows only 8 vertex buffers, so they ride in the horizon attribute). Per pixel, crowns on a jittered 3D lattice of the trees' spacing (a crown in each cell by chance, so that they cover the point's share), lit tops and darker rims, the floor between them in their shade; groves, clumps and stands make the cover wander where woods thin, so edges break into groves, clearings and single trees. Every scale fades to its mean by the pixel's footprint. The crowns' mean light matches the hull level's dark crowns, so the handover at 1.3 to 1.7 km no longer shows as a lighter band.
 - **Hollows and ridges**: each tile point's rise over the ground around it (as a slope, two to four cells out, and four to eight for the parent, packed in `morph.w`) darkens hollows and lightens ridges in GROUND, blended to the parent's with the geomorph.
 
+PR "Endcaps in ledges and walls" (renders …-farview-endcap0 → …-farview-endcap):
+
+- **The endcaps were a grey disc of perfect rings** (finding of v0.046): the terraces were axisymmetric, and the ecology took the profile's own tilt as the ground's least slope, so even a flat tread counted as a 65° wall and showed rock. On the steep upper slopes the old risers also leaned past sheer (heights go along the profile's normal), folding the ground. Now the terraces are nearly level ledges (10°) and nearly sheer walls (78°), their share of each step set by the slope so a wall never tips past sheer: broad ledges at the foot, narrow ones high up, none where the slope is already steeper than a wall. Their levels wander around the axis (most of a step, over ten steps' length) and some walls wear down toward the plain slope. `groundSlope` (gen/terrain.ts) measures steepness against true up for tiles and plants alike, so the ledges hold meadow, heath and pines and the walls stay rock.
+- `fromWorld` undoes `toWorld` exactly also far above or below the profile (the endcap's ledges sink tens of metres under it): it was centimetres off, enough to misplace a stone on a wall.
+- **The dark square under a high flyer** (finding 7): fixed in `sunlineFilter` (render/lights.ts), see above.
+
+## The view along the tube from near the axis
+
+Measured with the CPU reference (`hazeAlong`, world/air.ts) for the `far-tube` eye (0.1 R from the axis, at the foot of the wild endcap), at 60 km haze distance:
+
+| Hour | Straight down | 1 R along | 3 R along |
+|---|---|---|---|
+| midday (sun mid-tube) | T 0.93, glow 0.06 | 0.90, 0.10 | 0.78, 0.36 |
+| mid-morning (sun a quarter along, 2–5 km from the eye) | 0.93, 0.22 | 0.90, 0.39 | 0.78, 0.82 |
+
+The air is clear (T stays high); what veils the land is the air's own glow. Near the axis the line lights the air R / r times as strongly as on the floor (10× at 0.1 R), and the travelling sun's bright stretch more than doubles that near it. So in the morning, looking from the axis toward the sun, the glow is as bright as the land itself or brighter (the haze colour at glow 1 is as bright as a surface of albedo 0.67 in full light; meadows are 0.15 to 0.3). Without clouds (`far-tube-clear`) the view is still milky, so this is the air, not the clouds. It is what the model's physics gives; whether the look should win here is Arnd's call (to be asked). Options: eyes that stop down in a bright glow (the inside exposure opens only in shade so far), a phase function (dimmer at right angles to the light, brighter toward it), or less glow near the line than the R / r law.
+
 ## Still open
 
-- The view along the tube from near the axis is still white: the eye sits in the sunline's halo (the R / r term). A phase function for the halo, or less of it, would open it up.
-- The far endcaps read as a grey ringed disc (terraces of rock). The look target has a mountain with waterfalls; the endcaps need their own landforms and colour.
+- The view along the tube from near the axis (above): Arnd's call.
+- The endcaps: waterfalls where the rivers drop over the walls (the rivers already fall in cascades); landmarks.
 - The reference relief (hills 60 m in a 4 km radius) is too small to read from across the axis; the hollows-and-ridges light helps only where there is relief.
 - Clouds (the interior thread), landmarks (none yet), paths.
