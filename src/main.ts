@@ -109,6 +109,13 @@ go('The foot of the wild endcap', (h) => h.profile.floorStart + 20);
 go('Halfway up the wild endcap', (h) => h.profile.floorStart / 2);
 go('The foot of the port endcap', (h) => h.profile.floorEnd - 20);
 debug.add({ label: 'Travel 10× faster (toggle)', group: 'Go', run: () => { if (view) view.boost = view.boost === 1 ? 10 : 1; } });
+debug.addInfo(() => (view ? view.clockLine() : ''));
+debug.add({ label: 'Clock speed: ×60 → ×600 → paused → real time', group: 'Time', run: () => {
+  if (!view) return;
+  const speeds = [60, 600, 0, 1];
+  view.timeScale = speeds[(speeds.indexOf(view.timeScale) + 1) % speeds.length];
+} });
+debug.add({ label: 'Two hours later', group: 'Time', run: () => view?.skip(7200) });
 debug.add({ label: 'Log the shader report', group: 'Render', run: () => console.log((globalThis as { shaders?: { report(): string } }).shaders?.report() ?? 'no renderer yet') });
 debug.add({ label: 'Take a memory sample now', group: 'Memory', run: () => console.log(memory.sample()) });
 debug.add({ label: 'Log the memory history', group: 'Memory', run: () => console.table(memory.history.map((s) => ({ t: Math.round(s.t), totalMB: Math.round(s.total / 1048576), level: s.level }))) });

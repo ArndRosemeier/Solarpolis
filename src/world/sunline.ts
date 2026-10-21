@@ -20,10 +20,57 @@ export const EMISSION_SAMPLES = 256;
 /** Samples of the light integral in the shaders. */
 export const SUNLINE_STEPS = 8;
 
-/** The emission profile along the axis, 0 … 1 per sample, from the wild wall to the port wall. */
-export function sunlineEmission(_h: Habitat): Float32Array {
-  // The day cycle (milestone 3) moves a bright stretch along the tube; until then it glows evenly.
-  return new Float32Array(EMISSION_SAMPLES).fill(1);
+/** Where in its day the habitat is at clock time `t` (s): 0 … 1, with 0 the start of daylight (dawn at the wild end). */
+export function dayPhase(h: Habitat, t: number): number {
+  const f = t / h.params.day.length;
+  return f - Math.floor(f);
+}
+
+/** How far the day has come, while it is light: 0 at dawn, 1 at dusk; outside daylight, the nearer end. */
+function daylightProgress(h: Habitat, phase: number): number {
+  return Math.min(1, phase / h.params.day.daylight);
+}
+
+/**
+ * How bright the sunline is overall at a phase, 1 in full day, `night` at night: the light swells over the first
+ * and fades over the last twentieth of the daylight hours.
+ */
+export function dayLevel(h: Habitat, phase: number): number {
+  const { daylight, night } = h.params.day;
+  if (phase >= daylight) return night;
+  const u = phase / daylight, ramp = 0.05;
+  const k = Math.min(1, u / ramp, (1 - u) / ramp);
+  const s = k * k * (3 - 2 * k);
+  return night + (1 - night) * s;
+}
+
+/**
+ * The emission profile along the axis at clock time `t` (s), per sample from the wild wall to the port wall. In daylight
+ * a bright stretch travels from the wild end to the port end over the tube's even `base` glow; while all of the
+ * stretch is inside the tube, the profile's mean over the length is the day's level (1 in full day). At night the
+ * tube glows evenly at the night level.
+ */
+export function sunlineEmission(h: Habitat, t = h.params.day.length * h.params.day.daylight / 2, out = new Float32Array(EMISSION_SAMPLES)): Float32Array {
+  const { daylight, peakWidth, base } = h.params.day;
+  const phase = dayPhase(h, t), level = dayLevel(h, phase);
+  if (phase >= daylight) return out.fill(level);
+  // The stretch's centre runs from just behind the wild wall to just past the port wall.
+  const centre = -peakWidth + daylightProgress(h, phase) * (1 + 2 * peakWidth);
+  // Scaled by the whole stretch's mean, so it gives the full day's light only when all of it is inside the tube: at
+  // dawn it rises out of the wild wall, at dusk it sinks into the port wall.
+  const peakMean = peakWidth * Math.sqrt(2 * Math.PI);
+  for (let i = 0; i < EMISSION_SAMPLES; i++) {
+    const d = ((i + 0.5) / EMISSION_SAMPLES - centre) / peakWidth;
+    out[i] = level * (base + ((1 - base) * Math.exp(-0.5 * d * d)) / peakMean);
+  }
+  return out;
+}
+
+/** The mean of an emission profile over the length (the sky light's share of the day). */
+export function emissionMean(emission: Float32Array): number {
+  let s = 0;
+  for (const e of emission) s += e;
+  return s / emission.length;
 }
 
 /** The emission at z (linear between samples, dark beyond the walls), as the shaders' texture gives it. */
