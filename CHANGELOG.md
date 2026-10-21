@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.054 — Ragged cloud bottoms
+
+- Seen from low over the floor, the cloud layer no longer ends in one hard line where your view just grazes its underside. Each patch of clouds now has its own base height, so the edge breaks up into single cloud bottoms.
+
 ## v0.053 — An assembly pavilion on the ring lake
 
 - The first landmark: a wide, open round hall on piers in the middle of the ring lake, with rows of seats around a speaking floor and an open pool in the centre, under a tiled roof with an oculus.
