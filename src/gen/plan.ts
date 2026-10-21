@@ -154,6 +154,11 @@ export interface Plan extends Landform {
   readonly paths: readonly PlanPath[];
   /** The district a point of the worked floor belongs to, or null (the reserve, the lake, the endcaps). */
   districtAt(theta: number, s: number): District | null;
+  /**
+   * The district a point belongs to, with how far it lies inside it (m, to the nearest border with another district)
+   * and the district across that border; null where `districtAt` is.
+   */
+  borderAt(theta: number, s: number): { district: District; other: District; edge: number } | null;
 }
 
 /** Brings an angle into [−π, π] (the shortest turn to it). */
@@ -321,20 +326,51 @@ export function makePlan(h: Habitat): Plan {
   const cell = (c: number, r: number): District => districts[r * columns + (((c % columns) + columns) % columns)];
   const dist = (t0: number, s0: number, t1: number, s1: number): number => Math.hypot(wrap(t1 - t0) * R, s1 - s0);
   const colWidth = TURN / columns;
-  const districtAt = (theta: number, s: number): District | null => {
-    if (!(s >= reserveEnd && s <= floorEnd) || districts.length === 0) return null;
-    if (lake && Math.abs(s - lake.s) < lake.halfWidth) return null;
+  // The borders bend with the land, about a seventh of a district's side either way, over half its length: a district
+  // is a piece of country with a shape of its own, not a cell.
+  const bend = new Noise(deriveSeed(h.seed, 'plan', 'borders')), sway = side * 0.15, bendWidth = side * 0.6;
+  /** The seeds near (θ, s) that could own it, from the grid around its cell, and their squared distances to it. */
+  const near: District[] = [], near2: number[] = [];
+  const nearby = (theta: number, s: number): boolean => {
+    near.length = 0; near2.length = 0;
+    if (!(s >= reserveEnd && s <= floorEnd) || districts.length === 0) return false;
+    if (lake && Math.abs(s - lake.s) < lake.halfWidth) return false;
+    const u = Math.cos(theta) * R, v = Math.sin(theta) * R;
+    theta += (sway / R) * bend.fbm3(u / bendWidth, v / bendWidth, s / bendWidth, 1);
+    s += sway * bend.fbm3(u / bendWidth + 31.7, v / bendWidth, s / bendWidth, 1);
     const r0 = Math.min(rows - 1, Math.max(0, Math.floor((s - reserveEnd) / rowLength)));
-    // Columns lined up with the valleys start half a valley before the first one's middle.
+    // Columns lined up with the valleys start half a valley before the first one's middle. A seed strays at most a
+    // third of a row along the axis, so the rows either side hold every rival; around the axis the valleys wander more.
     const c0 = Math.floor(wrap(theta - phase + (perValley ? gap / 2 : 0)) / colWidth);
-    let best: District | null = null, d = Infinity;
-    for (let r = Math.max(0, r0 - 2); r <= Math.min(rows - 1, r0 + 2); r++) {
+    for (let r = Math.max(0, r0 - 1); r <= Math.min(rows - 1, r0 + 1); r++) {
       for (let c = c0 - 2; c <= c0 + 2; c++) {
-        const k = cell(c, r), e = dist(k.theta, k.s, theta, s);
-        if (e < d) { d = e; best = k; }
+        const k = cell(c, r), a = (k.theta - theta - TURN * Math.round((k.theta - theta) / TURN)) * R, b = k.s - s;
+        near.push(k); near2.push(a * a + b * b);
       }
     }
+    return true;
+  };
+  /** The nearest of `near`, by index. */
+  const nearest = (): number => {
+    let best = 0;
+    for (let i = 1; i < near.length; i++) if (near2[i] < near2[best]) best = i;
     return best;
+  };
+  const districtAt = (theta: number, s: number): District | null => (nearby(theta, s) ? near[nearest()] : null);
+  const borderAt = (theta: number, s: number): { district: District; other: District; edge: number } | null => {
+    if (!nearby(theta, s)) return null;
+    const i = nearest(), own = near[i];
+    // The border with each other seed is the line halfway between the two: its distance is (d₂² − d₁²) / 2|p₁p₂|.
+    let other = own, edge = Infinity;
+    for (let j = 0; j < near.length; j++) {
+      const k = near[j];
+      if (k === own) continue;
+      const apart = dist(own.theta, own.s, k.theta, k.s);
+      if (apart <= 0) continue;
+      const e = (near2[j] - near2[i]) / (2 * apart);
+      if (e < edge) { edge = e; other = k; }
+    }
+    return { district: own, other, edge };
   };
   // Neighbours: the grid's eight around (wrapping around the axis), when there is more than one column.
   for (const k of districts) {
@@ -455,5 +491,5 @@ export function makePlan(h: Habitat): Plan {
     relax(pick);
   }
 
-  return { ...form, culture, districts, sites: [...landmarks, ...placed], paths, districtAt };
+  return { ...form, culture, districts, sites: [...landmarks, ...placed], paths, districtAt, borderAt };
 }

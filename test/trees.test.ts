@@ -32,6 +32,8 @@ for (const form of PLANT_FORMS) {
     assert.ok(full.leaves.uvs.every((u) => u >= 0 && u <= 1), `${form}: leaf uv`);
     assert.ok(full.leaves.tint.every((v) => v >= 0 && v <= 1) && full.leaves.occ.every((v) => v >= 0 && v <= 1), `${form}: tint, occlusion`);
     assert.ok(full.canopy.every((c) => c > 0 && c < 1) && full.crown > 0, `${form}: canopy colour, crown`);
+    // What the far hull is matched against (render/plants.ts matchLeaves): the cards' shading, the hull's own colour.
+    assert.ok(full.leaf.shade.every((v) => v > 0.4 && v < 1.2) && full.hullColor.every((v) => v > 0 && v < 1) && full.leaf.cell >= 0 && full.leaf.cell < 16, `${form}: leaf look`);
     // The far hull is about as big as the plant it stands for, so nothing swells as it comes close (Arnd: shrubs did).
     const size = (p: Float32Array) => {
       let w = 0, h = 0;

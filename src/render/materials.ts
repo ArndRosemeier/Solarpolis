@@ -15,7 +15,8 @@ import { DataTexture, Uint8BufferAttribute, RGBAFormat, UnsignedByteType, Vector
 import { PLANT_STRIDE } from '../gen/scatter';
 import { BARK_STRIPS } from '../gen/trees';
 import { BARK_TEXELS } from '../gen/foliage';
-import { LEAF_ATLAS_SIZE } from '../workers/leaves';
+import { LEAF_ATLAS_SIZE, LEAF_CUT } from '../workers/leaves';
+import { PICK_TURNS } from '../gen/handover';
 import type { Node } from 'three/webgpu';
 import type { StageKind } from '@futuremagic/stage';
 import { REFERENCE } from '../blueprint';
@@ -412,6 +413,8 @@ export const LAMP = kind('lamp', ['position', 'color'], { cast: false, receive: 
  * from the eye), so a plant is always drawn by exactly one level and nothing ever just vanishes.
  */
 const plantBand = uniform(new Vector4(-2, -1, 1e30, 2e30)).onObjectUpdate(({ object }) => (object?.userData.band as Vector4 | undefined) ?? new Vector4(-2, -1, 1e30, 2e30));
+/** How far light wraps round a crown (leaf cards and the hulls standing in for them alike). */
+const LEAF_WRAP = 0.7;
 const plantHorizon = uniform(new Vector2(OPEN_SKY, OPEN_SKY)).onObjectUpdate(({ object }) => (object?.userData.horizon as Vector2 | undefined) ?? new Vector2(OPEN_SKY, OPEN_SKY));
 
 /** The bark atlas (gen/foliage.ts) and the leaf atlas (render/foliage.ts), filled in once the workers have drawn them. */
@@ -453,10 +456,13 @@ function plantFrame() {
   const c = cos(turn), sn = sin(turn);
   const ax = side.mul(c).add(axis.mul(sn)), az = side.mul(sn.negate()).add(axis.mul(c));
   // The band: each plant has its own threshold, so in a hand-over band one level takes it where the other leaves it.
+  // The threshold comes from the plant's own turn (its lattice spot's hash, `plantCell`), which is the same in every
+  // level's cell, so the two levels agree on every plant (`handOverPick` in gen/handover.ts); a hash of where it stands
+  // in its cell would differ between the levels' cells, and some plants in the band would be drawn by neither.
   // Measured from the eye (the origin of the drawn world), not the camera: the shadow pass draws from the light's
   // camera, hundreds of metres away, and would drop every near plant from the shadow map.
   const away = foot.length();
-  const pick = hash(inst.x.mul(13.7).add(inst.z.mul(7.1)).add(inst.y.mul(3.3)));
+  const pick = fract(turn.mul(PICK_TURNS / (2 * Math.PI)));
   const into = smoothstep(plantBand.x, plantBand.y, away), out = smoothstep(plantBand.z, plantBand.w, away);
   const keep = step(pick, into.mul(1.0001)).mul(mix(step(out, pick), float(1).sub(out), plantSink));
   // Where the air's phase comes from: where the plant stands.
@@ -548,16 +554,25 @@ export const LEAF = kind('leaf', ['position', 'normal', 'uv', 'wind', 'tint', 'o
   const dxA = dFdx(st.mul(LEAF_ATLAS)), dyA = dFdy(st.mul(LEAF_ATLAS));
   const lod = max(log2(max(dot(dxA, dxA), dot(dyA, dyA))).mul(0.5), 0);
   const alpha = clamp(leaf.a.mul(lod.mul(0.32).add(1)), 0, 1);
-  m.maskNode = alpha.greaterThan(0.45);
+  m.maskNode = alpha.greaterThan(LEAF_CUT);
   const tv = tint.sub(0.5);
   let col: Node<'vec3'> = leaf.rgb.mul(tv.mul(0.4).add(1));
   col = mix(col, col.mul(vec3(1.12, 1.06, 0.7)), max(tv, 0).mul(0.5));
   col = col.mul(float(1).sub(occ.mul(0.62)));
-  m.colorNode = throughAir(col.mul(sunlit(plantHorizon, normalize(v.normal), 0.7)));
+  m.colorNode = throughAir(col.mul(sunlit(plantHorizon, normalize(v.normal), LEAF_WRAP)));
   return m;
 });
 
-/** Crown hulls for the middle distance: vertex colours, a mottle, and edges that dissolve in noise. */
+/**
+ * What a hull's crown colour is multiplied by so it looks like the leaf cards it stands for (`userData.tint`, a
+ * Vector3 per form, measured from the leaf atlas and the cards: render/plants.ts `matchLeaves`); 1 until measured.
+ */
+const hullTint = uniform(new Vector3(1, 1, 1)).onObjectUpdate(({ object }) => (object?.userData.tint as Vector3 | undefined) ?? new Vector3(1, 1, 1));
+
+/**
+ * Crown hulls for the middle distance: vertex colours matched to the leaves (`hullTint`), a mottle, and edges that
+ * dissolve in noise; lit the way the leaf cards are (the same wrap), so a plant keeps its colour when it hands over.
+ */
 export const HULL = kind('hull', ['position', 'normal', 'color', 'kind', 'wind', 'plant'], { cast: true, receive: false }, () => {
   const m = new MeshBasicNodeMaterial();
   const v = plantVertex(0);
@@ -569,8 +584,10 @@ export const HULL = kind('hull', ['position', 'normal', 'color', 'kind', 'wind',
   const n = normalize(v.normal);
   const edge = float(1).sub(abs(dot(n, normalize(positionWorld.sub(cameraPosition).negate()))));
   m.maskNode = crown.lessThan(0.5).or(edge.mul(edge).mul(1.25).lessThanEqual(nz.add(0.12)));
-  const shade = mix(float(1), nz.mul(0.45).add(0.78), step(0.5, crown));
-  m.colorNode = throughAir(vertexColor().rgb.mul(shade).mul(sunlit(plantHorizon, n, 0.4)));
+  const isCrown = step(0.5, crown);
+  const shade = mix(float(1), nz.mul(0.45).add(0.78), isCrown);
+  const color = vertexColor().rgb.mul(mix(vec3(1, 1, 1), hullTint, isCrown));
+  m.colorNode = throughAir(color.mul(shade).mul(sunlit(plantHorizon, n, LEAF_WRAP)));
   return m;
 });
 

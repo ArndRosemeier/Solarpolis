@@ -2,6 +2,31 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.066 — Bushes: low, the same colour near and far, and never gone before the near one is there
+
+- Bushes are clearly lower now: most are knee to chest high, none reaches the eyes of someone standing.
+- Walking up to plants, the distant version of a bush, tree, tuft of grass or stone stays until the close-up version is ready, then hands over plant by plant. Nothing vanishes and waits any more.
+- Distant bushes and trees have the colour of their leaves. Before, they were darker and greener than the bush you then walked up to.
+- In the hand-over zone no plant goes missing for a moment any more (the two levels used to disagree about which plant to draw).
+- Debug menu: a "plant LOD" line counts holes (always 0), and Render → "Plants: every level → only the full → …" shows one level at a time to compare them.
+
+## v0.065 — Ground tiles build faster again
+
+- A biome that cannot grow at a point no longer works out its patch pattern there, and the district lookup is cheaper (one octave for the bending borders, the style's lean kept ready). The ground's colour per point is back to what it cost before the districts came, with the same result.
+- The districts' test has its own file, keeping the ecology tests under their time budget.
+
+## v0.064 — The districts show in the land
+
+- Each district of the worked floor now grows its land in its style: groves keep closed woods with glades, herds keep wood pasture in wide sweeps, play districts open fields, water districts wet ground with reeds, orchards and makers small blocks of trees over meadow. Districts that let their land go keep the climate's own mix.
+- Belts of trees run along the borders between districts, broken here and there, like hedgerows marking out a worked land, so the plan reads from the far side.
+- District borders bend with the land instead of running straight.
+
+## v0.063 — The ground keeps to its memory budget
+
+- Near the endcaps' rock walls (Arnd saw it at the foot of the Gate) the ground no longer eats gigabytes: cliffs are drawn as finely as their cells can show, not split down to the smallest tiles everywhere they are seen.
+- The ground has a hard memory budget: if a view would need more, it is drawn a little coarser until it fits, and the debug menu says so ("coarser ×…", or "OVER BUDGET").
+- The debug menu has a Copy button that puts its whole info text on the clipboard.
+
 ## v0.062 — The Mountain's summit band, the Water face's basins
 
 - Near the axis the Mountain's spurs no longer stand as a ring of thin rock fins hanging toward the floor: a spur only stands as tall as it has room to be wide, so the valleys close into one broad summit band.

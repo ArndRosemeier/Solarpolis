@@ -182,18 +182,23 @@ export function cellBounds(ecology: Ecology, sp: Species, k: CellKey): { theta0:
   return { theta0: (2 * Math.PI * k.i) / n, theta1: (2 * Math.PI * (k.i + 1)) / n, s0: k.j * cell, s1: Math.min(profile.length, (k.j + 1) * cell) };
 }
 
-/** A cell in sight, and the nearest anything in it can be to the eye (m). */
+/** A cell in sight, and the nearest and farthest anything in it can be from the eye (m). */
 export interface NearCell {
   key: CellKey;
   near: number;
+  far: number;
 }
 
-/** The cells of a plant at a level that may hold something it draws seen from `eye` (world), nearest first. */
-export function cellsNear(ecology: Ecology, sp: Species, level: Level, eye: Vec3): NearCell[] {
+/**
+ * The cells of a plant at a level that may hold something it draws seen from `eye` (world), nearest first: from where
+ * its band starts, or from `from` (m) where it may have to draw nearer, standing in for a finer level that is not built
+ * yet (gen/handover.ts).
+ */
+export function cellsNear(ecology: Ecology, sp: Species, level: Level, eye: Vec3, from = sp.band[level]?.[0] ?? 0): NearCell[] {
   if (level >= sp.band.length) return []; // not drawn at this level
   const { profile } = ecology.terrain.habitat;
   const at = fromWorld(profile, eye[0], eye[1], eye[2]);
-  const [near, , , far] = sp.band[level], cell = sp.cell[level], tall = sp.tall;
+  const [, , , far] = sp.band[level], near = from, cell = sp.cell[level], tall = sp.tall;
   // Too high above the ground to see any of this plant at this level: none.
   if (at.h - tall > far) return [];
   const reach = Math.sqrt(Math.max(0, far * far - Math.max(0, at.h - tall) ** 2)) + cell;
@@ -213,7 +218,7 @@ export function cellsNear(ecology: Ecology, sp: Species, level: Level, eye: Vec3
       const c = toWorld(profile, { theta: (b.theta0 + b.theta1) / 2, s: (b.s0 + b.s1) / 2, h: 0 });
       // The nearest and farthest anything in it can be: the middle, give or take half its diagonal and the tallest plant.
       const mid = Math.hypot(c[0] - eye[0], c[1] - eye[1], c[2] - eye[2]), give = Math.hypot(b.s1 - b.s0, (b.theta1 - b.theta0) * r) / 2 + tall;
-      if (mid - give < far && mid + give > near) out.push({ key: k, near: Math.max(0, mid - give) });
+      if (mid - give < far && mid + give > near) out.push({ key: k, near: Math.max(0, mid - give), far: mid + give });
     }
   }
   return out.sort((a, b) => a.near - b.near);

@@ -12,10 +12,6 @@
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView) each drive their own StreamCache (render/streamed.ts) the one way it is driven: frame, want, mark, bytes, clear; their requests are told apart by kind and key."
   },
   {
-    "key": "idiom: [.cache .frame] in solarpolis/render/hullDetail.ts + solarpolis/render/plants.ts + solarpolis/render/terrain.ts",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView) each drive their own StreamCache (render/streamed.ts) the one way it is driven: frame, want, mark, bytes, clear; their requests are told apart by kind and key."
-  },
-  {
     "key": "same name: solarpolis/app/memory.ts#stop + solarpolis/render/actors/animator.ts#stop",
     "reason": "The Actors figure and animator are ported from Dunfinity with their method names, which follow Actors' own Character API (load, update, stop, dispose); the plan moves the animator into Actors, and keeping the names keeps that swap a drop-in."
   },
@@ -128,8 +124,8 @@
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
-    "key": "same name: solarpolis/render/hullDetail.ts#info + solarpolis/render/terrain.ts#info",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+    "key": "same name: solarpolis/render/terrain.ts#info + solarpolis/render/traffic.ts#info",
+    "reason": "Each view's own line for the debug menu's info block (debug.addInfo); the bodies say different things (tiles and memory budget vs ships by phase)."
   },
   {
     "key": "same name: solarpolis/render/hullDetail.ts#make + solarpolis/render/plants.ts#make",

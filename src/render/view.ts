@@ -25,6 +25,7 @@ import { dayPhase, emissionMean, nearestLit, sunlineEmission, sunlineNorm, EMISS
 import { densityFalloff, seenMid } from '../world/air';
 import { TerrainView, describeLayout } from './terrain';
 import { PlantView } from './plants';
+import type { Level } from '../gen/scatter';
 import { slopeAt } from '../gen/scatter';
 import { setFloorEye, setRockBeds, setSnow } from './groundShaders';
 import { UNDER_CROWNS, crownsClosed, makeEcology, type Ecology } from '../gen/ecology';
@@ -201,6 +202,7 @@ export class InteriorView {
       this.stage.hudLine(),
       `${this.tiles?.info() ?? 'terrain: none'} · ${describeLayout(this.terrain)} · ${this.pool.workers} workers`,
       this.plants?.info() ?? 'plants: none',
+      this.plants?.lodLine() ?? '',
       this.landmarks?.info() ?? 'landmarks: none',
       `θ ${(a.theta * 180 / Math.PI).toFixed(1)}°, s ${(a.s / 1000).toFixed(2)} of ${(this.habitat.profile.length / 1000).toFixed(2)} km, ground ${this.standOn(a.theta, a.s).toFixed(1)} m, ${mode}, eyes ×${this.exposure.toFixed(2)}`,
     ].join('\n');
@@ -216,6 +218,9 @@ export class InteriorView {
 
   /** The cloud cover set in the debug menu in place of the schedule's, or null for the schedule. */
   cloudCover: number | null = null;
+  /** Draw only one level of every plant (debug: compare the levels' size and colour), or null for all of them. */
+  get plantLevel(): Level | null { return this.plants?.only ?? null; }
+  set plantLevel(l: Level | null) { if (this.plants) this.plants.only = l; }
 
   /** Take off (if on foot) and rise to `height` metres over the ground below (debug menu). */
   flyUp(height: number): void {
@@ -436,7 +441,7 @@ export class InteriorView {
     this.pose(v.eye);
     const pixelsPerRadian = (this.canvas.clientHeight || 720) / (this.camera.fov * Math.PI / 180);
     this.tiles?.follow(v.eye, pixelsPerRadian);
-    this.plants?.follow(v.eye);
+    this.plants?.follow(v.eye, this.frameDt);
     this.landmarks?.follow(v.eye, pixelsPerRadian);
   }
 

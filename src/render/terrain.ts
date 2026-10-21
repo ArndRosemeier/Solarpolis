@@ -8,15 +8,13 @@ import { arraysGeometry, freeMesh, meshGeometry, uploadStatic } from './geometry
 import type { Stage } from '@futuremagic/stage';
 import { toView, type Vec3 } from '../blueprint';
 import type { Terrain } from '../gen/terrain';
-import { CELL_PIXELS, cellSize, keyId, makeLayout, parent, roots, select, spheres, tileBytes, type TileFit, type TileKey, type TileLayout, type TileMesh } from '../gen/tiles';
+import { ERROR_PIXELS, LodBudget, keyId, makeLayout, parent, roots, select, spheres, splitError, tileBytes, type TileFit, type TileKey, type TileLayout, type TileMesh } from '../gen/tiles';
 import type { WorkerPool } from '../workers/pool';
 import type { GenAnswer, GenRequest } from '../workers/gen.worker';
 import { StreamCache, type Streamed } from './streamed';
 import { GROUND, WATER } from './materials';
 import { FLOOR_BYTES, loadFloor } from './groundShaders';
 
-/** A tile's error may cover at most this many pixels before the tile splits. */
-const MAX_PIXELS = 2;
 /** Built tiles kept, drawn or not: a few times what one view needs, so turning around costs nothing. */
 const CACHE = 3000;
 /**
@@ -44,6 +42,10 @@ export class TerrainView {
    * both stop: tiles that keep swapping or being built again are LOD flicker. */
   private swapped = 0;
   private made = 0;
+  /** The tiles in use stay within most of the cache's bytes (`LodBudget`), so a breach does not happen; if it does, it shows. */
+  private readonly budget = new LodBudget(CACHE_BYTES);
+  private used = 0;
+  private warnedAt = -Infinity;
 
   constructor(private readonly terrain: Terrain, private readonly stage: Stage, private readonly pool: WorkerPool) {
     this.layout = makeLayout(terrain);
@@ -76,19 +78,22 @@ export class TerrainView {
   shed(): void { this.cache.shed(); }
 
   info(): string {
-    return `terrain ${this.drawn.length} tiles drawn (${this.swapped} new last frame, ${this.made} built so far), ${this.cache.built.size} cached (${(this.cache.bytes / 1048576).toFixed(0)} MB), ${this.cache.building} building`;
+    const lod = this.budget.scale > 1.001 ? `, coarser ×${this.budget.scale.toFixed(1)} to stay in budget` : '';
+    const over = this.cache.overBudget ? ` · OVER BUDGET (${(CACHE_BYTES / 1048576).toFixed(0)} MB)` : '';
+    return `terrain ${this.drawn.length} tiles drawn (${this.swapped} new last frame, ${this.made} built so far), ${(this.used / 1048576).toFixed(0)} MB in use${lod}, ${this.cache.built.size} cached (${(this.cache.bytes / 1048576).toFixed(0)} MB), ${this.cache.building} building${over}`;
   }
 
   /** Choose, request and place the tiles for an eye; `pixelsPerRadian` is the screen height over the vertical FOV. */
   follow(eye: Vec3, pixelsPerRadian: number): void {
     this.cache.frame();
+    const maxPixels = ERROR_PIXELS * this.budget.scale;
     const fitOf = (k: TileKey): TileFit | undefined => this.cache.get(keyId(k))?.tile;
     // A parent's error as `select` judges it: its shape's error, or its cells.
     const parentError = (k: TileKey): number | undefined => {
       const e = k.level === 0 ? undefined : fitOf(parent(this.layout, k))?.error;
-      return e === undefined ? undefined : Math.max(e, (cellSize(this.layout, parent(this.layout, k)) * MAX_PIXELS) / CELL_PIXELS);
+      return e === undefined ? undefined : splitError(this.layout, parent(this.layout, k), e);
     };
-    const sel = select(this.terrain, this.layout, eye, pixelsPerRadian, MAX_PIXELS, fitOf, this.sphereOf);
+    const sel = select(this.terrain, this.layout, eye, pixelsPerRadian, maxPixels, fitOf, this.sphereOf);
     const before = new Set(this.drawn);
     for (const e of this.drawn) { e.mesh.visible = false; if (e.water) e.water.visible = false; }
     this.drawn = [];
@@ -98,9 +103,9 @@ export class TerrainView {
       const [x, y, z] = toView(eye, e.tile.origin);
       e.mesh.position.set(x, y, z);
       e.mesh.visible = true;
-      // Where the parent would be chosen instead (select: its error over the distance reaches MAX_PIXELS).
+      // Where the parent would be chosen instead (select: its error over the distance reaches maxPixels).
       const pe = parentError(k);
-      e.mesh.userData.morphFar = pe === undefined ? 1e30 : (pe * pixelsPerRadian) / MAX_PIXELS;
+      e.mesh.userData.morphFar = pe === undefined ? 1e30 : (pe * pixelsPerRadian) / maxPixels;
       if (e.water) { e.water.position.set(x, y, z); e.water.visible = true; }
       this.cache.mark(e);
       this.drawn.push(e);
@@ -109,9 +114,17 @@ export class TerrainView {
     // The tiles split to reach these, and children waiting for their siblings, are in use too: evicting one would drop
     // a branch back to a coarse tile, or keep a tile from ever splitting, while the full cache builds it again and
     // again (the flicker where the sunline meets an endcap).
-    for (const k of sel.keep) this.cache.mark(this.cache.get(keyId(k))!);
+    let used = 0;
+    for (const e of this.drawn) used += e.bytes;
+    for (const k of sel.keep) { const e = this.cache.get(keyId(k))!; this.cache.mark(e); used += e.bytes; }
+    this.used = used;
+    this.budget.update(used);
     // Ask for what is missing, most needed first; jobs no longer wanted are dropped from the queue.
     this.cache.want(sel.want.map((k) => ({ id: keyId(k), request: this.job(k) })));
+    if (this.cache.overBudget && performance.now() - this.warnedAt > 10_000) {
+      this.warnedAt = performance.now();
+      console.warn(`terrain: over its memory budget: ${this.info()}`);
+    }
   }
 
   private job(key: TileKey): GenRequest {
