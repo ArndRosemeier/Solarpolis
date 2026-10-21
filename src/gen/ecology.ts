@@ -17,6 +17,7 @@ import type { Terrain } from './terrain';
 import { riverAt } from './rivers';
 import { canopyColor } from './trees';
 import { plantedCanopy, plantedLawn } from './planted';
+import { snowCover, snowFieldOf } from './snow';
 
 /** Plants at least this tall (m, full grown) are trees: they make up the canopy of woods. */
 export const TREE_HEIGHT = 6;
@@ -68,6 +69,11 @@ export interface Ecology {
    * far apart the trees stand (m): the far view draws crowns and gaps from them (render/groundShaders.ts, `woodsFromAfar`).
    */
   colorAt(theta: number, s: number, h: number, slope: number, out: Float32Array, i: number, canopy?: Float32Array, floor?: Uint8Array, wood?: Float32Array): void;
+  /**
+   * How much of the ground lies above the Mountain's snow line (0 … 1, gen/snow.ts `snowCover`): nothing grows there,
+   * and between the snow (which the ground's shader lays over it, `snowOn`) the ground is bare rock.
+   */
+  snowAt(theta: number, s: number, h: number): number;
 }
 
 /** How soft the edges of a biome's moisture and height ranges are (in moisture units, and in shares of the radius). */
@@ -155,6 +161,12 @@ export function makeEcology(terrain: Terrain): Ecology {
     return share > 0 ? { kind: terrain.form.faces[valley].kind, share } : null;
   };
 
+  const snow = snowFieldOf(h);
+  const snowAt = (theta: number, s: number, height: number): number => {
+    const [x, y, z] = toWorld(profile, { theta, s, h: height });
+    return snowCover(snow, x, y, z);
+  };
+
   const shares = new Float32Array(count);
   const woods = biomes.map(canopyOf);
   // Each biome's floor as shares of the layers (summing to 1).
@@ -211,6 +223,8 @@ export function makeEcology(terrain: Terrain): Ecology {
         rock *= 1 - 0.7 * k;
       }
     }
+    // Above the snow line the ground is bare rock between the snow (the shader lays the snow over it, near and far).
+    if (s < profile.floorStart) rock += (1 - rock) * snowAt(theta, s, height);
     c0 += (r[0] - c0) * rock; c1 += (r[1] - c1) * rock; c2 += (r[2] - c2) * rock;
     out[i] = Math.min(1, Math.max(0, c0));
     out[i + 1] = Math.min(1, Math.max(0, c1));
@@ -252,7 +266,7 @@ export function makeEcology(terrain: Terrain): Ecology {
     canopy[at + 3] = tall * 0.75 * smoothstep(0.1, 0.7, cover);
   };
 
-  return { terrain, climate, biomesAt, moistureAt, colorAt };
+  return { terrain, climate, biomesAt, moistureAt, colorAt, snowAt };
 }
 
 /** A place found by `nearestWood` or `nearestFloor`, and the way there from where the search began. */

@@ -91,6 +91,15 @@ The Gate's faces read by kind in `colorAt`: the Stair face is dressed stone (roc
 
 Near the axis the land gets many times the floor's light (7× at 90 m from the axis in the reference). So the eyes' meter now walks the real terrain (`landHit`, with `heightAt`) for rays from or onto the endcaps; standing on the Mountain near its tip the eyes stop down to about ×0.6. That rock still reads very bright there: the meter takes the land at albedo 0.15, and pale rock near the axis is more.
 
+## Snow on the Mountain (2026-10-21)
+
+The Mountain's top (gravity below `plan.mountain.snowLine`, 0.15 of the floor's) lies under snow, on the wild end only; the Gate's top stays bare. One rule for both sides, `gen/snow.ts`:
+
+- **Gravity.** Snow fades in over a band a quarter of the snow line's radius wide. In the shader (`snowOver`, groundShaders.ts) the band's edge is torn by noise a band across, so from afar it is a ragged edge, never a ring around the axis. Up close, where the snow thins, it lies in patches a few metres across.
+- **Slope.** Settled snow holds where the slope's tangent is under its friction (tan 31°) plus its cohesion against its weight (`tanHolds`). Calibrated to Earth (42° at full gravity), it holds to 68° at the snow line and to walls of 75° and more near the axis, because its weight falls with gravity and its cohesion does not. This matters: inside a gravity share of 0.12 the endcap is the bare profile's cone, about 69° steep in the local gravity, so a flat-ground-only rule (35–40°) would leave a bare dark ring between a thin snow ring and a white tip. Rock steeper than the snow holds shows through as dark ribs and headwalls.
+- **Near = far.** The snow goes over GROUND's colour after the near floor and the far woods are blended, so both get the same snow, on the geometric normal (snow smooths the floor's relief). Drifts grey it over tens of metres, ripples across the slope up close; every pattern fades to its mean by the footprint, so the far snowfield has the near one's albedo (0.78, 0.8, 0.84).
+- **CPU.** `ecology.snowAt` is the gravity band without its noise. There `colorAt` makes the ground bare rock (the floor's rock share), so `rockFromAfar` dresses the rock between the snow, and no crowns or grass stand there. Scatter keeps every plant off above the line and stones off where the snow lies; boulders (0.8 m and up) stand out of it. The eyes' meter counts the snow's albedo where it lies (`landAlbedo`), so the eyes stop down before a sunlit snowfield.
+
 ## Still open
 
 - The endcaps: waterfalls where the rivers drop over the walls (the rivers already fall in cascades); landmarks.

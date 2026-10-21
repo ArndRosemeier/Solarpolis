@@ -32,6 +32,7 @@ import { groundSlope } from './terrain';
 import { keptClear } from './landmarks';
 import { plantedIn, plantingsOf, scatterKeepsOff } from './planted';
 import { bytesOf } from './shapes';
+import { snowFieldOf, snowLies } from './snow';
 
 /** Shapes per plant form: plants of a species pick one of these by their own hash. */
 export const PLANT_VARIANTS = 3;
@@ -276,6 +277,7 @@ export function plantCell(ecology: Ecology, plants: readonly Species[], k: CellK
       if (t.standAt(pt, ps) > ground + 0.05) continue; // under water
       if (keptClear(t, pt, ps)) continue; // under a landmark, or on the way onto it
       if (sp.what !== 'cover' && scatterKeepsOff(t, pt, ps)) continue; // a grove's clearing (its lawn stays)
+      if (ps < profile.floorStart && snowKeepsOff(ecology, sp, pt, ps, ground, f(6))) continue;
       if (!cover) {
         const slope = slopeAt(ecology, pt, ps, ground, gap);
         // Where the ground is too steep for any biome, the nearest fit still claims it (its colour is rock), but nothing
@@ -291,6 +293,23 @@ export function plantCell(ecology: Ecology, plants: readonly Species[], k: CellK
     }
   }
   return finished(t, k, b, origin, lists);
+}
+
+/** Debris at least this tall (m, the smallest of its kind) stands out of the snow: boulders, not stones. */
+const OUT_OF_SNOW = 0.8;
+
+/**
+ * Whether the Mountain's snow keeps a plant or a stone off a point (gen/snow.ts), with `chance` its own number (0 … 1):
+ * above the snow line nothing grows, and stones lie only where no snow covers them; boulders stand out of it.
+ */
+function snowKeepsOff(ecology: Ecology, sp: Species, theta: number, s: number, ground: number, chance: number): boolean {
+  const above = ecology.snowAt(theta, s, ground);
+  if (above === 0) return false;
+  if (sp.what !== 'debris') return chance < above;
+  if (sp.spec.height[0] >= OUT_OF_SNOW) return false;
+  const p = toWorld(ecology.terrain.habitat.profile, { theta, s, h: ground }), n = normalAt(ecology, theta, s, ground, 1);
+  const r = Math.max(Math.hypot(p[0], p[1]), 1e-6), level = -(n[0] * p[0] + n[1] * p[1]) / r;
+  return chance < snowLies(snowFieldOf(ecology.terrain.habitat), p[0], p[1], p[2], level);
 }
 
 /** A planted cell from its plants' floats per shape. */
@@ -363,6 +382,11 @@ function tiltAt(ecology: Ecology, theta: number, s: number, p: Vec3): [number, n
 
 /** How steep the ground is at a point (0 flat … 1 a wall), from its height a step either way (m). */
 export function slopeAt(ecology: Ecology, theta: number, s: number, ground: number, step: number): number {
+  return groundSlope(normalAt(ecology, theta, s, ground, step), theta);
+}
+
+/** The ground's unit normal at a point (world, into the air), from its height a step either way (m). */
+export function normalAt(ecology: Ecology, theta: number, s: number, ground: number, step: number): Vec3 {
   const t = ecology.terrain, { profile } = t.habitat;
   const r = Math.max(profile.at(s).r, 1e-6), d = Math.max(step * 0.5, 0.5);
   // The ground's normal from a step around the axis and a step along the profile (back where it ends).
@@ -377,7 +401,7 @@ export function slopeAt(ecology: Ecology, theta: number, s: number, ground: numb
     const facing = n[0] * air[0] + n[1] * air[1] + n[2] * air[2] < 0 ? -1 : 1;
     n = [(n[0] / len) * facing, (n[1] / len) * facing, (n[2] / len) * facing];
   }
-  return groundSlope(n, theta);
+  return n;
 }
 
 /**

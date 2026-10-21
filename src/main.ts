@@ -22,6 +22,7 @@ import { frameOf, landmarksOf, placeAt, type Landmark } from './gen/landmarks';
 import { plantingsOf, type Grove } from './gen/planted';
 import type { Terrain } from './gen/terrain';
 import { outOfPlace } from './gen/shapes';
+import { landformOf } from './gen/plan';
 import { pavilionPlan } from './gen/pavilion';
 
 const app = document.getElementById('app')!;
@@ -266,6 +267,23 @@ viewpoint('Fly: high up, looking down', 0.6, 0.05, 0.25);
 viewpoint('Fly: near the axis at the wild end, looking along the tube', 0.9, 0.02, 3, 0);
 viewpoint('Fly: over the floor, looking up the wild endcap', 0.1, 0, -1.5, 0.08);
 viewpoint('Fly: over the floor, looking up the port endcap', 0.1, 0, 1.5, 0.92);
+/**
+ * Over the Mountain's snow (gen/snow.ts): the eye where gravity is `from` times the snow line's, `up` shares of the
+ * radius over the ground, looking at the ground where it is `to` times the snow line's.
+ */
+const overSnow = (label: string, from: number, up: number, to: number): void => debug.add({
+  label, group: 'Go', run: () => {
+    const v = view(), t = v?.ecology?.terrain;
+    if (!v || !t) return;
+    const h = t.habitat, form = landformOf(h), line = form.mountain.snowLine, theta = v.walker.at.theta;
+    const s0 = form.endcapAt(true, line * from), s1 = form.endcapAt(true, line * to);
+    const eye = toWorld(h.profile, { theta, s: s0, h: t.heightAt(theta, s0) + up * h.radius }), at = toWorld(h.profile, { theta, s: s1, h: t.heightAt(theta, s1) });
+    const d = Math.hypot(at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]);
+    v.floatAt(eye, [(at[0] - eye[0]) / d, (at[1] - eye[1]) / d, (at[2] - eye[2]) / d]);
+  },
+});
+overSnow('Fly: at the Mountain\'s snow line, looking up into the snow', 1.1, 0.001, 0.75);
+overSnow('Fly: over the Mountain\'s snowfield', 1.6, 0.03, 0.4);
 /** The Inside view and something of its terrain (`pick`), when both are there. */
 function inView<T>(pick: (t: Terrain) => T | undefined): { v: InteriorView; x: T } | null {
   const v = view(), t = v?.ecology?.terrain, x = t && pick(t);
