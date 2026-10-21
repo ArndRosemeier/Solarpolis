@@ -14,13 +14,14 @@ import { exteriorDistance, type Habitat } from '../blueprint';
 import { columnsOf, makeSkin, skinFlux, type Columns, type Skin } from '../gen/skin';
 import { apply, mul, rotZ, sunlightFrom, transpose, type Mat3, type PlacedHabitat, type SkyView, type Space } from '../space';
 import { HARDWARE, RADIATOR, SKIN, STARS } from './materials';
-import { skinUniforms, type SkinUniforms } from './hullShaders';
+import { hideUnder, skinUniforms, type SkinUniforms } from './hullShaders';
 import { hullGeometry } from './hull';
 import { arraysGeometry, meshGeometry, setPose } from './geometry';
 import { HullDetailView, type Frames } from './hullDetail';
 import { sharedPool } from '../workers/pool';
 import { DISH, detailParts, partDistance, wholeTile, type DetailPart, type PartFrame } from '../gen/hullParts';
-import { reachOf } from '../gen/detailTree';
+import { NO_MASK, coverMask, reachOf } from '../gen/detailTree';
+import { skinEye, skinGrid } from '../gen/hullDetail';
 import { DRONES_WITHIN, DroneMesh } from './drones';
 
 /**
@@ -156,10 +157,8 @@ export class NecklaceView {
     for (const k of ['skin', 'radiators', 'mast'] as const) setPose(m[k], d.axes, d.origin);
     d.spindleAxes = mul(d.axes, rotZ(-d.placed.spinAt(this.time)));
     setPose(m.spindle, d.spindleAxes, d.origin);
-    // Each whole part from afar, until its near tiles cover it.
     for (const p of m.pieces) {
       const axes = p.frame === 'body' ? d.axes : d.spindleAxes;
-      p.mesh.visible = !d.detail?.covers(p.id);
       setPose(p.mesh, axes, v3add(d.origin, apply(axes, p.origin)));
     }
     // The drones only near the skin: the eye's distance to the body, in its own frame.
@@ -219,7 +218,17 @@ export class NecklaceView {
     const g = this.glints.geometry;
     g.attributes.position.needsUpdate = true;
     g.attributes.color.needsUpdate = true;
-    for (const d of this.drawn) if (d.meshes) { this.poseMeshes(d, d.meshes); this.followDetail(d); }
+    for (const d of this.drawn) if (d.meshes) { this.poseMeshes(d, d.meshes); this.followDetail(d); this.hideCovered(d, d.meshes); }
+  }
+
+  /**
+   * The far forms step aside where this frame's near tiles cover them, so the two never fight over one surface: each
+   * whole part where its tiles cover all of it, the drum's skin exactly over the root tiles drawn (`coverMask`).
+   */
+  private hideCovered(d: Drawn, m: NonNullable<Drawn['meshes']>): void {
+    for (const p of m.pieces) p.mesh.visible = !d.detail?.covers(p.id);
+    const eye = apply(transpose(d.axes), v3scale(d.origin, -1));
+    hideUnder(d.uniforms, d.detail ? coverMask(skinGrid(d.skin), skinEye(d.skin, eye), d.detail.covered('skin')) : NO_MASK);
   }
 
   /**

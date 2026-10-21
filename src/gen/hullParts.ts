@@ -63,8 +63,12 @@ export interface PartTile {
   parts: HullTile['parts'];
 }
 
-/** What a tile of this level holds (0–3, the lists above): one cell is the most. */
-export const partDetail = (level: number): 0 | 1 | 2 | 3 => (level >= 3 ? 0 : level === 2 ? 1 : level === 1 ? 2 : 3);
+/**
+ * What a tile of this level holds (0–3, the lists above): tiles of two cells a side and less the most. As on the skin,
+ * each detail comes in on tiles twice as large as its size alone would ask for (Arnd, 2026-10-21: details need to pop
+ * up earlier).
+ */
+export const partDetail = (level: number): 0 | 1 | 2 | 3 => (level >= 4 ? 0 : level === 3 ? 1 : level === 2 ? 2 : 3);
 
 /** The spindle's plating: root tiles 2^5 plates a side. */
 const PLATING_ROOT = 5;

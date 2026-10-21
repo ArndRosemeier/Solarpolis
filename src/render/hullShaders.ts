@@ -17,6 +17,7 @@ import {
 import type { Node } from 'three/webgpu';
 import { GLINT_GAIN, GLINT_POWER, LOOK, SALT, type Columns, type Skin } from '../gen/skin';
 import { DISPLAY_CAP, outside } from './skyShaders';
+import { MASK_WORDS, ROOT_SPAN, type CoverMask } from '../gen/detailTree';
 
 /** A habitat's skin as the four vectors its mesh hands the shader (`mesh.userData.skin`). */
 export interface SkinUniforms {
@@ -27,6 +28,18 @@ export interface SkinUniforms {
   mean: Vector4;
   /** (modules a panel holds a side, cells a module holds a side, a module's edge (m), unused). */
   parts: Vector4;
+  /**
+   * Where the near tiles cover the drum this frame, so the far skin hides there (`coverMask`, gen/detailTree.ts):
+   * (root tile size in panels, the eye's root column and row, root columns around), and the mask's four words.
+   */
+  hidden: Vector4;
+  hiddenBits: Vector4;
+}
+
+/** Hand the skin's mesh this frame's cover mask. */
+export function hideUnder(u: SkinUniforms, m: CoverMask): void {
+  u.hidden.set(m.size, m.i, m.j, m.around);
+  u.hiddenBits.set(m.words[0], m.words[1], m.words[2], m.words[3]);
 }
 
 export function skinUniforms(s: Skin, c: Columns): SkinUniforms {
@@ -38,6 +51,8 @@ export function skinUniforms(s: Skin, c: Columns): SkinUniforms {
     seed: new Vector4(s.seed >>> 16, s.seed & 0xffff, s.trackEvery, s.trackWidth),
     mean: new Vector4(c.mean.albedo[0], c.mean.albedo[1], c.mean.albedo[2], c.mean.gloss),
     parts: new Vector4(s.modules, s.cells, (2 * Math.PI * s.radius) / s.nTheta / s.modules, 0),
+    hidden: new Vector4(0, 0, 0, 1),
+    hiddenBits: new Vector4(),
   };
 }
 
@@ -47,7 +62,7 @@ const blank = (): SkinUniforms => skinUniforms(
 );
 const fallback = blank();
 const perObject = (k: keyof SkinUniforms) => uniform(new Vector4()).onObjectUpdate(({ object }) => ((object?.userData.skin as SkinUniforms | undefined) ?? fallback)[k]);
-const skin = { grid: perObject('grid'), campaign: perObject('campaign'), age: perObject('age'), seed: perObject('seed'), mean: perObject('mean'), parts: perObject('parts') };
+const skin = { grid: perObject('grid'), campaign: perObject('campaign'), age: perObject('age'), seed: perObject('seed'), mean: perObject('mean'), parts: perObject('parts'), hidden: perObject('hidden'), hiddenBits: perObject('hiddenBits') };
 
 /** lowbias32 (`hash32` in @futuremagic/core), on 32-bit unsigned integers, which wrap as JavaScript's Math.imul does. */
 const hash32Fn = Fn(([x]: [Node<'uint'>]) => {
@@ -135,6 +150,25 @@ function shade(albedo: Node<'vec3'>, gloss: Node<'float'>, emit: Node<'float'>, 
   const n = normalize(modelWorldMatrix.mul(vec4(local, 0)).xyz);
   const light = lightOn(n);
   return albedo.mul(light.all).add(glint(n, light.sun, gloss, sharp)).add(vec3(1, 0.86, 0.66).mul(emit)).mul(outside.exposure);
+}
+
+/**
+ * Whether the far skin shows at this pixel: not where the near tiles cover the drum (`masked` in gen/detailTree.ts,
+ * mirrored), so the two never fight over the same surface (Arnd, 2026-10-21).
+ */
+export function skinShown(): Node<'bool'> {
+  const p = positionLocal, size = skin.hidden.x, around = skin.hidden.w, side = 2 * ROOT_SPAN + 1;
+  const fi = fract(atan(p.y, p.x).div(2 * Math.PI)).mul(skin.grid.x);
+  const fj = p.z.sub(skin.grid.z).div(skin.grid.w.sub(skin.grid.z)).mul(skin.grid.y);
+  const d = floor(fi.div(size)).sub(skin.hidden.y);
+  const di = d.sub(around.mul(floor(d.div(around).add(0.5)))), dj = floor(fj.div(size)).sub(skin.hidden.z);
+  const inside = size.greaterThan(0).and(abs(di).lessThanEqual(ROOT_SPAN)).and(abs(dj).lessThanEqual(ROOT_SPAN));
+  const bit = di.add(ROOT_SPAN).mul(side).add(dj.add(ROOT_SPAN)), slot = floor(bit.div(24)), shift = bit.sub(slot.mul(24));
+  const words = (['x', 'y', 'z', 'w'] as const).slice(0, MASK_WORDS).map((c) => skin.hiddenBits[c]);
+  let word = words[0] as Node<'float'>;
+  for (let k = 1; k < words.length; k++) word = select(slot.equal(k), words[k], word);
+  const set = fract(floor(word.div(pow(2, shift))).mul(0.5)).greaterThan(0.25);
+  return inside.and(set).not();
 }
 
 /**
@@ -253,17 +287,22 @@ const MODULE_TILT = 0.09;
 export function skinDetailColor(): Node<'vec3'> {
   const m = attribute<'vec4'>('grid', 'vec4');
   const modules = skin.parts.x, cells = skin.parts.y, moduleEdge = skin.parts.z;
-  const i = uint(m.x), j = uint(m.y), panel = panelLook(i, j), seed = skinSeed();
+  // The bay's column and row are whole numbers, but interpolated they can land a hair below one: round, never cut,
+  // or a triangle of the bay takes its neighbour's look.
+  const i = uint(m.x.add(0.5)), j = uint(m.y.add(0.5)), panel = panelLook(i, j), seed = skinSeed();
   const a = clamp(floor(m.z), 0, modules.sub(1)), b = clamp(floor(m.w), 0, modules.sub(1));
   const mi = i.mul(uint(modules)).add(uint(a)), mj = j.mul(uint(modules)).add(uint(b));
   const fx = m.z.sub(a), fy = m.w.sub(b);
   const u = (x: Node<'uint'>, y: Node<'uint'>, salt: number): Node<'float'> => toFloat(hash3(seed, x, y, salt));
-  const moduleShade = u(mi, mj, SALT.module).sub(0.5).mul(LOOK.moduleShade).add(1);
+  // Each module's own shade and tilt only while modules are bigger than a pixel: below, a pixel would pick one
+  // module's at random and the glass would sparkle as the eye moves; their mean (no shade, no tilt) stands in.
+  const moduleShows = shows(vec2(m.z, m.w));
+  const moduleShade = u(mi, mj, SALT.module).sub(0.5).mul(LOOK.moduleShade).mul(moduleShows).add(1);
   let albedo = panel.albedo.mul(moduleShade) as Node<'vec3'>;
   let gloss = panel.gloss;
   const nLocal = normalize(normalLocal), aroundLocal = normalize(vec3(nLocal.y.negate(), nLocal.x, 0)), alongLocal = vec3(0, 0, 1);
   // Each module's own tilt: its glint, sharp up close, lands on its own spot.
-  let tilt = vec2(u(mi, mj, SALT.module + 30), u(mj, mi, SALT.module + 30)).sub(0.5).mul(2 * MODULE_TILT) as Node<'vec2'>;
+  let tilt = vec2(u(mi, mj, SALT.module + 30), u(mj, mi, SALT.module + 30)).sub(0.5).mul(2 * MODULE_TILT).mul(moduleShows) as Node<'vec2'>;
 
   // Solar cells: their gaps, dead ones, the fingers across them and the busbars along.
   const cx = fx.mul(cells), cy = fy.mul(cells);
