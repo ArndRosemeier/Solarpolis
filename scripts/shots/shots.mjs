@@ -393,20 +393,43 @@ export function parseRequest(name) {
   return { who: parts[0], views: parts[1] === 'default' ? null : parts[1].split(',').filter(Boolean), error: null };
 }
 
-/** Look for request branches every `interval` s; render, publish and delete each, in name order. */
+/** One watcher per machine: two would render every request twice and overwrite each other's `renders` pushes. */
+function takeWatchLock() {
+  const lock = join(WORK, 'watch.lock');
+  mkdirSync(WORK, { recursive: true });
+  if (existsSync(lock)) {
+    const pid = Number(readFileSync(lock, 'utf8'));
+    let alive = false;
+    try { process.kill(pid, 0); alive = pid !== process.pid; } catch { /* gone */ }
+    if (alive) throw new Error(`another watcher runs here (pid ${pid}); stop it first, or delete ${lock} if it is stale`);
+  }
+  writeFileSync(lock, String(process.pid));
+  const drop = () => { try { if (readFileSync(lock, 'utf8') === String(process.pid)) rmSync(lock); } catch { /* already gone */ } };
+  process.on('exit', drop);
+  for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { drop(); process.exit(130); });
+}
+
+/**
+ * Look for request branches every `interval` s; render, publish and delete each, in name order. Each request is
+ * rendered at the commit it pointed to when seen, and deleted only if it still points there: a request pushed again
+ * under the same name while the old one renders stays and is rendered next.
+ */
 async function watch(opts) {
+  takeWatchLock();
   log(`watching ${REQUEST_PREFIX}* on origin every ${opts.interval} s (Ctrl+C stops)`);
   for (;;) {
-    let names = [];
+    let requests = [];
     try {
-      names = git(['ls-remote', '--heads', 'origin', `${REQUEST_PREFIX}*`]).split('\n').filter(Boolean).map((l) => l.split('\t')[1].replace('refs/heads/', '')).sort();
+      requests = git(['ls-remote', '--heads', 'origin', `${REQUEST_PREFIX}*`]).split('\n').filter(Boolean)
+        .map((l) => { const [sha, ref] = l.split('\t'); return { sha, name: ref.replace('refs/heads/', '') }; })
+        .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
     } catch (e) { log(`ls-remote failed: ${firstLine(e.message)}`); }
-    for (const name of names) {
+    for (const { sha, name } of requests) {
       const req = parseRequest(name);
-      log(`request ${name}`);
-      await render({ ...opts, ref: name, views: req.views, publish: true, id: `${timestamp()}-${req.who}` }, name, req.error)
+      log(`request ${name} at ${sha.slice(0, 8)}`);
+      await render({ ...opts, ref: sha, views: req.views, publish: true, id: `${timestamp()}-${req.who}` }, name, req.error)
         .catch((e) => log(`request ${name} failed: ${firstLine(e?.message ?? e)}`));
-      try { git(['push', '--quiet', 'origin', '--delete', name]); } catch (e) { log(`could not delete ${name}: ${firstLine(e.message)}`); }
+      try { git(['push', '--quiet', `--force-with-lease=refs/heads/${name}:${sha}`, 'origin', `:refs/heads/${name}`]); } catch (e) { log(`kept ${name} (pushed again meanwhile, or the delete failed): ${firstLine(e.message)}`); }
     }
     await new Promise((r) => setTimeout(r, opts.interval * 1000));
   }

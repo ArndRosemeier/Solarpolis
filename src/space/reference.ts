@@ -8,5 +8,7 @@ export const REFERENCE_SPACE: SpaceParams = {
   home: REFERENCE,
   // Home over 10° E (Europe and Africa below); 24 habitats on the ring, about 11,000 km apart.
   necklace: { count: 24, homeLongitude: (10 * Math.PI) / 180, slotJitter: 0.3, sizeSpread: 2 },
+  // Each berth arm busy in nine of ten slots, each slot six of the slowest ships' round trips long.
+  traffic: { occupancy: 0.9, slot: 6 },
   seed: 1,
 };

@@ -4,6 +4,7 @@
  * the Sun and the stars). The two views are WebGPU only.
  */
 import { nearestFloor, nearestWood, type Ecology, type Found } from './gen/ecology';
+import { besideRiver, nearestSample, type River } from './gen/rivers';
 import './app/style.css';
 import { el } from './app/dom';
 import { TitleCard } from './app/title';
@@ -183,10 +184,26 @@ const toDebris = (label: string, back: number, pick: (d: DebrisSpec) => boolean)
 });
 toDebris('To the nearest fallen trunk', 6, (d) => d.form === 'log');
 toDebris('To the nearest boulder', 8, (d) => d.form === 'stone' && d.height[1] >= 1);
+/** Beside the nearest river sample that `pick` accepts: `down` metres downstream of it and off to the side, looking at it. */
+const toRiver = (label: string, down: number, pick: (r: River, i: number) => boolean): void => debug.add({
+  label, group: 'Go', run: () => {
+    const v = view(), t = v?.ecology?.terrain, at = v?.walker.at;
+    const near = t && at && nearestSample(t.rivers, at.theta, at.s, pick);
+    if (!v || !near) return;
+    const w = near.river.halfWidth[near.i];
+    const p = besideRiver(near.river, near.i, down, w + Math.max(3, w * 0.5));
+    v.goTo(p.theta, p.s, p.heading);
+  },
+});
+toRiver('To the nearest river', 40, (r, i) => r.steep[i] < 0.05);
+toRiver('Below the nearest falls', 200, (r, i) => r.steep[i] > 0.8);
 go('The middle of the floor', (h) => (h.profile.floorStart + h.profile.floorEnd) / 2);
 go('The foot of the wild endcap', (h) => h.profile.floorStart + 20);
 go('Halfway up the wild endcap', (h) => h.profile.floorStart / 2);
 go('The foot of the port endcap', (h) => h.profile.floorEnd - 20);
+// Where the sunline meets the endcaps: the axis at the wild end, the dock hub at the port end.
+go('Near the wild endcap\'s tip', (h) => h.profile.floorStart * 0.05);
+go('Near the port endcap\'s hub', (h) => h.profile.length - (h.profile.length - h.profile.floorEnd) * 0.05);
 debug.add({ label: 'Travel 10× faster (toggle)', group: 'Go', run: () => { const v = view(); if (v) v.boost = v.boost === 1 ? 10 : 1; } });
 debug.addInfo(() => view()?.clockLine() ?? '');
 /** The next of a cycle of clock speeds. */

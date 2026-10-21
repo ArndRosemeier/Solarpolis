@@ -1,17 +1,23 @@
 /**
  * The terrain's tile tree: one quadtree over the interior's (θ, s) grid, which wraps around the axis. The profile is
  * cut into bands along s; each band has as many root tiles around as its circumference needs (fewer near the axis,
- * like longitude lines at a pole). A tile splits into four until its error on screen is under a pixel or two, so the
- * far side overhead stays coarse and the ground underfoot gets fine.
+ * like longitude lines at a pole). A tile splits until its error on screen is under a pixel or two, so the far side
+ * overhead stays coarse and the ground underfoot gets fine.
+ *
+ * A tile splits in two along s always, and in two around the axis only where its row is wide enough (`splitsAround`):
+ * the endcaps' rings shrink to nothing at the axis, and halving every tile around as well would cut them into
+ * slivers there (a 60° wedge at a cone's tip still halved eight times), thousands of them around the eye wherever the
+ * sunline meets an endcap. So tiles stay about square everywhere, like the bands' own columns.
  *
  * A built tile is a grid of points on the ground, kept relative to its own origin so that a renderer drawing
  * everything relative to the camera never loses precision (docs/ARCHITECTURE.md, "Where does the camera sit?").
  * Edges between tiles of different size are hidden by skirts: a strip hanging down from each edge. Pure: no three.js.
  */
-import { toWorld, type Vec3 } from '../blueprint';
+import { toWorld, wrapAngle, type Vec3 } from '../blueprint';
 import type { Terrain } from './terrain';
 import { horizonAt } from './horizon';
 import type { Ecology } from './ecology';
+import { buildWater, type WaterMesh } from './water';
 
 /** Cells along each side of a tile. */
 export const TILE_CELLS = 64;
@@ -29,9 +35,14 @@ export interface TileLayout {
   rootSize: number;
   /** Deepest level: its cells are no finer than `finest` (m). */
   maxLevel: number;
+  /** Per band, per level, per row j: how many times that row's tiles are halved around the axis (`splitsAround`). */
+  around: Uint8Array[][];
 }
 
-/** A node of the tree: root (band, column), then `level` halvings, at (i, j) within the root (i around, j along). */
+/**
+ * A node of the tree: root (band, column), then `level` halvings along s, at (i, j) within the root (j along, i around;
+ * i counts the row's own halvings around, `splitsAround`).
+ */
 export interface TileKey {
   band: number;
   column: number;
@@ -63,13 +74,35 @@ export function makeLayout(terrain: Terrain): TileLayout {
     bands.push({ s0, s1, columns: Math.max(1, Math.round(widest / rootSize)) });
   }
   const maxLevel = Math.max(0, Math.ceil(Math.log2(rootSize / TILE_CELLS / FINEST)));
-  return { bands, rootSize, maxLevel };
+  // Halvings around per row: as many as keep the row's tiles at least about as wide (at their widest circle) as they
+  // are long, but never fewer than the parent row's (tiles only split) nor more than one more (one split per level).
+  const around = bands.map((b) => {
+    const levels: Uint8Array[] = [Uint8Array.of(0)];
+    for (let l = 1; l <= maxLevel; l++) {
+      const rows = 1 << l, ds = (b.s1 - b.s0) / rows, row = new Uint8Array(rows);
+      for (let j = 0; j < rows; j++) {
+        const s0 = b.s0 + j * ds, s1 = s0 + ds;
+        const widest = Math.max(profile.circumference(s0), profile.circumference(s1), profile.circumference((s0 + s1) / 2));
+        const want = Math.round(Math.log2(Math.max(1e-9, widest / b.columns / ds)));
+        const up = levels[l - 1][j >> 1];
+        row[j] = Math.min(up + 1, Math.max(up, want));
+      }
+      levels.push(row);
+    }
+    return levels;
+  });
+  return { bands, rootSize, maxLevel, around };
+}
+
+/** How many times a node's row is halved around the axis (its `level` along s; equal to it on the floor). */
+export function splitsAround(layout: TileLayout, k: { band: number; level: number; j: number }): number {
+  return layout.around[k.band][k.level][k.j];
 }
 
 /** The (θ, s) rectangle a node covers. */
 export function bounds(layout: TileLayout, k: TileKey): { theta0: number; theta1: number; s0: number; s1: number } {
   const band = layout.bands[k.band];
-  const dTheta = (2 * Math.PI) / band.columns / (1 << k.level);
+  const dTheta = (2 * Math.PI) / band.columns / (1 << splitsAround(layout, k));
   const dS = (band.s1 - band.s0) / (1 << k.level);
   const theta0 = (2 * Math.PI * k.column) / band.columns + k.i * dTheta;
   const s0 = band.s0 + k.j * dS;
@@ -82,17 +115,24 @@ export function roots(layout: TileLayout): TileKey[] {
   return out;
 }
 
-export function children(k: TileKey): TileKey[] {
-  const l = k.level + 1, i = k.i * 2, j = k.j * 2;
-  return [
-    { ...k, level: l, i, j }, { ...k, level: l, i: i + 1, j },
-    { ...k, level: l, i, j: j + 1 }, { ...k, level: l, i: i + 1, j: j + 1 },
-  ];
+/** The node's children: its two rows along s, each in one or two tiles around (four on the floor, two at the axis). */
+export function children(layout: TileLayout, k: TileKey): TileKey[] {
+  const level = k.level + 1, here = splitsAround(layout, k), out: TileKey[] = [];
+  for (const j of [k.j * 2, k.j * 2 + 1]) {
+    if (splitsAround(layout, { band: k.band, level, j }) > here) out.push({ ...k, level, i: k.i * 2, j }, { ...k, level, i: k.i * 2 + 1, j });
+    else out.push({ ...k, level, i: k.i, j });
+  }
+  return out;
+}
+
+/** Whether a node's parent was halved around to make it (else only along s). */
+export function splitAround(layout: TileLayout, k: TileKey): boolean {
+  return k.level > 0 && splitsAround(layout, k) > splitsAround(layout, { band: k.band, level: k.level - 1, j: k.j >> 1 });
 }
 
 /** The node one level up (a root's parent is itself). */
-export function parent(k: TileKey): TileKey {
-  return k.level === 0 ? k : { ...k, level: k.level - 1, i: k.i >> 1, j: k.j >> 1 };
+export function parent(layout: TileLayout, k: TileKey): TileKey {
+  return k.level === 0 ? k : { ...k, level: k.level - 1, i: splitAround(layout, k) ? k.i >> 1 : k.i, j: k.j >> 1 };
 }
 
 /** A sphere around a node's ground (world axes), allowing for the relief. */
@@ -131,6 +171,12 @@ export function cellSize(layout: TileLayout, k: TileKey): number {
 export interface Selection {
   /** The tiles to draw this frame: together they cover the whole interior once. */
   draw: TileKey[];
+  /**
+   * Built tiles the view needs besides those it draws: the ones split to reach them, and the children already built
+   * of a tile drawn while its other children are built. A cache must keep these too, or the view falls back to coarse
+   * tiles, or never gets all four children at once.
+   */
+  keep: TileKey[];
   /** Tiles that should exist but are not built yet, most needed first. */
   want: TileKey[];
 }
@@ -138,30 +184,32 @@ export interface Selection {
 /**
  * Choose the tiles for a view: split a tile while its error (how far its grid strays from the true ground, measured
  * when it was built) looks bigger than `maxPixels` from `eye` (with `pixelsPerRadian` = screen height / vertical
- * field of view), provided all four children are built. `errorOf` gives a built tile's error, undefined if not built.
+ * field of view), provided all its children are built. `errorOf` gives a built tile's error, undefined if not built.
  */
 export function select(terrain: Terrain, layout: TileLayout, eye: Vec3, pixelsPerRadian: number, maxPixels: number, errorOf: (k: TileKey) => number | undefined, sphereOf = spheres(terrain, layout)): Selection {
   const ready = (k: TileKey): boolean => errorOf(k) !== undefined;
-  const draw: TileKey[] = [];
+  const draw: TileKey[] = [], keep: TileKey[] = [];
   const want: { k: TileKey; need: number }[] = [];
   const visit = (k: TileKey): void => {
-    if (!ready(k)) { want.push({ k, need: Infinity }); return; }
+    const error = errorOf(k);
+    if (error === undefined) { want.push({ k, need: Infinity }); return; }
     const sp = sphereOf(k);
     const d = Math.max(1, Math.hypot(eye[0] - sp.center[0], eye[1] - sp.center[1], eye[2] - sp.center[2]) - sp.radius);
-    const pixels = (errorOf(k)! / d) * pixelsPerRadian;
+    const pixels = (error / d) * pixelsPerRadian;
     if (pixels <= maxPixels || k.level >= layout.maxLevel) { draw.push(k); return; }
-    const kids = children(k);
+    const kids = children(layout, k);
     const missing = kids.filter((c) => !ready(c));
     if (missing.length) {
       draw.push(k);
-      for (const c of missing) want.push({ k: c, need: pixels });
+      for (const c of kids) if (ready(c)) keep.push(c); else want.push({ k: c, need: pixels });
       return;
     }
+    keep.push(k);
     for (const c of kids) visit(c);
   };
   for (const r of roots(layout)) visit(r);
   want.sort((a, b) => b.need - a.need);
-  return { draw, want: want.map((w) => w.k) };
+  return { draw, keep, want: want.map((w) => w.k) };
 }
 
 export interface TileMesh {
@@ -187,18 +235,18 @@ export interface TileMesh {
   index: Uint32Array;
   /** How far the grid strays from the true ground between its points (m): its error on screen decides splitting. */
   error: number;
-  /** The ring lake's water over this tile, if any: positions and normals relative to the same origin. */
-  water: { positions: Float32Array; normals: Float32Array; index: Uint32Array } | null;
+  /** The water over this tile (the lake, the rivers: `gen/water.ts`), if any, relative to the same origin. */
+  water: WaterMesh | null;
 }
 
 /** Bytes a built tile holds, for the memory watchdog. */
 export function tileBytes(t: TileMesh): number {
   let b = t.positions.byteLength + t.normals.byteLength + t.colors.byteLength + t.morph.byteLength + t.horizon.byteLength + t.canopy.byteLength + t.floorA.byteLength + t.floorB.byteLength + t.index.byteLength;
-  if (t.water) b += t.water.positions.byteLength + t.water.normals.byteLength + t.water.index.byteLength;
+  if (t.water) for (const a of [t.water.positions, t.water.normals, t.water.flow, t.water.dir, t.water.index]) b += a.byteLength;
   return b;
 }
 
-/** Build a tile's ground (and the lake's water over it). */
+/** Build a tile's ground (and the water over it). */
 export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): TileMesh {
   const terrain = ecology.terrain;
   const { profile } = terrain.habitat;
@@ -252,13 +300,15 @@ export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): Til
     }
   }
 
-  // Morph targets: the parent's grid has every other point of this one, and its cells split along the same diagonal
-  // (from (i+1, j) to (i, j+1)), so the parent's surface at a point between its points is the mean of two of them.
+  // Morph targets: the parent's grid has every other point of this one (along s, and around where the parent was
+  // halved around too), and its cells split along the same diagonal (from (i+1, j) to (i, j+1)), so the parent's
+  // surface at a point between its points is the mean of two of them.
   const morph = new Float32Array(count * 3);
   const at = (i: number, j: number): number => ((j + 1) * W + (i + 1)) * 3;
+  const halvedAround = splitAround(layout, k);
   for (let j = 0; j <= N; j++) {
     for (let i = 0; i <= N; i++) {
-      const oddI = i & 1, oddJ = j & 1;
+      const oddI = halvedAround ? i & 1 : 0, oddJ = j & 1;
       if (!oddI && !oddJ) continue;
       const [p, q] = oddI && oddJ ? [at(i + 1, j - 1), at(i - 1, j + 1)] : oddI ? [at(i - 1, j), at(i + 1, j)] : [at(i, j - 1), at(i, j + 1)];
       const w = at(i, j), v = (j * row + i) * 3;
@@ -340,34 +390,24 @@ export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): Til
   // The floor shares as two four-channel attributes.
   const floorA = new Uint8Array(count * 4), floorB = new Uint8Array(count * 4);
   for (let v = 0; v < count; v++) for (let c = 0; c < 4; c++) { floorA[v * 4 + c] = floor[v * 8 + c]; floorB[v * 4 + c] = floor[v * 8 + 4 + c]; }
-  return { key: k, origin, positions, normals, colors, morph, horizon, canopy, floorA, floorB, index: Uint32Array.from(index), error, water: buildWater(terrain, b, origin) };
-}
-
-/** The lake's surface over a tile's rectangle: a grid at the water's level, fine enough to follow the curve. */
-function buildWater(terrain: Terrain, b: { theta0: number; theta1: number; s0: number; s1: number }, origin: Vec3): TileMesh['water'] {
-  const lake = terrain.lake;
-  if (!lake) return null;
-  const s0 = Math.max(b.s0, lake.s - lake.halfWidth), s1 = Math.min(b.s1, lake.s + lake.halfWidth);
-  if (s1 <= s0) return null;
-  const { profile } = terrain.habitat;
-  const N = 16, row = N + 1;
-  const positions = new Float32Array(row * row * 3), normals = new Float32Array(row * row * 3);
-  for (let j = 0; j <= N; j++) {
-    const s = s0 + ((s1 - s0) * j) / N;
-    const pp = profile.at(s);
-    for (let i = 0; i <= N; i++) {
-      const theta = b.theta0 + ((b.theta1 - b.theta0) * i) / N;
-      const p = toWorld(profile, { theta, s, h: lake.level });
-      const v = (j * row + i) * 3;
-      positions[v] = p[0] - origin[0]; positions[v + 1] = p[1] - origin[1]; positions[v + 2] = p[2] - origin[2];
-      normals[v] = pp.nr * Math.cos(theta); normals[v + 1] = pp.nr * Math.sin(theta); normals[v + 2] = pp.nz;
-    }
-  }
-  const index = new Uint32Array(N * N * 6);
-  let n = 0;
-  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
-    const a = j * row + i, bb = a + 1, d = a + row, e = d + 1;
-    index[n++] = a; index[n++] = d; index[n++] = bb; index[n++] = bb; index[n++] = d; index[n++] = e;
-  }
-  return { positions, normals, index };
+  // The water: where the cells are too coarse for a river's channel, it lies over the ground drawn here, this tile's or
+  // its parent's (every other point along s, and around if it was halved around; the same diagonals) while it morphs.
+  const drawn = (theta: number, s: number): number => {
+    let x = wrapAngle(theta - b.theta0);
+    if (x > Math.PI + (b.theta1 - b.theta0) / 2) x -= 2 * Math.PI;
+    const fi = Math.min(N + 1, Math.max(-1, x / dT)), fj = Math.min(N + 1, Math.max(-1, (s - b.s0) / dS));
+    const on = (si: number, sj: number): number => {
+      // The cell under the point, on this grid (border points included) or the parent's (even points only).
+      const cell = (f: number, step: number): number => Math.min(step === 1 ? N : N - 2, Math.max(step === 1 ? -1 : 0, Math.floor(f / step) * step));
+      const ci = cell(fi, si), cj = cell(fj, sj);
+      const u = (fi - ci) / si, v = (fj - cj) / sj;
+      const hAt = (i: number, j: number) => heights[(j + 1) * W + (i + 1)];
+      const a = hAt(ci, cj), bb = hAt(ci + si, cj), d = hAt(ci, cj + sj), e = hAt(ci + si, cj + sj);
+      return u + v <= 1 ? a + (bb - a) * u + (d - a) * v : e + (d - e) * (1 - u) + (bb - e) * (1 - v);
+    };
+    return Math.max(on(1, 1), on(halvedAround ? 2 : 1, 2));
+  };
+  const cell = Math.max(dS, dT * profile.at((b.s0 + b.s1) / 2).r);
+  const water = buildWater(terrain, { ...b, cell, drawn }, origin);
+  return { key: k, origin, positions, normals, colors, morph, horizon, canopy, floorA, floorB, index: Uint32Array.from(index), error, water };
 }

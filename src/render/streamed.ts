@@ -74,6 +74,8 @@ export class StreamCache<T extends Streamed> {
     if (!e) return;
     // No longer wanted while it was made, or made twice (asked again while an older job ran): keep one, free the other.
     if (!this.asked.has(id) || this.built.has(id)) { this.opts.free(e); return; }
+    // Just built for a view that wants it: as fresh as what was drawn this frame, not the first to go.
+    e.lastDrawn = this.frameNo;
     this.built.set(id, e);
     this.held += e.bytes;
     this.asked.delete(id);

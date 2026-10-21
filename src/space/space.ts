@@ -10,7 +10,8 @@
  * - `<habitat>.orbit`: a habitat's centre; its z axis on the pole of the ecliptic of date (Earth's orbit plane, which
  *   drifts slowly), so the Sun stays side-on to the habitat all year. `<habitat>.body`: the blueprint's own frame (`frame.ts`):
  *   origin on the axis at the wild endcap wall, +z toward the port wall, turning at the habitat's spin rate. Every
- *   interior position (`toWorld`) is a position in this frame.
+ *   interior position (`toWorld`) is a position in this frame. `<habitat>.spindle`: the same without the spin, the
+ *   frame of the despun dock spindle and of the ships at its berths (`traffic.ts`).
  *
  * Pure: no three.js, no DOM, no wall clock.
  */
@@ -21,6 +22,7 @@ import { FrameTree } from './frames';
 import { necklace, type NecklaceParams, type Placement } from './necklace';
 import { apply, IDENTITY, mul, rotX, rotZ, type Mat3 } from './pose';
 import { jdAt } from './time';
+import type { TrafficParams } from './traffic';
 
 export interface SpaceParams {
   /** Julian date at clock time 0. */
@@ -28,6 +30,7 @@ export interface SpaceParams {
   /** The player's habitat. */
   home: HabitatParams;
   necklace: NecklaceParams;
+  traffic: TrafficParams;
   seed: number;
 }
 
@@ -36,6 +39,7 @@ export interface PlacedHabitat extends Placement {
   /** Frame ids. */
   orbitFrame: string;
   bodyFrame: string;
+  spindleFrame: string;
   /** The habitat's spin angle at time t (radians in [0, 2π)). */
   spinAt(t: number): number;
 }
@@ -52,7 +56,7 @@ export interface Space {
 /** Turn a ring placement into its two frames: its centre with ecliptic-of-date axes, and the turning blueprint frame. */
 function placeHabitat(frames: FrameTree, p: Placement, epochJd: number): PlacedHabitat {
   const habitat = derive(p.params);
-  const orbitFrame = `${p.id}.orbit`, bodyFrame = `${p.id}.body`;
+  const orbitFrame = `${p.id}.orbit`, bodyFrame = `${p.id}.body`, spindleFrame = `${p.id}.spindle`;
   const slot: [number, number, number] = [p.orbitRadius * Math.cos(p.longitude), p.orbitRadius * Math.sin(p.longitude), 0];
   frames.add({ id: orbitFrame, parent: 'earth', pose: (t) => {
     const jd = jdAt(epochJd, t);
@@ -72,7 +76,8 @@ function placeHabitat(frames: FrameTree, p: Placement, epochJd: number): PlacedH
       return { origin: apply(axes, [0, 0, -habitat.length / 2]), axes };
     },
   });
-  return { ...p, habitat, orbitFrame, bodyFrame, spinAt };
+  frames.add({ id: spindleFrame, parent: orbitFrame, pose: () => ({ origin: apply(flip, [0, 0, -habitat.length / 2]), axes: flip }) });
+  return { ...p, habitat, orbitFrame, bodyFrame, spindleFrame, spinAt };
 }
 
 export function makeSpace(params: SpaceParams): Space {

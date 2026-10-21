@@ -17,12 +17,46 @@ export function meshGeometry(index: Uint32Array, attributes: Record<string, read
   return g;
 }
 
-/** A built shape's arrays (gen/shapes.ts `arrays()`, or a worker's tile) as a geometry: colours when it has them. */
-export function arraysGeometry(a: { positions: Float32Array; normals: Float32Array; colors?: Float32Array | null; index: Uint32Array }): BufferGeometry {
-  return meshGeometry(a.index, { position: [a.positions, 3], normal: [a.normals, 3], color: a.colors ? [a.colors, 3] : undefined });
+/**
+ * A built shape's arrays (gen/shapes.ts `arrays()`, or a worker's tile) as a geometry: colours when it has them, and
+ * any `more` attributes its kind lists.
+ */
+export function arraysGeometry(a: { positions: Float32Array; normals: Float32Array; colors?: Float32Array | null; index: Uint32Array }, more: Record<string, readonly [Float32Array | Uint8Array, number]> = {}): BufferGeometry {
+  return meshGeometry(a.index, { position: [a.positions, 3], normal: [a.normals, 3], color: a.colors ? [a.colors, 3] : undefined, ...more });
 }
 
 export type { RGB } from '../gen/shapes';
+
+/**
+ * Points of light drawn as stars are (the STARS kind): `n` quads, each a direction (position), a flux (color) and its
+ * four corners (corner, ±1). The far form of anything below a pixel: neighbours' glints, drones, ships.
+ */
+export function pointsGeometry(n: number): { geometry: BufferGeometry; position: Float32Array; color: Float32Array } {
+  const position = new Float32Array(n * 12), color = new Float32Array(n * 12);
+  const corner = new Float32Array(n * 8), index = new Uint32Array(n * 6), corners = [-1, -1, 1, -1, 1, 1, -1, 1];
+  for (let i = 0; i < n; i++) {
+    corner.set(corners, i * 8);
+    index.set([i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3], i * 6);
+  }
+  return { geometry: meshGeometry(index, { position: [position, 3], color: [color, 3], corner: [corner, 2] }), position, color };
+}
+
+/** After `setPoint`s: upload the points' new directions and fluxes. */
+export function pointsChanged(m: Mesh): void {
+  m.geometry.attributes.position.needsUpdate = true;
+  m.geometry.attributes.color.needsUpdate = true;
+}
+
+/** Point i of a `pointsGeometry`: `far` out along the unit direction `dir`, with this flux (relative to the Sun's) in each channel. */
+export function setPoint(position: Float32Array, color: Float32Array, i: number, dir: Vec3, far: number, flux: Vec3 | number): void {
+  const f: Vec3 = typeof flux === 'number' ? [flux, flux, flux] : flux;
+  for (let v = 0; v < 4; v++) {
+    for (let a = 0; a < 3; a++) {
+      position[i * 12 + v * 3 + a] = dir[a] * far;
+      color[i * 12 + v * 3 + a] = f[a];
+    }
+  }
+}
 
 /**
  * Meshes made of surfaces of revolution, boxes and the other parts of `Shape` (gen/shapes.ts): the habitats from
