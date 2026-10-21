@@ -7,18 +7,12 @@
  * come from the blueprint's relief (`HabitatParams.relief`): hills, the ring lake, the terrace step, the rivers (laid out in
  * `rivers.ts` over the land, which they then carve).
  */
-import { Noise, Rng, deriveSeed, smoothstep } from '@futuremagic/core';
+import { Noise, deriveSeed, smoothstep } from '@futuremagic/core';
 import { fromWorld, toWorld, type Habitat, type Vec3 } from '../blueprint';
 import { carve, makeRivers, riverAt, valleyReach, type River, type RiverHit } from './rivers';
+import { lakeOf, type Lake } from './plan';
 
-export interface Lake {
-  /** Where the lake's centre line lies along the profile, and its half width (m). */
-  s: number;
-  halfWidth: number;
-  depth: number;
-  /** The water's surface, as a height above the profile (on the flat floor that is a constant radius). */
-  level: number;
-}
+export type { Lake } from './plan';
 
 export interface Terrain {
   readonly habitat: Habitat;
@@ -62,15 +56,7 @@ export function makeTerrain(h: Habitat): Terrain {
   const hillWave = Math.max(hills * 40, 1);
   const step = relief.terraceStep;
 
-  let lake: Lake | null = null;
-  if (relief.ringLake) {
-    // The lake lies in the port half of the floor, away from the endcap's foot: the vertical slice is played there.
-    const rng = new Rng(deriveSeed(h.seed, 'terrain', 'lake'));
-    const half = relief.ringLake.width / 2;
-    const lo = floorStart + floor * 0.55 + half, hi = floorEnd - floor * 0.1 - half;
-    const s = lo < hi ? rng.range(lo, hi) : (floorStart + floorEnd) / 2;
-    lake = { s, halfWidth: half, depth: relief.ringLake.depth, level: -Math.min(1, relief.ringLake.depth * 0.1) };
-  }
+  const lake = lakeOf(h);
   // The shore: a band as wide as the lake is deep times ten, where hills flatten to meet the water.
   const shore = lake ? Math.max(lake.depth * 10, lake.halfWidth * 0.3) : 0;
 
