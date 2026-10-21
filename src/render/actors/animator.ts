@@ -49,6 +49,9 @@ interface MoveClip {
   once?: boolean;
   /** Matches its stride to the ground speed. */
   stride?: boolean;
+  /** Plays once, from this share of the clip on, fitted into `span` seconds (take-off and landing). */
+  from?: number;
+  span?: number;
 }
 
 /** The pack clip for each move state (a crouch that moves walks crouched). */
@@ -97,7 +100,7 @@ const MOOD_FACE: Record<Mood, string> = {
 
 /** The clips every figure may need, loaded before it is first drawn. */
 export const FIGURE_CLIPS = [...new Set([
-  'idle', 'sword idle', 'walk', 'jog', 'sprint', 'crouch', 'crouch walk', 'swim', 'tread water', 'jump', 'climb up', 'sit', 'death',
+  'idle', 'sword idle', 'walk', 'jog', 'sprint', 'crouch', 'crouch walk', 'swim', 'tread water', 'jump', 'jump start', 'jump land', 'climb up', 'sit', 'death',
   'knocked back', 'zombie idle', 'hit to chest', ...Object.values(ACTION_CLIPS),
 ])];
 
@@ -106,6 +109,17 @@ const LOWER = /^(Root|pelvis|thigh_|calf_|foot_|ball_)/;
 
 /** Cross-fade time between movement clips, seconds. */
 const FADE = 0.25;
+
+/**
+ * Jumps: the take-off plays the pack's "jump start" from its push-off on, squeezed into the first moments in the air
+ * (the body has already left the ground), then the "jump" loop holds until the landing. A fall that starts without a
+ * jump (off a step) shows only once it lasts. Landing from a real fall plays "jump land" when the body lands slowly
+ * enough to stop for it; running on lands straight into the stride.
+ */
+const TAKE_OFF = { from: 0.4, span: 0.3 };
+const LAND = { span: 0.45, after: 0.35, fastest: 2.5 };
+/** Seconds off the ground before a fall without a jump shows. */
+const FALL_SHOWS = 0.2;
 
 interface Halves {
   lower: AnimationAction;
@@ -128,6 +142,11 @@ export class FigureAnimator {
   private flinch: { halves: Halves; t: number; strength: number } | null = null;
   private mood: Mood = 'neutral';
   private hit = 0;
+  /** In the air: seconds since leaving the ground, and whether it was a jump. Landing: seconds of the clip left. */
+  private air: { t: number; jumped: boolean } | null = null;
+  private landing = 0;
+  /** The last clip on the ground (kept through a short drop off a step). */
+  private ground: MoveClip = { clip: 'idle' };
 
   constructor(private readonly character: Character) {
     this.mixer = character.actor.mixer;
@@ -156,7 +175,7 @@ export class FigureAnimator {
       }
       this.hit = 0;
     }
-    this.updateMove(moveClip(anim.move, speed, !!input.combat), speed, dt);
+    this.updateMove(this.withJumps(moveClip(anim.move, speed, !!input.combat), anim.move, speed, dt), speed, dt);
     const actionWeight = this.updateAction(anim.action, time, dt);
     const flinchWeight = this.updateFlinch(dt);
     const upperFree = Math.max(0, 1 - actionWeight - flinchWeight);
@@ -176,6 +195,29 @@ export class FigureAnimator {
     this.flinch = null;
   }
 
+  /** The take-off, the time in the air and the landing around the move state's own clip. */
+  private withJumps(want: MoveClip, move: MoveState, speed: number, dt: number): MoveClip {
+    if (move === 'jump' || move === 'fall') {
+      this.landing = 0;
+      this.air ??= { t: 0, jumped: move === 'jump' };
+      this.air.t += dt;
+      if (this.air.jumped && this.air.t < TAKE_OFF.span) return { clip: 'jump start', ...TAKE_OFF };
+      if (!this.air.jumped && this.air.t < FALL_SHOWS) return this.ground;
+      return { clip: 'jump' };
+    }
+    if (this.air) {
+      if (this.air.t > LAND.after && speed < LAND.fastest) this.landing = LAND.span;
+      this.air = null;
+    }
+    if (this.landing > 0) {
+      this.landing -= dt;
+      if (speed < LAND.fastest) return { clip: 'jump land', from: 0, span: LAND.span };
+      this.landing = 0;
+    }
+    this.ground = want;
+    return want;
+  }
+
   private updateMove(want: MoveClip, speed: number, dt: number): void {
     const current = this.moves[this.moves.length - 1];
     if (current?.name !== want.clip) {
@@ -184,11 +226,13 @@ export class FigureAnimator {
         const old = this.moves.find((m) => m.name === want.clip);
         if (old) this.moves = this.moves.filter((m) => m !== old);
         const next: Playing = old ?? { ...halves, name: want.clip, weight: current ? 0 : 1 };
+        const once = want.once || want.span !== undefined;
         for (const a of [next.lower, next.upper]) {
-          a.setLoop(want.once ? LoopOnce : LoopRepeat, Infinity);
-          a.clampWhenFinished = !!want.once;
-          if (!old) {
+          a.setLoop(once ? LoopOnce : LoopRepeat, Infinity);
+          a.clampWhenFinished = once;
+          if (!old || want.span !== undefined) {
             a.reset().play();
+            if (want.from) a.time = want.from * a.getClip().duration;
             // Walking into a run keeps the feet in step.
             if (current && want.stride && current.speed > 0) a.time = (current.lower.time / current.lower.getClip().duration) * a.getClip().duration;
           }
@@ -205,7 +249,9 @@ export class FigureAnimator {
       m.upper.stop();
     }
     this.moves = this.moves.filter((m) => m === top || m.weight > 0);
-    const scale = want.stride && top.speed > 0 ? Math.min(1.6, Math.max(0.6, speed / top.speed)) : 1;
+    const length = top.lower.getClip().duration;
+    const scale = want.span !== undefined ? (length * (1 - (want.from ?? 0))) / want.span
+      : want.stride && top.speed > 0 ? Math.min(1.6, Math.max(0.6, speed / top.speed)) : 1;
     top.lower.timeScale = top.upper.timeScale = scale;
   }
 

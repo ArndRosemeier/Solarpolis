@@ -390,7 +390,7 @@ export class InteriorView {
     const v = c.velocity, flat = v3madd(v, up, -v3dot(v, up)), speed = Math.hypot(...flat);
     const look = this.walker.view().look, ahead = v3madd(look, up, -v3dot(look, up));
     const front = v3norm(speed > 0.5 ? flat : ahead);
-    const move: MoveState = c.swimming ? 'swim' : !c.grounded ? 'jump' : speed < 0.3 ? 'idle' : speed < 2.5 ? 'walk' : speed < 5.5 ? 'run' : 'sprint';
+    const move: MoveState = c.swimming ? 'swim' : !c.grounded ? (v3dot(v, up) > 0.5 ? 'jump' : 'fall') : speed < 0.3 ? 'idle' : speed < 2.5 ? 'walk' : speed < 5.5 ? 'run' : 'sprint';
     f.update({ feet: toView(eye, feet), up, front, speed, anim: { move } }, this.frameDt, this.time);
   }
 
