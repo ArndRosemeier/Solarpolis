@@ -105,6 +105,8 @@ export type PathKind = 'sunwalk' | 'way' | 'trail';
 
 export interface PlanPath {
   kind: PathKind;
+  /** How wide it is (m, `LandPlan.pathWidth`). */
+  width: number;
   /** Points along it: θ, s, θ, s, … (θ unwrapped: it never jumps by a turn between points). */
   points: Float64Array;
 }
@@ -489,7 +491,8 @@ export function makePlan(h: Habitat): Plan {
   const walk: number[] = [];
   for (let s = floorStart; s < floorEnd; s += walkStep) walk.push(walkTheta(s), s);
   walk.push(walkTheta(floorEnd), floorEnd);
-  const paths: PlanPath[] = [{ kind: 'sunwalk', points: Float64Array.from(walk) }];
+  const widths = spec.pathWidth;
+  const paths: PlanPath[] = [{ kind: 'sunwalk', width: widths.sunwalk, points: Float64Array.from(walk) }];
 
   // Landmarks.
   const hutAt = endcapAt(true, 0.3);
@@ -510,10 +513,32 @@ export function makePlan(h: Habitat): Plan {
     const t = i / legs, s = floorStart + (hutAt - floorStart) * t;
     trail.push(start + (endUnwrapped - start) * t + (i % 2 ? swing : -swing) * Math.sin(Math.PI * t), s);
   }
-  paths.push({ kind: 'trail', points: Float64Array.from(trail) });
+  paths.push({ kind: 'trail', width: widths.trail, points: Float64Array.from(trail) });
 
   // The ways: the shortest net joining every entrance to the Sunwalk (a spanning tree, Prim's), never across the
-  // lake: water is crossed only by the Sunwalk, through the pavilion.
+  // lake: water is crossed only by the Sunwalk, through the pavilion. Each way swings gently from side to side, as a
+  // path walked for two hundred years does (a tenth of its length at most), and never into the lake.
+  const wrng = new Rng(deriveSeed(h.seed, 'plan', 'ways'));
+  const wayStep = Math.max(spacing / 12, widths.way * 4);
+  const wayPoints = (a: { theta: number; s: number }, b: { theta: number; s: number }): Float64Array => {
+    const du = wrap(b.theta - a.theta) * R, dv = b.s - a.s, length = Math.hypot(du, dv);
+    const n = Math.max(1, Math.ceil(length / wayStep)), out = new Float64Array((n + 1) * 2);
+    // Two swings of random phase: one long, one shorter, each fading out at the ends.
+    const p1 = wrng.range(0, TURN), p2 = wrng.range(0, TURN), a1 = wrng.range(-0.07, 0.07), a2 = wrng.range(-0.03, 0.03);
+    const nu = length > 0 ? -dv / length : 0, nv = length > 0 ? du / length : 0;
+    for (let i = 0; i <= n; i++) {
+      const t = i / n, ends = Math.sin(Math.PI * t);
+      const off = length * ends * (a1 * Math.sin(Math.PI * t + p1) + a2 * Math.sin(3 * Math.PI * t + p2));
+      let ps = a.s + dv * t + nv * off;
+      if (lake) {
+        const shore = lake.halfWidth + spacing * 0.1, d = ps - lake.s;
+        if (Math.abs(d) < shore) ps = lake.s + Math.sign(a.s - lake.s) * shore;
+      }
+      out[i * 2] = a.theta + (du * t + nu * off) / R;
+      out[i * 2 + 1] = Math.min(floorEnd, Math.max(reserveEnd, ps));
+    }
+    return out;
+  };
   const anchors: { theta: number; s: number }[] = [];
   for (let i = 0; i < walk.length; i += 2) if (walk[i + 1] >= reserveEnd) anchors.push({ theta: walk[i], s: walk[i + 1] });
   const nodes = [...anchors, ...placed];
@@ -538,7 +563,7 @@ export function makePlan(h: Habitat): Plan {
     if (pick < 0) break;
     inTree[pick] = 1;
     const a = nodes[from[pick]], b = nodes[pick];
-    paths.push({ kind: 'way', points: Float64Array.from([a.theta, a.s, a.theta + wrap(b.theta - a.theta), b.s]) });
+    paths.push({ kind: 'way', width: widths.way, points: wayPoints(a, b) });
     relax(pick);
   }
 

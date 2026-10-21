@@ -30,6 +30,7 @@ import { TREE_HEIGHT, type Ecology } from './ecology';
 import { horizonAt } from './horizon';
 import { groundSlope } from './terrain';
 import { keptClear } from './landmarks';
+import { pathsOf, type PathNet } from './paths';
 import { plantedIn, plantingsOf, scatterKeepsOff } from './planted';
 import { bytesOf } from './shapes';
 
@@ -61,6 +62,13 @@ export const COVER_GRID = 2;
  * stone over to the next, the two may then disagree about it; it is a few pixels across there.
  */
 const DEBRIS_GRID = [2, 16] as const;
+/** Whether (θ, s) lies on a path, or within `verge` of its width beside it (gen/paths.ts). */
+const onPath = (paths: PathNet, theta: number, s: number, verge: number): boolean => {
+  if (!paths.pieces) return false;
+  const hit = paths.pathAt(theta, s);
+  return !!hit && hit.distance < hit.width * (0.5 + verge);
+};
+
 /** The floor-layer lattice of a species on the floor at a level (`coverChance`). */
 export const gridOf = (sp: Species, level: Level): number =>
   sp.what === 'debris' ? Math.min(DEBRIS_GRID[1], Math.max(DEBRIS_GRID[0], sp.spec.spacing / 2) * 2 ** level) : COVER_GRID;
@@ -262,6 +270,7 @@ export function plantCell(ecology: Ecology, plants: readonly Species[], k: CellK
     }
     return finished(t, k, b, origin, lists);
   }
+  const paths = pathsOf(t.habitat);
   const shares = new Float32Array(ecology.climate.biomes.length);
   const cover = sp.on >= 0 ? coverChance(ecology, sp.on, gridOf(sp, k.level)) : null;
   const gap = spec.spacing;
@@ -281,6 +290,7 @@ export function plantCell(ecology: Ecology, plants: readonly Species[], k: CellK
       if (t.standAt(pt, ps) > ground + 0.05) continue; // under water
       if (keptClear(t, pt, ps)) continue; // under a landmark, or on the way onto it
       if (sp.what !== 'cover' && scatterKeepsOff(t, pt, ps)) continue; // a grove's clearing (its lawn stays)
+      if (sp.what !== 'cover' && onPath(paths, pt, ps, sp.what === 'debris' ? 0 : 0.25)) continue; // a path, and its verges for plants
       if (ps < profile.floorStart && snowKeepsOff(ecology, sp, pt, ps, ground, f(6))) continue;
       if (!cover) {
         const slope = slopeAt(ecology, pt, ps, ground, gap);

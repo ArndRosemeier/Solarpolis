@@ -178,6 +178,11 @@ export interface LandPlan {
    * an endcap is pushed against the spin (Coriolis), so its channels, and the valleys that carry them, spiral.
    */
   spiral: number;
+  /**
+   * How wide the paths are (m): the Sunwalk (the habitat's processional way, walked by crowds at its festivals), the
+   * ways between the entrances, and the trail up the Mountain. Human sizes: they do not grow with the habitat.
+   */
+  pathWidth: { sunwalk: number; way: number; trail: number };
 }
 
 export interface HabitatParams {

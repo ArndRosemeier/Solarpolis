@@ -178,7 +178,7 @@ export function nearestSample(rivers: readonly River[], theta: number, s: number
   for (const river of rivers) for (let i = 0; i < river.count; i++) {
     let turn = river.theta[i] - theta;
     turn -= TURN * Math.round(turn / TURN);
-    const d = Math.hypot(turn * river.radius[i], river.s0 + i * river.step - s);
+    const du = turn * river.radius[i], ds = river.s0 + i * river.step - s, d = Math.sqrt(du * du + ds * ds);
     if (d < gap && pick(river, i)) { gap = d; best = { river, i }; }
   }
   return best;

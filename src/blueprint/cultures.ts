@@ -7,6 +7,7 @@
  * Plain data, like the parameters and the climates. A style names what is done with the land, not its plants: the
  * climate decides what grows, the style what people make of it.
  */
+import type { FloorLayer } from './climates';
 
 /** The styles a district can shape its commons in. */
 export const DISTRICT_STYLES = ['orchard', 'water', 'stone', 'grove', 'herd', 'play', 'makers', 'let-go'] as const;
@@ -26,32 +27,34 @@ export interface StyleSpec {
  * What a style makes of its district's land, in terms any climate can grow (gen/ecology.ts): how much of the ground
  * its trees' crowns cover (`cover`, 0 open … 1 closed wood; null leaves the climate's mix as it falls), how big its
  * planted patches are against the climate's (`grain`), how much wetter it keeps its ground (`wet`, moisture), and how
- * strongly it holds to all that (`hold`, 0 … 1: a district that let its land go holds to nothing).
+ * strongly it holds to all that (`hold`, 0 … 1: a district that let its land go holds to nothing), and what its ways
+ * are laid with (`way`, a floor layer: gen/paths.ts), so a way's surface changes where it crosses into another district.
  */
 export interface StyleLand {
   cover: number | null;
   grain: number;
   wet: number;
   hold: number;
+  way: FloorLayer;
 }
 
 export const STYLE_LAND: Readonly<Record<DistrictStyle, StyleLand>> = {
-  // Fruit trees stand apart over mown meadow, in small blocks.
-  orchard: { cover: 0.4, grain: 0.35, wet: 0, hold: 0.85 },
+  // Fruit trees stand apart over mown meadow, in small blocks; its ways are mown grass.
+  orchard: { cover: 0.4, grain: 0.35, wet: 0, hold: 0.85, way: 'grass' },
   // Ponds, reed islands and canals: the ground kept wet.
-  water: { cover: null, grain: 0.5, wet: 0.35, hold: 0.7 },
-  // Dry stone, gravel and moss under a few old trees: mostly open.
-  stone: { cover: 0.1, grain: 0.5, wet: -0.1, hold: 0.85 },
-  // Halls of living trees and avenues: closed woods in big stands.
-  grove: { cover: 1, grain: 0.9, wet: 0, hold: 0.9 },
-  // Wood pasture: open grazing with trees in clumps, in wide sweeps.
-  herd: { cover: 0.2, grain: 1.4, wet: 0, hold: 0.8 },
-  // Fields, courts and a festival meadow: open ground.
-  play: { cover: 0, grain: 1.5, wet: -0.05, hold: 0.95 },
+  water: { cover: null, grain: 0.5, wet: 0.35, hold: 0.7, way: 'gravel' },
+  // Dry stone, gravel and moss under a few old trees: mostly open; its ways are laid stone.
+  stone: { cover: 0.1, grain: 0.5, wet: -0.1, hold: 0.85, way: 'rock' },
+  // Halls of living trees and avenues: closed woods in big stands; its ways are soft with leaf litter.
+  grove: { cover: 1, grain: 0.9, wet: 0, hold: 0.9, way: 'litter' },
+  // Wood pasture: open grazing with trees in clumps, in wide sweeps; its ways are droves of trodden earth.
+  herd: { cover: 0.2, grain: 1.4, wet: 0, hold: 0.8, way: 'dirt' },
+  // Fields, courts and a festival meadow: open ground; its ways are fine pale sand.
+  play: { cover: 0, grain: 1.5, wet: -0.05, hold: 0.95, way: 'sand' },
   // Workshops and sculpture walks in open ground with a few trees.
-  makers: { cover: 0.15, grain: 0.7, wet: 0, hold: 0.8 },
+  makers: { cover: 0.15, grain: 0.7, wet: 0, hold: 0.8, way: 'gravel' },
   // Let go: the climate's own mix, in its own patches.
-  'let-go': { cover: null, grain: 1, wet: 0, hold: 0 },
+  'let-go': { cover: null, grain: 1, wet: 0, hold: 0, way: 'dirt' },
 };
 
 /** The kinds of the port endcap's faces (gen/plan.ts): each valley is named for the face it runs into. */
