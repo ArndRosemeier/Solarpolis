@@ -170,8 +170,12 @@ export function cellSize(layout: TileLayout, k: TileKey): number {
 export interface Selection {
   /** The tiles to draw this frame: together they cover the whole interior once. */
   draw: TileKey[];
-  /** The built tiles above them that were split to reach them: a cache must keep these too, or the view falls back. */
-  through: TileKey[];
+  /**
+   * Built tiles the view needs besides those it draws: the ones split to reach them, and the children already built
+   * of a tile drawn while its other children are built. A cache must keep these too, or the view falls back to coarse
+   * tiles, or never gets all four children at once.
+   */
+  keep: TileKey[];
   /** Tiles that should exist but are not built yet, most needed first. */
   want: TileKey[];
 }
@@ -183,7 +187,7 @@ export interface Selection {
  */
 export function select(terrain: Terrain, layout: TileLayout, eye: Vec3, pixelsPerRadian: number, maxPixels: number, errorOf: (k: TileKey) => number | undefined, sphereOf = spheres(terrain, layout)): Selection {
   const ready = (k: TileKey): boolean => errorOf(k) !== undefined;
-  const draw: TileKey[] = [], through: TileKey[] = [];
+  const draw: TileKey[] = [], keep: TileKey[] = [];
   const want: { k: TileKey; need: number }[] = [];
   const visit = (k: TileKey): void => {
     const error = errorOf(k);
@@ -196,15 +200,15 @@ export function select(terrain: Terrain, layout: TileLayout, eye: Vec3, pixelsPe
     const missing = kids.filter((c) => !ready(c));
     if (missing.length) {
       draw.push(k);
-      for (const c of missing) want.push({ k: c, need: pixels });
+      for (const c of kids) if (ready(c)) keep.push(c); else want.push({ k: c, need: pixels });
       return;
     }
-    through.push(k);
+    keep.push(k);
     for (const c of kids) visit(c);
   };
   for (const r of roots(layout)) visit(r);
   want.sort((a, b) => b.need - a.need);
-  return { draw, through, want: want.map((w) => w.k) };
+  return { draw, keep, want: want.map((w) => w.k) };
 }
 
 export interface TileMesh {

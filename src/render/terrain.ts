@@ -101,9 +101,10 @@ export class TerrainView {
       this.drawn.push(e);
       if (!before.has(e)) this.swapped++;
     }
-    // The tiles split to reach these are in use too: evicting one would drop its whole branch back to a coarse tile
-    // until it is built again, and the cache, full, would evict it again (the flicker where the sunline meets an endcap).
-    for (const k of sel.through) this.cache.mark(this.cache.get(keyId(k))!);
+    // The tiles split to reach these, and children waiting for their siblings, are in use too: evicting one would drop
+    // a branch back to a coarse tile, or keep a tile from ever splitting, while the full cache builds it again and
+    // again (the flicker where the sunline meets an endcap).
+    for (const k of sel.keep) this.cache.mark(this.cache.get(keyId(k))!);
     // Ask for what is missing, most needed first; jobs no longer wanted are dropped from the queue.
     this.cache.want(sel.want.map((k) => ({ id: keyId(k), request: this.job(k) })));
   }

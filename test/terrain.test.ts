@@ -136,10 +136,10 @@ test('tiles: the view where the sunline meets an endcap needs no more tiles than
     const sel = count(s);
     // Before, each row near the axis was halved around as often as along: tens of thousands of slivers.
     assert.ok(sel.draw.length < floor * 2, `${sel.draw.length} tiles at s = ${s.toFixed(0)}, ${floor} on the floor`);
-    // The tiles split on the way are exactly every drawn tile's ancestors: the cache keeps them.
-    const through = new Set(sel.through.map(keyId)), above = new Set<string>();
+    // The cache keeps every drawn tile's ancestors (all split on the way), and nothing else here: all are built.
+    const keep = new Set(sel.keep.map(keyId)), above = new Set<string>();
     for (let k of sel.draw) while (k.level > 0) { k = parent(layout, k); above.add(keyId(k)); }
-    assert.deepEqual([...above].sort(), [...through].sort());
+    assert.deepEqual([...above].sort(), [...keep].sort());
   }
 });
 
@@ -151,6 +151,19 @@ test('tiles: a tile split only along s geomorphs into its parent', () => {
   const kid = children(layout, k).find((c) => !splitAround(layout, c))!;
   assert.ok(kid, 'a child halved only along s');
   morphLands(layout, buildTile(eco, layout, k), buildTile(eco, layout, kid));
+});
+
+test('tiles: children built while a sibling is not are kept, not drawn', () => {
+  const h = derive(MATRIX[0].params);
+  const t = makeTerrain(h), layout = makeLayout(t);
+  const root: TileKey = { band: 3, column: 0, level: 0, i: 0, j: 0 }, kids = children(layout, root);
+  const built = new Set([...roots(layout), ...kids.slice(1)].map(keyId));
+  const eye = toWorld(h.profile, { theta: 0.1, s: (layout.bands[3].s0 + layout.bands[3].s1) / 2, h: 2 });
+  const sel = select(t, layout, eye, PX_PER_RAD, 2, (k) => (built.has(keyId(k)) ? cellSize(layout, k) * 0.3 : undefined));
+  assert.ok(sel.draw.some((k) => keyId(k) === keyId(root)));
+  const want = new Set(sel.want.map(keyId)), keep = new Set(sel.keep.map(keyId)), draw = new Set(sel.draw.map(keyId));
+  assert.ok(want.has(keyId(kids[0])));
+  for (const k of kids.slice(1)) assert.ok(keep.has(keyId(k)) && !draw.has(keyId(k)), keyId(k));
 });
 
 test('tiles: nothing built yet means the roots are wanted first; a tile builds within its budget', () => {
