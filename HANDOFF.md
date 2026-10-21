@@ -14,3 +14,10 @@ Where the work stands, for the next thread. Update it in the PR that changes it.
 2. The sunline's day: the travelling sun and the night dimming.
 3. Physics for the walker (Rapier, Coriolis), then Actors' humanoid bodies.
 4. Dunfinity can switch to `@futuremagic/stage` and drop its own copy (its own PR, in its own thread).
+
+## Proposals waiting for Arnd (from the outside plan, "Solarpolis: the outside": https://claude.ai/artifact/5aV6F3oGzxDapsjV59haXi)
+
+- `frame.toView` takes positions in any frame of a float64 frame tree (heliocentric → Earth → orbit → habitat body → interior); the camera's anchor frame can change mid-shot.
+- `derive()`: radiators carry only the heat released inside (electricity used plus piped light), since the panels shed their own waste heat; about halves `radiatorArea`. A pure `exterior(habitat)` (radiator brims, despun spindle, outer profile).
+- Outside material kinds: SKY, PLANET, HULL, BRIM, HARDWARE, GLINT, WINDOW.
+- The interior generator places the starfloor rooms, the Hub lounge and the endcap ports.
