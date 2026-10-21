@@ -17,6 +17,7 @@ import { HARDWARE, RADIATOR, SKIN, STARS } from './materials';
 import { skinUniforms, type SkinUniforms } from './hullShaders';
 import { hullGeometry } from './hull';
 import { meshGeometry } from './geometry';
+import { DRONES_WITHIN, DroneMesh } from './drones';
 
 /** A neighbour this many pixels across switches from a glint to its meshes, and back below the lower number. */
 const MESH_ABOVE = 10;
@@ -30,7 +31,7 @@ interface Drawn {
   uniforms: SkinUniforms;
   /** Size across, for the switch to meshes (m). */
   span: number;
-  meshes: { skin: Mesh; radiators: Mesh; mast: Mesh; spindle: Mesh } | null;
+  meshes: { skin: Mesh; radiators: Mesh; mast: Mesh; spindle: Mesh; drones: DroneMesh } | null;
   building: boolean;
   /** This frame: the body's axes in the scene and its origin relative to the eye; the drum's centre relative to the eye. */
   axes: Mat3;
@@ -81,7 +82,7 @@ export class NecklaceView {
 
   /** Remove everything from the scene. */
   dispose(): void {
-    for (const d of this.drawn) this.drop(d);
+    for (const d of this.drawn) this.dropMeshes(d);
     this.stage.remove(this.glints);
     this.glints.geometry.dispose();
   }
@@ -102,25 +103,42 @@ export class NecklaceView {
       m.userData.skin = d.uniforms;
       return m;
     };
-    const meshes = { skin: mesh(g.skin, SKIN, 'skin'), radiators: mesh(g.radiators, RADIATOR, 'radiators'), mast: mesh(g.mast, HARDWARE, 'mast'), spindle: mesh(g.spindle, HARDWARE, 'spindle') };
+    const drones = new DroneMesh(d.skin, HARDWARE.material, STARS.material);
+    drones.mesh.name = `${d.placed.id} drones`;
+    const meshes = { skin: mesh(g.skin, SKIN, 'skin'), radiators: mesh(g.radiators, RADIATOR, 'radiators'), mast: mesh(g.mast, HARDWARE, 'mast'), spindle: mesh(g.spindle, HARDWARE, 'spindle'), drones };
     this.poseMeshes(d, meshes);
-    await Promise.all(Object.values(meshes).map((m) => this.stage.add(m)));
+    await Promise.all([meshes.skin, meshes.radiators, meshes.mast, meshes.spindle, drones.mesh, drones.points].map((m) => this.stage.add(m)));
     d.building = false;
     d.meshes = meshes;
   }
 
-  private drop(d: Drawn): void {
+  private dropMeshes(d: Drawn): void {
     if (!d.meshes) return;
-    for (const m of Object.values(d.meshes)) { this.stage.remove(m); m.geometry.dispose(); }
+    const m = d.meshes;
+    for (const x of [m.skin, m.radiators, m.mast, m.spindle, m.drones.mesh, m.drones.points]) { this.stage.remove(x); x.geometry.dispose(); }
     d.meshes = null;
   }
 
   private poseMeshes(d: Drawn, m: NonNullable<Drawn['meshes']>): void {
     for (const k of ['skin', 'radiators', 'mast'] as const) setPose(m[k], d.axes, d.origin);
     setPose(m.spindle, mul(d.axes, rotZ(-d.placed.spinAt(this.time))), d.origin);
+    // The drones only near the skin: the eye's distance to the body, in its own frame.
+    const eye = apply(transpose(d.axes), v3scale(d.origin, -1));
+    const near = exteriorDistance(d.habitat.exterior, eye) < DRONES_WITHIN * d.skin.droneSize;
+    m.drones.mesh.visible = near;
+    m.drones.points.visible = !near;
+    if (near) {
+      m.drones.moveTo(this.time);
+      setPose(m.drones.mesh, d.axes, d.origin);
+    } else {
+      m.drones.glow(this.time, d.axes, d.origin, apply(transpose(d.axes), this.sunDir), this.sunlight, this.far);
+    }
   }
 
   private time = 0;
+  /** This frame's Sun as the home habitat sees it (scene axes), and its unhidden share. */
+  private sunDir: Vec3 = [1, 0, 0];
+  private sunlight = 1;
 
   /**
    * Everything relative to the eye (home orbit frame) at clock time t: each body's pose, the near ones' meshes, the
@@ -128,6 +146,8 @@ export class NecklaceView {
    */
   follow(eye: Vec3, t: number, sky: SkyView, pixelsPerRadian: number): void {
     this.time = t;
+    this.sunDir = sky.sunDir;
+    this.sunlight = sky.sunlight;
     const sp = this.space, frame = sp.home.orbitFrame;
     const sunC = v3scale(sky.sunDir, sky.sunDistance);
     for (const d of this.drawn) {
@@ -139,7 +159,7 @@ export class NecklaceView {
     for (let k = 1; k < this.drawn.length; k++) {
       const d = this.drawn[k], dist = v3len(d.center), px = (d.span / dist) * pixelsPerRadian;
       if (px > MESH_ABOVE) void this.buildMeshes(d);
-      else if (px < GLINT_BELOW) this.drop(d);
+      else if (px < GLINT_BELOW) this.dropMeshes(d);
       const o = (k - 1) * 12;
       const dir = v3scale(d.center, 1 / dist);
       let flux: Vec3 = [0, 0, 0];
