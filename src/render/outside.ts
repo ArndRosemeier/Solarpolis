@@ -23,6 +23,8 @@ import { DARKEST, PERIPHERY, adapt, exposureFor, starExposure, sunInView, type M
 import { NecklaceView } from './necklace';
 import { meshGeometry, setPose } from './geometry';
 import { SHIP_ALBEDO, ShipMeshes, shipAxes } from './ship';
+import { BORE_ALBEDO } from './bore';
+import { BORE_LIGHT } from './hullShaders';
 import { FrameLoop, dragToLook, draw, fitCanvas, moveKeys } from './surface';
 
 /**
@@ -474,7 +476,9 @@ export class OutsideView {
       const L = this.shipShape.params.length;
       hulls.push({ center: v3sub(v3add(ship.position, v3scale(ship.forward, L / 2)), eye), axis: ship.forward, radius: this.shipShape.params.beam / 2, halfLength: L / 2, albedo: SHIP_ALBEDO });
     }
-    const metered: Meterable = { sky: this.sky, hulls, earthshine: outside.earthshine.value };
+    // Inside the spindle's bore every ray lands on its walls, in the light of its lamps.
+    const room = this.necklace?.insideBore() ? { luminance: BORE_ALBEDO * BORE_LIGHT, light: BORE_LIGHT } : null;
+    const metered: Meterable = { sky: this.sky, hulls, earthshine: outside.earthshine.value, room };
     this.exposure = adapt(this.exposure, exposureFor(metered, rays, this.nightEyes ? DARKEST.nightEyes : DARKEST.plain), dt);
     outside.exposure.value = this.exposure;
   }

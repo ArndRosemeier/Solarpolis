@@ -39,8 +39,8 @@ const memoryDetails = { debug: 'Show memory details' };
 export const views = {
   title: { query: '', about: 'the title card over the attract flight', default: true },
   arrival: {
-    query: '', about: 'Start: the passenger\'s ship down its corridor (-corridor), nearing the berth (-berth), then just latched',
-    steps: [{ run: async (page) => page.click('.title-start') }, { wait: 5000 }, { shot: 'corridor' }, { wait: 14000 }, { shot: 'berth' }, { wait: 3500 }],
+    query: '', about: 'Start: down the corridor (-corridor), nearing the berth (-berth), in the bore (-bore), past the bearing (-sleeve), then floating at the Hub',
+    steps: [{ run: async (page) => page.click('.title-start') }, { wait: 5000 }, { shot: 'corridor' }, { wait: 14000 }, { shot: 'berth' }, { wait: 9000 }, { shot: 'bore' }, { wait: 8000 }, { shot: 'sleeve' }, { wait: 14000 }],
   },
   lab: { query: 'view=lab', about: 'the Blueprint Lab', settle: 1000, default: true },
   inside: { query: 'view=inside', about: 'standing on the floor, first look', default: true },
@@ -66,6 +66,13 @@ export const views = {
   'clouds-in': { query: 'view=inside', about: 'flown up into the middle of the cloud layer, looking ahead', settle: 6000, steps: [{ debug: 'Fly up into the clouds' }, { wait: 3000 }] },
   'inside-wild-tip': { query: 'view=inside', about: 'near the wild endcap\'s tip, where the sunline meets it; logs the terrain line every 250 ms for 6 s (LOD flicker)', settle: 6000, steps: [{ debug: 'Near the wild endcap\'s tip' }, { wait: 8000 }, { run: logTiles }, { look: [0, -200] }, { wait: 1500 }] },
   'inside-port-hub': { query: 'view=inside', about: 'near the port endcap\'s hub, where the sunline meets it; logs the terrain line every 250 ms for 6 s (LOD flicker)', settle: 6000, steps: [{ debug: 'Near the port endcap\'s hub' }, { wait: 8000 }, { run: logTiles }, { look: [0, -200] }, { wait: 1500 }] },
+  // The far view (docs/far-view.md): high over the land, every distance band from a few hundred metres to across the tube.
+  'far-low': { query: 'view=inside', about: 'flying low over the floor, looking along it', steps: [{ debug: 'Fly: low over the floor' }, { wait: 9000 }] },
+  'far-across': { query: 'view=inside', about: 'a quarter of the way to the axis, looking across the curve', steps: [{ debug: 'Fly: a quarter of the way up' }, { wait: 9000 }] },
+  'far-side': { query: 'view=inside', about: 'halfway to the axis, looking at the far side', steps: [{ debug: 'Fly: halfway up' }, { wait: 9000 }] },
+  'far-down': { query: 'view=inside', about: 'high up, looking down at the floor', steps: [{ debug: 'Fly: high up, looking down' }, { wait: 9000 }] },
+  'far-tube': { query: 'view=inside', about: 'near the axis at the wild end, looking along the tube', steps: [{ debug: 'Fly: near the axis' }, { wait: 9000 }] },
+  'far-meadow-up': { query: 'view=inside', about: 'standing in a meadow, looking up at the far side', settle: 6000, steps: [{ debug: 'Into the nearest meadow' }, { wait: 5000 }, { look: [0, -260] }, { wait: 3000 }] },
   outside: { query: 'view=outside', about: 'the home habitat from outside', default: true },
   'outside-earth': { query: 'view=outside', about: 'looking at Earth (key 2)', steps: [{ key: 'Digit2' }, { wait: 3000 }] },
   'outside-moon': { query: 'view=outside', about: 'looking at the Moon (key 3)', steps: [{ key: 'Digit3' }, { wait: 3000 }] },

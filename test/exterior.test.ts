@@ -51,4 +51,10 @@ for (const { name, params } of MATRIX) {
     for (let i = 1; i < e.outline.length; i++) assert.ok(e.outline[i][0] >= e.outline[i - 1][0], 'z never runs backwards');
     assert.ok(e.spindle.to > e.portFace && e.spindle.radius === params.hubRadius && e.mast.from < e.wildFace);
   });
+
+  test(`exterior ${name}: the bore runs on the axis from the Hub through the bearing at the port face to the berth arms`, () => {
+    const b = e.spindle.bore;
+    assert.ok(b.radius > 0 && b.radius < params.hubRadius);
+    assert.ok(b.from === h.length && b.bearing === e.portFace && b.to === e.spindle.arms.z && b.from < b.bearing && b.bearing < b.to);
+  });
 }

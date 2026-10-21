@@ -12,7 +12,7 @@ export const REFERENCE: HabitatParams = {
   floorGravity: 9.81,
   sunDistanceAu: 1,
   axisOrientation: 'side-on',
-  air: { floorPressure: 101325, temperature: 288, gasConstant: 287 },
+  air: { floorPressure: 101325, temperature: 288, gasConstant: 287, hazeDistance: 60000 },
   layers: { soilMin: 1, soilMax: 5, ceilingDeck: 3, living: 20, floorDeck: 2, service: 10, solarSkin: 0.5 },
   // Refined asteroid steel, as the design doc has it.
   hull: { density: 7800, strength: 1.5e9, safetyFactor: 1.5 },
@@ -33,7 +33,7 @@ export const REFERENCE: HabitatParams = {
   clouds: { base: 1200, thickness: 450, cover: 0.3, size: 700, wind: { along: 3, around: 1 } },
   // An Earth day, two thirds lit; the bright stretch a seventh of the length; a dim blue-hour glow at night.
   day: { length: 86400, daylight: 0.65, peakWidth: 0.14, base: 0.3, night: 0.03 },
-  exterior: { brimReach: 1.6, brimSpacing: 0.4, maxBrims: 8, brimThickness: 2, brimMaterial: { density: 1800, strength: 3e9, safetyFactor: 1.5 }, spindleLength: 0.25, mastLength: 0.05, berthArms: 6, keepOut: 500, panel: 40, campaign: { around: 12, along: 30 }, panelLife: 120, starfloors: 0.004, drones: { trackEvery: 24, spacing: 2500, size: 3, speed: 1.5 }, antennas: { count: 5, dish: 0.6 }, parts: { module: 2.5, cell: 0.156, plate: 3, handrail: 1.1 } },
+  exterior: { brimReach: 1.6, brimSpacing: 0.4, maxBrims: 8, brimThickness: 2, brimMaterial: { density: 1800, strength: 3e9, safetyFactor: 1.5 }, spindleLength: 0.25, mastLength: 0.05, berthArms: 6, bore: 0.12, keepOut: 500, panel: 40, campaign: { around: 12, along: 30 }, panelLife: 120, starfloors: 0.004, drones: { trackEvery: 24, spacing: 2500, size: 3, speed: 1.5 }, antennas: { count: 5, dish: 0.6 }, parts: { module: 2.5, cell: 0.156, plate: 3, handrail: 1.1 } },
   climate: 'temperate-mild',
   population: 300000,
   age: 200,

@@ -342,7 +342,7 @@ export class InteriorView {
     this.norm = sunlineNorm(h);
     setSunline(h.length, this.norm, nearestLit(h));
     this.shine();
-    setAir(densityFalloff(h), h.radius, seenMid(h));
+    setAir(densityFalloff(h), h.radius, seenMid(h), h.params.air.hazeDistance);
     // The sunline: from the wild wall to the port wall along the axis.
     const tube = new CylinderGeometry(h.params.sunlineRadius, h.params.sunlineRadius, h.length, 24, 1, true);
     tube.deleteAttribute('uv'); // the kind's attributes are position and normal (docs/SHADERS.md)
@@ -495,6 +495,17 @@ export class InteriorView {
     this.character = null;
     this.walker.place(theta, s, heading);
     this.standUp();
+  }
+
+  /**
+   * Float at a point (world, m) looking along `look`, as the flyer (the crossing into the Hub hands over here). Up is
+   * the flyer's: toward the axis, so the point should be off the axis itself.
+   */
+  floatAt(eye: Vec3, look: Vec3): void {
+    this.physics?.removeCharacter();
+    this.character = null;
+    const r = Math.hypot(eye[0], eye[1]), up: Vec3 = r > 0 ? [-eye[0] / r, -eye[1] / r, 0] : [1, 0, 0];
+    this.flyer = new Flyer(this.habitat.profile, { eye, look, up }, this.terrain.standAt);
   }
 
   /** Take off from where the walker stands, or land under the flyer. */

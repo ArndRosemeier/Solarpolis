@@ -111,6 +111,11 @@ export interface ExteriorShape {
   mastLength: number;
   /** Berth arms on the spindle. */
   berthArms: number;
+  /**
+   * The bore people cross into the spin by, on the axis from the berth arms through the bearing at the port face to
+   * the Hub: its radius as a share of `hubRadius`.
+   */
+  bore: number;
   /** Torch ships cut their drive this far out (in outer radii): their exhaust would scorch the skin. */
   keepOut: number;
   /** Edge of one skin panel (m): the solar skin is a grid of panels this size around and along the drum. */
@@ -154,6 +159,11 @@ export interface HabitatParams {
     temperature: number;
     /** Specific gas constant (J/(kg K)); 287 for Earth air. */
     gasConstant: number;
+    /**
+     * How clear the air is: across this much air at floor density only a quarter of a surface's light gets through (m).
+     * A designed habitat filters its air far cleaner than a city's; the far side then reads clearly across the axis.
+     */
+    hazeDistance: number;
   };
   layers: LayerDepths;
   hull: HullMaterial;

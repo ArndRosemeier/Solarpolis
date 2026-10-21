@@ -19,3 +19,12 @@ test('kinds: every kind the registry exports is warmed up by a view (a kind left
   assert.ok(kinds.length >= warmed.size, 'finds the exported kinds');
   for (const [name, k] of kinds) assert.ok(warmed.has(k as never), `${name} is in allKinds() or outsideKinds()`);
 });
+
+test('kinds: no kind needs more than WebGPU\'s 8 vertex buffers, or its pipeline never builds', () => {
+  for (const kind of [...allKinds(), ...outsideKinds()]) {
+    const mesh = standIn(kind, standInAttribute);
+    // Each attribute is a buffer of its own, except interleaved ones, which share theirs.
+    const buffers = new Set(Object.values(mesh.geometry.attributes).map((a) => ('data' in a && a.data ? a.data : a)));
+    assert.ok(buffers.size <= 8, `${kind.name}: ${buffers.size} vertex buffers`);
+  }
+});
