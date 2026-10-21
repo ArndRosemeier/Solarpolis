@@ -1,9 +1,5 @@
 [
   {
-    "key": "clone: core/math.ts#v3cross + solarpolis/gen/hullDetail.ts#cross",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
     "key": "clone: core/noise.ts#cellular2 + core/noise.ts#cellular3",
     "reason": "2D and 3D variants of the same noise in the shared core package; merging them would cost the hot path a dimension branch."
   },
@@ -20,16 +16,8 @@
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView) each drive their own StreamCache (render/streamed.ts) the one way it is driven: frame, want, mark, bytes, clear; their requests are told apart by kind and key."
   },
   {
-    "key": "idiom: [.key .kind] in solarpolis/render/hullDetail.ts + solarpolis/render/plants.ts + solarpolis/render/terrain.ts",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView) each drive their own StreamCache (render/streamed.ts) the one way it is driven: frame, want, mark, bytes, clear; their requests are told apart by kind and key."
-  },
-  {
     "key": "same name: solarpolis/app/memory.ts#stop + solarpolis/render/actors/animator.ts#stop",
     "reason": "The Actors figure and animator are ported from Dunfinity with their method names, which follow Actors' own Character API (load, update, stop, dispose); the plan moves the animator into Actors, and keeping the names keeps that swap a drop-in."
-  },
-  {
-    "key": "same name: solarpolis/gen/hullDetail.ts#visit + solarpolis/gen/tiles.ts#visit",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
     "key": "same name: solarpolis/lab/blueprintLab.ts#update + solarpolis/render/actors/animator.ts#update",
@@ -274,5 +262,17 @@
   {
     "key": "idiom: [.mul .sub] in solarpolis/render/hullShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
     "reason": "TSL has no operators: every shader file does its arithmetic with .mul and .sub. Shared shader steps already live in one place each (sunlit, throughAir, the hull and sky pieces); this pair is the language, not a copied procedure."
+  },
+  {
+    "key": "same name: solarpolis/render/hullDetail.ts#dispose + solarpolis/render/necklace.ts#dispose",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/hullDetail.ts#follow + solarpolis/render/necklace.ts#follow",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/hullDetail.ts#follow + solarpolis/render/plants.ts#follow",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   }
 ]

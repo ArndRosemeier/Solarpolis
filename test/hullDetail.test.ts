@@ -5,21 +5,7 @@ import { MATRIX, derive } from '../src/blueprint';
 import { makeSkin, type Skin } from '../src/gen/skin';
 import { ROOT_LEVEL, buildHullTile, bayEdge, detailOf, finestLevel, hullTileBytes, railTop, tileOrigin, wantedTiles, type HullTile, type HullTileKey } from '../src/gen/hullDetail';
 import type { Vec3 } from '@futuremagic/core';
-
-/** Every triangle's winding agrees with its normal (front faces outward), and the share of them that are not slivers. */
-function windingOk(pos: Float32Array, nrm: Float32Array, idx: Uint32Array): { bad: number; total: number } {
-  let bad = 0;
-  for (let t = 0; t < idx.length; t += 3) {
-    const [a, b, c] = [idx[t], idx[t + 1], idx[t + 2]].map((k) => [pos[k * 3], pos[k * 3 + 1], pos[k * 3 + 2]]);
-    const e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-    const n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
-    const len = Math.hypot(n[0], n[1], n[2]);
-    if (len < 1e-12) continue;
-    const k = idx[t] * 3;
-    if ((n[0] * nrm[k] + n[1] * nrm[k + 1] + n[2] * nrm[k + 2]) / len < 0.5) bad++;
-  }
-  return { bad, total: idx.length / 3 };
-}
+import { windingOk } from './meshChecks';
 
 /** Glass area of a tile (m²). */
 function glassArea(t: HullTile): number {

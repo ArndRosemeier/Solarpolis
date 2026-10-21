@@ -16,6 +16,7 @@ import { hash3f, deriveSeed } from '@futuremagic/core';
 import { fromWorld, toWorld, wrapAngle, type PlantSpec, type Vec3 } from '../blueprint';
 import { TREE_HEIGHT, type Ecology } from './ecology';
 import { horizonAt } from './horizon';
+import { bytesOf } from './shapes';
 
 /** Shapes per plant form: plants of a species pick one of these by their own hash. */
 export const PLANT_VARIANTS = 3;
@@ -190,7 +191,7 @@ export function plantCell(ecology: Ecology, plants: readonly Species[], k: CellK
 
 /** Bytes a planted cell holds (memory watchdog). */
 export function cellBytes(c: PlantCell): number {
-  return c.instances.reduce((n, a) => n + a.byteLength, 0);
+  return bytesOf(c.instances);
 }
 
 /** How steep the ground is at a point (0 flat … 1 a wall), from its height a step either way. */
