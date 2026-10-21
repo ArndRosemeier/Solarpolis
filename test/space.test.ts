@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { v3dot, v3len, v3norm, v3sub, type Vec3 } from '@futuremagic/core';
 import { MATRIX, toWorld } from '../src/blueprint';
 import {
-  AU, DAY, earthAt, moonFromEarthAt, julianDay, makeSpace, geostationaryRadius, siderealTimeAt, obliquityAt, REFERENCE_SPACE,
+  AU, DAY, calendarOf, earthAt, moonFromEarthAt, julianDay, makeSpace, geostationaryRadius, siderealTimeAt, obliquityAt, REFERENCE_SPACE,
   type Space,
 } from '../src/space';
 
@@ -22,6 +22,12 @@ test('space: Julian dates match Meeus', () => {
   assert.equal(julianDay(2000, 1, 1.5), 2451545);
   near(julianDay(1957, 10, 4.81), 2436116.31, 1e-9, 'Sputnik');
   near(julianDay(1987, 1, 27), 2446822.5, 1e-9, 'Meeus 7.a');
+  // And back: Meeus 7.c, and a date in the game's century.
+  assert.deepEqual(calendarOf(2436116.31), { year: 1957, month: 10, day: calendarOf(2436116.31).day });
+  near(calendarOf(2436116.31).day, 4.81, 1e-6, 'Sputnik, back');
+  const c = calendarOf(julianDay(3026, 3, 1.6));
+  assert.deepEqual([c.year, c.month], [3026, 3]);
+  near(c.day, 1.6, 1e-6, 'March 3026, back');
 });
 
 test('space: Earth is at perihelion in early January and aphelion in early July (2026)', () => {

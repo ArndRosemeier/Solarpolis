@@ -3,7 +3,8 @@
  * lacks, and draws the chosen ones relative to the eye. Built tiles stay cached until memory runs short or the cache
  * is full, least recently drawn first.
  */
-import { BufferAttribute, BufferGeometry, Group, Mesh } from 'three/webgpu';
+import { Group, Mesh, type BufferGeometry } from 'three/webgpu';
+import { meshGeometry } from './geometry';
 import type { Stage } from '@futuremagic/stage';
 import { toView, type Vec3 } from '../blueprint';
 import type { Terrain } from '../gen/terrain';
@@ -136,15 +137,10 @@ export class TerrainView {
 }
 
 function geometry(positions: Float32Array, normals: Float32Array, index: Uint32Array, colors?: Float32Array, morph?: Float32Array, horizon?: Float32Array): BufferGeometry {
-  const g = new BufferGeometry();
-  g.setAttribute('position', new BufferAttribute(positions, 3));
-  g.setAttribute('normal', new BufferAttribute(normals, 3));
-  if (colors) g.setAttribute('color', new BufferAttribute(colors, 3));
-  if (morph) g.setAttribute('morph', new BufferAttribute(morph, 3));
-  if (horizon) g.setAttribute('horizon', new BufferAttribute(horizon, 2));
-  g.setIndex(new BufferAttribute(index, 1));
-  g.computeBoundingSphere();
-  return g;
+  return meshGeometry(index, {
+    position: [positions, 3], normal: [normals, 3],
+    color: colors && [colors, 3], morph: morph && [morph, 3], horizon: horizon && [horizon, 2],
+  });
 }
 
 /** The interior's tile layout, for the debug menu. */

@@ -9,7 +9,7 @@
  * Everything is drawn relative to the camera (`toView`), so `positionWorld` is the offset from the eye; the eye's own
  * world position is the `view.eye` uniform, for whatever needs the true place (the axis, ground patterns).
  */
-import { MeshBasicNodeMaterial, DoubleSide, type Material } from 'three/webgpu';
+import { MeshBasicNodeMaterial, DoubleSide, BackSide, AdditiveBlending, type Material } from 'three/webgpu';
 import { abs, atan, attribute, cameraPosition, clamp, color, cos, log, select, sign, sqrt, dot, exp, float, max, mix, mx_fractal_noise_float, normalize, min, modelWorldMatrix, normalWorld, positionLocal, positionWorld, pow, sin, smoothstep, texture, uniform, vec2, vec3, vec4, vertexColor } from 'three/tsl';
 import { ClampToEdgeWrapping, DataTexture, DataUtils, Float32BufferAttribute, HalfFloatType, LinearFilter, RedFormat, Vector3, type BufferGeometry } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
@@ -18,6 +18,7 @@ import { HAZE_DIAMETER } from '../blueprint';
 import { OPEN_SKY } from '../gen/horizon';
 import { EMISSION_SAMPLES, SUNLINE_STEPS } from '../world/sunline';
 import { HAZE_STEPS } from '../world/air';
+import { hullColor, skyDome, starColor, starVertex } from './skyShaders';
 
 /** The air's look, shared by every kind (uniforms: changing them never builds a shader). */
 export const air = {
@@ -217,12 +218,43 @@ export const WATER = kind('water', ['position', 'normal'], { cast: false, receiv
   return m;
 });
 
+/**
+ * The view outside (skyShaders.ts). The sky dome: a sphere around the eye, drawn first and behind everything, with the
+ * Sun, Earth and the Moon computed per pixel. Its meshes carry position only.
+ */
+export const SKY = kind('sky', ['position'], { cast: false, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial({ side: BackSide, depthTest: false, depthWrite: false });
+  m.colorNode = skyDome();
+  return m;
+});
+
+/** The stars: camera-facing quads, added on top of the dome and hidden by the hull. Position, color (× flux), corner. */
+export const STARS = kind('stars', ['position', 'color', 'corner'], { cast: false, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial({ transparent: true, blending: AdditiveBlending, depthWrite: false });
+  m.vertexNode = starVertex();
+  m.colorNode = starColor();
+  return m;
+});
+
+/** A habitat's hull from outside: drum, endcap faces, brims, mast and the despun spindle. Position, normal, color. */
+export const HULL = kind('hull', ['position', 'normal', 'color'], { cast: false, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial({ side: DoubleSide });
+  m.colorNode = hullColor();
+  return m;
+});
+
 /** The game's own attributes on the Stage's warm-up stand-ins (StageOptions.attribute): no morph, open horizons. */
 export function standInAttribute(g: BufferGeometry, name: string): boolean {
   if (name === 'morph') g.setAttribute('morph', new Float32BufferAttribute(new Array(9).fill(0), 3));
+  else if (name === 'corner') g.setAttribute('corner', new Float32BufferAttribute([-1, -1, 1, -1, 1, 1], 2));
   else if (name === 'horizon') g.setAttribute('horizon', new Float32BufferAttribute(new Array(6).fill(OPEN_SKY), 2));
   else return false;
   return true;
+}
+
+/** The kinds of the view outside, for its Stage's warm-up (windows will add them to the interior's). */
+export function outsideKinds(): readonly Kind[] {
+  return [SKY, STARS, HULL];
 }
 
 /** Every kind, for the Stage's warm-up. */

@@ -25,3 +25,14 @@ export function jdAt(epochJd: number, t: number): number {
 export function centuries(jd: number): number {
   return (jd - JD_J2000) / JULIAN_CENTURY;
 }
+
+/** The Gregorian calendar date of a Julian date, the day with its fraction (Meeus, chapter 7): the inverse of `julianDay`. */
+export function calendarOf(jd: number): { year: number; month: number; day: number } {
+  const z = Math.floor(jd + 0.5), f = jd + 0.5 - z;
+  const alpha = Math.floor((z - 1867216.25) / 36524.25);
+  const a = z + 1 + alpha - Math.floor(alpha / 4), b = a + 1524;
+  const c = Math.floor((b - 122.1) / 365.25), d = Math.floor(365.25 * c), e = Math.floor((b - d) / 30.6001);
+  const day = b - d - Math.floor(30.6001 * e) + f;
+  const month = e < 14 ? e - 1 : e - 13;
+  return { year: month > 2 ? c - 4716 : c - 4715, month, day };
+}

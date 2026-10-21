@@ -42,12 +42,14 @@ Each row is a question you will have while coding, and the one place that answer
 | How do I get a position from one frame to another? | `space.frames.position(p, from, to, t)`, `.direction`, `.relative` (`frames.ts`), float64, via the nearest common frame. Ids: `sun`, `earth`, `earth.fixed`, `moon`, `<habitat>.orbit`, `<habitat>.body` (the blueprint frame of `toWorld`). Then `toView` for the GPU. |
 | Which habitats exist, and where? | `makeSpace(params).habitats` from `necklace()` (`necklace.ts`): the geostationary ring, home first, neighbours seeded from the world seed. `REFERENCE_SPACE` (`reference.ts`). |
 | How do rotations and poses compose? | `Mat3`, `Pose`, `compose`, `invert`, `rotX`, `rotZ` (`pose.ts`). |
+| What does the sky hold from a point (Sun, Earth, Moon, eclipses)? | `skyFrom(space, frame, eye, t)` → `SkyView` (`sky.ts`): directions, sizes, body axes, `sunlight` (share of the Sun's disc not hidden). |
+| Where are the stars, how bright, what colour? | `decodeStars(bytes)` (`stars.ts`) on `public/sky/stars.bin` (Hipparcos to magnitude 8, J2000 ecliptic directions, flux relative to the Sun). `calendarOf(jd)` turns a date back into the calendar. |
 
 ## Drawing (`src/render`)
 
 | Question | The one way |
 |---|---|
-| How do I get a renderer? | `createRenderer(canvas, { backends: 'webgpu', depth: 'reversed' })` from `@futuremagic/stage`, called once in `view.ts`. |
+| How do I get a renderer? | `createRenderer(canvas, { backends: 'webgpu', depth: 'reversed' })` from `@futuremagic/stage`, once per view (`view.ts`, `outside.ts`). |
 | How does a mesh get a material? | A kind from `materials.ts` (`GROUND`, `WATER`, `SUNLINE`, `allKinds`; own attributes on warm-up stand-ins via `standInAttribute`); the mesh carries exactly the kind's attributes. |
 | How does a thing enter the scene? | `stage.add(obj)` (the Stage from `@futuremagic/stage`, made in `view.ts`). |
 | How are things lit? | By the sunline as a line light, in the kinds' shaders (no three.js lights): `sunlit(horizon)` in `materials.ts` integrates the emission texture along the axis past the two horizon angles, plus `air.skyLight` scaled by the open sky. `setSunline` loads a habitat's scale and length, `setEmission` the hour's emission profile. |
@@ -55,6 +57,10 @@ Each row is a question you will have while coding, and the one place that answer
 | Where does the camera sit, given the huge distances? | At the origin: meshes are placed at `frame.toView(eye, origin)` (float64), and shaders get the world eye from `view.eye` (`materials.ts`). |
 | How does the terrain reach the screen? | `TerrainView` (`render/terrain.ts`): `follow(eye, pixelsPerRadian)` each frame selects tiles, asks the worker pool for missing ones, caches and evicts; sets each tile's `userData.morphFar` so GROUND geomorphs it into its parent's shape before they swap. |
 | What is drawn inside? | `InteriorView` (`view.ts`): terrain tiles, sunline, the walker's or the flyer's camera (`toggleFlying`, key F). |
+| What is drawn outside? | `OutsideView` (`outside.ts`): the home habitat in its orbit frame with the sky dome (`SKY`: Sun, Earth, Moon per pixel), the stars (`STARS`) and the hull (`HULL`, `hullGeometry` in `hull.ts`); shader pieces and the `outside` uniforms in `skyShaders.ts`; kinds listed by `outsideKinds()`. |
+| How bright is it outside, and how do eyes follow? | `exposureFor(meterable, rays, darkest)` and `adapt` (`exposure.ts`): units where sunlit white paper is 1; the `outside.exposure` uniform scales every outside kind. |
+| What do the 3D views share (frame loop, canvas size, right-drag looking, drawing a frame)? | `runFrames`, `fitCanvas`, `dragToLook`, `draw(stage)` (`surface.ts`). Each view is a `PageView` in `main.ts`'s `ViewSlot`. |
+| How do I turn arrays into a mesh geometry? | `meshGeometry(index, attributes)` (`geometry.ts`). |
 | What time is it in the habitat? | `InteriorView.time` (clock s since the first dawn), advanced by frame time × `timeScale`; the debug menu's Time group changes it. Nothing reads the wall clock. |
 
 ## Workers (`src/workers`)
