@@ -37,9 +37,19 @@ interface Part {
 /** A form's shapes: per level, the parts of each variant (the hull level has one variant). */
 type Shapes = Part[][][];
 
+/** One shape's plants in a cell: all of them, the buffer the meshes draw (the ones in their band), the meshes. */
+interface Shaped {
+  all: Float32Array;
+  buffer: InstancedInterleavedBuffer;
+  meshes: Mesh[];
+}
+
 interface Entry extends Streamed {
   cell: PlantCell;
   meshes: Mesh[];
+  shaped: Shaped[];
+  /** The choice (`PlantView.generation`) its buffers were last trimmed for. */
+  trimmed: number;
 }
 
 export class PlantView {
@@ -51,6 +61,8 @@ export class PlantView {
   private chosenAt: Vec3 | null = null;
   private chosen: CellKey[] = [];
   private chosenForms = 0;
+  /** Counts the choices of cells (each time the eye has moved far enough). */
+  private generation = 0;
   /** Bytes of the shared shapes and the two atlases. */
   private shared = 0;
 
@@ -103,6 +115,7 @@ export class PlantView {
     if (!this.chosenAt || this.chosenForms !== this.shapes.size || Math.hypot(eye[0] - this.chosenAt[0], eye[1] - this.chosenAt[1], eye[2] - this.chosenAt[2]) > smallest * RECHOOSE) {
       this.chosenAt = [...eye];
       this.chosenForms = this.shapes.size;
+      this.generation++;
       // Every plant's cells at every level, nearest first: the near ones are where a gap would show.
       this.chosen = this.species.flatMap((sp) => (this.shapes.has(sp.spec.form) ? LEVELS.flatMap((_, level) => cellsNear(this.ecology, sp, level as Level, eye)) : []))
         .sort((a, b) => a.near - b.near).map((c) => c.key);
@@ -115,11 +128,35 @@ export class PlantView {
       const id = cellId(key), e = this.cache.get(id);
       if (!e) { wanted.push({ id, request: { kind: 'plants', params, key } }); continue; }
       const [x, y, z] = toView(eye, e.cell.origin);
-      for (const m of e.meshes) { m.position.set(x, y, z); m.visible = true; }
+      if (e.trimmed !== this.generation) this.trim(e, [x, y, z], smallest * RECHOOSE);
+      for (const m of e.meshes) { m.position.set(x, y, z); m.visible = (m.geometry as InstancedBufferGeometry).instanceCount > 0; }
       this.cache.mark(e);
       this.drawn.push(e);
     }
     this.cache.want(wanted);
+  }
+
+  /**
+   * Keep in a cell's buffers only the plants its level may draw from here: those within its band, give or take how far
+   * the eye moves before the next choice. The shader still hands each plant over by its exact distance; this only
+   * spares the GPU the plants it would fold away anyway.
+   */
+  private trim(e: Entry, at: [number, number, number], slack: number): void {
+    e.trimmed = this.generation;
+    const sp = this.species[e.cell.key.species], [lo, , , hi] = sp.band[e.cell.key.level];
+    const near = Math.max(0, lo - slack), far = hi + slack;
+    for (const s of e.shaped) {
+      const out = s.buffer.array as Float32Array;
+      let n = 0;
+      for (let i = 0; i < s.all.length; i += PLANT_STRIDE) {
+        const d = Math.hypot(at[0] + s.all[i], at[1] + s.all[i + 1], at[2] + s.all[i + 2]);
+        if (d < near - s.all[i + 3] || d > far + s.all[i + 3]) continue;
+        out.set(s.all.subarray(i, i + PLANT_STRIDE), n * PLANT_STRIDE);
+        n++;
+      }
+      s.buffer.needsUpdate = true;
+      for (const m of s.meshes) (m.geometry as InstancedBufferGeometry).instanceCount = n;
+    }
   }
 
   private async make(answer: GenAnswer, id: string): Promise<Entry | null> {
@@ -128,10 +165,12 @@ export class PlantView {
     if (!shapes) return null;
     const band = new Vector4(...sp.band[cell.key.level]);
     const horizon = new Vector2(cell.horizon[0], cell.horizon[1]);
-    const meshes: Mesh[] = [];
+    const meshes: Mesh[] = [], shaped: Shaped[] = [];
     cell.instances.forEach((data, v) => {
       if (!data.length) return;
-      const buffer = new InstancedInterleavedBuffer(data, PLANT_STRIDE);
+      const buffer = new InstancedInterleavedBuffer(data.slice(), PLANT_STRIDE);
+      const s: Shaped = { all: data, buffer, meshes: [] };
+      shaped.push(s);
       for (const part of shapes[cell.key.level][v]) {
         const g = new InstancedBufferGeometry();
         for (const [name, a] of part.attributes) g.setAttribute(name, a);
@@ -147,11 +186,12 @@ export class PlantView {
         m.userData.band = band;
         m.userData.horizon = horizon;
         meshes.push(m);
+        s.meshes.push(m);
       }
     });
     for (const m of meshes) await this.stage.prepare(m);
     for (const m of meshes) this.group.add(m);
-    return { cell, meshes, bytes: cellBytes(cell), lastDrawn: 0 };
+    return { cell, meshes, shaped, trimmed: -1, bytes: cellBytes(cell) * 2, lastDrawn: 0 };
   }
 
   dispose(): void {
