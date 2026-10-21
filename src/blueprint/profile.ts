@@ -104,8 +104,20 @@ export function makeProfile(R: number, L: number, hubRadius: number, endcaps: { 
       const d2 = (z - pz) * (z - pz) + (r - pr) * (r - pr);
       if (d2 < best) { best = d2; bestS = ss[i] + Math.sqrt(len2) * t; }
     }
-    const p = at(bestS);
-    return { s: bestS, h: (z - p.z) * p.nz + (r - p.r) * p.nr };
+    // `toWorld` lifts a point along the smoothed normal, which leans off its segment's perpendicular: walk s until the
+    // point lies on the normal at s (secant steps), so this undoes `toWorld` exactly, also far above or below the curve.
+    let s = bestS;
+    const offNormal = (at_: ProfilePoint): number => (z - at_.z) * at_.nr - (r - at_.r) * at_.nz;
+    for (let k = 0; k < 6; k++) {
+      const ds = s + 0.01 <= length ? 0.01 : -0.01;
+      const f0 = offNormal(at(s)), f1 = offNormal(at(s + ds)), slope = (f1 - f0) / ds;
+      if (Math.abs(f0) < 1e-9 || Math.abs(slope) < 1e-12) break;
+      const next = Math.min(length, Math.max(0, s - f0 / slope));
+      if (Math.abs(next - s) < 1e-9) break;
+      s = next;
+    }
+    const p = at(s);
+    return { s, h: (z - p.z) * p.nz + (r - p.r) * p.nr };
   };
 
   return {

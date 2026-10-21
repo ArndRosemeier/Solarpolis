@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { MATRIX, derive, toWorld } from '../src/blueprint';
 import { makeTerrain } from '../src/gen/terrain';
 import { makeEcology } from '../src/gen/ecology';
+import { slopeAt } from '../src/gen/scatter';
 import { makeLayout, roots, bounds, buildTile, select, children, parent, keyId, cellSize, spheres, splitsAround, splitAround, packRelief, unpackRelief, CELL_PIXELS, RISE_RANGE, TILE_CELLS, type TileKey, type TileFit, type TileLayout, type TileMesh } from '../src/gen/tiles';
 
 const PX_PER_RAD = 1440 / (70 * Math.PI / 180);
@@ -49,6 +50,26 @@ for (const { name, params } of MATRIX) {
         assert.equal(t.standAt(theta, lake.s), lake.level, 'one stands (swims) on the water');
       }
     } else assert.equal(t.lake, null);
+  });
+
+  test(`terrain (${name}): the endcaps climb in ledges and walls that wander around the axis, not in rings`, () => {
+    const P = h.profile, step = params.relief.terraceStep, n = 48;
+    let rings = 0, partly = 0, level = 0, all = 0;
+    for (const [a, b] of [[0, P.floorStart], [P.floorEnd, P.length]]) for (let k = 2; k < 20; k++) {
+      const s = a + ((b - a) * k) / 20;
+      let ledge = 0;
+      for (let i = 0; i < n; i++) {
+        const theta = (i / n) * 2 * Math.PI, slope = slopeAt(eco, theta, s, t.heightAt(theta, s), step * 0.02);
+        if (slope < 0.3) ledge++;
+        if (slope < 0.45) level++;
+        all++;
+      }
+      // A ring of the slope with a ledge somewhere has it only partly around: the ledges wander.
+      if (ledge > n * 0.02) { rings++; if (ledge < n * 0.9) partly++; }
+    }
+    assert.ok(rings >= 10 && partly >= rings * 0.9, `${rings} rings with ledges, ${partly} of them only partly around`);
+    // Ledges level enough to grow on, though the slopes are mostly steeper than a meadow could hold.
+    assert.ok(level / all > 0.08, `${((100 * level) / all).toFixed(0)} % of the endcaps level enough to grow on`);
   });
 
   test(`tiles (${name}): bands cover the profile, neighbours meet, faces look into the air`, () => {
