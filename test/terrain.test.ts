@@ -4,7 +4,7 @@ import { MATRIX, derive, toWorld } from '../src/blueprint';
 import { CIRQUE, GATE_TERRACES, HORN, makeTerrain } from '../src/gen/terrain';
 import { makeEcology } from '../src/gen/ecology';
 import { slopeAt } from '../src/gen/scatter';
-import { makeLayout, roots, bounds, buildTile, select, children, parent, keyId, cellSize, spheres, splitsAround, splitAround, packRelief, unpackRelief, CELL_PIXELS, RISE_RANGE, TILE_CELLS, type TileKey, type TileFit, type TileLayout, type TileMesh } from '../src/gen/tiles';
+import { makeLayout, roots, bounds, buildTile, select, children, parent, keyId, cellSize, spheres, LodBudget, splitsAround, splitAround, packRelief, unpackRelief, CELL_PIXELS, RISE_RANGE, TILE_CELLS, type TileKey, type TileFit, type TileLayout, type TileMesh } from '../src/gen/tiles';
 
 const wrap = (a: number): number => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
 const PX_PER_RAD = 1440 / (70 * Math.PI / 180);
@@ -280,4 +280,33 @@ test('tiles: a point\'s rise over the ground around it packs into one float and 
     assert.ok(Math.abs(a - Math.max(-RISE_RANGE, Math.min(RISE_RANGE, own))) < RISE_RANGE / 120, `${own} → ${a}`);
     assert.ok(Math.abs(b - Math.max(-RISE_RANGE, Math.min(RISE_RANGE, parent))) < RISE_RANGE / 120, `${parent} → ${b}`);
   }
+});
+
+test('tiles: rock walls (an error that never shrinks) do not split every tile that sees them', () => {
+  const h = derive(MATRIX[0].params);
+  const t = makeTerrain(h), layout = makeLayout(t), { profile } = h;
+  // Over the floor near the foot of the Gate, 163 m up (Arnd, 2026-10-21: 4,214 tiles drawn there), every tile a cliff 60 m high.
+  const theta = 323.8 * Math.PI / 180, s = profile.length - 5000;
+  const eye = toWorld(profile, { theta, s, h: t.heightAt(theta, s) + 163 });
+  const cliffs = select(t, layout, eye, PX_PER_RAD, 2, () => ({ error: 60, relief: 10 }));
+  // No more than ground whose error is half its cells everywhere (`FINEST_CELL_PIXELS`); split by their error alone,
+  // cliffs would take every tile within kilometres to the finest level (tens of thousands).
+  const steep = select(t, layout, eye, PX_PER_RAD, 2, (k) => ({ error: cellSize(layout, k) / 2, relief: 10 }));
+  assert.ok(cliffs.draw.length <= steep.draw.length, `${cliffs.draw.length} tiles with cliffs everywhere, ${steep.draw.length} on steep ground`);
+  assert.ok(cliffs.draw.length < 2500, `${cliffs.draw.length} tiles drawn`);
+});
+
+test('tiles: a view over its bytes is drawn coarser until it fits, and eases back once it can', () => {
+  const h = derive(MATRIX[0].params);
+  const t = makeTerrain(h), layout = makeLayout(t), { profile } = h;
+  const TILE = 0.5 * 1048576, budget = new LodBudget(100 * 1048576);
+  const fit = (k: TileKey): TileFit => ({ error: cellSize(layout, k) * 0.3, relief: 10 });
+  const eye = toWorld(profile, { theta: 1, s: (profile.floorStart + profile.floorEnd) / 2, h: 2 });
+  const used = (): number => { const sel = select(t, layout, eye, PX_PER_RAD, 2 * budget.scale, fit); return (sel.draw.length + sel.keep.length) * TILE; };
+  assert.ok(used() > budget.bytes, 'the view needs more than the budget at full detail');
+  let now = used();
+  for (let f = 0; f < 80 && now > budget.bytes * 0.8; f++) { budget.update(now); now = used(); }
+  assert.ok(budget.scale > 1 && now <= budget.bytes * 0.8, `scale ${budget.scale.toFixed(2)}: ${(now / 1048576).toFixed(0)} MB`);
+  for (let f = 0; f < 400; f++) budget.update(0);
+  assert.equal(budget.scale, 1);
 });
