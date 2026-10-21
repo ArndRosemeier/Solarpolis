@@ -76,6 +76,26 @@ const HORIZON_STEP = 8;
  * fine enough for them (docs/far-view.md). Its shape alone (`error`) would leave the far side at the roots' cells.
  */
 export const CELL_PIXELS = 12;
+/**
+ * ...and need never be finer than this many pixels, however rough the ground: a rock wall's error does not shrink as
+ * its tile splits (no grid of heights draws a wall until its cells are narrower than the wall is wide), so its error
+ * alone would split every tile that sees a cliff down to the finest level (near the foot of the Gate: 4,214 tiles drawn,
+ * 2026-10-21). Up close every tile is at the finest level anyway.
+ */
+export const FINEST_CELL_PIXELS = 4;
+
+/** The pixels a tile's error may cover at full detail (`select`'s `maxPixels` is this, or more when a view is over its budget). */
+export const ERROR_PIXELS = 2;
+
+/**
+ * The size on the ground (m) a tile's split is judged by: its error, but at most what its cells would show at
+ * `FINEST_CELL_PIXELS`, and at least what they show at `CELL_PIXELS` (at `ERROR_PIXELS`' scale: a `maxPixels` above
+ * it makes all three coarser together). `select` and the geomorph's hand-over distance use the same.
+ */
+export function splitError(layout: TileLayout, k: TileKey, error: number): number {
+  const cell = cellSize(layout, k) * ERROR_PIXELS;
+  return Math.max(Math.min(error, cell / FINEST_CELL_PIXELS), cell / CELL_PIXELS);
+}
 
 /** Root tiles in the whole tree, about: enough that the far side is covered, few enough to build at load. */
 const ROOTS = 48;
@@ -215,7 +235,7 @@ export interface Selection {
 /**
  * Choose the tiles for a view: split a tile while its error (how far its grid strays from the true ground, measured
  * when it was built) looks bigger than `maxPixels` from `eye` (with `pixelsPerRadian` = screen height / vertical
- * field of view), or its cells look bigger than `CELL_PIXELS`, provided all its children are built. `fitOf` gives a
+ * field of view), or its cells look bigger than `CELL_PIXELS` (`splitError`), provided all its children are built. `fitOf` gives a
  * built tile's error and relief (`TileMesh` has both), undefined if not built.
  */
 export function select(terrain: Terrain, layout: TileLayout, eye: Vec3, pixelsPerRadian: number, maxPixels: number, fitOf: (k: TileKey) => TileFit | undefined, sphereOf = spheres(terrain, layout)): Selection {
@@ -228,7 +248,7 @@ export function select(terrain: Terrain, layout: TileLayout, eye: Vec3, pixelsPe
     const sp = sphereOf(k);
     const d = Math.max(1, Math.hypot(eye[0] - sp.center[0], eye[1] - sp.center[1], eye[2] - sp.center[2]) - sp.radius - fit.relief);
     // How far over its limits the tile is: its error, or its cells.
-    const pixels = (Math.max(fit.error, (cellSize(layout, k) * maxPixels) / CELL_PIXELS) / d) * pixelsPerRadian;
+    const pixels = (splitError(layout, k, fit.error) / d) * pixelsPerRadian;
     if (pixels <= maxPixels || k.level >= layout.maxLevel) { draw.push(k); return; }
     const kids = children(layout, k);
     const missing = kids.filter((c) => !ready(c));
@@ -243,6 +263,26 @@ export function select(terrain: Terrain, layout: TileLayout, eye: Vec3, pixelsPe
   for (const r of roots(layout)) visit(r);
   want.sort((a, b) => b.need - a.need);
   return { draw, keep, want: want.map((w) => w.k) };
+}
+
+/**
+ * Keeps the tiles a view uses within its share of the cache's bytes: after each frame the view reports the bytes of
+ * the built tiles it drew or kept, and while they are over `high` of the budget the selection's pixel error is let
+ * grow (`scale`, ×1.25 a frame), coarser tiles standing in; well under (`low`) it eases back to 1. Whatever the ground
+ * (a cliff's error does not shrink as tiles split), the view's memory stays bounded, and nothing is evicted that a
+ * view still uses.
+ */
+export class LodBudget {
+  /** Multiplies the selection's `maxPixels`. */
+  scale = 1;
+  constructor(readonly bytes: number, private readonly high = 0.75, private readonly low = 0.5, private readonly most = 64) {}
+
+  /** After a frame: the bytes of the built tiles the view drew or kept. Returns the scale for the next frame. */
+  update(used: number): number {
+    if (used > this.bytes * this.high) this.scale = Math.min(this.most, this.scale * 1.25);
+    else if (used < this.bytes * this.low && this.scale > 1) this.scale = Math.max(1, this.scale / 1.02);
+    return this.scale;
+  }
 }
 
 export interface TileMesh {
