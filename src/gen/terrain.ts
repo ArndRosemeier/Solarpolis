@@ -87,10 +87,8 @@ export function makeTerrain(h: Habitat): Terrain {
       const rough = step * 0.08 * detail.fbm3(x / (step * 2), y / (step * 2), z / (step * 2), 3);
       height += (1 - f) * fade * (terrace + rough);
     }
-    // Small ground roughness everywhere: tufts and hollows of a few tens of centimetres, and finer still, the bumps
-    // and dips a walker steps over (the finest tiles show them; textures carry on below).
+    // Small ground roughness everywhere: tufts and hollows of a few tens of centimetres.
     height += Math.min(0.3, hills * 0.01) * detail.fbm3(x / 25, y / 25, z / 25, 3);
-    height += Math.min(0.1, hills * 0.004) * detail.fbm3(x / 3 + 17.3, y / 3 - 5.1, z / 3 + 9.7, 3);
     return height;
   };
 

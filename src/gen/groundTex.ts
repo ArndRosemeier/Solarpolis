@@ -9,7 +9,7 @@
  */
 import { Rng, srgbToLinear } from '@futuremagic/core';
 import type { FloorLayer } from '../blueprint';
-import { TNoise, Tex, finish, mix, newCell, pebbles, rgb, rnd, smooth, splat, stroke, worley, type RGB, type TexLayer } from './texgen';
+import { TNoise, Tex, clamp01, finish, mix, newCell, pebbles, rgb, rnd, smooth, splat, stroke, worley, type RGB, type TexLayer } from './texgen';
 
 type Gen = (t: Tex) => void;
 
@@ -120,29 +120,40 @@ const dryGrass: Gen = (t) => lawn(t, 4300, 0.85);
 /** Leaves of a broadleaf wood's floor: z-buffered leaves (oval, lobed), twigs and moss over dark humus. */
 const litter: Gen = (t) => {
   const W = t.W;
-  const nH = new TNoise(4401, W), nM = new TNoise(4402, W);
+  const nH = new TNoise(4401, W), nM = new TNoise(4402, W), nAge = new TNoise(4405, W);
+  // Under the leaves: dark, half-rotted mould.
   t.each((u, v, _x, _y, idx) => {
     const k = 0.85 + nH.fbm(u, v, 0.1, 3) * 0.2 + (rnd(4403, idx) - 0.5) * 0.15;
-    t.set(idx, 0.16 * k, 0.11 * k, 0.07 * k, 0.95, nH.fbm(u, v, 0.4, 3) * 0.01);
+    t.set(idx, 0.27 * k, 0.19 * k, 0.12 * k, 0.95, nH.fbm(u, v, 0.4, 3) * 0.01);
   });
   const rng = new Rng(4404);
-  const palette: RGB[] = [rgb(120, 78, 40), rgb(140, 96, 48), rgb(98, 62, 34), rgb(156, 112, 58), rgb(110, 92, 50), rgb(80, 54, 30)];
-  const n = Math.round((W * W) / (0.045 * 0.03) * 1.3);
-  for (let k = 0; k < n; k++) {
-    const cx = rng.float() * W, cy = rng.float() * W;
-    const len = rng.range(0.03, 0.075), wid = len * rng.range(0.35, 0.6), a = rng.float() * Math.PI;
-    const ca = Math.cos(a), sa = Math.sin(a), z0 = rng.float() * 0.02, curl = rng.range(0, 0.4);
-    const lobes = rng.chance(0.4) ? rng.int(3, 5) : 0;
-    const col = palette[rng.int(0, palette.length - 1)], vk = rng.range(0.75, 1.2);
+  // Old leaves (grey-brown) and this year's (tan, ochre, a few red), in drifts.
+  const old: RGB[] = [rgb(104, 82, 60), rgb(92, 72, 52), rgb(118, 94, 68), rgb(84, 66, 50)];
+  const fresh: RGB[] = [rgb(150, 104, 56), rgb(166, 120, 64), rgb(132, 86, 46), rgb(176, 132, 72), rgb(140, 72, 40), rgb(120, 98, 52)];
+  // Leaves are laid lowest first, so each one's soft edge lies over what is under it.
+  const leaves = Array.from({ length: Math.round((W * W) / (0.05 * 0.03) * 2.2) }, () => ({ cx: rng.float() * W, cy: rng.float() * W, z0: rng.float() * 0.02, seed: rng.int(0, 0x7fffffff) }));
+  leaves.sort((p, q) => p.z0 - q.z0);
+  for (const { cx, cy, z0, seed } of leaves) {
+    const r = new Rng(seed);
+    const len = r.range(0.035, 0.09), wid = len * r.range(0.35, 0.6), a = r.float() * Math.PI;
+    const ca = Math.cos(a), sa = Math.sin(a), curl = r.range(0, 0.4);
+    const lobes = r.chance(0.4) ? r.int(3, 5) : 0;
+    const age = smooth(-0.15, 0.25, nAge.fbm(cx / W, cy / W, 0.35, 3) - 0.5 + (r.float() - 0.5) * 0.5);
+    const pal = r.float() < age ? old : fresh;
+    const col = pal[r.int(0, pal.length - 1)], vk = r.range(0.8, 1.15);
+    // Edge softness in the leaf's own units: about one texel.
+    const soft = (2 * t.ps) / wid;
     splat(t, cx, cy, len / 2, (dx, dy, idx) => {
       const px = (dx * ca + dy * sa) / (len / 2), py = (-dx * sa + dy * ca) / (wid / 2);
       let edge = 1 - px * px;
       if (lobes) edge *= 0.75 + 0.25 * Math.cos(px * Math.PI * lobes);
-      if (py * py >= edge) return;
+      const cover = clamp01((edge - py * py) / soft);
+      if (cover <= 0) return;
       const z = z0 + (1 - py * py) * curl * wid * 0.3;
-      if (z <= t.h[idx]) return;
-      const vein = Math.abs(py) < 0.08 ? 0.82 : 1;
-      t.set(idx, col[0] * vk * vein, col[1] * vk * vein, col[2] * vk * vein, 0.8, z);
+      const vein = 1 - 0.15 * clamp01(1 - Math.abs(py) / 0.1);
+      t.r[idx] = mix(t.r[idx], col[0] * vk * vein, cover); t.g[idx] = mix(t.g[idx], col[1] * vk * vein, cover); t.b[idx] = mix(t.b[idx], col[2] * vk * vein, cover);
+      t.rough[idx] = mix(t.rough[idx], 0.8, cover);
+      t.h[idx] = mix(t.h[idx], Math.max(z, t.h[idx]), cover);
     });
   }
   // twigs
@@ -167,17 +178,19 @@ const litter: Gen = (t) => {
 /** A pine wood's floor: a mat of fallen needles, rust to grey, over dark duff, with bits of bark and cone scales. */
 const needles: Gen = (t) => {
   const W = t.W;
-  const nH = new TNoise(4501, W);
+  const nH = new TNoise(4501, W), nAge = new TNoise(4504, W), nN = new TNoise(4505, W);
   t.each((u, v, _x, _y, idx) => {
     const k = 0.8 + nH.fbm(u, v, 0.15, 3) * 0.25;
     t.set(idx, 0.13 * k, 0.09 * k, 0.06 * k, 0.95, nH.fbm(u, v, 0.5, 3) * 0.008);
   });
   const rng = new Rng(4502);
-  const n = Math.round((W * W) / (0.05 * 0.0015) * 0.9);
+  const n = Math.round((W * W) / (0.05 * 0.0015) * 1.2);
   for (let k = 0; k < n; k++) {
     const x = rng.float() * W, y = rng.float() * W, a = rng.float() * Math.PI * 2, len = rng.range(0.035, 0.07);
-    const z0 = rng.float() * 0.012, age = rng.float();
-    const r = mix(0.52, 0.36, age), g = mix(0.3, 0.27, age), b = mix(0.14, 0.2, age), vk = rng.range(0.7, 1.15);
+    // Thinner in patches, where the mould shows; drifts of fresh (rust) and old (grey-brown) needles.
+    if (rng.float() > 0.55 + 0.6 * nN.fbm(x / W, y / W, 0.3, 3)) continue;
+    const z0 = rng.float() * 0.012, age = clamp01(nAge.fbm(x / W, y / W, 0.3, 3) * 1.6 - 0.3 + (rng.float() - 0.5) * 0.6);
+    const r = mix(0.44, 0.3, age), g = mix(0.28, 0.26, age), b = mix(0.16, 0.21, age), vk = rng.range(0.7, 1.15);
     stroke(t, x, y, a, len, (s, idx) => {
       const z = z0 + Math.sin(s * Math.PI) * 0.002;
       if (z <= t.h[idx]) return;
@@ -201,8 +214,8 @@ const sand: Gen = (t) => {
     t.set(idx, 0.58 * k, 0.51 * k, 0.37 * k, 0.9, rip * 0.004 + nG.fbm(u, v, 0.3, 3) * 0.002);
   });
   pebbles(t, 4605, {
-    count: 0.03, rMin: 0.004, rMax: 0.014, height: 0.4, bed: false,
-    palette: [rgb(200, 190, 170), rgb(150, 140, 130), rgb(220, 214, 200), rgb(120, 110, 100)], fines: rgb(150, 132, 96), finesH: 0,
+    count: 0.008, rMin: 0.004, rMax: 0.014, height: 0.4, bed: false,
+    palette: [rgb(168, 156, 132), rgb(140, 128, 112), rgb(184, 170, 146), rgb(112, 102, 90)], fines: rgb(150, 132, 96), finesH: 0,
   });
 };
 
@@ -211,15 +224,20 @@ const rock: Gen = (t) => {
   const W = t.W;
   const nS = new TNoise(4701, W), nL = new TNoise(4702, W), nC = new TNoise(4703, W);
   const cell = newCell(), fine = newCell();
-  const fj = Math.round(W / 0.9), fc = Math.round(W / 0.25);
+  // Slabs of a metre or two; joints come and go (weathered shut in places), cracks finer.
+  const fj = Math.round(W / 1.6), fc = Math.round(W / 0.3);
   t.each((u, v, _x, _y, idx) => {
-    worley(4704, u * fj + nC.fbm(u, v, 0.4, 2) * 0.4, v * fj, fj, fj, 1, cell, true);
+    worley(4704, u * fj + nC.fbm(u, v, 0.4, 3) * 0.7, v * fj + nC.fbm(v, u, 0.4, 3) * 0.5, fj, fj, 1, cell, true);
     worley(4705, u * fc, v * fc + nC.fbm(u, v, 0.2, 2) * 0.3, fc, fc, 1, fine, true);
-    const joint = 1 - smooth(0, 0.05, cell.edge), crack = (1 - smooth(0, 0.03, fine.edge)) * smooth(0.1, 0.5, nC.fbm(u, v, 0.6, 3));
+    const open = smooth(-0.2, 0.2, nC.fbm(u, v, 0.25, 3) + 0.2);
+    const joint = (1 - smooth(0, 0.025, cell.edge)) * open, crack = (1 - smooth(0, 0.02, fine.edge)) * smooth(0.25, 0.6, nC.fbm(u, v, 0.6, 3));
     const block = ((cell.id >>> 8) & 255) / 255;
-    const h = nS.fbm(u, v, 0.5, 5, 0.55) * 0.03 + (1 - joint) * 0.02 - crack * 0.006 + block * 0.01;
-    const k = (0.85 + block * 0.25 + nS.fbm(u, v, 0.08, 3) * 0.12 + (rnd(4706, idx) - 0.5) * 0.08) * (1 - joint * 0.45) * (1 - crack * 0.3);
-    t.set(idx, 0.42 * k, 0.4 * k, 0.37 * k, 0.85, h);
+    // Grain and weathering: a broad mottle, layered bands across the slab, fine speckle.
+    const band = 0.5 + 0.5 * Math.sin((u * 0.8 + v * 0.35 + nS.fbm(u, v, 0.3, 3) * 0.6) * fj * Math.PI * 3);
+    const h = nS.fbm(u, v, 0.5, 5, 0.55) * 0.035 + (1 - joint) * 0.012 - crack * 0.005 + block * 0.006;
+    const k = (0.88 + block * 0.12 + nS.fbm(u, v, 0.12, 4) * 0.22 + band * 0.05 + (rnd(4706, idx) - 0.5) * 0.1) * (1 - joint * 0.3) * (1 - crack * 0.2);
+    const warm = nL.fbm(u, v, 0.2, 3) * 0.04;
+    t.set(idx, (0.42 + warm) * k, 0.4 * k, (0.37 - warm) * k, 0.85, h);
   });
   // lichen rosettes on the tops
   const rng = new Rng(4707);

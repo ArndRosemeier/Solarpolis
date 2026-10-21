@@ -47,8 +47,8 @@ const HORIZON_STEP = 8;
 
 /** Root tiles in the whole tree, about: enough that the far side is covered, few enough to build at load. */
 const ROOTS = 48;
-/** The finest cell edge (m): a quarter step, fine enough for the bumps a walker steps over; below that, the textures. */
-const FINEST = 0.25;
+/** The finest cell edge (m): a step's length, enough for paths and banks; detail below that is the shaders' job. */
+const FINEST = 0.5;
 
 export function makeLayout(terrain: Terrain): TileLayout {
   const { profile, radius } = terrain.habitat;
