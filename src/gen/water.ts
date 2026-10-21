@@ -154,8 +154,10 @@ function section(terrain: Terrain, r: River, b: WaterTile, a: Along, origin: Vec
   let dx = there[0] - here[0], dy = there[1] - here[1], dz = there[2] - here[2];
   const dl = Math.hypot(dx, dy, dz) || 1;
   dx /= dl; dy /= dl; dz /= dl;
-  // Too coarse to show the channel: lift the water over the ground the tile draws.
-  const coarse = b.cell > a.halfWidth * 0.75, lift = 0.05 + b.cell * 0.02;
+  // Too coarse to carve the channel cleanly (fewer than about eight cells across it, and a coarser parent's while it
+  // morphs): lift the water over the ground the tile draws. Only the finest tiles, near the eye, keep it at its level
+  // between banks that rise out of it.
+  const coarse = b.cell > a.halfWidth * 0.25, lift = 0.05 + b.cell * 0.02;
   const first = out.points;
   for (let j = 0; j <= ACROSS; j++) {
     const x = -1 + (2 * j) / ACROSS, theta = a.theta + (x * a.halfWidth) / rad;
