@@ -1,16 +1,19 @@
 /**
  * The view from inside: the one renderer (WebGPU only), the Stage, the terrain tiles and the sunline, seen by a walker
- * on the ground. Everything is drawn relative to the eye (`toView`): the camera sits at the origin and the world moves. Hold the right mouse button to look around (the pointer stays free for clicking
- * things); W A S D or the arrow keys to walk, Shift to run.
+ * on the ground or a flyer in the air. Everything is drawn relative to the eye (`toView`): the camera sits at the origin
+ * and the world moves. Hold the right mouse button to look around (the pointer stays free for clicking things);
+ * W A S D or the arrow keys to move, Shift to run; F takes off or lands, and in the air E or Space climbs, Q or C sinks.
  */
 import { Color, CylinderGeometry, Mesh, PerspectiveCamera, Scene, type WebGPURenderer } from 'three/webgpu';
 import { Stage, createRenderer } from '@futuremagic/stage';
-import { toView, type Habitat } from '../blueprint';
+import { fromWorld, toView, type Habitat } from '../blueprint';
 import { makeTerrain, type Terrain } from '../gen/terrain';
-import { Walker } from '../world/walker';
+import { Walker, type View } from '../world/walker';
+import { Flyer } from '../world/flyer';
 import { WorkerPool } from '../workers/pool';
-import { SUNLINE, air, allKinds, setSunline, standInAttribute, view } from './materials';
+import { SUNLINE, air, allKinds, setAir, setSunline, standInAttribute, view } from './materials';
 import { nearestLit, sunlineEmission, sunlineNorm } from '../world/sunline';
+import { densityFalloff, seenMid } from '../world/air';
 import { TerrainView, describeLayout } from './terrain';
 
 /** Running is this many times the walking speed. */
@@ -27,6 +30,8 @@ export class InteriorView {
   private terrain: Terrain;
   private tiles: TerrainView | null = null;
   private sunline: Mesh | null = null;
+  /** In the air, or null on foot. */
+  private flyer: Flyer | null = null;
   private keys = new Set<string>();
   private running = false;
   private last = 0;
@@ -65,11 +70,12 @@ export class InteriorView {
 
   /** Lines for the debug menu. */
   info(): string {
-    const a = this.walker.at;
+    const a = this.flyer ? fromWorld(this.habitat.profile, ...this.flyer.eye) : this.walker.at;
+    const mode = this.flyer ? `flying ${this.flyer.clearance().toFixed(0)} m up` : 'on foot';
     return [
       this.stage.hudLine(),
       `${this.tiles?.info() ?? 'terrain: none'} · ${describeLayout(this.terrain)} · ${this.pool.workers} workers`,
-      `θ ${(a.theta * 180 / Math.PI).toFixed(1)}°, s ${(a.s / 1000).toFixed(2)} of ${(this.habitat.profile.length / 1000).toFixed(2)} km, ground ${this.terrain.standAt(a.theta, a.s).toFixed(1)} m`,
+      `θ ${(a.theta * 180 / Math.PI).toFixed(1)}°, s ${(a.s / 1000).toFixed(2)} of ${(this.habitat.profile.length / 1000).toFixed(2)} km, ground ${this.terrain.standAt(a.theta, a.s).toFixed(1)} m, ${mode}`,
     ].join('\n');
   }
 
@@ -78,6 +84,7 @@ export class InteriorView {
     if (h === this.habitat) return;
     this.habitat = h;
     this.terrain = makeTerrain(h);
+    this.flyer = null;
     this.walker.setProfile(h.profile, this.terrain.standAt);
     await this.build();
   }
@@ -87,6 +94,7 @@ export class InteriorView {
     if (this.sunline) { this.stage.remove(this.sunline); this.sunline.geometry.dispose(); }
     const h = this.habitat;
     setSunline(sunlineEmission(h), h.length, sunlineNorm(h), nearestLit(h));
+    setAir(densityFalloff(h), h.radius, seenMid(h));
     // The sunline: from the wild wall to the port wall along the axis.
     const tube = new CylinderGeometry(h.params.sunlineRadius, h.params.sunlineRadius, h.length, 24, 1, true);
     tube.deleteAttribute('uv'); // the kind's attributes are position and normal (docs/SHADERS.md)
@@ -105,7 +113,7 @@ export class InteriorView {
 
   /** Put the camera at the origin looking the walker's way, and the world around it relative to the eye. */
   private place(): void {
-    const v = this.walker.view();
+    const v = this.current();
     view.eye.value.set(...v.eye);
     this.camera.position.set(0, 0, 0);
     this.camera.up.set(...v.up);
@@ -113,6 +121,21 @@ export class InteriorView {
     if (this.sunline) this.sunline.position.set(...toView(v.eye, [0, 0, 0]));
     const pixelsPerRadian = (this.canvas.clientHeight || 720) / (this.camera.fov * Math.PI / 180);
     this.tiles?.follow(v.eye, pixelsPerRadian);
+  }
+
+  private current(): View {
+    return this.flyer ? this.flyer.view() : this.walker.view();
+  }
+
+  /** Take off from where the walker stands, or land under the flyer. */
+  toggleFlying(): void {
+    if (this.flyer) {
+      const at = fromWorld(this.habitat.profile, ...this.flyer.eye);
+      this.walker.land(at.theta, at.s, this.flyer.look);
+      this.flyer = null;
+    } else {
+      this.flyer = new Flyer(this.habitat.profile, this.walker.view(), this.terrain.standAt);
+    }
   }
 
   private listen(): void {
@@ -138,9 +161,15 @@ export class InteriorView {
     this.canvas.addEventListener('pointermove', (e) => {
       if (e.pointerId !== looking) return;
       const k = 0.004;
-      this.walker.turn(e.movementX * k, -e.movementY * k);
+      if (this.flyer) this.flyer.turn(e.movementX * k, -e.movementY * k);
+      else this.walker.turn(e.movementX * k, -e.movementY * k);
     });
-    window.addEventListener('keydown', (e) => { if (this.running) this.keys.add(e.code); });
+    window.addEventListener('keydown', (e) => {
+      if (!this.running) return;
+      if (e.code === 'KeyF' && !e.repeat) this.toggleFlying();
+      if (e.code === 'Space') e.preventDefault();
+      this.keys.add(e.code);
+    });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('blur', () => this.keys.clear());
   }
@@ -163,10 +192,17 @@ export class InteriorView {
     const k = this.keys;
     const forward = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
     const right = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0);
-    const base = this.walker.speed;
-    this.walker.speed = base * this.boost * (k.has('ShiftLeft') || k.has('ShiftRight') ? RUN : 1);
-    this.walker.step({ forward, right }, dt);
-    this.walker.speed = base;
+    const run = this.boost * (k.has('ShiftLeft') || k.has('ShiftRight') ? RUN : 1);
+    if (this.flyer) {
+      const up = (k.has('KeyE') || k.has('Space') ? 1 : 0) - (k.has('KeyQ') || k.has('KeyC') ? 1 : 0);
+      this.flyer.boost = run;
+      this.flyer.step({ forward, right, up }, dt);
+    } else {
+      const base = this.walker.speed;
+      this.walker.speed = base * run;
+      this.walker.step({ forward, right }, dt);
+      this.walker.speed = base;
+    }
     const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
     if (w && h && (this.canvas.width !== Math.round(w * this.renderer.getPixelRatio()) || this.camera.aspect !== w / h)) {
       this.renderer.setSize(w, h, false);
