@@ -1,6 +1,7 @@
 /**
  * The page: the header with the version and What's new, the memory watchdog, the debug menu, and the current view:
- * the Blueprint Lab (design a habitat) or Inside (walk in it, WebGPU only).
+ * the Blueprint Lab (design a habitat), Inside (walk in it) or Outside (the habitat in its orbit, with Earth, the Moon,
+ * the Sun and the stars). The two views are WebGPU only.
  */
 import './app/style.css';
 import { el } from './app/dom';
@@ -10,7 +11,9 @@ import { VERSION, whatsNewButton } from './app/whatsNew';
 import { BlueprintLab } from './lab/blueprintLab';
 import { GraphicsUnavailable } from '@futuremagic/stage';
 import { InteriorView } from './render/view';
+import { OutsideView } from './render/outside';
 import { EYE_HEIGHT } from './world/walker';
+import type { Habitat } from './blueprint';
 
 const app = document.getElementById('app')!;
 const debug = new DebugMenu();
@@ -18,8 +21,8 @@ const debug = new DebugMenu();
 // ---- the header ---------------------------------------------------------------------------------
 const header = el('header', 'top');
 const tabs = el('nav', 'tabs');
-const labTab = el('button', 'tab on', 'Blueprint'), insideTab = el('button', 'tab', 'Inside');
-tabs.append(labTab, insideTab);
+const labTab = el('button', 'tab on', 'Blueprint'), insideTab = el('button', 'tab', 'Inside'), outsideTab = el('button', 'tab', 'Outside');
+tabs.append(labTab, insideTab, outsideTab);
 header.append(el('h1', '', 'Solarpolis'), tabs, whatsNewButton());
 app.append(header);
 
@@ -38,58 +41,85 @@ document.body.append(warning);
 const lab = new BlueprintLab(new URLSearchParams(location.search), (query) => {
   // The Lab owns the habitat's fields; the open view rides along.
   const q = new URLSearchParams(query);
-  if (new URLSearchParams(location.search).get('view') === 'inside') q.set('view', 'inside');
+  const open = new URLSearchParams(location.search).get('view');
+  if (open === 'inside' || open === 'outside') q.set('view', open);
   const all = q.toString();
   history.replaceState(null, '', all ? `?${all}` : location.pathname);
 });
 app.append(lab.root);
 
-const inside = el('div', 'inside');
-const note = el('p', 'inside-note');
-const hint = el('p', 'inside-hint', 'Hold the right mouse button to look around · W A S D to move · Shift to run · Space to jump · V to see yourself · F to fly (E up, Q down)');
-inside.append(note, hint);
-inside.hidden = true;
-app.append(inside);
-// The view fills the window below the header, whatever height the header wraps to.
-const fit = (): void => inside.style.setProperty('--top', `${header.getBoundingClientRect().bottom}px`);
-new ResizeObserver(fit).observe(header);
-let view: InteriorView | null = null;
-let starting: Promise<void> | null = null;
+/** A 3D view on the page: made on first show, then kept and handed the Lab's current habitat. */
+interface PageView {
+  readonly canvas: HTMLCanvasElement;
+  setHabitat(h: Habitat): Promise<void>;
+  setRunning(on: boolean): void;
+  bytes(): number;
+  shed(): void;
+}
 
-async function showInside(): Promise<void> {
-  const h = lab.habitat;
-  if (!h) { note.textContent = 'These parameters make no habitat: fix them in the Blueprint first.'; return; }
-  if (view) { await view.setHabitat(h); view.setRunning(true); return; }
-  note.textContent = 'Building the interior…';
-  try {
-    view = await InteriorView.create(h);
-    inside.prepend(view.canvas);
-    memory.track('terrain tiles', () => view?.bytes() ?? 0);
-    memory.track('player body', () => view?.bodyBytes() ?? 0);
-    memory.onPressure('soft', () => view?.shed());
-    note.textContent = '';
-    view.setRunning(!inside.hidden);
-  } catch (e) {
-    note.textContent = e instanceof Error ? e.message : String(e);
-    if (e instanceof GraphicsUnavailable) note.textContent += '. Solarpolis needs WebGPU: a current Chrome, Edge or Safari (macOS 26, iPadOS 26), or Firefox 141+ on Windows.';
+class ViewSlot<V extends PageView> {
+  readonly box = el('div', 'inside');
+  private readonly note = el('p', 'inside-note');
+  view: V | null = null;
+
+  constructor(hint: string, private readonly building: string, private readonly memoryOwner: string, private readonly make: (h: Habitat) => Promise<V>) {
+    this.box.append(this.note, el('p', 'inside-hint', hint));
+    this.box.hidden = true;
+    app.append(this.box);
+  }
+
+  async show(): Promise<void> {
+    const h = lab.habitat;
+    if (!h) { this.note.textContent = 'These parameters make no habitat: fix them in the Blueprint first.'; return; }
+    if (this.view) { await this.view.setHabitat(h); this.view.setRunning(!this.box.hidden); return; }
+    this.note.textContent = this.building;
+    try {
+      const v = await this.make(h);
+      this.view = v;
+      this.box.prepend(v.canvas);
+      memory.track(this.memoryOwner, () => this.view?.bytes() ?? 0);
+      memory.onPressure('soft', () => this.view?.shed());
+      this.note.textContent = '';
+      v.setRunning(!this.box.hidden);
+    } catch (e) {
+      this.note.textContent = e instanceof Error ? e.message : String(e);
+      if (e instanceof GraphicsUnavailable) this.note.textContent += '. Solarpolis needs WebGPU: a current Chrome, Edge or Safari (macOS 26, iPadOS 26), or Firefox 141+ on Windows.';
+    }
   }
 }
 
-function select(which: 'lab' | 'inside'): void {
+const insideSlot = new ViewSlot('Hold the right mouse button to look around · W A S D to move · Shift to run · Space to jump · V to see yourself · F to fly (E up, Q down)', 'Building the interior…', 'terrain tiles', async (h) => {
+  const v = await InteriorView.create(h);
+  memory.track('player body', () => v.bodyBytes());
+  return v;
+});
+const outsideSlot = new ViewSlot('Hold the right mouse button to swing around · wheel to come closer · 1 habitat, 2 Earth, 3 Moon', 'Building the sky…', 'sky maps and stars', (h) => OutsideView.create(h));
+// The views fill the window below the header, whatever height the header wraps to.
+const fit = (): void => { for (const s of [insideSlot, outsideSlot]) s.box.style.setProperty('--top', `${header.getBoundingClientRect().bottom}px`); };
+new ResizeObserver(fit).observe(header);
+let starting: Promise<void> | null = null;
+
+type Tab = 'lab' | 'inside' | 'outside';
+function showTab(which: Tab): void {
   labTab.classList.toggle('on', which === 'lab');
   insideTab.classList.toggle('on', which === 'inside');
+  outsideTab.classList.toggle('on', which === 'outside');
   lab.root.hidden = which !== 'lab';
-  inside.hidden = which !== 'inside';
-  if (which === 'inside') starting = (starting ?? Promise.resolve()).then(showInside);
-  else view?.setRunning(false);
+  for (const [tab, slot] of [['inside', insideSlot], ['outside', outsideSlot]] as const) {
+    slot.box.hidden = which !== tab;
+    if (which === tab) starting = (starting ?? Promise.resolve()).then(() => slot.show());
+    else slot.view?.setRunning(false);
+  }
   const q = new URLSearchParams(location.search);
-  if (which === 'inside') q.set('view', 'inside'); else q.delete('view');
+  if (which !== 'lab') q.set('view', which); else q.delete('view');
   const query = q.toString();
   history.replaceState(null, '', query ? `?${query}` : location.pathname);
 }
-labTab.addEventListener('click', () => select('lab'));
-insideTab.addEventListener('click', () => select('inside'));
-if (new URLSearchParams(location.search).get('view') === 'inside') select('inside');
+labTab.addEventListener('click', () => showTab('lab'));
+insideTab.addEventListener('click', () => showTab('inside'));
+outsideTab.addEventListener('click', () => showTab('outside'));
+const opened = new URLSearchParams(location.search).get('view');
+if (opened === 'inside' || opened === 'outside') showTab(opened);
 
 // ---- the debug menu ------------------------------------------------------------------------------
 debug.addInfo(() => `Solarpolis ${VERSION}`);
@@ -101,26 +131,30 @@ debug.addInfo(() => memory.line());
 debug.addInfo(() => debug.fps());
 debug.add({ label: 'Copy the parameters as JSON', group: 'Habitat', run: () => { void navigator.clipboard?.writeText(JSON.stringify(lab.parameters, null, 2)); } });
 debug.add({ label: 'Log the parameters and the derived habitat', group: 'Habitat', run: () => console.log(lab.parameters, lab.habitat) });
-debug.addInfo(() => (view ? view.info() : 'inside: not started'));
+const view = (): InteriorView | null => insideSlot.view, outsideView = (): OutsideView | null => outsideSlot.view;
+debug.addInfo(() => view()?.info() ?? 'inside: not started');
 const go = (label: string, s: (h: NonNullable<typeof lab.habitat>) => number): void => debug.add({
-  label, group: 'Go', run: () => { const h = lab.habitat; if (view && h) view.walker.at = { theta: view.walker.at.theta, s: s(h), h: EYE_HEIGHT }; },
+  label, group: 'Go', run: () => { const h = lab.habitat, v = view(); if (v && h) v.walker.at = { theta: v.walker.at.theta, s: s(h), h: EYE_HEIGHT }; },
 });
 go('The middle of the floor', (h) => (h.profile.floorStart + h.profile.floorEnd) / 2);
 go('The foot of the wild endcap', (h) => h.profile.floorStart + 20);
 go('Halfway up the wild endcap', (h) => h.profile.floorStart / 2);
 go('The foot of the port endcap', (h) => h.profile.floorEnd - 20);
-debug.add({ label: 'Travel 10× faster (toggle)', group: 'Go', run: () => { if (view) view.boost = view.boost === 1 ? 10 : 1; } });
-debug.addInfo(() => (view ? view.clockLine() : ''));
-debug.add({ label: 'Clock speed: ×60 → ×600 → paused → real time', group: 'Time', run: () => {
-  if (!view) return;
-  const speeds = [60, 600, 0, 1];
-  view.timeScale = speeds[(speeds.indexOf(view.timeScale) + 1) % speeds.length];
-} });
-debug.add({ label: 'Two hours later', group: 'Time', run: () => view?.skip(7200) });
-debug.addInfo(() => (view ? view.physicsLine() : ''));
-debug.add({ label: 'Drop a ball from 20 m', group: 'Physics', run: () => void view?.dropBall(20) });
-debug.add({ label: 'Drop a ball from 100 m', group: 'Physics', run: () => void view?.dropBall(100) });
-debug.add({ label: 'Remove the balls', group: 'Physics', run: () => view?.clearBalls() });
+debug.add({ label: 'Travel 10× faster (toggle)', group: 'Go', run: () => { const v = view(); if (v) v.boost = v.boost === 1 ? 10 : 1; } });
+debug.addInfo(() => view()?.clockLine() ?? '');
+/** The next of a cycle of clock speeds. */
+const nextSpeed = (speeds: number[], now: number): number => speeds[(speeds.indexOf(now) + 1) % speeds.length];
+debug.add({ label: 'Clock speed: ×60 → ×600 → paused → real time', group: 'Time', run: () => { const v = view(); if (v) v.timeScale = nextSpeed([60, 600, 0, 1], v.timeScale); } });
+debug.add({ label: 'Two hours later', group: 'Time', run: () => view()?.skip(7200) });
+debug.addInfo(() => outsideView()?.info() ?? 'outside: not started');
+debug.add({ label: 'Clock speed outside: ×60 → ×3600 → paused → real time', group: 'Outside', run: () => { const v = outsideView(); if (v) v.timeScale = nextSpeed([60, 3600, 0, 1], v.timeScale); } });
+debug.add({ label: 'Six hours later', group: 'Outside', run: () => outsideView()?.skip(6 * 3600) });
+debug.add({ label: "Jump to Earth's next shadow on the habitat", group: 'Outside', run: () => { const v = outsideView(); if (v && !v.nextShadow()) console.log('no shadow within a year'); } });
+debug.add({ label: 'Night eyes augmentation (toggle): the eyes open far enough for the stars', group: 'Outside', run: () => { const v = outsideView(); if (v) v.nightEyes = !v.nightEyes; } });
+debug.addInfo(() => view()?.physicsLine() ?? '');
+debug.add({ label: 'Drop a ball from 20 m', group: 'Physics', run: () => void view()?.dropBall(20) });
+debug.add({ label: 'Drop a ball from 100 m', group: 'Physics', run: () => void view()?.dropBall(100) });
+debug.add({ label: 'Remove the balls', group: 'Physics', run: () => view()?.clearBalls() });
 debug.add({ label: 'Log the shader report', group: 'Render', run: () => console.log((globalThis as { shaders?: { report(): string } }).shaders?.report() ?? 'no renderer yet') });
 debug.add({ label: 'Take a memory sample now', group: 'Memory', run: () => console.log(memory.sample()) });
 debug.add({ label: 'Log the memory history', group: 'Memory', run: () => console.table(memory.history.map((s) => ({ t: Math.round(s.t), totalMB: Math.round(s.total / 1048576), level: s.level }))) });

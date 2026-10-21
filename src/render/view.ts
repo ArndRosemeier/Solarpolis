@@ -23,6 +23,7 @@ import { BALL, SUNLINE, air, allKinds, setAir, setEmission, setSunline, standInA
 import { dayPhase, emissionMean, nearestLit, sunlineEmission, sunlineNorm, EMISSION_SAMPLES } from '../world/sunline';
 import { densityFalloff, seenMid } from '../world/air';
 import { TerrainView, describeLayout } from './terrain';
+import { dragToLook, draw, fitCanvas, runFrames } from './surface';
 
 /** Running is this many times the walking speed. */
 const RUN = 8;
@@ -54,7 +55,6 @@ export class InteriorView {
   private flyer: Flyer | null = null;
   private keys = new Set<string>();
   private running = false;
-  private last = 0;
   /** Travel speed multiplier from the debug menu. */
   boost = 1;
   /**
@@ -356,30 +356,11 @@ export class InteriorView {
   }
 
   private listen(): void {
-    // The pointer stays visible and free (Arnd, 2026-10-21): the left button is for clicking things in the world,
-    // the right button held down looks around. On touch screens a one-finger drag looks around.
-    let looking: number | null = null;
-    const looks = (e: PointerEvent): boolean => (e.pointerType === 'touch' ? e.isPrimary : e.button === 2);
-    this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-    this.canvas.addEventListener('pointerdown', (e) => {
-      if (!looks(e) || looking !== null) return;
-      looking = e.pointerId;
-      this.canvas.setPointerCapture(e.pointerId);
-      this.canvas.classList.add('looking');
-    });
-    const stop = (e: PointerEvent): void => {
-      if (e.pointerId !== looking) return;
-      looking = null;
-      if (this.canvas.hasPointerCapture(e.pointerId)) this.canvas.releasePointerCapture(e.pointerId);
-      this.canvas.classList.remove('looking');
-    };
-    this.canvas.addEventListener('pointerup', stop);
-    this.canvas.addEventListener('pointercancel', stop);
-    this.canvas.addEventListener('pointermove', (e) => {
-      if (e.pointerId !== looking) return;
+    // The pointer stays visible and free (Arnd, 2026-10-21): the right button held down looks around.
+    dragToLook(this.canvas, (dx, dy) => {
       const k = 0.004;
-      if (this.flyer) this.flyer.turn(e.movementX * k, -e.movementY * k);
-      else this.walker.turn(e.movementX * k, -e.movementY * k);
+      if (this.flyer) this.flyer.turn(dx * k, -dy * k);
+      else this.walker.turn(dx * k, -dy * k);
     });
     window.addEventListener('keydown', (e) => {
       if (!this.running) return;
@@ -396,14 +377,7 @@ export class InteriorView {
   setRunning(on: boolean): void {
     this.running = on;
     if (!on) { this.keys.clear(); return; }
-    this.last = performance.now();
-    const tick = (t: number): void => {
-      if (!this.running) return;
-      this.frame(Math.min(0.1, (t - this.last) / 1000));
-      this.last = t;
-      requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
+    runFrames(() => this.running, (dt) => this.frame(dt));
   }
 
   /** The last frame's time step (s), for posing the body. */
@@ -431,17 +405,11 @@ export class InteriorView {
       this.walker.speed = base;
     }
     this.jump = false;
-    const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
-    if (w && h && (this.canvas.width !== Math.round(w * this.renderer.getPixelRatio()) || this.camera.aspect !== w / h)) {
-      this.renderer.setSize(w, h, false);
-      this.camera.aspect = w / h;
-      this.camera.updateProjectionMatrix();
-    }
+    fitCanvas(this.canvas, this.renderer, this.camera);
     this.time += dt * this.timeScale;
     this.shine();
     this.simulate(dt, this.current().eye);
     this.place();
-    this.stage.frame();
-    this.renderer.render(this.scene, this.camera);
+    draw(this.stage);
   }
 }
