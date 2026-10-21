@@ -4,11 +4,12 @@
  */
 import type { Habitat } from './derive';
 import { CLIMATES, climateOf } from './climates';
+import { CULTURES, cultureOf } from './cultures';
 
 export type Severity = 'invalid' | 'unusual';
 
 export interface Finding {
-  id: 'spin' | 'hull' | 'hull-thick' | 'axis-air' | 'haze' | 'heat' | 'light' | 'layers' | 'population' | 'sunline' | 'relief' | 'day' | 'brims' | 'collectors' | 'climate' | 'clouds';
+  id: 'spin' | 'hull' | 'hull-thick' | 'axis-air' | 'haze' | 'heat' | 'light' | 'layers' | 'population' | 'sunline' | 'relief' | 'day' | 'brims' | 'collectors' | 'climate' | 'clouds' | 'culture' | 'plan';
   severity: Severity;
   message: string;
 }
@@ -63,6 +64,10 @@ export function validate(h: Habitat): Finding[] {
   if (c && !(c.base > 0 && c.thickness > 0 && c.base + c.thickness < h.radius - p.hubRadius && c.cover >= 0 && c.cover <= 1 && c.size > 0 && Number.isFinite(c.wind.along) && Number.isFinite(c.wind.around)))
     out.push({ id: 'clouds', severity: 'invalid', message: 'clouds need a base and thickness > 0 that stay clear of the axis, a cover from 0 to 1 and a size > 0' });
   if (!climateOf(p.climate)) out.push({ id: 'climate', severity: 'invalid', message: `no climate "${p.climate}" in the catalogue (${Object.keys(CLIMATES).join(', ')})` });
+  if (!cultureOf(p.culture)) out.push({ id: 'culture', severity: 'invalid', message: `no culture "${p.culture}" in the catalogue (${Object.keys(CULTURES).join(', ')})` });
+  const pl = p.plan;
+  if (!(Number.isInteger(pl.valleys) && pl.valleys >= 1 && pl.reserve >= 0 && pl.reserve <= 0.9 && pl.districtPeople > 0 && pl.entranceSpacing > 0))
+    out.push({ id: 'plan', severity: 'invalid', message: 'the land plan needs a whole number of valleys ≥ 1, a reserve from 0 to 0.9 of the floor, and districts and entrance spacing > 0' });
   if (!(p.population >= 0)) out.push({ id: 'population', severity: 'invalid', message: 'the population must not be negative' });
   return out;
 }

@@ -71,6 +71,15 @@ button { font: inherit; color: inherit; }
 .lab-table td { padding: 4px 0; font-variant-numeric: tabular-nums; }
 .lab-table tr + tr { border-top: 1px solid var(--line); }
 .lab-section svg, .lab-stack svg { width: 100%; height: auto; display: block; }
+.plan-summary { color: var(--quiet); margin: 0 0 8px; }
+.plan-map { width: 100%; height: auto; display: block; border-radius: 4px; }
+.plan-figure { margin: 0 0 10px; }
+.plan-figure figcaption { color: var(--quiet); font-size: 12px; margin-top: 4px; }
+.plan-ends { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.plan-key { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--quiet); }
+.plan-chip { display: inline-flex; align-items: center; gap: 5px; }
+.plan-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
+.plan-swatch.plan-line { height: 3px; width: 16px; border-radius: 2px; }
 
 .sec-shell { fill: #6b5a48; }
 .sec-ground { fill: var(--ground); }

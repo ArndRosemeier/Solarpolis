@@ -143,6 +143,23 @@ export interface ExteriorShape {
   parts: { module: number; cell: number; plate: number; handrail: number };
 }
 
+/**
+ * The habitat's plan for its land (gen/plan.ts): the big shapes its mind decided on before anything grew. Valleys run
+ * along the axis, evenly round it, with ridges between; the wild end of the floor is a reserve; the rest is cut into
+ * districts, one above each neighbourhood of the living layer, each shaping its commons in a style of the habitat's
+ * culture, with entrances down to the people living below.
+ */
+export interface LandPlan {
+  /** Long valleys along the axis, evenly round it, with a ridge between each two (a whole number, at least 1). */
+  valleys: number;
+  /** Share of the floor's length, from the wild end, that is the reserve: no districts, only trails (0 … 0.9). */
+  reserve: number;
+  /** About how many people live under one district; with the population it sets how many districts there are. */
+  districtPeople: number;
+  /** About how far apart the entrances down to the living layer lie (m): how far people walk to reach one. */
+  entranceSpacing: number;
+}
+
 export interface HabitatParams {
   /** Floor radius R: from the axis to the mean ground surface (m). */
   radius: number;
@@ -200,7 +217,9 @@ export interface HabitatParams {
   population: number;
   /** Years since the habitat was finished: drives history (rebuilds, abandoned chambers, overgrowth). */
   age: number;
-  /** The culture profile, by name (catalogue comes with the macro layout stage). */
+  /** The plan for the land: valleys, the reserve, districts and their entrances (gen/plan.ts). */
+  plan: LandPlan;
+  /** The culture, by name (`CULTURES` in cultures.ts): the styles its districts shape their commons in. */
   culture: string;
   /** Same parameters and same seed give the same habitat. */
   seed: number;
