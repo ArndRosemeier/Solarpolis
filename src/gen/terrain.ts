@@ -53,7 +53,7 @@ const BENCH = { step: 2, wander: 0.8, tread: 10 * DEG, riser: 78 * DEG, worn: 0.
 export const GATE_TERRACES: Readonly<Record<FaceKind, { step: number; wander: number; tread: number; riser: number }>> = {
   stair: { step: 0.3, wander: 0, tread: 1 * DEG, riser: 87 * DEG },
   vine: { step: 0.25, wander: 0.3, tread: 3 * DEG, riser: 84 * DEG },
-  water: { step: 0.5, wander: 1.5, tread: -3 * DEG, riser: 88 * DEG },
+  water: { step: 0.5, wander: 2.5, tread: -3 * DEG, riser: 88 * DEG },
 };
 /** The Mountain's horn and cirque: where they stand (gravity, as a share of the floor's), their sizes in massifs. */
 export const HORN = { gravity: 0.25, radius: 3, height: 2 };
@@ -146,12 +146,16 @@ export function makeTerrain(h: Habitat): Terrain {
     const r = Math.max(R * g, 1e-6);
     // Spurs between the couloirs, from the foothills to the snow near the axis: the main spur on the ridge between two
     // valleys, side spurs down each valley's flanks (sharp crests over rounded gullies, wandering a little), then crags.
-    const grow = smoothstep(0.97, 0.75, g) * smoothstep(0.03, 0.2, g);
+    // Near the axis the valleys crowd together: a spur only stands as tall as it has room to be wide (half the gap
+    // between two valleys there), so the summit band closes into one broad dome instead of a ring of thin fins.
+    const room = (Math.PI / form.valleys) * r;
+    const grow = smoothstep(0.97, 0.75, g) * smoothstep(0.03, 0.2, g) * smoothstep(massif * 1.5, massif * 4, room);
     const a = Math.abs(form.acrossAt(theta, s).across);
     const spur = massif * 1.4 * Math.pow(smoothstep(0.05, 0.95, a), 1.3);
     const q = a * flanks + 0.25 * noise.fbm3(x / (massif * 8), y / (massif * 8), s / (massif * 8), 2);
     const crest = 0.5 - 0.5 * Math.cos(2 * Math.PI * q);
-    const sideSpur = massif * smoothstep(0.08, 0.3, a) * crest * crest;
+    // Side spurs likewise give way where they would be narrower than about two massifs.
+    const sideSpur = massif * smoothstep(0.08, 0.3, a) * crest * crest * smoothstep(1.5, 3, room / flanks / Math.max(massif, 1e-6));
     // Broad fractures, not fine wrinkles: the smaller rock is the stones' and boulders'.
     const side = sideSpur + massif * (0.1 + 0.15 * a) * (crags(x, y, s, crag * 4, 2) - 0.35);
     // The natural benches: a few rock steps across the slope, each ending within an arc, none in the couloirs.
@@ -203,7 +207,8 @@ export function makeTerrain(h: Habitat): Terrain {
     // Vine face: broad folds the contour terraces curve round. Water face: basins lobed like travertine rims.
     const fold = massif * 3 + 1;
     const folds = face.kind === 'vine' ? grow * massif * 0.6 * noise.fbm3(x / fold, y / fold, z / fold, 2) : 0;
-    const lobe = tier * (face.kind === 'water' ? 3 : 12);
+    // The Water face's basins are tens of metres across, a few to a face's width from afar (not a fine crinkle).
+    const lobe = tier * (face.kind === 'water' ? 16 : 12);
     const wander = tier * spec.wander * noise.fbm3(x / lobe, y / lobe, z / lobe, 2);
     let shape = terraces(e - folds + wander, tier, alpha, spec.tread, spec.riser) + folds;
     // Stair face: the Lift Stair's ramp, a plain even slope up the main valley's line.
