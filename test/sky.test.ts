@@ -115,3 +115,22 @@ test('exposure: full Earth in view sets it near 0.6, a sunlit hull against black
   assert.ok(Math.abs(Math.log(adapt(1e3, target, 1) / target)) < 0.25 * Math.log(1e3 / target), 'quick into the light');
   assert.ok(adapt(1, dark, 1) < 0.5 * dark, 'slow into the dark');
 });
+
+test('heroic stars: without the Sun in view a magnitude-0 star peaks at HEROIC_PEAK; with it, the eyes\' own exposure', async () => {
+  const { starExposure, sunInView, HEROIC_PEAK, STAR_SIGMA, PERIPHERY } = await import('../src/render/exposure');
+  for (const omega of [1e-7, 1.2e-6, 1e-5]) {
+    const e = starExposure(2.5, omega, 0);
+    const peak = ((fluxOfMagnitude(0) * Math.PI) / omega / (2 * Math.PI * STAR_SIGMA * STAR_SIGMA)) * e;
+    assert.ok(Math.abs(peak / HEROIC_PEAK - 1) < 1e-9);
+    assert.equal(starExposure(1e12, omega, 0), 1e12);
+    assert.equal(starExposure(2.5, omega, 1), 2.5);
+    assert.equal(starExposure(2.5, omega, 0, false), 2.5);
+    const half = starExposure(2.5, omega, 0.5);
+    assert.ok(Math.abs(half - Math.sqrt(2.5 * e)) < 1e-6 * half);
+  }
+  assert.equal(sunInView(0.3, 0.5, 1), 1);
+  assert.equal(sunInView(0.5 * PERIPHERY, 0.5, 1), 0);
+  assert.equal(sunInView(0.3, 0.5, 0), 0);
+  const mid = sunInView(0.5 * (1 + PERIPHERY) / 2, 0.5, 1);
+  assert.ok(mid > 0.45 && mid < 0.55);
+});
