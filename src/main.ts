@@ -46,7 +46,7 @@ app.append(lab.root);
 
 const inside = el('div', 'inside');
 const note = el('p', 'inside-note');
-const hint = el('p', 'inside-hint', 'Hold the right mouse button to look around · W A S D to move · Shift to run · Space to jump · F to fly (E up, Q down)');
+const hint = el('p', 'inside-hint', 'Hold the right mouse button to look around · W A S D to move · Shift to run · Space to jump · V to see yourself · F to fly (E up, Q down)');
 inside.append(note, hint);
 inside.hidden = true;
 app.append(inside);
@@ -65,6 +65,7 @@ async function showInside(): Promise<void> {
     view = await InteriorView.create(h);
     inside.prepend(view.canvas);
     memory.track('terrain tiles', () => view?.bytes() ?? 0);
+    memory.track('player body', () => view?.bodyBytes() ?? 0);
     memory.onPressure('soft', () => view?.shed());
     note.textContent = '';
     view.setRunning(!inside.hidden);

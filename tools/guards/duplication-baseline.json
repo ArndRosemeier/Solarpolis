@@ -6,5 +6,37 @@
   {
     "key": "clone: core/noise.ts#fbm2 + core/noise.ts#fbm3",
     "reason": "2D and 3D variants of the same noise in the shared core package; merging them would cost the hot path a dimension branch."
+  },
+  {
+    "key": "same name: solarpolis/app/memory.ts#stop + solarpolis/render/actors/animator.ts#stop",
+    "reason": "The Actors figure and animator are ported from Dunfinity with their method names, which follow Actors' own Character API (load, update, stop, dispose); the plan moves the animator into Actors, and keeping the names keeps that swap a drop-in."
+  },
+  {
+    "key": "same name: solarpolis/lab/blueprintLab.ts#update + solarpolis/render/actors/animator.ts#update",
+    "reason": "The Actors figure and animator are ported from Dunfinity with their method names, which follow Actors' own Character API (load, update, stop, dispose); the plan moves the animator into Actors, and keeping the names keeps that swap a drop-in."
+  },
+  {
+    "key": "same name: solarpolis/lab/blueprintLab.ts#update + solarpolis/render/actors/figure.ts#update",
+    "reason": "The Actors figure and animator are ported from Dunfinity with their method names, which follow Actors' own Character API (load, update, stop, dispose); the plan moves the animator into Actors, and keeping the names keeps that swap a drop-in."
+  },
+  {
+    "key": "same name: solarpolis/physics/world.ts#dispose + solarpolis/render/actors/figure.ts#dispose",
+    "reason": "The Actors figure and animator are ported from Dunfinity with their method names, which follow Actors' own Character API (load, update, stop, dispose); the plan moves the animator into Actors, and keeping the names keeps that swap a drop-in."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/animator.ts#load + solarpolis/render/actors/figure.ts#load",
+    "reason": "The Actors figure and animator are ported from Dunfinity with their method names, which follow Actors' own Character API (load, update, stop, dispose); the plan moves the animator into Actors, and keeping the names keeps that swap a drop-in."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/animator.ts#load + solarpolis/render/terrain.ts#load",
+    "reason": "The Actors figure and animator are ported from Dunfinity with their method names, which follow Actors' own Character API (load, update, stop, dispose); the plan moves the animator into Actors, and keeping the names keeps that swap a drop-in."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/animator.ts#stop + solarpolis/render/view.ts#stop",
+    "reason": "The Actors figure and animator are ported from Dunfinity with their method names, which follow Actors' own Character API (load, update, stop, dispose); the plan moves the animator into Actors, and keeping the names keeps that swap a drop-in."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/animator.ts#update + solarpolis/render/actors/figure.ts#update",
+    "reason": "The Actors figure and animator are ported from Dunfinity with their method names, which follow Actors' own Character API (load, update, stop, dispose); the plan moves the animator into Actors, and keeping the names keeps that swap a drop-in."
   }
 ]

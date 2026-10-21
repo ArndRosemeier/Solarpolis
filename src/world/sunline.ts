@@ -92,18 +92,37 @@ export function nearestLit(h: Habitat): number {
  * toward the wild end up to `towardWild` (radians from the straight-in direction), unscaled. `steps` samples (midpoint).
  */
 export function rawIrradiance(h: Habitat, emission: Float32Array, p: Vec3, n: Vec3, towardPort = OPEN_SKY, towardWild = OPEN_SKY, steps = 256): number {
+  let sum = 0;
+  alongSunline(h, emission, p, towardPort, towardWild, steps, (w, d) => { sum += w * Math.max(0, n[0] * d[0] + n[1] * d[1] + n[2] * d[2]); });
+  return sum;
+}
+
+/**
+ * Visit the sunline seen from p between the two horizon angles in `steps` pieces: each piece's direction d (unit, from
+ * p) and its weight w, so that the light on a surface with normal n is Σ w · max(n·d, 0) (before `sunlineNorm`).
+ */
+function alongSunline(h: Habitat, emission: Float32Array, p: Vec3, towardPort: number, towardWild: number, steps: number, visit: (w: number, d: Vec3) => void): void {
   const len = Math.hypot(p[0], p[1]);
   const r = Math.max(len, nearestLit(h));
   const ix = len > 1e-9 ? -p[0] / len : 0, iy = len > 1e-9 ? -p[1] / len : 0;
   const lo = Math.max(-towardWild, Math.atan(-p[2] / r)), hi = Math.min(towardPort, Math.atan((h.length - p[2]) / r));
   const span = Math.max(0, hi - lo);
-  let sum = 0;
   for (let k = 0; k < steps; k++) {
     const a = lo + (span * (k + 0.5)) / steps, c = Math.cos(a), s = Math.sin(a);
-    const facing = Math.max(0, n[0] * ix * c + n[1] * iy * c + n[2] * s);
-    sum += emissionAt(emission, h.length, p[2] + r * Math.tan(a)) * c * facing;
+    visit((emissionAt(emission, h.length, p[2] + r * Math.tan(a)) * c * span) / steps / r, [ix * c, iy * c, s]);
   }
-  return (sum * span) / steps / r;
+}
+
+/**
+ * The sunline's direct light at p as one vector (scaled like `irradiance`): its direction is where the light comes
+ * from on average, its length how strong it is. A surface facing all of the lit stretch gets exactly n · vector; this
+ * lights things drawn by three.js's own lights (Actors' bodies) with one directional light. `norm` is `sunlineNorm(h)`,
+ * passed in where it is called every frame.
+ */
+export function lightVector(h: Habitat, emission: Float32Array, p: Vec3, towardPort = OPEN_SKY, towardWild = OPEN_SKY, norm = sunlineNorm(h)): Vec3 {
+  const v: Vec3 = [0, 0, 0], k = norm;
+  alongSunline(h, emission, p, towardPort, towardWild, 64, (w, d) => { v[0] += w * d[0] * k; v[1] += w * d[1] * k; v[2] += w * d[2] * k; });
+  return v;
 }
 
 /** The scale that makes the light 1 on the floor at mid-length under an even emission (the shaders' `light.norm`). */

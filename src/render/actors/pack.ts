@@ -1,0 +1,47 @@
+/**
+ * Ported from Dunfinity src/render/actors/pack.ts.
+ *
+ * Where the Actors asset pack is served (vite.config.ts serves and builds it under /actors/,
+ * tools/actors/pack.mjs fetches it), and the one place its files are fetched: each file once,
+ * shared by every figure (a figure parses its own copy).
+ */
+import type { Fetcher } from '@actors/core';
+import { Character, buildCatalog, defaultConfig, type CharacterCatalog, type CharacterConfig } from '@actors/generator';
+import { Human } from '@actors/human';
+import { IRIS_PRESETS } from '@actors/three';
+
+/** The human pack's manifest. */
+export const HUMAN_PACK = `${import.meta.env.BASE_URL}actors/human/manifest.json`;
+
+const files = new Map<string, Promise<ArrayBuffer>>();
+
+/** Fetches a pack file once; every caller gets its own copy (a runtime may hand buffers on). */
+export const packFetch: Fetcher = async (url) => {
+  let job = files.get(url);
+  if (!job) {
+    job = fetch(url).then((r) => {
+      if (!r.ok) throw new Error(`${url}: ${r.status}`);
+      return r.arrayBuffer();
+    });
+    files.set(url, job);
+    job.catch(() => files.delete(url));
+  }
+  return (await job).slice(0);
+};
+
+let catalog: Promise<{ catalog: CharacterCatalog; base: CharacterConfig }> | undefined;
+
+/**
+ * What the pack offers (races, garments, hair, clips...) and the default look, loaded once. Only
+ * what is free to ship without a credit line: garments and hair under CC-BY are left out.
+ */
+export function humanCatalog(): Promise<{ catalog: CharacterCatalog; base: CharacterConfig }> {
+  catalog ??= Human.load(HUMAN_PACK, packFetch).then((human) => {
+    const all = buildCatalog(human, Object.keys(IRIS_PRESETS));
+    const c: CharacterCatalog = { ...all, garments: all.garments.filter((g) => !g.credit), hair: all.hair.filter((h) => !h.credit) };
+    return { catalog: c, base: defaultConfig(c) };
+  });
+  return catalog;
+}
+
+export { Character };

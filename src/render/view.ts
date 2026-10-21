@@ -4,16 +4,20 @@
  * and the world moves. Hold the right mouse button to look around (the pointer stays free for clicking things);
  * W A S D or the arrow keys to move, Shift to run, Space to jump; F takes off or lands, and in the air E or Space climbs,
  * Q or C sinks. On foot the physics carries the player (`physics/character.ts`): up is toward the axis, and gravity
- * is the spin's.
+ * is the spin's. The player is an Actors human (`render/actors`); V looks at them from behind, V again from their eyes.
  */
 import { Color, CylinderGeometry, Mesh, PerspectiveCamera, Scene, SphereGeometry, type WebGPURenderer } from 'three/webgpu';
 import { Stage, createRenderer } from '@futuremagic/stage';
+import { deriveSeed, v3dot, v3madd, v3norm } from '@futuremagic/core';
 import { fromWorld, toView, toWorld, type Habitat, type Vec3 } from '../blueprint';
 import { makeTerrain, type Terrain } from '../gen/terrain';
 import { Walker, type View } from '../world/walker';
 import { Flyer } from '../world/flyer';
 import { PhysicsWorld } from '../physics/world';
-import type { Character } from '../physics/character';
+import { HUMAN, type Character } from '../physics/character';
+import { Figure, type MoveState } from './actors/figure';
+import { playerLook } from './actors/looks';
+import { Lights } from './lights';
 import { WorkerPool } from '../workers/pool';
 import { BALL, SUNLINE, air, allKinds, setAir, setEmission, setSunline, standInAttribute, view } from './materials';
 import { dayPhase, emissionMean, nearestLit, sunlineEmission, sunlineNorm, EMISSION_SAMPLES } from '../world/sunline';
@@ -31,6 +35,9 @@ const PATCH_EDGE = 0.4;
 const BALL_GEOMETRY = new SphereGeometry(0.25, 20, 14).deleteAttribute('uv');
 /** Clock seconds per real second by default: a day in about 24 minutes, so the sun is seen to travel. */
 const DAY_SPEED = 60;
+/** The third-person camera: how far behind the player's head, and how far above it (m). */
+const CHASE_BACK = 3.5;
+const CHASE_UP = 0.4;
 
 export class InteriorView {
   readonly canvas = document.createElement('canvas');
@@ -64,6 +71,11 @@ export class InteriorView {
   /** The player's body on foot, once the physics has ground under it; null while flying. */
   private character: Character | null = null;
   private jump = false;
+  /** The player's body (an Actors human), once loaded, and whether the camera looks at it from behind. */
+  private figure: Figure | null = null;
+  thirdPerson = false;
+  private readonly lights: Lights;
+  private norm = 1;
   private readonly balls = new Map<number, Mesh>();
   /** The last dropped ball: where it was let go (θ) and from how high, and how far it landed behind, once it has. */
   private drop: { id: number; theta: number; height: number; landed: number | null } | null = null;
@@ -74,6 +86,8 @@ export class InteriorView {
     this.terrain = makeTerrain(habitat);
     this.walker = new Walker(habitat.profile, undefined, this.terrain.standAt);
     this.canvas.className = 'view-canvas';
+    // Before the warm-up: the lights are part of every lit shader's key.
+    this.lights = new Lights(this.scene);
   }
 
   /** Make the view: throws `GraphicsUnavailable` where the browser has no WebGPU (the caller shows why). */
@@ -88,7 +102,21 @@ export class InteriorView {
     await v.build();
     v.listen();
     void v.physicsReady();
+    void v.loadPlayer();
     return v;
+  }
+
+  /** Load the player's body (the same person for the same world seed) and put it in, hidden until seen. */
+  private async loadPlayer(): Promise<void> {
+    const figure = await Figure.load(await playerLook(deriveSeed(this.habitat.params.seed, 'player')));
+    figure.object.visible = false;
+    await this.stage.add(figure.object);
+    this.figure = figure;
+  }
+
+  /** Bytes the player's body holds (memory watchdog). */
+  bodyBytes(): number {
+    return this.figure?.bytes() ?? 0;
   }
 
   /** Bytes of geometry this view holds (memory watchdog). */
@@ -249,7 +277,8 @@ export class InteriorView {
     if (this.tiles) { this.scene.remove(this.tiles.group); this.tiles.dispose(); }
     if (this.sunline) { this.stage.remove(this.sunline); this.sunline.geometry.dispose(); }
     const h = this.habitat;
-    setSunline(h.length, sunlineNorm(h), nearestLit(h));
+    this.norm = sunlineNorm(h);
+    setSunline(h.length, this.norm, nearestLit(h));
     this.shine();
     setAir(densityFalloff(h), h.radius, seenMid(h));
     // The sunline: from the wild wall to the port wall along the axis.
@@ -276,12 +305,40 @@ export class InteriorView {
     this.camera.up.set(...v.up);
     this.camera.lookAt(v.look[0], v.look[1], v.look[2]);
     if (this.sunline) this.sunline.position.set(...toView(v.eye, [0, 0, 0]));
+    this.pose(v.eye);
     const pixelsPerRadian = (this.canvas.clientHeight || 720) / (this.camera.fov * Math.PI / 180);
     this.tiles?.follow(v.eye, pixelsPerRadian);
   }
 
   private current(): View {
-    return this.flyer ? this.flyer.view() : this.walker.view();
+    if (this.flyer) return this.flyer.view();
+    const v = this.walker.view();
+    if (!this.thirdPerson) return v;
+    // From behind and a little above the head, looking the same way; never under the ground.
+    let eye = v3madd(v3madd(v.eye, v.look, -CHASE_BACK), v.up, CHASE_UP);
+    const at = fromWorld(this.habitat.profile, ...eye), floor = this.terrain.standAt(at.theta, at.s) + 0.3;
+    if (at.h < floor) eye = toWorld(this.habitat.profile, { ...at, h: floor });
+    return { eye, look: v.look, up: v.up };
+  }
+
+  /** Switch between the player's eyes and a camera behind them. */
+  toggleThirdPerson(): void {
+    this.thirdPerson = !this.thirdPerson;
+  }
+
+  /** Light the player's body where it stands and pose it for the frame (relative to the camera's eye). */
+  private pose(eye: Vec3): void {
+    const f = this.figure, c = this.character;
+    if (!f) return;
+    f.object.visible = !!c && !this.flyer && this.thirdPerson;
+    if (!c || !f.object.visible) return;
+    const feet = this.walker.feetAt(), up = c.up;
+    this.lights.shineOn(this.habitat, this.terrain, this.emission, emissionMean(this.emission), air.skyLight.value, this.norm, v3madd(feet, up, HUMAN.height / 2));
+    const v = c.velocity, flat = v3madd(v, up, -v3dot(v, up)), speed = Math.hypot(...flat);
+    const look = this.walker.view().look, ahead = v3madd(look, up, -v3dot(look, up));
+    const front = v3norm(speed > 0.5 ? flat : ahead);
+    const move: MoveState = c.swimming ? 'swim' : !c.grounded ? 'jump' : speed < 0.3 ? 'idle' : speed < 2.5 ? 'walk' : speed < 5.5 ? 'run' : 'sprint';
+    f.update({ feet: toView(eye, feet), up, front, speed, anim: { move } }, this.frameDt, this.time);
   }
 
   /** Take off from where the walker stands, or land under the flyer. */
@@ -327,6 +384,7 @@ export class InteriorView {
     window.addEventListener('keydown', (e) => {
       if (!this.running) return;
       if (e.code === 'KeyF' && !e.repeat) this.toggleFlying();
+      if (e.code === 'KeyV' && !e.repeat) this.toggleThirdPerson();
       if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) this.jump = true; }
       this.keys.add(e.code);
     });
@@ -348,7 +406,11 @@ export class InteriorView {
     requestAnimationFrame(tick);
   }
 
+  /** The last frame's time step (s), for posing the body. */
+  private frameDt = 0;
+
   private frame(dt: number): void {
+    this.frameDt = dt;
     const k = this.keys;
     const forward = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
     const right = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0);
