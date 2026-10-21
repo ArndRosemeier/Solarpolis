@@ -342,7 +342,9 @@ function plantVertex(flutter: number, seed: Node<'float'> = float(0)) {
   const c = cos(turn), sn = sin(turn);
   const ax = side.mul(c).add(axis.mul(sn)), az = side.mul(sn.negate()).add(axis.mul(c));
   // The band: each plant has its own threshold, so in a hand-over band one level takes it where the other leaves it.
-  const away = foot.sub(cameraPosition).length();
+  // Measured from the eye (the origin of the drawn world), not the camera: the shadow pass draws from the light's
+  // camera, hundreds of metres away, and would drop every near plant from the shadow map.
+  const away = foot.length();
   const pick = hash(inst.x.mul(13.7).add(inst.z.mul(7.1)).add(inst.y.mul(3.3)));
   const into = smoothstep(plantBand.x, plantBand.y, away), out = smoothstep(plantBand.z, plantBand.w, away);
   const keep = step(pick, into.mul(1.0001)).mul(step(out, pick));
