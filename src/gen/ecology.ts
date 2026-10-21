@@ -17,7 +17,7 @@ import type { Terrain } from './terrain';
 import { riverAt } from './rivers';
 import { canopyColor } from './trees';
 import { plantedCanopy, plantedLawn } from './planted';
-import { planOf, type District } from './plan';
+import { fromLake, planOf, type District } from './plan';
 import { snowCover, snowFieldOf } from './snow';
 import { pathCover, pathsOf } from './paths';
 import { placesOf, type PlaceKind } from './places';
@@ -147,7 +147,7 @@ export function makeEcology(terrain: Terrain): Ecology {
   const moistureWith = (theta: number, s: number, height: number, district: District | null): number => {
     const [x, y, z] = toWorld(profile, { theta, s, h: 0 });
     let m = climate.wetness + (district ? STYLE_LAND[district.style].wet : 0) + 0.3 * wander.fbm3(x / patch, y / patch, z / patch, 3);
-    if (lake) m += 0.55 * Math.exp(-Math.max(0, Math.abs(s - lake.s) - lake.halfWidth) / reach);
+    if (lake) m += 0.55 * Math.exp(-Math.max(0, fromLake(lake, s)) / reach);
     const river = rivers.length ? riverAt(rivers, theta, s, banks * 4) : null;
     if (river) m += 0.5 * Math.exp(-Math.max(0, Math.abs(river.across) - river.halfWidth) / banks);
     // Water gathers in hollows and drains off hilltops; the endcaps dry out as they climb.
@@ -284,7 +284,7 @@ export function makeEcology(terrain: Terrain): Ecology {
       gravel = Math.max(gravel, paved);
       c0 += ((sh[0] + rk[0]) / 2 - c0) * paved; c1 += ((sh[1] + rk[1]) / 2 - c1) * paved; c2 += ((sh[2] + rk[2]) / 2 - c2) * paved;
     }
-    if (lake && Math.abs(s - lake.s) < lake.halfWidth + reach) {
+    if (lake && fromLake(lake, s) < reach) {
       // Sand at the waterline, the lake's bed below it (only by the lake: terraces elsewhere dip below its level too).
       const below = lake.level - height;
       sand = smoothstep(-1.5, 0, below) * (1 - smoothstep(0.5, 3, below));
@@ -316,7 +316,7 @@ export function makeEcology(terrain: Terrain): Ecology {
     // A path over it all, as much of the patch as it covers; not under water (the Sunwalk's bridges cross the lake), nor
     // on a court's floor, where the ways arrive.
     const way = net.pieces ? net.pathAt(theta, s, Math.max(cell / 2, 0.1)) : null;
-    const path = way && !(lake && height < lake.level && Math.abs(s - lake.s) < lake.halfWidth) && !(court && court.distance < court.court.radius) ? pathCover(way, cell) : 0;
+    const path = way && !(lake && height < lake.level && fromLake(lake, s) < 0) && !(court && court.distance < court.court.radius) ? pathCover(way, cell) : 0;
     if (path > 0 && way) {
       // A mown grass way is the meadow, a little paler and drier; the others their material.
       const c: Rgb = way.kind === 'sunwalk' ? sunwalk : laid[way.layer] ?? [c0 * 1.08, c1 * 1.06, c2 * 0.9];

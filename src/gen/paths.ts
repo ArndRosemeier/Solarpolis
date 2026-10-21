@@ -11,6 +11,7 @@
 import { smoothstep } from '@futuremagic/core';
 import { STYLE_LAND, type DistrictStyle, type FloorLayer, type Habitat } from '../blueprint';
 import { kept } from './kept';
+import { fileUnder, floorGrid } from './floorGrid';
 import { planOf, type PathKind } from './plan';
 
 const TURN = 2 * Math.PI;
@@ -80,9 +81,8 @@ function makePathNet(h: Habitat): PathNet {
   const reachOf = (k: number): number => width[k] * (0.5 + SHOULDER.most);
   let most = 1, least = Infinity;
   for (let k = 0; k < n; k++) { most = Math.max(most, reachOf(k)); least = Math.min(least, width[k] * SHOULDER.most); }
-  const cell = most * 2, columns = Math.max(1, Math.floor(circumference / cell)), size = circumference / columns;
+  const grid = floorGrid(R, most * 2), { cell, columns, size } = grid;
   const corner = Math.sqrt(size * size + cell * cell) / 2;
-  const cellKey = (column: number, row: number): number => row * columns + (((column % columns) + columns) % columns);
   const lengthSq = new Float64Array(n), middle = new Float64Array(n);
   for (let k = 0; k < n; k++) { lengthSq[k] = du[k] * du[k] + ds[k] * ds[k]; middle[k] = u0[k] + du[k] / 2; }
   /** How far along piece k (0 … 1) the point nearest (u, s) lies. */
@@ -98,8 +98,7 @@ function makePathNet(h: Habitat): PathNet {
       const cu = (column + 0.5) * size, cs = (row + 0.5) * cell, t = along(k, cu, cs);
       const gu = cu - u0[k] - du[k] * t, gs = cs - s0[k] - ds[k] * t;
       if (gu * gu + gs * gs > (r + corner) ** 2) continue;
-      const key = cellKey(column, row), list = lists.get(key);
-      if (list) list.push(k); else lists.set(key, [k]);
+      fileUnder(lists, grid.key(column, row), k);
     }
   }
   // Which cells hold any piece, a bit each: most points are on no path, and this says so before any lookup.
@@ -127,7 +126,7 @@ function makePathNet(h: Habitat): PathNet {
     const narrow = s < floorStart || s > floorEnd ? h.profile.at(s).r / R : 1;
     let best = -1, bestRank = Infinity, bestEdge = Infinity, bestT = 0, bestShift = 0;
     for (let row = r0; row <= r1; row++) for (let column = c0; column <= c1; column++) {
-      const key = cellKey(column, row);
+      const key = grid.key(column, row);
       if (key >= 0 && key < cells && !(used[key >>> 5] & (1 << (key & 31)))) continue;
       const list = filed.get(key);
       if (!list) continue;

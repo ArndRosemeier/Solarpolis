@@ -454,5 +454,9 @@
   {
     "key": "same name: solarpolis/space/flyer.ts#turn + solarpolis/world/walker.ts#turn",
     "reason": "Each camera turns by pointer movement in its own frame (walker: heading on the curved floor; flyer outside: yaw around the ecliptic pole)."
+  },
+  {
+    "key": "idiom: [.find .kind] in solarpolis/gen/places.ts + solarpolis/gen/plan.ts + solarpolis/lab/planView.ts",
+    "reason": "Looking one thing up by its kind in three different lists (the Gate's faces, the plan's faces, the plan's paths): a plain Array.find, not a copied procedure; the plan's sites already have siteOf."
   }
 ]

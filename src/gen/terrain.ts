@@ -20,7 +20,7 @@ import { Noise, deriveSeed, smoothstep } from '@futuremagic/core';
 import { fromWorld, toWorld, type FaceKind, type Habitat, type Vec3 } from '../blueprint';
 import { LEVEL_STEP, gradePath, pathsOf } from './paths';
 import { carve, makeRivers, riverAt, valleyReach, type River, type RiverHit } from './rivers';
-import { COURT, courtOf, landformOf, planOf, type Court, type Lake, type Landform } from './plan';
+import { COURT, courtOf, fromLake, landformOf, planOf, type Court, type Lake, type Landform } from './plan';
 
 export type { Lake } from './plan';
 
@@ -379,7 +379,7 @@ export function makeTerrain(h: Habitat): Terrain {
     const way = net.pieces ? net.pathAt(theta, s) : null;
     if (way && !(hit && Math.abs(hit.across) < hit.halfWidth)) {
       const level = levelOf(way.piece, way.along, way.width);
-      if (!(lake && level < lake.level && Math.abs(way.s - lake.s) < lake.halfWidth)) ground = gradePath(ground, level, way);
+      if (!(lake && level < lake.level && fromLake(lake, way.s) < 0)) ground = gradePath(ground, level, way);
     }
     const near = courts.length ? nearCourt(theta, s) : null;
     return near && near.distance < near.at.court.radius ? dig(ground, near.at.floor, near.at.court.radius, near.distance) : ground;

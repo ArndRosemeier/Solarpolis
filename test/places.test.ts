@@ -1,23 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MATRIX, derive, fromWorld, toWorld } from '../src/blueprint';
-import { makeTerrain, type Terrain } from '../src/gen/terrain';
-import { makeEcology, type Ecology } from '../src/gen/ecology';
+import { MATRIX, fromWorld, toWorld } from '../src/blueprint';
+import type { Terrain } from '../src/gen/terrain';
+import type { Ecology } from '../src/gen/ecology';
 import { planOf } from '../src/gen/plan';
+import { ecologyOf, terrainOf } from './worlds';
 import { EDGE, PARCELS, VINE_TOP, nearestPlace, placesOf, vineFaceFoot } from '../src/gen/places';
 import { cellsNear, levelRunOf, onRow, plantCell, plantsOf, slopeAt, PLANT_STRIDE } from '../src/gen/scatter';
 
-/** One terrain and ecology per habitat for the whole file (their places are kept with them). */
-const made = new Map<string, { t: Terrain; eco: Ecology }>();
-const worldOf = (name: string): { t: Terrain; eco: Ecology } => {
-  let w = made.get(name);
-  if (!w) {
-    const t = makeTerrain(derive(MATRIX.find((m) => m.name === name)!.params));
-    w = { t, eco: makeEcology(t) };
-    made.set(name, w);
-  }
-  return w;
-};
+const worldOf = (name: string): { t: Terrain; eco: Ecology } => ({ t: terrainOf(name), eco: ecologyOf(name) });
 const TURN = 2 * Math.PI;
 
 for (const { name } of MATRIX) {

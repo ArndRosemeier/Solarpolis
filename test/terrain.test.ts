@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MATRIX, derive, toWorld } from '../src/blueprint';
-import { CIRQUE, FLOOR_VALLEYS, GATE_TERRACES, HORN, makeTerrain } from '../src/gen/terrain';
-import { makeEcology } from '../src/gen/ecology';
+import { MATRIX, toWorld } from '../src/blueprint';
+import { CIRQUE, FLOOR_VALLEYS, GATE_TERRACES, HORN } from '../src/gen/terrain';
 import { COURT, courtOf, planOf } from '../src/gen/plan';
 import { slopeAt } from '../src/gen/scatter';
+import { ecologyOf, terrainOf } from './worlds';
 import { makeLayout, roots, bounds, buildTile, select, children, parent, keyId, cellSize, spheres, LodBudget, splitsAround, splitAround, packRelief, unpackRelief, CELL_PIXELS, RISE_RANGE, TILE_CELLS, type TileKey, type TileFit, type TileLayout, type TileMesh } from '../src/gen/tiles';
 
 const wrap = (a: number): number => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
@@ -31,8 +31,7 @@ function morphLands(layout: TileLayout, parentTile: TileMesh, kid: TileMesh): vo
 }
 
 for (const { name, params } of MATRIX) {
-  const h = derive(params);
-  const t = makeTerrain(h), eco = makeEcology(t);
+  const eco = ecologyOf(name, params), t = eco.terrain, h = t.habitat;
   const layout = makeLayout(t);
 
   test(`terrain (${name}): wraps around the axis, stays within its relief, and the lake holds water`, () => {
@@ -246,8 +245,7 @@ for (const { name, params } of MATRIX) {
 }
 
 test('tiles: the view where the sunline meets an endcap needs no more tiles than one on the floor', () => {
-  const h = derive(MATRIX[0].params);
-  const t = makeTerrain(h), layout = makeLayout(t), { profile } = h;
+  const t = terrainOf(MATRIX[0].name), h = t.habitat, layout = makeLayout(t), { profile } = h;
   // Every tile built, each as rough as its cells: enough to count what a view splits to.
   const errorOf = (k: TileKey): TileFit => ({ error: cellSize(layout, k) * 0.3, relief: 10 });
   const count = (s: number): ReturnType<typeof select> => select(t, layout, toWorld(profile, { theta: 1, s, h: 2 }), PX_PER_RAD, 2, errorOf);
@@ -264,8 +262,7 @@ test('tiles: the view where the sunline meets an endcap needs no more tiles than
 });
 
 test('tiles: a tile split only along s geomorphs into its parent', () => {
-  const h = derive(MATRIX[0].params);
-  const t = makeTerrain(h), eco = makeEcology(t), layout = makeLayout(t);
+  const t = terrainOf(MATRIX[0].name), eco = ecologyOf(MATRIX[0].name), layout = makeLayout(t);
   let k: TileKey = { band: 0, column: 0, level: 0, i: 0, j: 0 };
   while (children(layout, k).length === 4) k = children(layout, k)[0];
   const kid = children(layout, k).find((c) => !splitAround(layout, c))!;
@@ -274,8 +271,7 @@ test('tiles: a tile split only along s geomorphs into its parent', () => {
 });
 
 test('tiles: children built while a sibling is not are kept, not drawn', () => {
-  const h = derive(MATRIX[0].params);
-  const t = makeTerrain(h), layout = makeLayout(t);
+  const t = terrainOf(MATRIX[0].name), h = t.habitat, layout = makeLayout(t);
   const root: TileKey = { band: 3, column: 0, level: 0, i: 0, j: 0 }, kids = children(layout, root);
   const built = new Set([...roots(layout), ...kids.slice(1)].map(keyId));
   const eye = toWorld(h.profile, { theta: 0.1, s: (layout.bands[3].s0 + layout.bands[3].s1) / 2, h: 2 });
@@ -289,8 +285,7 @@ test('tiles: children built while a sibling is not are kept, not drawn', () => {
 // How fast a tile builds is timed in the slow suite (test/slow/terrain.slow.test.ts), warmed up first: a runner's speed
 // varies 1.6× from one CI run to the next, which a timing here could not tell from a slowdown (Arnd, 2026-10-21).
 test('tiles: nothing built yet means the roots are wanted first', () => {
-  const h = derive(MATRIX[0].params);
-  const t = makeTerrain(h), layout = makeLayout(t);
+  const t = terrainOf(MATRIX[0].name), h = t.habitat, layout = makeLayout(t);
   const sel = select(t, layout, [h.radius - 2, 0, h.length / 2], PX_PER_RAD, 2, () => undefined);
   assert.equal(sel.draw.length, 0);
   assert.equal(sel.want.length, roots(layout).length);
@@ -298,7 +293,7 @@ test('tiles: nothing built yet means the roots are wanted first', () => {
 
 test('tiles: from high up a flat floor still splits until its cells are a few pixels (the far view)', () => {
   for (const { name, params } of MATRIX) {
-    const h = derive(params), t = makeTerrain(h), layout = makeLayout(t), sphereOf = spheres(t, layout);
+    const t = terrainOf(name, params), h = t.habitat, layout = makeLayout(t), sphereOf = spheres(t, layout);
     const s = (h.profile.floorStart + h.profile.floorEnd) / 2;
     const eye = toWorld(h.profile, { theta: 0, s, h: h.radius * 0.5 });
     // Every tile built and perfectly flat: only the cells' size on screen can split them.
@@ -320,8 +315,7 @@ test('tiles: a point\'s rise over the ground around it packs into one float and 
 });
 
 test('tiles: rock walls (an error that never shrinks) do not split every tile that sees them', () => {
-  const h = derive(MATRIX[0].params);
-  const t = makeTerrain(h), layout = makeLayout(t), { profile } = h;
+  const t = terrainOf(MATRIX[0].name), h = t.habitat, layout = makeLayout(t), { profile } = h;
   // Over the floor near the foot of the Gate, 163 m up (Arnd, 2026-10-21: 4,214 tiles drawn there), every tile a cliff 60 m high.
   const theta = 323.8 * Math.PI / 180, s = profile.length - 5000;
   const eye = toWorld(profile, { theta, s, h: t.heightAt(theta, s) + 163 });
@@ -334,8 +328,7 @@ test('tiles: rock walls (an error that never shrinks) do not split every tile th
 });
 
 test('tiles: a view over its bytes is drawn coarser until it fits, and eases back once it can', () => {
-  const h = derive(MATRIX[0].params);
-  const t = makeTerrain(h), layout = makeLayout(t), { profile } = h;
+  const t = terrainOf(MATRIX[0].name), h = t.habitat, layout = makeLayout(t), { profile } = h;
   const TILE = 0.5 * 1048576, budget = new LodBudget(100 * 1048576);
   const fit = (k: TileKey): TileFit => ({ error: cellSize(layout, k) * 0.3, relief: 10 });
   const eye = toWorld(profile, { theta: 1, s: (profile.floorStart + profile.floorEnd) / 2, h: 2 });

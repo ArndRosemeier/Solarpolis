@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { MATRIX, derive, fromWorld, toWorld, withParams } from '../src/blueprint';
 import { makeTerrain } from '../src/gen/terrain';
 import { canopyOf, makeEcology, TREE_HEIGHT } from '../src/gen/ecology';
-import { canopyBand, cellBounds, cellsNear, LEVELS, plantCell, plantsOf, PLANT_STRIDE, type CellKey, type Level, type Species } from '../src/gen/scatter';
+import { canopyBand, cellBounds, cellsNear, LEVELS, levelRunOf, plantCell, plantsOf, PLANT_STRIDE, type CellKey, type Level, type Species } from '../src/gen/scatter';
 
 /** A cell of a plant near a point of the floor, and the plant. */
 function cellAt(name: string, params = MATRIX[0].params, at?: (lake: number, floor: [number, number]) => number) {
@@ -61,15 +61,15 @@ test('scatter: woods are about as dense as their spacing says where the biome is
   assert.ok(trees > want * 0.6 && trees < want * 1.3, `${trees} trees where the spacing says ${want.toFixed(0)}`);
 });
 
-test('scatter: olive groves are planted in straight rows', () => {
+test('scatter: olive groves are planted in straight rows (their spacing apart along the level run)', () => {
   const { eco, plants, sp, cells } = cellAt('olive', withParams({ climate: 'mediterranean' }));
-  const { profile } = eco.terrain.habitat;
+  const { profile } = eco.terrain.habitat, run = levelRunOf(profile);
   let n = 0;
   for (const k of cells.slice(0, 40)) {
     const c = plantCell(eco, plants, k);
     for (const list of c.instances) for (let i = 0; i < list.length; i += PLANT_STRIDE) {
       const p = fromWorld(profile, c.origin[0] + list[i], c.origin[1] + list[i + 1], c.origin[2] + list[i + 2]);
-      const off = p.s / sp.spec.spacing - Math.round(p.s / sp.spec.spacing);
+      const row = run.u(p.s) / sp.spec.spacing, off = row - Math.round(row);
       assert.ok(Math.abs(off) < 0.01, `on a row: s ${p.s}`);
       n++;
     }

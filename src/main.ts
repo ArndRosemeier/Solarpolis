@@ -19,7 +19,7 @@ import { InteriorView } from './render/view';
 import { OutsideView } from './render/outside';
 import { hubView } from './space';
 import { fromWorld, toWorld, type DebrisSpec, type Habitat } from './blueprint';
-import { nearestOf, plantsOf, type Level } from './gen/scatter';
+import { levelRunOf, nearestOf, onRow, plantsOf, slopeAt, type Level } from './gen/scatter';
 import { frameOf, landmarksOf, type Hut, type Pavilion } from './gen/landmarks';
 import { plantingsOf, type Grove } from './gen/planted';
 import type { Terrain } from './gen/terrain';
@@ -218,13 +218,18 @@ toPlace('Into the nearest meadow', -30, (eco, t, s) => nearestFloor(eco, t, s, e
 toPlace('Onto the Sunwalk', 0, (eco, t, s) => nearestOnPath(eco.terrain.habitat, 'sunwalk', t, s));
 toPlace('Onto the nearest way', 0, (eco, t, s) => nearestOnPath(eco.terrain.habitat, 'way', t, s));
 toPlace('Onto the Mountain trail', 0, (eco, t, s) => nearestOnPath(eco.terrain.habitat, 'trail', t, s));
-toPlace('Into the nearest orchard', -10, (eco, t, s) => nearestPlace(eco.terrain, 'orchard', t, s));
+/** Ground one can stand on (a terrace's ledge, not its wall). */
+const ledge = (eco: Ecology) => (pt: number, ps: number): boolean => slopeAt(eco, pt, ps, eco.terrain.heightAt(pt, ps), 2) < 0.2;
+toPlace('Into the nearest orchard', -10, (eco, t, s) => nearestPlace(eco.terrain, 'orchard', t, s, ledge(eco)));
 toPlace('Into the nearest vineyard', 0, (eco, t, s) => {
   // Between two rows, looking along them.
-  const at = nearestPlace(eco.terrain, 'vineyard', t, s);
+  const at = nearestPlace(eco.terrain, 'vineyard', t, s, ledge(eco));
   const vine = eco.climate.biomes.find((b) => b.name === eco.climate.places.vineyard)?.plants.find((p) => p.rowGap);
-  const gap = vine?.rowGap ?? 0;
-  return at && gap ? { ...at, s: (Math.floor(at.s / gap) + 0.5) * gap } : at;
+  const P = eco.terrain.habitat.profile, row = at && vine?.rowGap ? onRow(eco.terrain, levelRunOf(P), at.theta, at.s, vine.rowGap, Infinity) : null;
+  if (!at || !row || !vine?.rowGap) return at;
+  // Half a row across: up the level's gradient, square to the row (`onRow`'s turn: the row runs along cos, sin).
+  const r = Math.max(P.at(row.s).r, 1), cos = Math.max(Math.abs(P.at(row.s).nr), 0.3), half = vine.rowGap / 2;
+  return { theta: row.theta + (half * Math.sin(row.turn)) / r, s: row.s - (half * Math.cos(row.turn)) / cos, way: [Math.cos(row.turn), Math.sin(row.turn)] };
 });
 debug.add({
   label: 'Before the Vine face, out on the floor', group: 'Go', run: () => {

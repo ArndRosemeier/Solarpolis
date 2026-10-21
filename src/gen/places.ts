@@ -18,8 +18,9 @@
  */
 import { Rng, deriveSeed, hash3f, smoothstep } from '@futuremagic/core';
 import type { Terrain } from './terrain';
-import { planOf, type District } from './plan';
+import { fromLake, planOf, type District } from './plan';
 import { kept } from './kept';
+import { fileUnder, floorGrid } from './floorGrid';
 
 export type PlaceKind = 'orchard' | 'vineyard';
 
@@ -69,7 +70,7 @@ function makePlaces(t: Terrain): Places {
   const fit = (d: District, theta: number, s: number, halfAround: number, halfAlong: number): number => {
     const reach = Math.hypot(halfAround, halfAlong);
     if (s - halfAlong < plan.reserveEnd || s + halfAlong > h.profile.floorEnd) return -1;
-    if (lake && Math.abs(s - lake.s) < lake.halfWidth + halfAlong + size * 0.5) return -1;
+    if (fromLake(lake, s) < halfAlong + size * 0.5) return -1;
     for (const p of plots) if (Math.abs(gap(p.theta, theta)) < p.halfAround + halfAround + EDGE * 2 && Math.abs(p.s - s) < p.halfAlong + halfAlong + EDGE * 2) return -1;
     const at = plan.borderAt(theta, s);
     if (!at || at.district !== d || at.edge < reach * 1.3) return -1;
@@ -105,20 +106,15 @@ function makePlaces(t: Terrain): Places {
     }
   }
 
-  // The blocks filed in a grid over the unrolled floor by every cell they touch, so a point looks in one cell.
-  const cell = Math.max(size * 2, 1), columns = Math.max(1, Math.floor((TURN * R) / cell));
-  const wrapped = (theta: number): number => theta - TURN * Math.floor(theta / TURN);
-  const keyOf = (column: number, row: number): number => row * columns + (((column % columns) + columns) % columns);
-  const filed = new Map<number, Plot[]>();
+  // The blocks filed by every cell of the floor's grid they touch, so a point looks in one cell.
+  const grid = floorGrid(R, Math.max(size * 2, 1)), filed = new Map<number, Plot[]>();
   for (const p of plots) {
-    const u = (wrapped(p.theta) * R) / cell;
-    for (let row = Math.floor((p.s - p.halfAlong) / cell); row <= Math.floor((p.s + p.halfAlong) / cell); row++) {
-      for (let column = Math.floor(u - p.halfAround / cell); column <= Math.floor(u + p.halfAround / cell); column++) {
-        const key = keyOf(column, row), list = filed.get(key);
-        if (list) list.push(p); else filed.set(key, [p]);
-      }
+    const c = grid.column(p.theta), reach = Math.ceil(p.halfAround / grid.size);
+    for (let row = grid.row(p.s - p.halfAlong); row <= grid.row(p.s + p.halfAlong); row++) {
+      for (let column = c - reach; column <= c + reach; column++) fileUnder(filed, grid.key(column, row), p);
     }
   }
+  const wrapped = (theta: number): number => theta - TURN * Math.floor(theta / TURN);
 
   const parcelSeed = deriveSeed(h.seed, 'places', 'parcels'), parcel = spec.places.parcel;
   const placeAt = (theta: number, s: number): { kind: PlaceKind; share: number } | null => {
@@ -136,7 +132,7 @@ function makePlaces(t: Terrain): Places {
       return share > 0 ? { kind, share } : null;
     }
     if (!plots.length) return null;
-    const list = filed.get(keyOf(Math.floor((wrapped(theta) * R) / cell), Math.floor(s / cell)));
+    const list = filed.get(grid.key(grid.column(theta), grid.row(s)));
     if (!list) return null;
     for (const p of list) {
       const across = p.halfAround - Math.abs(gap(theta, p.theta)), along = p.halfAlong - Math.abs(s - p.s);

@@ -1,20 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MATRIX, derive, fromWorld, type HabitatParams } from '../src/blueprint';
-import { makeTerrain, type Terrain } from '../src/gen/terrain';
+import { MATRIX, fromWorld } from '../src/blueprint';
+import type { Terrain } from '../src/gen/terrain';
 import { buildCourt, buildCourtTile, courtDetailOf, courtGridOf, courtLayoutOf, courtTopAt, courtWorld, courtsIn, rimAt, type CourtLayout } from '../src/gen/courts';
 import { childrenOf, rootTiles, type TileKey } from '../src/gen/detailTree';
 import { keptClear, landmarkTopAt } from '../src/gen/landmarks';
 import { buildPatch } from '../src/gen/patch';
 import { riserAt } from '../src/gen/liftStair';
 import { windingOk } from './meshChecks';
+import { terrainOf } from './worlds';
 
-const terrains = new Map<string, Terrain>();
-const terrainOf = (name: string, params: HabitatParams): Terrain => {
-  let t = terrains.get(name);
-  if (!t) { t = makeTerrain(derive(params)); terrains.set(name, t); }
-  return t;
-};
 
 /** Up to `n` of a terrain's courts, spread over all of them. */
 const someOf = (t: Terrain, n: number): CourtLayout[] => {

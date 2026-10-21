@@ -21,8 +21,9 @@
  * Coordinates are the profile's (θ, s); distances over the floor are measured unrolled (θ times the radius, and s).
  */
 import { Rng, Noise, angleDiff, deriveSeed, smoothstep } from '@futuremagic/core';
-import { cultureOf, wrapAngle, type Culture, type DistrictStyle, type FaceKind, type Habitat } from '../blueprint';
+import { cultureOf, type Culture, type DistrictStyle, type FaceKind, type Habitat } from '../blueprint';
 import { kept } from './kept';
+import { fileUnder, floorGrid } from './floorGrid';
 
 const TURN = 2 * Math.PI;
 
@@ -38,6 +39,9 @@ export interface Lake {
   /** The water's surface, as a height above the profile (on the flat floor that is a constant radius). */
   level: number;
 }
+
+/** How far a place along the axis lies from the ring lake's shore (m, negative in the water; far without a lake). */
+export const fromLake = (lake: Lake | null, s: number): number => (lake ? Math.abs(s - lake.s) - lake.halfWidth : Infinity);
 
 export type { FaceKind } from '../blueprint';
 
@@ -378,7 +382,7 @@ export function makePlan(h: Habitat): Plan {
   const nearby = (theta: number, s: number): boolean => {
     near.length = 0; near2.length = 0;
     if (!(s >= reserveEnd && s <= floorEnd) || districts.length === 0) return false;
-    if (lake && Math.abs(s - lake.s) < lake.halfWidth) return false;
+    if (fromLake(lake, s) < 0) return false;
     const u = Math.cos(theta) * R, v = Math.sin(theta) * R;
     theta += (sway / R) * bend.fbm3(u / bendWidth, v / bendWidth, s / bendWidth, 1);
     s += sway * bend.fbm3(u / bendWidth + 31.7, v / bendWidth, s / bendWidth, 1);
@@ -451,13 +455,11 @@ export function makePlan(h: Habitat): Plan {
   const nearRiver = (theta: number, s: number): boolean => rivers.some((r) => Math.abs(wrap(theta - routeOf(r, s))) * R < riverWidth * (3 + r.meander));
   const placed: Site[] = [];
   // Entrances filed by a grid a spacing wide (around the axis, along it), so a new one checks only its neighbours.
-  const bin = new Map<number, Site[]>(), around = Math.ceil(circumference / spacing);
-  const keyOf = (i: number, j: number): number => j * around + (((i % around) + around) % around);
-  const columnOf = (theta: number): number => Math.floor((wrapAngle(theta) * R) / spacing);
+  const bin = new Map<number, Site[]>(), grid = floorGrid(R, spacing);
   const tooClose = (theta: number, s: number): boolean => {
-    const i = columnOf(theta), j = Math.floor(s / spacing);
+    const i = grid.column(theta), j = grid.row(s);
     for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) {
-      for (const o of bin.get(keyOf(i + di, j + dj)) ?? []) if (dist(o.theta, o.s, theta, s) < spacing * 0.6) return true;
+      for (const o of bin.get(grid.key(i + di, j + dj)) ?? []) if (dist(o.theta, o.s, theta, s) < spacing * 0.6) return true;
     }
     return false;
   };
@@ -466,13 +468,12 @@ export function makePlan(h: Habitat): Plan {
     for (let n = 0, tries = 0; n < perDistrict && tries < perDistrict * 30; tries++) {
       const s = k.s + erng.range(-0.75, 0.75) * reach, theta = wrap(k.theta + (erng.range(-0.75, 0.75) * reach) / R);
       // The cheap checks first; each throw must pass them all.
-      if (lake && Math.abs(s - lake.s) < lake.halfWidth + spacing * 0.15) continue;
+      if (fromLake(lake, s) < spacing * 0.15) continue;
       if (tooClose(theta, s) || districtAt(theta, s) !== k || nearRiver(theta, s)) continue;
       const site: Site = { kind: 'entrance', theta, s, size: spacing * 0.025, facing: erng.range(0, TURN), district: k.id };
       k.entrances.push(site);
       placed.push(site);
-      const key = keyOf(columnOf(theta), Math.floor(s / spacing)), list = bin.get(key);
-      if (list) list.push(site); else bin.set(key, [site]);
+      fileUnder(bin, grid.key(grid.column(theta), grid.row(s)), site);
       n++;
     }
     if (!k.entrances.length) {

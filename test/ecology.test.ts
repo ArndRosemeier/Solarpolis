@@ -4,6 +4,7 @@ import { CLIMATES, MATRIX, derive, validate, withParams, type HabitatParams } fr
 import { makeTerrain } from '../src/gen/terrain';
 import { CLOSED_RAISE, UNDER_CROWNS, crownsClosed, makeEcology, type Ecology } from '../src/gen/ecology';
 import { insideExposure, underCrowns } from '../src/render/exposure';
+import { ecologyOf } from './worlds';
 
 /** A grid of points over the whole interior: (θ, s, height, slope of the profile). */
 function sample(eco: Ecology, around = 24, along = 60): { theta: number; s: number; h: number; slope: number }[] {
@@ -25,7 +26,7 @@ const habitats: { name: string; params: HabitatParams }[] = [
 
 for (const { name, params } of habitats) {
   test(`ecology (${name}): planted patches with clear edges, several biomes, the same every time`, () => {
-    const h = derive(params), eco = makeEcology(makeTerrain(h)), again = makeEcology(makeTerrain(h));
+    const eco = ecologyOf(name, params), again = makeEcology(makeTerrain(derive(params)));
     const n = eco.climate.biomes.length, w = new Float32Array(n), w2 = new Float32Array(n);
     const cover = new Array<number>(n).fill(0);
     let clear = 0;
@@ -48,7 +49,7 @@ for (const { name, params } of habitats) {
 
 for (const { name, params } of MATRIX) {
   test(`ecology (${name}): wetter by the lake, drier up the endcaps, high biomes high up`, () => {
-    const h = derive(params), t = makeTerrain(h), eco = makeEcology(t), { profile } = h;
+    const eco = ecologyOf(name, params), t = eco.terrain, h = t.habitat, { profile } = h;
     const floorMid = (profile.floorStart + profile.floorEnd) / 2;
     const mean = (s: number): number => { let m = 0; for (let i = 0; i < 16; i++) { const th = (i / 16) * 2 * Math.PI; m += eco.moistureAt(th, s, t.heightAt(th, s)); } return m / 16; };
     if (t.lake) {
@@ -74,7 +75,7 @@ test('ecology: an unknown climate is an invalid habitat', () => {
 
 for (const { name, params } of MATRIX) {
   test(`ecology (${name}): closed woods shade, open land does not, and the eyes open up under them`, () => {
-    const eco = makeEcology(makeTerrain(derive(params)));
+    const eco = ecologyOf(name, params);
     const color = new Float32Array(3), canopy = new Float32Array(4);
     let open = 0, closed = 0;
     for (const p of sample(eco, 16, 40)) {
@@ -97,7 +98,7 @@ for (const { name, params } of MATRIX) {
 
 for (const { name, params } of MATRIX) {
   test(`ecology (${name}): the Gate's faces read from afar by what they are made of`, () => {
-    const h = derive(params), t = makeTerrain(h), eco = makeEcology(t), { profile } = h, form = t.form;
+    const eco = ecologyOf(name, params), t = eco.terrain, h = t.habitat, { profile } = h, form = t.form;
     const s = profile.floorEnd + (profile.length - profile.floorEnd) * 0.5;
     const out = new Float32Array(3), lum = () => 0.2126 * out[0] + 0.7152 * out[1] + 0.0722 * out[2];
     const sums: Record<string, { rock: number; green: number; n: number }> = {};
