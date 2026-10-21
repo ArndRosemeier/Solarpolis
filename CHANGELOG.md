@@ -2,6 +2,11 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.049 — Softer cloud bases
+
+- Cloud bases are flat under each cloud's middle and lift toward its rim, so where they meet the horizon they no longer form one ruler-straight line.
+- Long views along the axis no longer show ring patterns in the clouds.
+
 ## v0.048 — Clouds
 
 - A cloud layer a kilometre or so above the floor: grey-bottomed cumulus overhead, bright where the sunline shines through a thin edge, and their sunlit tops on the far side of the cylinder.
