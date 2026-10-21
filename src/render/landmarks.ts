@@ -9,8 +9,8 @@ import type { Stage } from '@futuremagic/stage';
 import { toView, type Habitat, type Vec3 } from '../blueprint';
 import type { Mat3 } from '../space';
 import { frameOf, type Landmark } from '../gen/landmarks';
-import type { Place } from '../gen/shapes';
-import { PAVILION_LEVELS, pavilionPlan, roofAt } from '../gen/pavilion';
+import { intoPlace, type Place } from '../gen/shapes';
+import { PAVILION_LEVELS, pavilionPlan, roofAt, type PavilionPlan } from '../gen/pavilion';
 import type { WorkerPool } from '../workers/pool';
 import { BUILT } from './materials';
 import { freeMesh, meshGeometry, posedMesh, setPose, uploadStatic } from './geometry';
@@ -28,6 +28,7 @@ const PIXELS = 0.5;
 interface Shown {
   landmark: Landmark;
   frame: Place;
+  plan: PavilionPlan;
   axes: Mat3;
   /** How far the eye may be from the centre, past the roof's edge, for each finer level (m). */
   within: Record<Exclude<Level, 'far'>, number>;
@@ -51,7 +52,7 @@ export class LandmarkView {
     this.shown = landmarks.map((landmark) => {
       const f = frameOf(habitat, landmark), q = pavilionPlan(landmark);
       return {
-        landmark, frame: f,
+        landmark, frame: f, plan: q,
         axes: [f.ex[0], f.ey[0], f.ez[0], f.ex[1], f.ey[1], f.ez[1], f.ex[2], f.ey[2], f.ez[2]],
         // Near: the railings' posts and cables (a few centimetres); mid: the seats' risers and the piers.
         within: { near: (q.handrail * 0.07) / PIXELS, mid: q.riser / PIXELS },
@@ -77,7 +78,7 @@ export class LandmarkView {
   /** Each frame: pick each landmark's level by the eye's distance, ask for what is missing, and place the meshes. */
   follow(eye: Vec3, pixelsPerRadian: number): void {
     this.shown.forEach((s, i) => {
-      const o = s.frame.at, edge = Math.hypot(eye[0] - o[0], eye[1] - o[1], eye[2] - o[2]) - s.roof.x;
+      const o = s.frame.at, edge = this.awayFrom(s, eye);
       const near = s.within.near * pixelsPerRadian, mid = s.within.mid * pixelsPerRadian;
       const want: Level = edge < near * (s.drawn === 'near' ? HOLD : 1) ? 'near' : edge < mid * (s.drawn !== 'far' ? HOLD : 1) ? 'mid' : 'far';
       if (edge < near * AHEAD) this.ask(i, 'near');
@@ -96,6 +97,17 @@ export class LandmarkView {
         if (m.visible) setPose(m, s.axes, at);
       }
     });
+  }
+
+  /** How far the eye is from the nearest part of a landmark: under or over its roof's disc, or by one of its bridges (m). */
+  private awayFrom(s: Shown, eye: Vec3): number {
+    const [x, y, z] = intoPlace(s.frame, eye), q = s.plan;
+    let across = Math.max(0, Math.hypot(x, y) - q.reach);
+    for (const b of s.landmark.bridges) {
+      const along = x * b.dir, past = along < b.from ? b.from - along : along > b.to ? along - b.to : 0;
+      across = Math.min(across, Math.hypot(past, Math.max(0, Math.abs(y) - q.bridge / 2)));
+    }
+    return Math.hypot(across, Math.max(0, z - q.eaves, -z));
   }
 
   private ask(i: number, level: Level): void {
