@@ -268,13 +268,14 @@ export function rockFromAfar(color: Node<'vec3'>, rock: Node<'float'>, world: No
       const steep = smoothstep(0.15, 0.6, float(1).sub(dot(normal, up)));
       const layered = mix(vec3(1), beds, showBeds.mul(steep));
       // Streaks: noise drawn out down the fall line (narrow across it, long along it).
-      const fall = up.sub(normal.mul(dot(up, normal))).normalize(), side = normal.cross(fall);
+      // On level ground the fall line is undefined (and the streaks gone with `steep`): keep it finite there.
+      const downhill = up.sub(normal.mul(dot(up, normal))), fall = downhill.div(max(length(downhill), 1e-3)), side = normal.cross(fall);
       const along = vec3(dot(world, side).div(bed.mul(0.8)), dot(world, fall).div(bed.mul(10)), 0.5);
       const streak = mix(float(STREAK_MEAN), smoothstep(0.1, 0.4, mx_noise_float(along)), showStreaks);
       const wet = float(1).sub(streak.mul(steep).mul(1 - STREAK_DARK));
-      // Broad tones over thirty beds: warmer where darker.
+      // Broad tones over thirty beds, iron-stained: warmer where darker.
       const broad = mx_noise_float(world.div(bed.mul(30)).add(vec3(5.3, 1.7, 8.1))).mul(showBroad);
-      const tones = vec3(broad.mul(0.25).add(1), broad.mul(0.2).add(1), broad.mul(0.12).add(1));
+      const tones = vec3(broad.mul(0.4).add(1), broad.mul(0.32).add(1), broad.mul(0.2).add(1));
       // Lichen in patches of a few beds across.
       const patches = smoothstep(0.05, 0.45, mx_noise_float(world.div(bed.mul(2.5)).add(vec3(11.1, 2.9, 6.4))));
       const lichen = mix(float(LICHEN_MEAN), patches, showLichen).mul(0.5);

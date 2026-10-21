@@ -237,8 +237,11 @@ function landHit(m: InsideMeterable, eye: Vec3, d: Vec3): { p: Vec3; n: Vec3 } |
   if (d[2] > 1e-9 && (L - eye[2]) / d[2] < t) { t = (L - eye[2]) / d[2]; n = [0, 0, -1]; }
   else if (d[2] < -1e-9 && -eye[2] / d[2] < t) { t = -eye[2] / d[2]; n = [0, 0, 1]; }
   if (!Number.isFinite(t) || t <= 0) return null;
-  const heightAt = m.heightAt;
-  if (heightAt) {
+  // The land rises far from the profile only on the endcaps (the massif, the Gate): a ray from over the floor that
+  // reaches the floor's tube meets only its gentle hills, where the tube is, near enough for the meter.
+  const heightAt = m.heightAt, z0 = h.profile.at(h.profile.floorStart).z, z1 = h.profile.at(h.profile.floorEnd).z;
+  const between = (z: number): boolean => z > z0 && z < z1;
+  if (heightAt && !(n === null && between(eye[2]) && between(eye[2] + d[2] * t))) {
     const above = (u: number): { over: number; theta: number; s: number } => {
       const q = fromWorld(h.profile, eye[0] + d[0] * u, eye[1] + d[1] * u, eye[2] + d[2] * u);
       return { over: q.h - heightAt(q.theta, q.s), theta: q.theta, s: q.s };
