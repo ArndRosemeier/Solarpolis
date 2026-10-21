@@ -36,6 +36,19 @@ export interface EndcapShape {
   rise: number;
 }
 
+/**
+ * The land's relief. Hills and lakes are built: the ceiling deck rises under a hill and dips under a lake, and the
+ * living layer below follows it, so relief is not limited by the soil's depth (Arnd's decision card, 2026-10-21).
+ */
+export interface Relief {
+  /** The highest hills on the floor, above the mean surface (m). */
+  hills: number;
+  /** The ring lake around the whole floor: its width along the axis and its depth (m); null for none. */
+  ringLake: { width: number; depth: number } | null;
+  /** Height of one terrace step on the endcap slopes (m). */
+  terraceStep: number;
+}
+
 export type AxisOrientation = 'side-on' | 'end-on';
 
 export interface HabitatParams {
@@ -76,6 +89,7 @@ export interface HabitatParams {
   /** Radius of the sunline, the light tube along the axis (m). It ends in the dock hub, so it is thinner than the hub. */
   sunlineRadius: number;
   endcaps: { wild: EndcapShape; port: EndcapShape };
+  relief: Relief;
   /** The climate and biome profile, by name (catalogue comes with the ecology stage). */
   climate: string;
   population: number;

@@ -3,8 +3,8 @@
  * ground and a pitch, turned into an eye, a view direction and an up vector in world axes. "Up" is the ground's
  * normal, so it swings with the curve of the floor and leans over on the endcap slopes. Pure (no three.js).
  *
- * For now the walker glides along the profile at a fixed eye height: no physics, no Coriolis yet (both come with the
- * physics stage).
+ * For now the walker glides over the ground at a fixed eye height (`ground` gives where one stands: the terrain, or the
+ * water over the lake): no physics, no Coriolis yet (both come with the physics stage).
  */
 import { toWorld, groundNormal, wrapAngle, type Interior, type Profile, type Vec3 } from '../blueprint';
 
@@ -27,7 +27,7 @@ export const EYE_HEIGHT = 1.7;
 const PITCH_LIMIT = Math.PI / 2 - 0.01;
 
 export class Walker {
-  /** Where the walker stands (h is the eye's height above the ground). */
+  /** Where the walker stands (h is the eye's height above the ground, not above the profile). */
   at: Interior;
   /** Heading on the ground: 0 along +s (towards the port end on the floor); growing turns right. */
   heading = 0;
@@ -36,14 +36,15 @@ export class Walker {
   /** Ground speed (m/s). */
   speed = 5;
 
-  constructor(private profile: Profile, at: Interior = startOf(profile)) {
+  constructor(private profile: Profile, at: Interior = startOf(profile), private ground: (theta: number, s: number) => number = () => 0) {
     this.at = { ...at };
   }
 
-  /** Move to another habitat's profile (the Lab changed it), keeping the share of the way along it. */
-  setProfile(profile: Profile): void {
+  /** Move to another habitat (the Lab changed it), keeping the share of the way along its profile. */
+  setProfile(profile: Profile, ground: (theta: number, s: number) => number = () => 0): void {
     const share = this.at.s / this.profile.length;
     this.profile = profile;
+    this.ground = ground;
     this.at.s = share * profile.length;
   }
 
@@ -76,7 +77,7 @@ export class Walker {
     const side: Vec3 = [-Math.sin(theta), Math.cos(theta), 0].map((v) => -v) as Vec3;
     const ch = Math.cos(this.heading), sh = Math.sin(this.heading), cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
     const look: Vec3 = [0, 1, 2].map((i) => cp * (ch * along[i] + sh * side[i]) + sp * up[i]) as Vec3;
-    return { eye: toWorld(this.profile, this.at), look, up };
+    return { eye: toWorld(this.profile, { theta, s, h: this.ground(theta, s) + this.at.h }), look, up };
   }
 }
 

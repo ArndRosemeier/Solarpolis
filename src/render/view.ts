@@ -1,14 +1,16 @@
 /**
- * The view from inside: the one renderer (WebGPU only), the Stage, the whole interior surface and the sunline,
- * seen by a walker on the ground. Hold the right mouse button to look around (the pointer stays free for clicking
+ * The view from inside: the one renderer (WebGPU only), the Stage, the terrain tiles and the sunline, seen by a walker
+ * on the ground. Everything is drawn relative to the eye (`toView`): the camera sits at the origin and the world moves. Hold the right mouse button to look around (the pointer stays free for clicking
  * things); W A S D or the arrow keys to walk, Shift to run.
  */
-import { BufferAttribute, BufferGeometry, Color, CylinderGeometry, Mesh, PerspectiveCamera, Scene, type WebGPURenderer } from 'three/webgpu';
+import { Color, CylinderGeometry, Mesh, PerspectiveCamera, Scene, type WebGPURenderer } from 'three/webgpu';
 import { Stage, createRenderer } from '@futuremagic/stage';
-import type { Habitat } from '../blueprint';
-import { buildSurface, surfaceBytes, type SurfaceGrid } from '../gen/surface';
+import { toView, type Habitat } from '../blueprint';
+import { makeTerrain, type Terrain } from '../gen/terrain';
 import { Walker } from '../world/walker';
-import { GROUND, SUNLINE, air, allKinds } from './materials';
+import { WorkerPool } from '../workers/pool';
+import { SUNLINE, air, allKinds, view } from './materials';
+import { TerrainView, describeLayout } from './terrain';
 
 /** Running is this many times the walking speed. */
 const RUN = 8;
@@ -20,9 +22,10 @@ export class InteriorView {
   private stage!: Stage;
   private readonly scene = new Scene();
   private readonly camera = new PerspectiveCamera(70, 1, 0.3, 1e6);
-  private ground: Mesh | null = null;
+  private readonly pool = new WorkerPool();
+  private terrain: Terrain;
+  private tiles: TerrainView | null = null;
   private sunline: Mesh | null = null;
-  private grid: SurfaceGrid | null = null;
   private keys = new Set<string>();
   private running = false;
   private last = 0;
@@ -30,7 +33,8 @@ export class InteriorView {
   boost = 1;
 
   private constructor(private habitat: Habitat) {
-    this.walker = new Walker(habitat.profile);
+    this.terrain = makeTerrain(habitat);
+    this.walker = new Walker(habitat.profile, undefined, this.terrain.standAt);
     this.canvas.className = 'view-canvas';
   }
 
@@ -50,37 +54,37 @@ export class InteriorView {
 
   /** Bytes of geometry this view holds (memory watchdog). */
   bytes(): number {
-    return this.grid ? surfaceBytes(this.grid) : 0;
+    return this.tiles?.bytes() ?? 0;
   }
 
-  /** One line for the debug menu. */
+  /** Give memory back (memory watchdog): drop every cached tile not on screen. */
+  shed(): void {
+    this.tiles?.shed();
+  }
+
+  /** Lines for the debug menu. */
   info(): string {
-    const g = this.grid;
     const a = this.walker.at;
-    return `${this.stage.hudLine()}\nsurface ${g ? `${g.columns} × ${g.rows} cells of ~${g.cell.toFixed(0)} m` : 'none'} · θ ${(a.theta * 180 / Math.PI).toFixed(1)}°, s ${(a.s / 1000).toFixed(2)} of ${(this.habitat.profile.length / 1000).toFixed(2)} km`;
+    return [
+      this.stage.hudLine(),
+      `${this.tiles?.info() ?? 'terrain: none'} · ${describeLayout(this.terrain)} · ${this.pool.workers} workers`,
+      `θ ${(a.theta * 180 / Math.PI).toFixed(1)}°, s ${(a.s / 1000).toFixed(2)} of ${(this.habitat.profile.length / 1000).toFixed(2)} km, ground ${this.terrain.standAt(a.theta, a.s).toFixed(1)} m`,
+    ].join('\n');
   }
 
   /** Show another habitat (the Lab changed it). */
   async setHabitat(h: Habitat): Promise<void> {
     if (h === this.habitat) return;
     this.habitat = h;
-    this.walker.setProfile(h.profile);
+    this.terrain = makeTerrain(h);
+    this.walker.setProfile(h.profile, this.terrain.standAt);
     await this.build();
   }
 
   private async build(): Promise<void> {
-    for (const m of [this.ground, this.sunline]) if (m) { this.stage.remove(m); m.geometry.dispose(); }
+    if (this.tiles) { this.scene.remove(this.tiles.group); this.tiles.dispose(); }
+    if (this.sunline) { this.stage.remove(this.sunline); this.sunline.geometry.dispose(); }
     const h = this.habitat;
-    const g = buildSurface(h);
-    const geo = new BufferGeometry();
-    geo.setAttribute('position', new BufferAttribute(g.positions, 3));
-    geo.setAttribute('normal', new BufferAttribute(g.normals, 3));
-    geo.setAttribute('color', new BufferAttribute(g.colors, 3));
-    geo.setIndex(new BufferAttribute(g.index, 1));
-    this.grid = g;
-    this.ground = new Mesh(geo, GROUND.material);
-    this.ground.frustumCulled = false; // it surrounds the eye
-    this.ground.name = 'ground';
     // The sunline: from the wild wall to the port wall along the axis.
     const tube = new CylinderGeometry(h.params.sunlineRadius, h.params.sunlineRadius, h.length, 24, 1, true);
     tube.deleteAttribute('uv'); // the kind's attributes are position and normal (docs/SHADERS.md)
@@ -88,16 +92,25 @@ export class InteriorView {
     tube.translate(0, 0, h.length / 2);
     this.sunline = new Mesh(tube, SUNLINE.material);
     this.sunline.name = 'sunline';
+    this.sunline.frustumCulled = false;
     this.camera.far = 4 * (h.radius + h.length);
     this.camera.updateProjectionMatrix();
-    await Promise.all([this.stage.add(this.ground), this.stage.add(this.sunline)]);
+    this.tiles = new TerrainView(this.terrain, this.stage, this.pool);
+    this.scene.add(this.tiles.group);
+    this.place();
+    await Promise.all([this.stage.add(this.sunline), this.tiles.load()]);
   }
 
+  /** Put the camera at the origin looking the walker's way, and the world around it relative to the eye. */
   private place(): void {
     const v = this.walker.view();
-    this.camera.position.set(...v.eye);
+    view.eye.value.set(...v.eye);
+    this.camera.position.set(0, 0, 0);
     this.camera.up.set(...v.up);
-    this.camera.lookAt(v.eye[0] + v.look[0], v.eye[1] + v.look[1], v.eye[2] + v.look[2]);
+    this.camera.lookAt(v.look[0], v.look[1], v.look[2]);
+    if (this.sunline) this.sunline.position.set(...toView(v.eye, [0, 0, 0]));
+    const pixelsPerRadian = (this.canvas.clientHeight || 720) / (this.camera.fov * Math.PI / 180);
+    this.tiles?.follow(v.eye, pixelsPerRadian);
   }
 
   private listen(): void {
