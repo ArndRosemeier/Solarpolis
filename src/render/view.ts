@@ -26,7 +26,7 @@ import { densityFalloff, seenMid } from '../world/air';
 import { TerrainView, describeLayout } from './terrain';
 import { PlantView } from './plants';
 import { slopeAt } from '../gen/scatter';
-import { setFloorEye } from './groundShaders';
+import { setFloorEye, setRockBeds } from './groundShaders';
 import { UNDER_CROWNS, crownsClosed, makeEcology, type Ecology } from '../gen/ecology';
 import { FrameLoop, dragToLook, draw, fitCanvas, moveKeys } from './surface';
 import { freeMesh } from './geometry';
@@ -358,6 +358,7 @@ export class InteriorView {
     setSunline(h.length, this.norm, nearestLit(h));
     this.shine();
     setAir(densityFalloff(h), h.radius, seenMid(h), h.params.air.hazeDistance);
+    setRockBeds(h.params.relief.terraceStep);
     // The sunline: from the wild wall to the port wall along the axis.
     const tube = new CylinderGeometry(h.params.sunlineRadius, h.params.sunlineRadius, h.length, 24, 1, true);
     tube.deleteAttribute('uv'); // the kind's attributes are position and normal (docs/SHADERS.md)

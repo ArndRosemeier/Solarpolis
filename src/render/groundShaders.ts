@@ -15,7 +15,7 @@
 import { DataArrayTexture, Vector3, type Node } from 'three/webgpu';
 import { filtered } from './textures';
 import { abs, attribute, clamp, dFdx, dFdy, exp, float, floor, int, length, log, max, min, mix, mx_noise_float, fract, dot, normalize, positionWorld, pow, select, smoothstep, sqrt, texture, uniform, uniformArray, vec2, vec3 } from 'three/tsl';
-import { FLOOR_LAYERS, type HabitatParams } from '../blueprint';
+import { FLOOR_LAYERS, type FloorLayer, type HabitatParams } from '../blueprint';
 import type { WorkerPool } from '../workers/pool';
 import { GROUND_LAYERS, GROUND_TEX } from '../gen/groundTex';
 
@@ -79,6 +79,12 @@ function topTwo(w: Node<'float'>[]): { a: Node<'int'>; b: Node<'int'>; va: Node<
   return { a, b, va, vb };
 }
 
+/** A floor layer's share at a point (0 … 1): the tiles carry the eight layers' shares as `floorA` and `floorB`. */
+export function floorShare(layer: FloorLayer): Node<'float'> {
+  const i = FLOOR_LAYERS.indexOf(layer), v = attribute<'vec4'>(i < 4 ? 'floorA' : 'floorB', 'vec4');
+  return [v.x, v.y, v.z, v.w][i % 4];
+}
+
 /** A projection of a 3-vector on the plane across axis `axis` (0 x, 1 y, 2 z). */
 const across = (axis: Node<'float'>, v: Node<'vec3'>): Node<'vec2'> => select(axis.lessThan(0.5), v.yz, select(axis.lessThan(1.5), v.zx, v.xy));
 /** The plane's two directions in world space. */
@@ -140,6 +146,18 @@ function cellHash(c: Node<'vec3'>): Node<'vec3'> {
   return fract(b.xxy.add(b.yxx).mul(b.zyx));
 }
 
+/**
+ * A pixel's footprint on the ground (m): long down the line of sight on ground seen at a slant, short across it.
+ * `shown(size)` is how much of a pattern of that size may show: while the footprint's area is well under it (`foot`, the
+ * geometric mean), and as long as the long side (`reach`) still samples it twice, or it would alias into streaks
+ * along the view. Past that, a pattern gives way to its mean.
+ */
+function footprint(): { foot: Node<'float'>; reach: Node<'float'>; shown: (size: Node<'float'>) => Node<'float'> } {
+  const fx = length(dFdx(positionWorld)), fy = length(dFdy(positionWorld));
+  const reach = max(fx, fy), foot = sqrt(fx.mul(fy));
+  return { foot, reach, shown: (size) => float(1).sub(smoothstep(0.15, 0.45, foot.div(size))).mul(float(1).sub(smoothstep(0.5, 1, reach.div(size)))) };
+}
+
 /** A crown's radius in its cell (the cells are the trees' spacing apart), for a mean-sized tree. */
 const CROWN = 0.8;
 /**
@@ -161,13 +179,8 @@ const GAP_SHADE = 0.25;
  * Closed woods stay closed and open land stays open: the stands and clumps only move the cover where it is between.
  */
 export function woodsFromAfar(ground: Node<'vec3'>, crown: Node<'vec3'>, cover: Node<'float'>, spacing: Node<'float'>, world: Node<'vec3'>): Node<'vec3'> {
-  // The pixel's footprint on the ground (m): long down the line of sight on ground seen at a slant, short across it.
-  // A pattern shows while the footprint's area is well under its size (`foot`, the geometric mean), and as long as
-  // the long side still samples it twice (`reach`), or it would alias into streaks along the view.
-  const fx = length(dFdx(positionWorld)), fy = length(dFdy(positionWorld));
-  const reach = max(fx, fy), foot = sqrt(fx.mul(fy));
+  const { foot, shown } = footprint();
   const cell = max(spacing, 2);
-  const shown = (size: Node<'float'>): Node<'float'> => float(1).sub(smoothstep(0.15, 0.45, foot.div(size))).mul(float(1).sub(smoothstep(0.5, 1, reach.div(size))));
   // Stands (two dozen trees across), groves (ten) and clumps (five): the cover wanders where the woods are open or
   // thinning, so their edges break into groves and clearings rather than fading over the tile's points.
   const between = sqrt(clamp(cover.mul(float(1).sub(cover)), 0, 0.25)).mul(2);
@@ -200,4 +213,52 @@ export function woodsFromAfar(ground: Node<'vec3'>, crown: Node<'vec3'>, cover: 
   const far = mix(gap, crown.mul(CROWN_MEAN), covered);
   // The land itself is never one flat colour: stands and clumps tint it a little, woods and open ground alike.
   return mix(near, far, float(1).sub(shown(cell.mul(2.6)))).mul(stands.mul(0.1).add(groves.mul(0.06)).add(clumps.mul(0.05)).add(1));
+}
+
+/** How thick a bed of rock is (m): set per habitat from its relief (`setRockBeds`). */
+const rockBed = uniform(30);
+/** Rock beds are a fifth of a terrace step thick: a cliff shows a few of them, an endcap's face dozens. */
+export function setRockBeds(terraceStep: number): void {
+  rockBed.value = terraceStep / 5;
+}
+/**
+ * The way the beds dip (unit, world): mostly across the axis, so they cross an endcap as folded stripes and a cliff as
+ * slanting bands, never as rings around the axis.
+ */
+const DIP = new Vector3(0.8, 0.45, 0.4).normalize();
+/** Each bed's tone against the rock's own colour: dark and warm, plain, pale and cool; their mean over the beds is 1. */
+const BED_TONES: [number, number, [number, number, number]][] = [[0, 0.35, [0.66, 0.6, 0.52]], [0.35, 0.75, [1, 1, 1]], [0.75, 1, [1.3, 1.3, 1.36]]];
+const BED_MEAN = BED_TONES.map(([a, b, t]) => (b - a) * (t[0] + t[1] + t[2]) / 3).reduce((x, y) => x + y, 0);
+/** Lichen on rock: how much of it a patch holds on average, and its colour against the rock's grey. */
+const LICHEN_MEAN = 0.2;
+const LICHEN = vec3(0.95, 1.05, 0.62);
+
+/**
+ * Rock from afar (GROUND, where the floor is rock: the `rock` share, docs/far-view.md): the climate's one rock colour
+ * becomes beds of darker, warmer and paler stone, folded and dipping across the slope, broad tones over many beds, and
+ * lichen in patches. Each scale gives way to its mean as the footprint grows (`footprint`), so rock seen across the
+ * habitat keeps the light it has close up.
+ */
+export function rockFromAfar(color: Node<'vec3'>, rock: Node<'float'>, world: Node<'vec3'>): Node<'vec3'> {
+  const { shown } = footprint();
+  const bed = rockBed;
+  // The beds: the dip, folded at the scale of a dozen beds.
+  const u = dot(world, vec3(DIP.x, DIP.y, DIP.z)).div(bed).add(mx_noise_float(world.div(bed.mul(14))).mul(2.5));
+  const toneOf = (k: Node<'float'>): Node<'vec3'> => {
+    const h = cellHash(vec3(k, 7, 3)).x;
+    let t: Node<'vec3'> = vec3(...BED_TONES[0][2]);
+    for (const [from, , tone] of BED_TONES.slice(1)) t = select(h.greaterThan(from), vec3(...tone), t);
+    return t;
+  };
+  const k = floor(u), seam = smoothstep(0.82, 1, fract(u));
+  const beds = mix(toneOf(k), toneOf(k.add(1)), seam).div(BED_MEAN);
+  const layered = mix(vec3(1), beds, shown(bed.mul(1.5)));
+  // Broad tones over thirty beds: warmer where darker.
+  const broad = mx_noise_float(world.div(bed.mul(30)).add(vec3(5.3, 1.7, 8.1))).mul(shown(bed.mul(30)));
+  const tones = vec3(broad.mul(0.25).add(1), broad.mul(0.2).add(1), broad.mul(0.12).add(1));
+  // Lichen in patches of a few beds across.
+  const patches = smoothstep(0.05, 0.45, mx_noise_float(world.div(bed.mul(2.5)).add(vec3(11.1, 2.9, 6.4))));
+  const lichen = mix(float(LICHEN_MEAN), patches, shown(bed.mul(2.5))).mul(0.5);
+  const stone = color.mul(layered).mul(tones);
+  return mix(color, mix(stone, stone.mul(LICHEN), lichen), rock);
 }

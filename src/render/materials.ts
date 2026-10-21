@@ -25,7 +25,7 @@ import { OPEN_SKY } from '../gen/horizon';
 import { EMISSION_SAMPLES, SUNLINE_STEPS } from '../world/sunline';
 import { HAZE_STEPS } from '../world/air';
 import { skyDome, starColor, starVertex } from './skyShaders';
-import { floorSurface, woodsFromAfar } from './groundShaders';
+import { floorShare, floorSurface, rockFromAfar, woodsFromAfar } from './groundShaders';
 import { RISE_RANGE } from '../gen/tiles';
 import { filtered } from './textures';
 import { cloudMarch, cloudShade } from './cloudShaders';
@@ -226,9 +226,11 @@ export const GROUND = kind('ground', ['position', 'normal', 'color', 'morph', 'h
   const far = varying(woods);
   // Close up, the floor's own surface (groundShaders.ts): grass, litter, sand, rock, resolving as the eye comes near.
   const away = positionWorld.sub(cameraPosition).length();
-  const floorUp = floorSurface(vertexColor().rgb, normalize(normalWorld));
+  // Rock in beds, tones and lichen (groundShaders.ts), where the floor is rock.
+  const base = rockFromAfar(vertexColor().rgb, floorShare('rock'), worldPosition());
+  const floorUp = floorSurface(base, normalize(normalWorld));
   // From afar, crowns and the gaps between them, clumps and glades (groundShaders.ts, docs/far-view.md).
-  const fromAfar = woodsFromAfar(vertexColor().rgb, canopy.rgb, horizon.z, horizon.w, worldPosition());
+  const fromAfar = woodsFromAfar(base, canopy.rgb, horizon.z, horizon.w, worldPosition());
   const ground = mix(floorUp.color, fromAfar, far);
   // Under the woods past the shadow map's reach, the crowns' shade on average (`crownsClosed`): the floor stays in
   // the shade the near trees cast, and the canopy seen from afar keeps its sunlit tops.
