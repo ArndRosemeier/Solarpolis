@@ -7,7 +7,7 @@
  * oak) are new, where Scale had palm fronds. Colours are dilated into the transparent texels so the mips do not
  * bleed dark fringes. Cell numbers: `LEAF_CELLS` (gen/trees.ts). Deterministic: one fixed seed.
  */
-import { Rng, clamp } from '@futuremagic/core';
+import { Rng, clamp, srgbToLinear } from '@futuremagic/core';
 
 type Ctx = OffscreenCanvasRenderingContext2D;
 const deg = Math.PI / 180;
@@ -488,3 +488,26 @@ export function leafAtlas(): Uint8Array {
   }
   return new Uint8Array(d.buffer.slice(0));
 }
+
+/**
+ * The mean colour (linear) of each of the atlas's 16 cells over the texels a leaf card shows (alpha past the LEAF
+ * kind's cut-off, `LEAF_CUT`): what a crown of its cards looks like from a little way off, which the far hull matches.
+ */
+export function leafMeans(atlas: Uint8Array): Float32Array {
+  const S = LEAF_ATLAS_SIZE, C = S / 4, out = new Float32Array(16 * 3), cut = LEAF_CUT * 255;
+  const lin = new Float32Array(256).map((_, v) => srgbToLinear(v / 255));
+  for (let i = 0; i < 16; i++) {
+    const cx = (i % 4) * C, cy = Math.floor(i / 4) * C;
+    let r = 0, g = 0, b = 0, n = 0;
+    for (let y = cy; y < cy + C; y++) for (let x = cx; x < cx + C; x++) {
+      const o = (y * S + x) * 4;
+      if (atlas[o + 3] <= cut) continue;
+      r += lin[atlas[o]]; g += lin[atlas[o + 1]]; b += lin[atlas[o + 2]]; n++;
+    }
+    if (n) out.set([r / n, g / n, b / n], i * 3);
+  }
+  return out;
+}
+
+/** The alpha below which a leaf card's texel is cut away (the LEAF kind's mask). */
+export const LEAF_CUT = 0.45;
