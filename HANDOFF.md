@@ -13,11 +13,12 @@ Where the work stands, for the next thread. Update it in the PR that changes it.
 - **Haze**: `src/world/air.ts` and `throughAir`: density from the blueprint's pressure profile, lit by the sunline (a halo near it), marched per pixel in 10 pieces with the halo term integrated exactly. The plan's froxel volume (compute) is not built: per pixel is exact and needs no compute pass. It becomes worth it when clouds and night lights join the air (milestone 4).
 - **Travelling sun**: `HabitatParams.day` and `sunlineEmission(h, t)`: a bright stretch crosses the tube from the wild end to the port end over the daylight hours, the tube dims at night; the sunline mesh, ground light, sky light and haze all follow it. The view's clock runs ×60 by default (a day in 24 minutes); debug menu, Time.
 - **Rotating-frame physics (milestone 3, part 1)**: `src/world/motion.ts` (centrifugal plus Coriolis), `src/physics/world.ts` (Rapier with gravity off and the apparent force added per step, a bubble that moves with the player over a ground patch from the worker pool). Debug menu, Physics: a ball dropped from 20 m lands about `habitat.dropOffset(20)` behind the spot below it, tested over the whole `MATRIX`.
+- **Character controller**: `src/physics/character.ts`, the player's capsule on Rapier's character controller. Up is toward the axis everywhere (`upAt`), gravity is the spin's, so the view stays upright on the endcap slopes and jumps carry further up them; Coriolis acts in the air; in the lake the body floats and swims. Space jumps. The walker only glides until the first ground patch arrives.
 - **Fly camera**: `src/world/flyer.ts`, F in the Inside view; E/Space climb, Q/C sink; speed grows with height.
 
 ## Next
 
-1. Milestone 3, "Standing in it": the character controller in `PhysicsWorld` with a moving up (replaces the walker's glide), the player as an Actors human, the near shadow map.
+1. Milestone 3, "Standing in it": the player as an Actors human (body on the `Character`), the near shadow map.
 2. Dunfinity can switch to `@futuremagic/stage` and drop its own copy (its own PR, in its own thread).
 
 ## The outside (plan "Solarpolis: the outside": https://claude.ai/artifact/5aV6F3oGzxDapsjV59haXi)

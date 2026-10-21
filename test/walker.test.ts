@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MATRIX, derive, fromWorld } from '../src/blueprint';
+import { MATRIX, derive, toWorld } from '../src/blueprint';
 import { Walker, EYE_HEIGHT } from '../src/world/walker';
 
 const dot = (a: number[], b: number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -31,14 +31,15 @@ for (const { name, params } of MATRIX) {
     const v2 = w.view();
     assert.ok(dot(v2.look, rightHere) > 0.999, 'turning a quarter right looks where right was');
     for (let i = 0; i < 50; i++) w.step({ forward: 1, right: 0.3 }, 7);
-    const at = fromWorld(h.profile, ...w.view().eye);
-    assert.ok(Math.abs(at.h - EYE_HEIGHT) < 1e-3, 'still at eye height above the ground');
+    // The eye stands EYE_HEIGHT straight up (toward the axis) from the feet, on the floor and up the endcaps alike.
+    const eye = w.view().eye, feet = toWorld(h.profile, { theta: w.at.theta, s: w.at.s, h: 0 });
+    assert.ok(Math.abs(Math.hypot(eye[0] - feet[0], eye[1] - feet[1], eye[2] - feet[2]) - EYE_HEIGHT) < 1e-6, 'still at eye height above the feet');
   });
 
-  test(`walker (${name}): on an endcap slope, up leans towards the open side`, () => {
+  test(`walker (${name}): on an endcap slope, up is still the spin's (toward the axis), not the slope's`, () => {
     const w = new Walker(h.profile, { theta: 1, s: h.profile.floorStart / 2, h: EYE_HEIGHT });
-    const v = w.view();
-    assert.ok(v.up[2] > 0.05, 'on the wild slope, up leans towards the port end');
+    const v = w.view(), r = Math.hypot(v.eye[0], v.eye[1]);
+    assert.ok(Math.abs(v.up[2]) < 1e-12 && Math.abs(v.up[0] + v.eye[0] / r) < 1e-9 && Math.abs(v.up[1] + v.eye[1] / r) < 1e-9, 'up points at the axis');
     assert.ok(Math.abs(dot(v.up, v.look)) < 1e-9, 'level look is along the ground');
   });
 }

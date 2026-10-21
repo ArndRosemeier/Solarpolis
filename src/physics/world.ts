@@ -12,6 +12,7 @@ import type RAPIER_NS from '@dimforge/rapier3d-compat';
 import type { Habitat, Vec3 } from '../blueprint';
 import type { GroundPatch } from '../gen/patch';
 import { apparentAcceleration } from '../world/motion';
+import { Character, type WaterDepth } from './character';
 
 type Rapier = typeof RAPIER_NS;
 
@@ -41,6 +42,7 @@ export class PhysicsWorld {
   private readonly bodies = new Map<number, { body: RAPIER_NS.RigidBody; radius: number }>();
   private next = 1;
   private carry = 0;
+  private character: Character | null = null;
 
   private constructor(private readonly R: Rapier, private habitat: Habitat) {
     this.world = new R.World({ x: 0, y: 0, z: 0 });
@@ -68,7 +70,9 @@ export class PhysicsWorld {
   setGround(patch: GroundPatch): void {
     if (this.ground) this.world.removeCollider(this.ground, false);
     const shift: Vec3 = [this.origin[0] - patch.origin[0], this.origin[1] - patch.origin[1], this.origin[2] - patch.origin[2]];
-    for (const { body } of this.bodies.values()) {
+    const moving = [...this.bodies.values()].map((b) => b.body);
+    if (this.character) moving.push(this.character.rigidBody);
+    for (const body of moving) {
       const t = body.translation();
       body.setTranslation({ x: t.x + shift[0], y: t.y + shift[1], z: t.z + shift[2] }, true);
     }
@@ -94,6 +98,23 @@ export class PhysicsWorld {
     return id;
   }
 
+  /** The player's body, standing with its feet at a world position (replaces any earlier one). */
+  addCharacter(feet: Vec3, water?: WaterDepth): Character {
+    this.removeCharacter();
+    this.character = new Character(this.R, this.world, this.habitat, feet, this.origin, water);
+    return this.character;
+  }
+
+  removeCharacter(): void {
+    this.character?.release();
+    this.character = null;
+  }
+
+  /** How far (0 … 1) the time not yet stepped is into the next step: draw moving things that share between steps. */
+  get blend(): number {
+    return this.carry / PHYSICS_STEP;
+  }
+
   remove(id: number): void {
     const b = this.bodies.get(id);
     if (!b) return;
@@ -111,6 +132,7 @@ export class PhysicsWorld {
         body.resetForces(false);
         body.addForce({ x: a[0] * m, y: a[1] * m, z: a[2] * m }, true);
       }
+      this.character?.step(PHYSICS_STEP, this.origin);
       this.world.step();
       this.carry -= PHYSICS_STEP;
     }
@@ -130,18 +152,29 @@ export class PhysicsWorld {
   /** Bodies in the world. */
   get count(): number { return this.bodies.size; }
 
-  /** Drop the bodies that have left the ground patch sideways (nothing to land on there); height does not count. */
+  /** Whether a world point is further than `share` of the patch's size from its centre, sideways (height does not count). */
+  offPatch(p: Vec3, share = 0.5): boolean {
+    return !this.patch || this.sideways(p[0] - this.origin[0], p[1] - this.origin[1], p[2] - this.origin[2]) > this.patch.size * share;
+  }
+
+  /** How far a point in the bubble's coordinates lies from its centre, across the up at the centre. */
+  private sideways(x: number, y: number, z: number): number {
+    const o = this.origin, r = Math.hypot(o[0], o[1]) || 1, ux = -o[0] / r, uy = -o[1] / r; // up: toward the axis
+    const along = x * ux + y * uy;
+    return Math.hypot(x - along * ux, y - along * uy, z);
+  }
+
+  /** Drop the bodies that have left the ground patch sideways (nothing to land on there). */
   private dropStrays(): void {
     if (!this.patch) return;
-    const o = this.origin, r = Math.hypot(o[0], o[1]) || 1, ux = -o[0] / r, uy = -o[1] / r; // up: toward the axis
     for (const [id, { body }] of this.bodies) {
-      const t = body.translation(), along = t.x * ux + t.y * uy;
-      const side = Math.hypot(t.x - along * ux, t.y - along * uy, t.z);
-      if (side > this.patch.size * 0.5) this.remove(id);
+      const t = body.translation();
+      if (this.sideways(t.x, t.y, t.z) > this.patch.size * 0.5) this.remove(id);
     }
   }
 
   dispose(): void {
+    this.character = null;
     this.world.free();
     this.bodies.clear();
   }

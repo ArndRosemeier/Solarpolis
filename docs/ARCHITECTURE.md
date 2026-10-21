@@ -20,7 +20,7 @@ Each row is a question you will have while coding, and the one place that answer
 
 | Question | The one way |
 |---|---|
-| How high is the ground at (θ, s), and what is it (meadow, forest, rock, shore, lake bed)? | `makeTerrain(habitat)` (`terrain.ts`): `heightAt`, `standAt` (ground or water surface), `colorAt`, `lake`; sizes from `HabitatParams.relief`. Noise is sampled at world positions, so it wraps. |
+| How high is the ground at (θ, s), and what is it (meadow, forest, rock, shore, lake bed)? | `makeTerrain(habitat)` (`terrain.ts`): `heightAt`, `standAt` (ground or water surface), `waterDepth(p)`, `colorAt`, `lake`; sizes from `HabitatParams.relief`. Noise is sampled at world positions, so it wraps. |
 | What hides the sunline from a ground point? | `horizonAt(terrain, θ, s)` (`horizon.ts`): the horizon angles toward the port and the wild end, from the ground in the point's meridian; tiles bake them per point (`TileMesh.horizon`). |
 | How is the ground cut into pieces for drawing, and which pieces does a view need? | The tile tree (`tiles.ts`): `makeLayout` (bands along s, columns by circumference), `roots`, `children`, `parent`, `select(terrain, layout, eye, pixelsPerRadian, maxPixels, errorOf)` by measured error on screen, `buildTile` (mesh relative to its `origin`, skirts, water, `morph` towards the parent's surface). |
 | What ground does the physics stand on? | `buildPatch(terrain, θ, s, size, cell)` (`patch.ts`): a square trimesh of the ground around a point, relative to its `origin`; built in the worker pool (request kind `'patch'`). |
@@ -33,7 +33,8 @@ Each row is a question you will have while coding, and the one place that answer
 | How does the camera fly? | `Flyer` (`flyer.ts`): world eye, look and up; up swings toward the axis (rolls over when crossing it), speed grows with height, never below the ground. `walker.land(θ, s, look)` sets down under it. |
 | How much light from the sunline reaches a point? | `irradiance(h, emission, p, n, towardPort, towardWild)` (`sunline.ts`), the reference of the shaders' sum; `sunlineEmission(h, t)` is the brightness along the axis at clock time t (the travelling sun, `HabitatParams.day`), `dayPhase`, `dayLevel`, `emissionMean`, `sunlineNorm(h)` makes the mid floor 1. |
 | How does something move in the turning habitat? | `apparentAcceleration(h, p, v)` (`motion.ts`): centrifugal plus Coriolis in the habitat's own frame (Ω = +ω ẑ); `coast` is the RK4 reference the physics is tested against. |
-| Where is the player, which way is up, where do they look? | `Walker` (`walker.ts`): position in (θ, s, h), heading and pitch → `view()` eye, look, up (up is the ground's normal). `startOf(profile)` is where a walk begins; the eye stands on a ground function (`terrain.standAt`). |
+| Which way is up, and how strong is gravity, at a world point? | `upAt(p)` (`motion.ts`): toward the axis (null on it); strength `habitat.gravityAt(r)`. Up never follows the ground's slope. |
+| Where is the player, which way is up, where do they look? | `Walker` (`walker.ts`): position in (θ, s, h), heading (0 = +z) and pitch → `view()` eye, look, up (`upAt`); `stride(input)` is the velocity the keys ask of the physics body, `follow(feet)` stands on it; it glides only until the physics has ground. `startOf(profile)` is where a walk begins; the eye stands on a ground function (`terrain.standAt`). |
 
 ## Space around the habitats (`src/space`, pure)
 
@@ -64,7 +65,8 @@ Each row is a question you will have while coding, and the one place that answer
 
 | Question | The one way |
 |---|---|
-| How do bodies fall, roll and collide? | `PhysicsWorld` (`world.ts`): `create(habitat)` loads Rapier; no engine gravity, each fixed step (`PHYSICS_STEP`) adds `apparentAcceleration` as a force. A bubble around the player: `needsGround(p)` / `setGround(patch)` move its origin and rebase the bodies, so floats stay precise anywhere. `addBall`, `remove`, `advance(dt)`, `states()` in world coordinates. |
+| How do bodies fall, roll and collide? | `PhysicsWorld` (`world.ts`): `create(habitat)` loads Rapier; no engine gravity, each fixed step (`PHYSICS_STEP`) adds `apparentAcceleration` as a force. A bubble around the player: `needsGround(p)` / `setGround(patch)` move its origin and rebase the bodies, so floats stay precise anywhere. `addBall`, `remove`, `advance(dt)`, `states()` in world coordinates, `offPatch(p)`, `blend` (for drawing between steps). |
+| How does the player's body move? | `Character` (`character.ts`), from `PhysicsWorld.addCharacter(feet, water)`: a capsule on Rapier's character controller, up from `upAt`, the spin's gravity and Coriolis in the air, buoyancy in water; set its `stride` (walk velocity, jump). |
 
 ## Workers (`src/workers`)
 
@@ -86,6 +88,5 @@ Each row is a question you will have while coding, and the one place that answer
 
 | Question | The one way (to build) |
 |---|---|
-| Which way is up, and how strong is gravity, at a world point? | `world.upAt(p)`, `world.gravityAt(p)` (`src/world`), from the blueprint. |
 | How is a person or a robot made? | Arnd's Actors package (`Figure`, humanoid robot bodies). |
 | Who lives here, and what are they doing now? | Derived from seed + clock (`src/sim`); only touched people are simulated. |
