@@ -72,6 +72,7 @@ export const views = {
   'far-side': { query: 'view=inside', about: 'halfway to the axis, looking at the far side', steps: [{ debug: 'Fly: halfway up' }, { wait: 9000 }] },
   'far-down': { query: 'view=inside', about: 'high up, looking down at the floor', steps: [{ debug: 'Fly: high up, looking down' }, { wait: 9000 }] },
   'far-tube': { query: 'view=inside', about: 'near the axis at the wild end, looking along the tube', steps: [{ debug: 'Fly: near the axis' }, { wait: 9000 }] },
+  'far-tube-clear': { query: 'view=inside', about: 'as far-tube, with no clouds (to tell the air from the clouds)', steps: [...Array(4).fill({ debug: 'Clouds: schedule' }), { debug: 'Fly: near the axis' }, { wait: 9000 }] },
   'far-meadow-up': { query: 'view=inside', about: 'standing in a meadow, looking up at the far side', settle: 6000, steps: [{ debug: 'Into the nearest meadow' }, { wait: 5000 }, { look: [0, -260] }, { wait: 3000 }] },
   outside: { query: 'view=outside', about: 'the home habitat from outside', default: true },
   'outside-earth': { query: 'view=outside', about: 'looking at Earth (key 2)', steps: [{ key: 'Digit2' }, { wait: 3000 }] },
