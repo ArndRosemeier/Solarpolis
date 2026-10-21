@@ -2,6 +2,12 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.034 — Grass up close
+
+- Meadows now have real grass: tufts of blades around your feet, swaying as waves of wind roll along the cylinder. Farther out they sink into the grass texture of the ground, so nothing pops.
+- The heath up the endcaps and the dry Mediterranean hills grow dry tussocks; a few tufts grow between the leaves of the woods.
+- The debug menu's Go entries work again with the walking body, and there is a new one: Into the nearest meadow.
+
 ## v0.033 — Light in the woods
 
 - Your eyes adapt in a wood: walking under closed crowns, the view opens up over a few seconds, and closes again when you step back into the open.
