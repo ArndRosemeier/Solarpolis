@@ -6,4 +6,4 @@ export { makeProfile, type Profile, type ProfilePoint } from './profile';
 export { toWorld, fromWorld, toView, groundNormal, wrapAngle, type Interior, type Vec3 } from './frame';
 export { validate, isValid, COMFORT_RPM, FLYABLE_AXIS_PRESSURE, HAZE_DIAMETER, BIG_FINS, THICK_HULL, type Finding, type Severity } from './validate';
 export { REFERENCE, MATRIX, withParams } from './reference';
-export { CLIMATES, climateOf, type Climate, type BiomeSpec, type Rgb } from './climates';
+export { CLIMATES, climateOf, type Climate, type BiomeSpec, type PlantSpec, type PlantForm, type Rgb } from './climates';

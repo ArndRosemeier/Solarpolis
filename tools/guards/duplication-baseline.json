@@ -60,7 +60,71 @@
     "reason": "The Actors figure and animator are ported from Dunfinity with their method names, which follow Actors' own Character API (load, update, stop, dispose); the plan moves the animator into Actors, and keeping the names keeps that swap a drop-in."
   },
   {
-    "key": "idiom: [.s .theta] in solarpolis/render/view.ts + solarpolis/world/flyer.ts + solarpolis/world/walker.ts",
-    "reason": "(θ, s) is the interior's surface coordinate (blueprint frame.ts); reading both fields of a point is how every user of it starts, not a copied procedure. It crossed the idiom threshold only because more files made the names rarer."
+    "key": "same name: solarpolis/main.ts#make + solarpolis/render/streamed.ts#make",
+    "reason": "make is the name of a factory callback in unrelated places (the page's view slot, the stream cache); the bodies have nothing in common."
+  },
+  {
+    "key": "same name: solarpolis/physics/world.ts#dispose + solarpolis/render/plants.ts#dispose",
+    "reason": "dispose() frees what an object holds and load() fetches it: the common lifecycle names (three.js, Rapier, Actors), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/physics/world.ts#dispose + solarpolis/render/terrain.ts#dispose",
+    "reason": "dispose() frees what an object holds and load() fetches it: the common lifecycle names (three.js, Rapier, Actors), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/figure.ts#dispose + solarpolis/render/plants.ts#dispose",
+    "reason": "dispose() frees what an object holds and load() fetches it: the common lifecycle names (three.js, Rapier, Actors), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/figure.ts#dispose + solarpolis/render/terrain.ts#dispose",
+    "reason": "dispose() frees what an object holds and load() fetches it: the common lifecycle names (three.js, Rapier, Actors), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/figure.ts#load + solarpolis/render/terrain.ts#load",
+    "reason": "dispose() frees what an object holds and load() fetches it: the common lifecycle names (three.js, Rapier, Actors), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/outside.ts#bytes + solarpolis/render/plants.ts#bytes",
+    "reason": "Everything holding big buffers reports them to the memory watchdog through a bytes() method (CLAUDE.md rule 12)."
+  },
+  {
+    "key": "same name: solarpolis/render/outside.ts#bytes + solarpolis/render/streamed.ts#bytes",
+    "reason": "Everything holding big buffers reports them to the memory watchdog through a bytes() method (CLAUDE.md rule 12)."
+  },
+  {
+    "key": "same name: solarpolis/render/plants.ts#bytes + solarpolis/render/streamed.ts#bytes",
+    "reason": "The streamed views (TerrainView, PlantView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/plants.ts#bytes + solarpolis/render/terrain.ts#bytes",
+    "reason": "The streamed views (TerrainView, PlantView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/plants.ts#dispose + solarpolis/render/terrain.ts#dispose",
+    "reason": "dispose() frees what an object holds and load() fetches it: the common lifecycle names (three.js, Rapier, Actors), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/plants.ts#follow + solarpolis/render/terrain.ts#follow",
+    "reason": "The streamed views (TerrainView, PlantView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/plants.ts#free + solarpolis/render/terrain.ts#free",
+    "reason": "The streamed views (TerrainView, PlantView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/plants.ts#id + solarpolis/render/terrain.ts#id",
+    "reason": "The streamed views (TerrainView, PlantView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/plants.ts#make + solarpolis/render/terrain.ts#make",
+    "reason": "The streamed views (TerrainView, PlantView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/plants.ts#shed + solarpolis/render/terrain.ts#shed",
+    "reason": "The streamed views (TerrainView, PlantView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/streamed.ts#bytes + solarpolis/render/terrain.ts#bytes",
+    "reason": "The streamed views (TerrainView, PlantView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, shed, dispose), with bodies of their own."
   }
 ]

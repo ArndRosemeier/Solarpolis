@@ -23,6 +23,8 @@ import { BALL, SUNLINE, air, allKinds, setAir, setEmission, setSunline, standInA
 import { dayPhase, emissionMean, nearestLit, sunlineEmission, sunlineNorm, EMISSION_SAMPLES } from '../world/sunline';
 import { densityFalloff, seenMid } from '../world/air';
 import { TerrainView, describeLayout } from './terrain';
+import { PlantView } from './plants';
+import { makeEcology } from '../gen/ecology';
 import { dragToLook, draw, fitCanvas, runFrames } from './surface';
 
 /** Running is this many times the walking speed. */
@@ -62,6 +64,7 @@ export class InteriorView {
   private readonly pool = new WorkerPool();
   private terrain: Terrain;
   private tiles: TerrainView | null = null;
+  private plants: PlantView | null = null;
   private sunline: Mesh | null = null;
   /** In the air, or null on foot. */
   private flyer: Flyer | null = null;
@@ -139,12 +142,13 @@ export class InteriorView {
 
   /** Bytes of geometry this view holds (memory watchdog). */
   bytes(): number {
-    return this.tiles?.bytes() ?? 0;
+    return (this.tiles?.bytes() ?? 0) + (this.plants?.bytes() ?? 0);
   }
 
-  /** Give memory back (memory watchdog): drop every cached tile not on screen. */
+  /** Give memory back (memory watchdog): drop every cached tile and plant cell not on screen. */
   shed(): void {
     this.tiles?.shed();
+    this.plants?.shed();
   }
 
   /** Lines for the debug menu. */
@@ -156,6 +160,7 @@ export class InteriorView {
     return [
       this.stage.hudLine(),
       `${this.tiles?.info() ?? 'terrain: none'} · ${describeLayout(this.terrain)} · ${this.pool.workers} workers`,
+      this.plants?.info() ?? 'plants: none',
       `θ ${(a.theta * 180 / Math.PI).toFixed(1)}°, s ${(a.s / 1000).toFixed(2)} of ${(this.habitat.profile.length / 1000).toFixed(2)} km, ground ${this.terrain.standAt(a.theta, a.s).toFixed(1)} m, ${mode}`,
     ].join('\n');
   }
@@ -294,6 +299,7 @@ export class InteriorView {
 
   private async build(): Promise<void> {
     if (this.tiles) { this.scene.remove(this.tiles.group); this.tiles.dispose(); }
+    if (this.plants) { this.scene.remove(this.plants.group); this.plants.dispose(); }
     if (this.sunline) { this.stage.remove(this.sunline); this.sunline.geometry.dispose(); }
     const h = this.habitat;
     this.norm = sunlineNorm(h);
@@ -312,6 +318,8 @@ export class InteriorView {
     this.camera.updateProjectionMatrix();
     this.tiles = new TerrainView(this.terrain, this.stage, this.pool);
     this.scene.add(this.tiles.group);
+    this.plants = new PlantView(makeEcology(this.terrain), this.stage, this.pool);
+    this.scene.add(this.plants.group);
     this.place();
     // While loading, nothing draws, but the compile cap still counts frames (one new shader per frame): keep its
     // frames ticking, or a second build here (a shadow pass's own shader) would wait for a frame that never comes.
@@ -336,6 +344,7 @@ export class InteriorView {
     this.pose(v.eye);
     const pixelsPerRadian = (this.canvas.clientHeight || 720) / (this.camera.fov * Math.PI / 180);
     this.tiles?.follow(v.eye, pixelsPerRadian);
+    this.plants?.follow(v.eye);
   }
 
   private current(): View {
