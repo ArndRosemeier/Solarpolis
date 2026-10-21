@@ -4,6 +4,7 @@
  * the Sun and the stars). The two views are WebGPU only.
  */
 import { nearestFloor, nearestWood, type Ecology, type Found } from './gen/ecology';
+import { nearestOnPath } from './gen/paths';
 import { besideRiver, nearestSample, type River } from './gen/rivers';
 import './app/style.css';
 import { el } from './app/dom';
@@ -212,6 +213,9 @@ const toPlace = (label: string, back: number, find: (eco: Ecology, theta: number
 toPlace('Before the nearest wood', 40, (eco, t, s) => nearestWood(eco, t, s));
 toPlace('Into the nearest wood', -30, (eco, t, s) => nearestWood(eco, t, s));
 toPlace('Into the nearest meadow', -30, (eco, t, s) => nearestFloor(eco, t, s, eco.climate.cover[0]?.on ?? 'grass'));
+toPlace('Onto the Sunwalk', 0, (eco, t, s) => nearestOnPath(eco.terrain.habitat, 'sunwalk', t, s));
+toPlace('Onto the nearest way', 0, (eco, t, s) => nearestOnPath(eco.terrain.habitat, 'way', t, s));
+toPlace('Onto the Mountain trail', 0, (eco, t, s) => nearestOnPath(eco.terrain.habitat, 'trail', t, s));
 /** A few metres before the nearest of the climate's first debris that `pick` chooses, facing it. */
 const toDebris = (label: string, back: number, pick: (d: DebrisSpec) => boolean): void => toPlace(label, back, (eco, theta, s) => {
   const { profile } = eco.terrain.habitat, plants = plantsOf(eco), sp = plants.find((p) => p.what === 'debris' && pick(p.spec as DebrisSpec));

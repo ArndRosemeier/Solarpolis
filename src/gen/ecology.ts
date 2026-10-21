@@ -12,13 +12,14 @@
  * parkland does. Pure and continuous like the terrain: any point, in any order, gives the same answer.
  */
 import { Noise, deriveSeed, smoothstep } from '@futuremagic/core';
-import { FLOOR_LAYERS, STYLE_LAND, climateOf, toWorld, type BiomeSpec, type Climate, type FaceKind, type FloorLayer } from '../blueprint';
+import { FLOOR_LAYERS, STYLE_LAND, climateOf, toWorld, type BiomeSpec, type Climate, type FaceKind, type FloorLayer, type Rgb } from '../blueprint';
 import type { Terrain } from './terrain';
 import { riverAt } from './rivers';
 import { canopyColor } from './trees';
 import { plantedCanopy, plantedLawn } from './planted';
 import { planOf, type District } from './plan';
 import { snowCover, snowFieldOf } from './snow';
+import { pathCover, pathsOf } from './paths';
 
 /** Plants at least this tall (m, full grown) are trees: they make up the canopy of woods. */
 export const TREE_HEIGHT = 6;
@@ -68,8 +69,10 @@ export interface Ecology {
    * stand) and the canopy's height (m). With `floor`, the share of each of `FLOOR_LAYERS` there (0 … 255, summing to
    * about 255), at `i / 3 * 8`. With `wood`, at `i / 3 * 2`, the share of the ground the crowns cover (0 … 1) and how
    * far apart the trees stand (m): the far view draws crowns and gaps from them (render/groundShaders.ts, `woodsFromAfar`).
+   * `cell` is how wide a patch of ground the point stands for (m, a tile's cell; 0 for the point itself): a path
+   * narrower than that is laid over its share of the patch, so from afar it is a faint line, not a dotted one.
    */
-  colorAt(theta: number, s: number, h: number, slope: number, out: Float32Array, i: number, canopy?: Float32Array, floor?: Uint8Array, wood?: Float32Array): void;
+  colorAt(theta: number, s: number, h: number, slope: number, out: Float32Array, i: number, canopy?: Float32Array, floor?: Uint8Array, wood?: Float32Array, cell?: number): void;
   /**
    * How much of the ground lies above the Mountain's snow line (0 … 1, gen/snow.ts `snowCover`): nothing grows there,
    * and between the snow (which the ground's shader lays over it, `snowOn`) the ground is bare rock.
@@ -216,7 +219,20 @@ export function makeEcology(terrain: Terrain): Ecology {
     return f.map((x) => x / sum);
   });
   const layers = new Float32Array(L);
-  const colorAt = (theta: number, s: number, height: number, slope: number, out: Float32Array, i: number, canopy?: Float32Array, floor?: Uint8Array, wood?: Float32Array): void => {
+  // The paths' surfaces (gen/paths.ts): each floor layer a path can be laid with, in the colour it has from afar.
+  const net = pathsOf(h);
+  const { shore: sh, rock: rk, bed: bd } = climate;
+  const gravelColor: Rgb = [(sh[0] + rk[0]) / 2, (sh[1] + rk[1]) / 2, (sh[2] + rk[2]) / 2];
+  const laid: Partial<Record<FloorLayer, Rgb>> = {
+    gravel: gravelColor,
+    rock: [rk[0] * 1.2, rk[1] * 1.2, rk[2] * 1.2],
+    sand: sh,
+    dirt: bd,
+    litter: [bd[0] * 0.7, bd[1] * 0.7, bd[2] * 0.7],
+  };
+  // The Sunwalk is dressed stone, paler than any gravel: a line one can read from the far side.
+  const sunwalk: Rgb = [gravelColor[0] * 1.3, gravelColor[1] * 1.3, gravelColor[2] * 1.3];
+  const colorAt = (theta: number, s: number, height: number, slope: number, out: Float32Array, i: number, canopy?: Float32Array, floor?: Uint8Array, wood?: Float32Array, cell = 0): void => {
     biomesAt(theta, s, height, slope, shares);
     const [x, y, z] = toWorld(profile, { theta, s, h: 0 });
     let c0 = 0, c1 = 0, c2 = 0;
@@ -276,6 +292,15 @@ export function makeEcology(terrain: Terrain): Ecology {
     // Above the snow line the ground is bare rock between the snow (the shader lays the snow over it, near and far).
     if (s < profile.floorStart) rock += (1 - rock) * snowAt(theta, s, height);
     c0 += (r[0] - c0) * rock; c1 += (r[1] - c1) * rock; c2 += (r[2] - c2) * rock;
+    // A path over it all, as much of the patch as it covers; not under water (the Sunwalk's bridges cross the lake), nor
+    // on a court's floor, where the ways arrive.
+    const way = net.pieces ? net.pathAt(theta, s, Math.max(cell / 2, 0.1)) : null;
+    const path = way && !(lake && height < lake.level && Math.abs(s - lake.s) < lake.halfWidth) && !(court && court.distance < court.court.radius) ? pathCover(way, cell) : 0;
+    if (path > 0 && way) {
+      // A mown grass way is the meadow, a little paler and drier; the others their material.
+      const c: Rgb = way.kind === 'sunwalk' ? sunwalk : laid[way.layer] ?? [c0 * 1.08, c1 * 1.06, c2 * 0.9];
+      c0 += (c[0] - c0) * path; c1 += (c[1] - c1) * path; c2 += (c[2] - c2) * path;
+    }
     out[i] = Math.min(1, Math.max(0, c0));
     out[i + 1] = Math.min(1, Math.max(0, c1));
     out[i + 2] = Math.min(1, Math.max(0, c2));
@@ -285,12 +310,14 @@ export function makeEcology(terrain: Terrain): Ecology {
       for (let b = 0; b < count; b++) if (shares[b]) for (let l = 0; l < L; l++) layers[l] += shares[b] * floors[b][l];
       const over = (l: number, k: number) => { for (let m = 0; m < L; m++) layers[m] *= 1 - k; layers[l] += k; };
       over(GRAVEL, gravel); over(SAND, sand); over(DIRT, bed); over(ROCK, rock);
+      if (path > 0 && way) over(FLOOR_LAYERS.indexOf(way.layer), path);
       const at = (i / 3) * L;
       for (let l = 0; l < L; l++) floor[at + l] = Math.round(layers[l] * 255);
     }
     if (!canopy && !wood) return;
     // The woods over it: crowns cover their biome's share of the point (rock and water hold none).
-    const bare = (1 - rock) * (1 - Math.max(gravel, bed)) * (court ? 1 - ring : 1);
+    // No crowns over the Sunwalk or a way; the trail runs under the reserve's trees.
+    const bare = (1 - rock) * (1 - Math.max(gravel, bed)) * (court ? 1 - ring : 1) * (way && way.kind !== 'trail' ? 1 - path : 1);
     let cover = 0, tall = 0, apart = 0, k0 = 0, k1 = 0, k2 = 0;
     for (let b = 0; b < count; b++) {
       const w = shares[b] * woods[b].cover * bare;
