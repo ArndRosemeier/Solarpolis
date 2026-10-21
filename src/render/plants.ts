@@ -25,7 +25,7 @@ import type { Ecology } from '../gen/ecology';
 import type { FallenWood, TreeModel } from '../gen/trees';
 import type { StoneMesh, StoneModel } from '../gen/stones';
 import type { TuftModel } from '../gen/grass';
-import { canopyBand, cellBytes, cellId, cellsNear, LEVELS, plantsOf, PLANT_STRIDE, PLANT_VARIANTS, type Level, type NearCell, type PlantCell, type Species } from '../gen/scatter';
+import { canopyBand, cellBytes, cellId, cellSphere, cellsNear, LEVELS, plantsOf, PLANT_STRIDE, PLANT_VARIANTS, type Level, type NearCell, type PlantCell, type Species } from '../gen/scatter';
 import type { WorkerPool } from '../workers/pool';
 import type { GenAnswer, GenRequest } from '../workers/gen.worker';
 import { StreamCache, type Streamed } from './streamed';
@@ -312,6 +312,8 @@ export class PlantView {
     const band = this.bands[sp.id][cell.key.level], tint = sp.what === 'plant' || sp.what === 'planted' ? this.tintOf(shapeKey(sp)) : undefined;
     const horizon = new Vector2(cell.horizon[0], cell.horizon[1]);
     const meshes: Mesh[] = [], shaped: Shaped[] = [];
+    // Everything in the cell, around its plants (not its origin: on a hill that lies far below them).
+    const bound = cellSphere(cell, sp.spec.height[1]), middle = new Vector3(...bound.middle);
     cell.instances.forEach((data, v) => {
       if (!data.length) return;
       const buffer = new InstancedInterleavedBuffer(data.slice(), PLANT_STRIDE);
@@ -323,8 +325,7 @@ export class PlantView {
         g.setIndex(part.index);
         plantInstances(g, buffer);
         g.instanceCount = data.length / PLANT_STRIDE;
-        // Everything in the cell: its plants stand within half its diagonal of the origin, as tall as the tallest.
-        g.boundingSphere = new Sphere(new Vector3(), sp.cell[cell.key.level] * Math.SQRT1_2 + sp.spec.height[1] * 1.2);
+        g.boundingSphere = new Sphere(middle.clone(), bound.radius);
         const m = new Mesh(g, part.material);
         m.name = `plants ${sp.spec.name} ${id}`;
         m.castShadow = part.cast;

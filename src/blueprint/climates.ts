@@ -16,6 +16,8 @@ export const PLANT_FORMS = [
   'oak', 'holm-oak', 'linden', 'maple', 'birch', 'willow', 'chestnut', 'plane', 'ginkgo', 'olive',
   'pine', 'stone-pine', 'cypress', 'juniper',
   'shrub', 'evergreen-shrub', 'heather', 'reeds',
+  // Grown by people (gen/places.ts): fruit trees pruned open, vines trained along a wire.
+  'fruit', 'vine',
 ] as const;
 export type PlantForm = (typeof PLANT_FORMS)[number];
 
@@ -28,6 +30,11 @@ export interface PlantSpec {
   spacing: number;
   /** Planted in rows (groves, orchards) rather than as they fall. */
   rows?: boolean;
+  /**
+   * Planted in rows this far apart (m), `spacing` apart along each row, rather than on a square: vines. The rows run
+   * around the axis (along the contours, up an endcap) and the plants are turned along them.
+   */
+  rowGap?: number;
 }
 
 /**
@@ -102,6 +109,8 @@ export interface BiomeSpec {
   plants: readonly PlantSpec[];
   /** Its ground up close: the share of each floor layer (relative; they need not sum to 1). */
   floor: Readonly<Partial<Record<FloorLayer, number>>>;
+  /** Grows only where people plant it (a place's, `Climate.places`), never where the land happens to suit it. */
+  placed?: boolean;
 }
 
 export interface Climate {
@@ -128,6 +137,8 @@ export interface Climate {
    * and tallest trees in it stand in a ring at the founders' grove (gen/planted.ts).
    */
   grove: string;
+  /** The biome (by name) each kind of planted place is grown as (gen/places.ts): the orchards' fruit, the vineyards. */
+  places: Readonly<Record<'orchard' | 'vineyard', string>>;
 }
 
 export const CLIMATES: Readonly<Record<string, Climate>> = {
@@ -143,6 +154,9 @@ export const CLIMATES: Readonly<Record<string, Climate>> = {
       { name: 'wetland', color: [0.2, 0.26, 0.09], vary: 0.15, moisture: [0.75, 1], height: [0, 0.05], slope: 0.25, share: 0.8, plants: [{ name: 'reeds', form: 'reeds', height: [1.5, 2.6], spacing: 1.6 }, { name: 'willow', form: 'willow', height: [7, 12], spacing: 30 }], floor: { grass: 0.7, dirt: 0.5 } },
       { name: 'pinewood', color: [0.08, 0.042, 0.02], vary: 0.08, moisture: [0.15, 0.7], height: [0.12, 0.6], slope: 0.8, share: 1, plants: [{ name: 'pine', form: 'pine', height: [16, 28], spacing: 7 }], floor: { needles: 1, dirt: 0.12 } },
       { name: 'heath', color: [0.2, 0.17, 0.09], vary: 0.15, moisture: [0, 0.32], height: [0.3, 1], slope: 0.85, share: 1, plants: [{ name: 'heather', form: 'heather', height: [0.4, 1], spacing: 2.5 }, { name: 'juniper', form: 'juniper', height: [3, 7], spacing: 25 }], floor: { 'dry grass': 0.6, dirt: 0.4, gravel: 0.25 } },
+      // Planted by people (gen/places.ts): apple and pear in rows over a mown meadow; vines on wires along the contours.
+      { name: 'orchard', placed: true, color: [0.17, 0.3, 0.08], vary: 0.06, moisture: [0, 1], height: [0, 1], slope: 0.45, share: 1, plants: [{ name: 'apple', form: 'fruit', height: [4.5, 6.5], spacing: 7, rows: true }], floor: { grass: 1, dirt: 0.05 } },
+      { name: 'vineyard', placed: true, color: [0.15, 0.17, 0.07], vary: 0.06, moisture: [0, 1], height: [0, 1], slope: 0.35, share: 1, plants: [{ name: 'vine', form: 'vine', height: [1.4, 1.8], spacing: 1.3, rowGap: 2.6, rows: true }], floor: { dirt: 0.6, grass: 0.45 } },
     ],
     cover: [
       { name: 'meadow grass', form: 'grass', on: 'grass', height: [0.25, 0.55], spacing: 0.4, color: [0.16, 0.31, 0.08] },
@@ -162,6 +176,7 @@ export const CLIMATES: Readonly<Record<string, Climate>> = {
     shore: [0.42, 0.38, 0.27],
     bed: [0.18, 0.2, 0.16],
     grove: 'oak',
+    places: { orchard: 'orchard', vineyard: 'vineyard' },
   },
   mediterranean: {
     name: 'mediterranean',
@@ -175,6 +190,7 @@ export const CLIMATES: Readonly<Record<string, Climate>> = {
       { name: 'holm oak', color: [0.08, 0.048, 0.022], vary: 0.08, moisture: [0.4, 0.9], height: [0, 0.35], slope: 0.7, share: 0.8, plants: [{ name: 'holm oak', form: 'holm-oak', height: [8, 15], spacing: 9 }, { name: 'myrtle', form: 'evergreen-shrub', height: [0.5, 1.3], spacing: 15 }], floor: { litter: 1, dirt: 0.3 } },
       { name: 'maquis', color: [0.1, 0.13, 0.06], vary: 0.15, moisture: [0.1, 0.5], height: [0.15, 0.8], slope: 0.85, share: 1, plants: [{ name: 'rosemary and cistus', form: 'evergreen-shrub', height: [0.3, 0.9], spacing: 5 }], floor: { dirt: 0.6, gravel: 0.4, 'dry grass': 0.3 } },
       { name: 'umbrella pines', color: [0.11, 0.07, 0.03], vary: 0.1, moisture: [0.2, 0.6], height: [0.1, 0.5], slope: 0.6, share: 0.7, plants: [{ name: 'stone pine', form: 'stone-pine', height: [12, 20], spacing: 14 }], floor: { needles: 1, 'dry grass': 0.3 } },
+      { name: 'vineyard', placed: true, color: [0.2, 0.18, 0.08], vary: 0.06, moisture: [0, 1], height: [0, 1], slope: 0.35, share: 1, plants: [{ name: 'vine', form: 'vine', height: [1.3, 1.7], spacing: 1.3, rowGap: 2.6, rows: true }], floor: { dirt: 0.8, 'dry grass': 0.3 } },
     ],
     cover: [
       { name: 'dry grass', form: 'dry-grass', on: 'dry grass', height: [0.25, 0.6], spacing: 0.45, color: [0.34, 0.28, 0.11] },
@@ -192,6 +208,8 @@ export const CLIMATES: Readonly<Record<string, Climate>> = {
     shore: [0.5, 0.45, 0.33],
     bed: [0.2, 0.22, 0.17],
     grove: 'stone pine',
+    // Olives are its orchards.
+    places: { orchard: 'olive grove', vineyard: 'vineyard' },
   },
 };
 

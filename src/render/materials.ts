@@ -16,7 +16,7 @@ import { PLANT_STRIDE } from '../gen/scatter';
 import { BARK_STRIPS } from '../gen/trees';
 import { BARK_TEXELS } from '../gen/foliage';
 import { LEAF_ATLAS_SIZE, LEAF_CUT } from '../workers/leaves';
-import { PICK_TURNS } from '../gen/handover';
+import { PICK_HEIGHT, PICK_TURNS } from '../gen/handover';
 import type { Node } from 'three/webgpu';
 import type { StageKind } from '@futuremagic/stage';
 import { REFERENCE } from '../blueprint';
@@ -456,13 +456,13 @@ function plantFrame() {
   const c = cos(turn), sn = sin(turn);
   const ax = side.mul(c).add(axis.mul(sn)), az = side.mul(sn.negate()).add(axis.mul(c));
   // The band: each plant has its own threshold, so in a hand-over band one level takes it where the other leaves it.
-  // The threshold comes from the plant's own turn (its lattice spot's hash, `plantCell`), which is the same in every
+  // The threshold comes from the plant's own turn and height (its lattice spot's hash, `plantCell`), the same in every
   // level's cell, so the two levels agree on every plant (`handOverPick` in gen/handover.ts); a hash of where it stands
   // in its cell would differ between the levels' cells, and some plants in the band would be drawn by neither.
   // Measured from the eye (the origin of the drawn world), not the camera: the shadow pass draws from the light's
   // camera, hundreds of metres away, and would drop every near plant from the shadow map.
   const away = foot.length();
-  const pick = fract(turn.mul(PICK_TURNS / (2 * Math.PI)));
+  const pick = fract(turn.mul(PICK_TURNS / (2 * Math.PI)).add(inst.w.mul(PICK_HEIGHT)));
   const into = smoothstep(plantBand.x, plantBand.y, away), out = smoothstep(plantBand.z, plantBand.w, away);
   const keep = step(pick, into.mul(1.0001)).mul(mix(step(out, pick), float(1).sub(out), plantSink));
   // Where the air's phase comes from: where the plant stands.

@@ -84,13 +84,14 @@ export function sweepTo(now: readonly [number, number], want: readonly [number, 
 }
 
 /**
- * Plants: each plant's own threshold in a dithered band (0 … 1), from its turn about up (`plantCell`: its lattice spot's
- * hash, the same in every level's cell). The plant kinds (render/materials.ts `plantFrame`) compute the same, so in a
- * band one level draws a plant exactly where the other stops: `out ≤ pick` for the level fading out, `pick ≤ into` for
- * the one fading in.
+ * Plants: each plant's own threshold in a dithered band (0 … 1), from its turn about up and its height (`plantCell`: its
+ * lattice spot's hash, the same in every level's cell; the height too, since vines in a row all turn nearly alike). The
+ * plant kinds (render/materials.ts `plantFrame`) compute the same, so in a band one level draws a plant exactly where the
+ * other stops: `out ≤ pick` for the level fading out, `pick ≤ into` for the one fading in.
  */
 export const PICK_TURNS = 13;
-export const handOverPick = (turn: number): number => {
-  const v = (turn * PICK_TURNS) / (2 * Math.PI);
+export const PICK_HEIGHT = 7.31;
+export const handOverPick = (turn: number, height: number): number => {
+  const v = (turn * PICK_TURNS) / (2 * Math.PI) + height * PICK_HEIGHT;
   return v - Math.floor(v);
 };

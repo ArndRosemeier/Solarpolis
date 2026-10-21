@@ -9,13 +9,8 @@ import { planOf, siteOf } from '../src/gen/plan';
 import { Shape, intoPlace, outOfPlace, planeMap, type MappedArrays } from '../src/gen/shapes';
 import { hutBounds, hutPlan, hutTop, roofTopAt } from '../src/gen/summitHut';
 import { fromWorld } from '../src/blueprint';
+import { terrainOf } from './worlds';
 
-const terrains = new Map<string, Terrain>();
-const terrainOf = (name: string, params: HabitatParams): Terrain => {
-  let t = terrains.get(name);
-  if (!t) { t = makeTerrain(derive(params)); terrains.set(name, t); }
-  return t;
-};
 
 /** A pavilion as the blueprint sizes it, without the land: for the geometry alone. */
 const pavilionFor = (p: HabitatParams): Pavilion | null => {

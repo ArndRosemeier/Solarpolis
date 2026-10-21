@@ -3,21 +3,22 @@ import assert from 'node:assert/strict';
 import { MATRIX, derive, fromWorld, toWorld, withParams } from '../src/blueprint';
 import { makeTerrain } from '../src/gen/terrain';
 import { canopyOf, makeEcology, TREE_HEIGHT } from '../src/gen/ecology';
-import { canopyBand, cellBounds, cellsNear, LEVELS, plantCell, plantsOf, PLANT_STRIDE, type CellKey, type Level, type Species } from '../src/gen/scatter';
+import { canopyBand, cellBounds, cellSphere, cellsNear, LEVELS, levelRunOf, plantCell, plantsOf, PLANT_STRIDE, type CellKey, type Level, type Species } from '../src/gen/scatter';
+import { ecologyOf } from './worlds';
 
 /** A cell of a plant near a point of the floor, and the plant. */
 function cellAt(name: string, params = MATRIX[0].params, at?: (lake: number, floor: [number, number]) => number) {
   const h = derive(params), eco = makeEcology(makeTerrain(h)), plants = plantsOf(eco);
   const sp = plants.find((p) => p.spec.name === name)!;
   const s = at ? at(eco.terrain.lake?.s ?? 0, [h.profile.floorStart, h.profile.floorEnd]) : (h.profile.floorStart + h.profile.floorEnd) / 2;
-  const eye = toWorld(h.profile, { theta: 0.3, s, h: 1.7 });
+  const eye = toWorld(h.profile, { theta: 0.3, s, h: eco.terrain.heightAt(0.3, s) + 1.7 });
   return { h, eco, plants, sp, eye, cells: cellsNear(eco, sp, 0, eye).map((c) => c.key) };
 }
 
 for (const { name, params } of MATRIX) {
   test(`scatter (${name}): cells near the eye are within sight, plants stand on the ground inside their cell, the same each time`, () => {
     const h = derive(params), eco = makeEcology(makeTerrain(h)), plants = plantsOf(eco);
-    const s = (h.profile.floorStart + h.profile.floorEnd) / 2, eye = toWorld(h.profile, { theta: 1, s, h: 1.7 });
+    const s = (h.profile.floorStart + h.profile.floorEnd) / 2, eye = toWorld(h.profile, { theta: 1, s, h: eco.terrain.heightAt(1, s) + 1.7 });
     let planted = 0;
     for (const sp of plants) {
       const cells = cellsNear(eco, sp, 0, eye).map((c) => c.key);
@@ -61,15 +62,15 @@ test('scatter: woods are about as dense as their spacing says where the biome is
   assert.ok(trees > want * 0.6 && trees < want * 1.3, `${trees} trees where the spacing says ${want.toFixed(0)}`);
 });
 
-test('scatter: olive groves are planted in straight rows', () => {
+test('scatter: olive groves are planted in straight rows (their spacing apart along the level run)', () => {
   const { eco, plants, sp, cells } = cellAt('olive', withParams({ climate: 'mediterranean' }));
-  const { profile } = eco.terrain.habitat;
+  const { profile } = eco.terrain.habitat, run = levelRunOf(profile);
   let n = 0;
   for (const k of cells.slice(0, 40)) {
     const c = plantCell(eco, plants, k);
     for (const list of c.instances) for (let i = 0; i < list.length; i += PLANT_STRIDE) {
       const p = fromWorld(profile, c.origin[0] + list[i], c.origin[1] + list[i + 1], c.origin[2] + list[i + 2]);
-      const off = p.s / sp.spec.spacing - Math.round(p.s / sp.spec.spacing);
+      const row = run.u(p.s) / sp.spec.spacing, off = row - Math.round(row);
       assert.ok(Math.abs(off) < 0.01, `on a row: s ${p.s}`);
       n++;
     }
@@ -138,4 +139,29 @@ test('ecology: woods have a canopy layer as high as their trees, open land none'
     assert.ok(c.color.every((v) => v > 0 && v < 1), `${b.name}: colour`);
   }
   assert.ok(eco.climate.biomes.some((b) => canopyOf(b).cover > 0.5), 'some closed woods');
+});
+
+test('scatter: on a hilltop the plants around the eye are still near (their distance is from the ground, not the profile)', () => {
+  const eco = ecologyOf('reference'), t = eco.terrain, P = t.habitat.profile, plants = plantsOf(eco);
+  // The highest point of the floor on a coarse grid: a hilltop well above the profile.
+  let best = { theta: 0, s: 0, g: -Infinity };
+  for (let j = 1; j < 60; j++) for (let i = 0; i < 48; i++) {
+    const s = P.floorStart + ((P.floorEnd - P.floorStart) * j) / 60, theta = (i / 48) * 2 * Math.PI, g = t.heightAt(theta, s);
+    if (g > best.g) best = { theta, s, g };
+  }
+  const sp = plants.find((p) => p.what === 'plant' && p.band.length > 0)!;
+  assert.ok(best.g > sp.band[0][3], `a hill ${best.g.toFixed(0)} m high, above the full level's reach`);
+  const eye = toWorld(P, { theta: best.theta, s: best.s, h: best.g + 1.7 }), cells = cellsNear(eco, sp, 0, eye);
+  assert.ok(cells.length > 0 && cells[0].near === 0, `${cells.length} cells at the full level`);
+  // Each cell's bounds hold its plants, whose feet lie far above its origin on the profile.
+  let held = 0;
+  for (const c of cells.slice(0, 8)) {
+    const cell = plantCell(eco, plants, c.key), { middle, radius } = cellSphere(cell, sp.spec.height[1]);
+    for (const list of cell.instances) for (let i = 0; i < list.length; i += PLANT_STRIDE) {
+      const top = Math.hypot(list[i] - middle[0], list[i + 1] - middle[1], list[i + 2] - middle[2]) + list[i + 3];
+      assert.ok(top <= radius + 1e-6, 'a plant outside its cell\'s bounds');
+      held++;
+    }
+  }
+  assert.ok(held > 0, 'plants near the hilltop');
 });

@@ -5,6 +5,7 @@
  */
 import { nearestFloor, nearestWood, type Ecology, type Found } from './gen/ecology';
 import { nearestOnPath } from './gen/paths';
+import { nearestPlace, vineFaceFoot } from './gen/places';
 import { besideRiver, nearestSample, type River } from './gen/rivers';
 import './app/style.css';
 import { el } from './app/dom';
@@ -18,7 +19,7 @@ import { InteriorView } from './render/view';
 import { OutsideView } from './render/outside';
 import { hubView } from './space';
 import { fromWorld, toWorld, type DebrisSpec, type Habitat } from './blueprint';
-import { nearestOf, plantsOf, type Level } from './gen/scatter';
+import { levelRunOf, nearestOf, onRow, plantsOf, slopeAt, type Level } from './gen/scatter';
 import { frameOf, landmarksOf, type Hut, type Pavilion } from './gen/landmarks';
 import { plantingsOf, type Grove } from './gen/planted';
 import type { Terrain } from './gen/terrain';
@@ -217,6 +218,32 @@ toPlace('Into the nearest meadow', -30, (eco, t, s) => nearestFloor(eco, t, s, e
 toPlace('Onto the Sunwalk', 0, (eco, t, s) => nearestOnPath(eco.terrain.habitat, 'sunwalk', t, s));
 toPlace('Onto the nearest way', 0, (eco, t, s) => nearestOnPath(eco.terrain.habitat, 'way', t, s));
 toPlace('Onto the Mountain trail', 0, (eco, t, s) => nearestOnPath(eco.terrain.habitat, 'trail', t, s));
+/** Ground one can stand on (a terrace's ledge, not its wall). */
+const ledge = (eco: Ecology) => (pt: number, ps: number): boolean => slopeAt(eco, pt, ps, eco.terrain.heightAt(pt, ps), 2) < 0.2;
+toPlace('Into the nearest orchard', -10, (eco, t, s) => nearestPlace(eco.terrain, 'orchard', t, s, ledge(eco)));
+toPlace('Into the nearest vineyard', 0, (eco, t, s) => {
+  // Between two rows, looking along them.
+  const at = nearestPlace(eco.terrain, 'vineyard', t, s, ledge(eco));
+  const vine = eco.climate.biomes.find((b) => b.name === eco.climate.places.vineyard)?.plants.find((p) => p.rowGap);
+  const P = eco.terrain.habitat.profile, row = at && vine?.rowGap ? onRow(eco.terrain, levelRunOf(P), at.theta, at.s, vine.rowGap, Infinity) : null;
+  if (!at || !row || !vine?.rowGap) return at;
+  // Half a row across: up the level's gradient, square to the row (`onRow`'s turn: the row runs along cos, sin).
+  const r = Math.max(P.at(row.s).r, 1), cos = Math.max(Math.abs(P.at(row.s).nr), 0.3), half = vine.rowGap / 2;
+  return { theta: row.theta + (half * Math.sin(row.turn)) / r, s: row.s - (half * Math.cos(row.turn)) / cos, way: [Math.cos(row.turn), Math.sin(row.turn)] };
+});
+debug.add({
+  label: 'Fly: the Vine face from over the floor', group: 'Go', run: () => {
+    // Floating over the floor before the face, looking at its lower terraces (where gravity is about 0.75 of the floor's).
+    const v = view(), t = v?.ecology?.terrain, foot = t && vineFaceFoot(t);
+    if (!v || !t || !foot) return;
+    const P = t.habitat.profile, R = t.habitat.radius;
+    let s = foot.s;
+    while (s < P.length && P.at(s).r > R * 0.75) s += 10;
+    const eye = toWorld(P, { theta: foot.theta, s: foot.s - R * 0.25, h: 150 }), at = toWorld(P, { theta: foot.theta, s, h: t.heightAt(foot.theta, s) });
+    const d = Math.hypot(at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]);
+    v.floatAt(eye, [(at[0] - eye[0]) / d, (at[1] - eye[1]) / d, (at[2] - eye[2]) / d]);
+  },
+});
 /** A few metres before the nearest of the climate's first debris that `pick` chooses, facing it. */
 const toDebris = (label: string, back: number, pick: (d: DebrisSpec) => boolean): void => toPlace(label, back, (eco, theta, s) => {
   const { profile } = eco.terrain.habitat, plants = plantsOf(eco), sp = plants.find((p) => p.what === 'debris' && pick(p.spec as DebrisSpec));

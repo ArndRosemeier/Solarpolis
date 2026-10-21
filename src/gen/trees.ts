@@ -239,6 +239,11 @@ interface FormCfg {
   cross?: number;
   /** Target number of leaf tufts (overrides density when given). */
   cards?: number;
+  /**
+   * Trained along a line (a vine on its wire): the crown this share as deep (z) as it is long (x), the first limbs
+   * along ±x, the trunk leaning only along x. The plant's turn lays x along its row (gen/scatter.ts).
+   */
+  along?: number;
 }
 
 const L = (o: Partial<LevelCfg> & Pick<LevelCfg, 'n'>): LevelCfg => ({
@@ -449,6 +454,33 @@ function formCfg(form: PlantForm, variant: number): FormCfg {
         leafLevels: [1],
         farColor: [0.45, 0.47, 0.25],
       };
+    case 'fruit':
+      // An apple or pear pruned open for two centuries: a short trunk, four scaffold limbs in a vase, a round open crown
+      // whose shoots hang a little under the fruit.
+      return {
+        height: [4.5, 6], trunkR: 0.17, bark: 0, leafCell: LEAF_CELLS.birch, cards: 1100, leafSize: 0.85, density: 5, leafStart: 0.2, cardMode: 'cluster',
+        width: 2.7, crownBase: 0.28, prof: (t) => Math.pow(Math.sin(Math.PI * Math.pow(t, 0.8)), 0.5),
+        trunkTop: 0.26, trunkUp: 0, trunkCurve: 0.2, lean: 0.07, flare: 0.3, lobes: 0.08,
+        levels: [
+          L({ n: [4, 4], start: 1, end: 1, whorl: 4, angle: 46, angleVar: 8, len: 1.2, lenRef: 'width', rr: 0.62, segs: 6, radial: 6, up: 0.04, curve: 0.45 }),
+          L({ n: [7, 9], start: 0.15, end: 0.98, angle: 58, angleVar: 16, len: 0.55, rr: 0.5, segs: 4, radial: 4, up: -0.06, curve: 0.45 }),
+          L({ n: [3, 4], start: 0.3, end: 1, angle: 50, angleVar: 16, len: 0.45, rr: 0.55, segs: 2, radial: 3, up: -0.04, curve: 0.35 }),
+        ],
+        farColor: [0.3, 0.42, 0.17],
+      };
+    case 'vine':
+      // A vine trained on its wire: a gnarled stock to the cordon, two arms along the wire, canes rising from them in a
+      // narrow wall of palmate leaves.
+      return {
+        height: [1.4, 1.8], trunkR: 0.05, bark: 1, leafCell: LEAF_CELLS.maple, cards: 300, leafSize: 0.36, density: 12, leafStart: 0.2, cardMode: 'cluster',
+        width: 0.95, crownBase: 0.45, prof: (t) => Math.pow(Math.sin(Math.PI * Math.min(1, 0.15 + Math.pow(t, 0.7))), 0.25),
+        trunkTop: 0.48, trunkUp: 0, trunkCurve: 0.2, lean: 0.02, flare: 0.2, lobes: 0.18,
+        levels: [
+          L({ n: [2, 2], start: 1, end: 1, phyllo: 0, angle: 86, angleVar: 3, len: 1, lenRef: 'width', rr: 0.65, segs: 4, radial: 4, up: 0, curve: 0.1 }),
+          L({ n: [6, 7], start: 0.08, end: 1, angle: 80, angleVar: 10, len: 0.95, lenRef: 'width', rr: 0.5, segs: 3, radial: 3, up: 0.7, curve: 0.25 }),
+        ],
+        farColor: [0.3, 0.4, 0.15], along: 0.2,
+      };
     case 'evergreen-shrub':
     case 'shrub': {
       const box = form === 'evergreen-shrub';
@@ -549,7 +581,7 @@ function buildSkeleton(cfg: FormCfg, rng: Rng): TreeSkeleton {
   const branches: Branch[] = [];
 
   // The trunk.
-  const leanDir = randUnit(rng).setY(0).normalize();
+  const leanDir = cfg.along ? v3(rng.range(-1, 1) < 0 ? -1 : 1, 0, 0) : randUnit(rng).setY(0).normalize();
   const trunkDir = UP.clone().addScaledVector(leanDir, cfg.lean * rng.range(0.4, 1.2)).normalize();
   const trunkLen = Math.max(0.05, H * cfg.trunkTop);
   const trunkSegs = trunkLen < 0.5 ? 1 : Math.max(6, Math.round(trunkLen / 0.7));
@@ -560,12 +592,14 @@ function buildSkeleton(cfg: FormCfg, rng: Rng): TreeSkeleton {
   branches.push(trunk);
   const top = tPts[tPts.length - 1];
 
+  // A trained plant keeps its crown on its line: no wander off it.
+  const off = cfg.along ? 0 : 1;
   const env = new Envelope(
     H * cfg.crownBase, H,
-    cfg.width * wScale * rng.range(0.92, 1.08), cfg.width * wScale * rng.range(0.92, 1.08),
+    cfg.width * wScale * rng.range(0.92, 1.08), cfg.width * wScale * rng.range(0.92, 1.08) * (cfg.along ?? 1),
     cfg.prof,
-    excurrent ? top.x * 0.4 + rng.range(-0.2, 0.2) : top.x + rng.range(-0.3, 0.3),
-    excurrent ? top.z * 0.4 + rng.range(-0.2, 0.2) : top.z + rng.range(-0.3, 0.3),
+    excurrent ? top.x * 0.4 + rng.range(-0.2, 0.2) : top.x + rng.range(-0.3, 0.3) * off,
+    excurrent ? top.z * 0.4 + rng.range(-0.2, 0.2) : top.z * off + rng.range(-0.3, 0.3) * off,
   );
 
   const P = v3(), T = v3();
@@ -575,18 +609,21 @@ function buildSkeleton(cfg: FormCfg, rng: Rng): TreeSkeleton {
     const count = rng.int(lv.n[0], lv.n[1]);
     const perNode = lv.whorl && lv.start < 1 ? lv.whorl : 1;
     const isTop = lv.start >= 1;
-    let az = rng.range(0, Math.PI * 2);
+    // A trained plant's first limbs run along its line (±x); its canes rise from them.
+    let az = cfg.along && li === 0 ? Math.PI / 2 : rng.range(0, Math.PI * 2); // π/2: along x off a near-upright trunk (perpBasis)
     const pLen = branchLen(parent);
     for (let k = 0; k < count; k++) {
       const t = isTop ? 1 : lv.start + (lv.end - lv.start) * ((k + 0.5 + rng.range(-0.35, 0.35)) / count);
       const pr = sampleBranch(parent, t, P, T);
       for (let w = 0; w < perNode; w++) {
         let a = az + (perNode > 1 ? (w / perNode) * Math.PI * 2 + rng.range(-0.25, 0.25) : 0);
-        if (isTop) a = az + (k / count) * Math.PI * 2 + rng.range(-0.3, 0.3);
+        if (isTop) a = az + (k / count) * Math.PI * 2 + rng.range(-0.3, 0.3) * (cfg.along ? 0.1 : 1);
         const ang = (lv.angle + rng.range(-lv.angleVar, lv.angleVar)) * deg;
         const [p1, p2] = perpBasis(T);
+        // A trained plant's canes rise from its arms (up, square to the arm, give or take a little), never out of its line.
+        const rise = cfg.along && li > 0 ? UP.clone().addScaledVector(T, -T.dot(UP)).normalize().rotate(T, rng.range(-0.3, 0.3)) : null;
         const mk = (aa: number) => {
-          const radial = p1.clone().multiplyScalar(Math.cos(aa)).addScaledVector(p2, Math.sin(aa));
+          const radial = rise ? rise.clone() : p1.clone().multiplyScalar(Math.cos(aa)).addScaledVector(p2, Math.sin(aa));
           return T.clone().multiplyScalar(Math.cos(ang)).addScaledVector(radial, Math.sin(ang)).normalize();
         };
         let dir = mk(a);
@@ -724,8 +761,11 @@ function buildLeaves(cfg: FormCfg, sk: TreeSkeleton, rng: Rng, cardScale: number
       const off = q1.multiplyScalar(Math.cos(a)).addScaledVector(q2, Math.sin(a));
       const toOut = v3(pt.x - env.cx, pt.y - env.cy, pt.z - env.cz).normalize();
       if (off.dot(toOut) < 0) off.multiplyScalar(-0.6);
+      if (cfg.along) off.z *= cfg.along;
       pt = pt.clone().addScaledVector(off, rng.range(0, leafSize * 0.7));
     }
+    // A trained plant's leaves stay in its wall.
+    if (cfg.along) pt.z = env.cz + clamp(pt.z - env.cz, -env.rz, env.rz);
     const d = env.normalAt(pt, sph);
     const outward = v3(pt.x - env.cx, 0, pt.z - env.cz);
     if (outward.lengthSq() < 1e-8) outward.copy(randUnit(rng)).setY(0);
@@ -751,6 +791,12 @@ function buildLeaves(cfg: FormCfg, sk: TreeSkeleton, rng: Rng, cardScale: number
         const rnd = randUnit(rng);
         axis = tan.clone().multiplyScalar(0.55).addScaledVector(outward, 0.5).addScaledVector(rnd, 0.75).addScaledVector(UP, 0.25).normalize();
         nrm0 = UP.clone().multiplyScalar(0.7).addScaledVector(sph, 0.5).addScaledVector(randUnit(rng), 0.8);
+        if (cfg.along) {
+          // In a trained wall the leaves face out of it, to either side.
+          axis.z *= cfg.along;
+          axis.normalize();
+          nrm0 = v3(0, 0.4, rng.sign()).addScaledVector(randUnit(rng), 0.5);
+        }
       }
     }
     nrm0.addScaledVector(axis, -nrm0.dot(axis));
@@ -894,26 +940,28 @@ function buildHull(cfg: FormCfg, sk: TreeSkeleton, woodNoise: Noise, leaves: rea
     hb.vert(p, n, 1, [cfg.farColor[0] * shade, cfg.farColor[1] * shade, cfg.farColor[2] * shade], 0.75);
   }
   for (const [a, b, cc] of faces) hb.idx.push(first + a, first + b, first + cc);
-  fitToLeaves(hb.pos, first, leaves);
+  fitToLeaves(hb.pos, first, leaves, !!cfg.along);
   return hb;
 }
 
 /**
  * Stretch the crown's points (from point `first` on) to the leaves' own height and spread around the trunk: an envelope
- * can stand taller or narrower than the leaves it holds (a holm oak's by a third), and the hull must not.
+ * can stand taller or narrower than the leaves it holds (a holm oak's by a third), and the hull must not. A plant
+ * trained along a line (`along`) is fitted along x and across it (z) each on its own.
  */
-function fitToLeaves(pos: number[], first: number, leaves: readonly number[]): void {
+function fitToLeaves(pos: number[], first: number, leaves: readonly number[], along = false): void {
+  const quantile = (a: number[]) => { a.sort((x, y) => x - y); return a[Math.floor((a.length - 1) * HULL_SPREAD)] ?? 0; };
   const spread = (p: readonly number[], from: number) => {
-    const wide: number[] = [];
+    const wide: number[] = [], xs: number[] = [], zs: number[] = [];
     let top = 0;
-    for (let i = from * 3; i < p.length; i += 3) { top = Math.max(top, p[i + 1]); wide.push(Math.hypot(p[i], p[i + 2])); }
-    wide.sort((a, b) => a - b);
-    return { top, wide: wide[Math.floor((wide.length - 1) * HULL_SPREAD)] ?? 0 };
+    for (let i = from * 3; i < p.length; i += 3) { top = Math.max(top, p[i + 1]); wide.push(Math.hypot(p[i], p[i + 2])); xs.push(Math.abs(p[i])); zs.push(Math.abs(p[i + 2])); }
+    return { top, wide: quantile(wide), x: quantile(xs), z: quantile(zs) };
   };
   const want = spread(leaves, 0), have = spread(pos, first);
   if (!(have.top > 0 && have.wide > 0 && want.top > 0 && want.wide > 0)) return;
   const up = want.top / have.top, out = want.wide / have.wide;
-  for (let i = first * 3; i < pos.length; i += 3) { pos[i] *= out; pos[i + 1] *= up; pos[i + 2] *= out; }
+  const ox = along && have.x > 0 ? want.x / have.x : out, oz = along && have.z > 0 ? want.z / have.z : out;
+  for (let i = first * 3; i < pos.length; i += 3) { pos[i] *= ox; pos[i + 1] *= up; pos[i + 2] *= oz; }
 }
 
 /** The share of points within the spread a hull is fitted to (its widest few may stray). */

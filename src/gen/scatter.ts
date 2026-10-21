@@ -25,7 +25,7 @@
  * grove's clearing.
  */
 import { hash3f, deriveSeed } from '@futuremagic/core';
-import { FLOOR_LAYERS, fromWorld, groundNormal, toWorld, wrapAngle, type CoverSpec, type DebrisSpec, type PlantSpec, type Vec3 } from '../blueprint';
+import { FLOOR_LAYERS, fromWorld, groundNormal, toWorld, wrapAngle, type CoverSpec, type DebrisSpec, type Habitat, type PlantSpec, type Vec3 } from '../blueprint';
 import { TREE_HEIGHT, type Ecology } from './ecology';
 import { horizonAt } from './horizon';
 import { groundSlope } from './terrain';
@@ -33,6 +33,7 @@ import { keptClear } from './landmarks';
 import { pathsOf, type PathNet } from './paths';
 import { plantedIn, plantingsOf, scatterKeepsOff } from './planted';
 import { bytesOf } from './shapes';
+import { kept } from './kept';
 
 /** Shapes per plant form: plants of a species pick one of these by their own hash. */
 export const PLANT_VARIANTS = 3;
@@ -207,9 +208,11 @@ export function cellsNear(ecology: Ecology, sp: Species, level: Level, eye: Vec3
   const { profile } = ecology.terrain.habitat;
   const at = fromWorld(profile, eye[0], eye[1], eye[2]);
   const [, , , far] = sp.band[level], near = from, cell = sp.cell[level], tall = sp.tall;
-  // Too high above the ground to see any of this plant at this level: none.
-  if (at.h - tall > far) return [];
-  const reach = Math.sqrt(Math.max(0, far * far - Math.max(0, at.h - tall) ** 2)) + cell;
+  // Too high above the ground to see any of this plant at this level: none. Above the ground under the eye, not above
+  // the profile: on a hill the eye stands that much higher over the profile, and its plants with it.
+  const ground = ecology.terrain.heightAt(at.theta, at.s), above = Math.max(0, at.h - ground - tall);
+  if (above > far) return [];
+  const reach = Math.sqrt(Math.max(0, far * far - above * above)) + cell;
   const out: NearCell[] = [];
   const j0 = Math.max(0, Math.floor((at.s - reach) / cell)), j1 = Math.min(Math.ceil(profile.length / cell) - 1, Math.floor((at.s + reach) / cell));
   for (let j = j0; j <= j1; j++) {
@@ -223,7 +226,8 @@ export function cellsNear(ecology: Ecology, sp: Species, level: Level, eye: Vec3
       if (seenCol.has(i)) continue;
       seenCol.add(i);
       const k: CellKey = { species: sp.id, level, j, i }, b = cellBounds(ecology, sp, k);
-      const c = toWorld(profile, { theta: (b.theta0 + b.theta1) / 2, s: (b.s0 + b.s1) / 2, h: 0 });
+      // On the ground under the eye: the cells it stands among are about as high, a far one's rise or fall is small to its distance.
+      const c = toWorld(profile, { theta: (b.theta0 + b.theta1) / 2, s: (b.s0 + b.s1) / 2, h: ground });
       // The nearest and farthest anything in it can be: the middle, give or take half its diagonal and the tallest plant.
       const mid = Math.hypot(c[0] - eye[0], c[1] - eye[1], c[2] - eye[2]), give = Math.hypot(b.s1 - b.s0, (b.theta1 - b.theta0) * r) / 2 + tall;
       if (mid - give < far && mid + give > near) out.push({ key: k, near: Math.max(0, mid - give), far: mid + give });
@@ -273,18 +277,29 @@ export function plantCell(ecology: Ecology, plants: readonly Species[], k: CellK
   const paths = pathsOf(t.habitat);
   const shares = new Float32Array(ecology.climate.biomes.length);
   const cover = sp.on >= 0 ? coverChance(ecology, sp.on, gridOf(sp, k.level)) : null;
-  const gap = spec.spacing;
-  for (let row = Math.floor(b.s0 / gap); row * gap < b.s1; row++) {
-    const s0 = row * gap, r = profile.at(Math.min(profile.length, s0 + gap / 2)).r;
+  // The lattice: rows `along` apart along s, columns `gap` apart around the axis in each. Rows planted by people are
+  // that far apart on level ground: along the profile's level run (`levelRunOf`), so on an endcap's terraces they stand
+  // as close as on the floor. Plants trained in rows (vines) take the spots of a square lattice their spacing apart that
+  // lie on a row (`onRow`), drawn onto it.
+  const gap = spec.spacing, rowGap = ('rowGap' in spec && spec.rowGap) || 0, along = gap;
+  const rows = 'rows' in spec && !!spec.rows, trained = rowGap > 0, run = rows || trained ? levelRunOf(profile) : null;
+  const u0 = run ? run.u(b.s0) : b.s0, u1 = run ? run.u(b.s1) : b.s1;
+  for (let row = Math.floor(u0 / along); row * along < u1; row++) {
+    const s0 = run ? run.s(row * along) : row * along, r = profile.at(Math.min(profile.length, run ? s0 : s0 + along / 2)).r;
     if (r < gap) continue; // at the axis itself, nothing grows
     const n = Math.max(1, Math.round((2 * Math.PI * r) / gap)), dTheta = (2 * Math.PI) / n;
     // The lattice squares that reach into the cell (a cell can wrap past θ = 0 only as a whole column).
     for (let col = Math.floor(b.theta0 / dTheta); col * dTheta < b.theta1; col++) {
       const it = ((col % n) + n) % n;
       const f = (q: number) => hash3f(seed, row, it, q);
-      const rows = 'rows' in spec && spec.rows;
-      const ps = rows ? s0 : s0 + f(0) * gap, pt = rows ? col * dTheta : (col + f(1)) * dTheta;
+      let ps = rows ? s0 : s0 + f(0) * along, pt = rows ? col * dTheta : (col + f(1)) * dTheta;
       if (ps < b.s0 || ps >= b.s1 || pt < b.theta0 || pt >= b.theta1 || ps > profile.length) continue;
+      let along0 = 0;
+      if (trained) {
+        const at = onRow(t, run!, pt, ps, rowGap, gap);
+        if (!at) continue;
+        pt = at.theta; ps = at.s; along0 = at.turn;
+      }
       if (cover && f(2) >= cover(pt, ps)) continue;
       const ground = t.heightAt(pt, ps);
       if (t.standAt(pt, ps) > ground + 0.05) continue; // under water
@@ -303,11 +318,79 @@ export function plantCell(ecology: Ecology, plants: readonly Species[], k: CellK
       const p = toWorld(profile, { theta: pt, s: ps, h: ground });
       const shape = Math.min(shapes - 1, Math.floor(f(5) * shapes));
       const [tx, tz] = sp.what === 'debris' ? tiltAt(ecology, pt, ps, p) : [0, 0];
-      lists[shape].push(p[0] - origin[0], p[1] - origin[1], p[2] - origin[2], spec.height[0] + (spec.height[1] - spec.height[0]) * f(3), f(4) * 2 * Math.PI, tx, tz);
+      // A plant trained in a row is turned along it (its x around the axis: `plantFrame`), either way round, give or take
+      // a little; anything else any way.
+      const turn = trained ? along0 + (f(4) < 0.5 ? 0 : Math.PI) + (f(7) - 0.5) * TRAINED_TWIST : f(4) * 2 * Math.PI;
+      lists[shape].push(p[0] - origin[0], p[1] - origin[1], p[2] - origin[2], spec.height[0] + (spec.height[1] - spec.height[0]) * f(3), turn, tx, tz);
     }
   }
   return finished(t, k, b, origin, lists);
 }
+
+/**
+ * Where a spot of a trained plant's square lattice (`spacing` apart) stands on a row `rowGap` from the next, or null
+ * when it lies between rows: drawn square onto the nearest row if that is within half the spacing, and the row's way
+ * there (a plant turn: 0 around the axis, `plantFrame`). On the Gate's terraces (`Terrain.terraceAt`) the rows follow the
+ * terrace, its lines of one level, counted from where its ledge begins; elsewhere they run around the axis, `rowGap`
+ * apart along the level run.
+ */
+export function onRow(t: Ecology['terrain'], run: { u(s: number): number; s(u: number): number }, theta: number, s: number, rowGap: number, spacing: number): { theta: number; s: number; turn: number } | null {
+  const { profile } = t.habitat;
+  const here = s > profile.floorEnd ? t.terraceAt(theta, s) : null;
+  if (!here) {
+    const u = run.u(s), off = Math.round(u / rowGap) * rowGap - u;
+    return Math.abs(off) < spacing / 2 ? { theta, s: run.s(u + off), turn: 0 } : null;
+  }
+  // Across the rows is up the level's gradient (over level ground: per metre around the axis, and along it, where a step
+  // along the profile is |nr| of a step on the level). Step that far along it to the row's line, twice, as the line bends.
+  const p = profile.at(s), r = Math.max(p.r, 1), cos = Math.max(Math.abs(p.nr), 0.3), d = 0.5;
+  let at = here, pt = theta, ps = s, turn = 0;
+  for (let k = 0; k < 2; k++) {
+    const a = t.terraceAt(pt + d / r, ps), b = t.terraceAt(pt, ps + d);
+    if (!a || !b || a.tier !== at.tier || b.tier !== at.tier) return null; // on a terrace's brink
+    const gu = (a.level - at.level) / d, gv = (b.level - at.level) / (d * cos), g = Math.hypot(gu, gv);
+    if (!(g > 1e-6)) return null;
+    // How far across the terrace's ledge the spot is, and the nearest row's line from it.
+    const x = ((at.level / at.step - at.tier) * at.step) / g, off = (Math.floor(x / rowGap) + 0.5) * rowGap - x;
+    if (k === 0 && Math.abs(off) >= spacing / 2) return null;
+    pt += (off * gu) / g / r; ps += (off * gv) / g / cos; turn = Math.atan2(gu, -gv);
+    const next = t.terraceAt(pt, ps);
+    if (!next || next.tier !== here.tier) return null;
+    at = next;
+  }
+  return { theta: pt, s: ps, turn };
+}
+
+/** The level run's samples along the profile (m), and how steep a slope it counts (|nr|, the cosine from level, at least). */
+const RUN_STEP = 2;
+const RUN_STEEPEST = 0.3;
+
+/**
+ * How far one walks on level ground for each metre along the profile, summed from the wild end (`u`), and back (`s`):
+ * 1 on the floor, 1 / cos of the slope up an endcap (gravity points away from the axis there, so level ground is a
+ * terrace's ledge at one radius). A terrace's ledge covers only that share of the profile's length, so rows of plants
+ * spaced by `u` stand their spacing apart on it. Made once per profile (a few hundred kB at most).
+ */
+export const levelRunOf: (profile: Habitat['profile']) => { u(s: number): number; s(u: number): number } = kept((profile) => {
+  const n = Math.ceil(profile.length / RUN_STEP) + 1, us = new Float64Array(n);
+  for (let i = 1; i < n; i++) {
+    const s = Math.min(profile.length, (i - 0.5) * RUN_STEP), nr = Math.abs(profile.at(s).nr);
+    us[i] = us[i - 1] + RUN_STEP / Math.max(nr, RUN_STEEPEST);
+  }
+  const u = (s: number): number => {
+    const f = Math.min(n - 1, Math.max(0, s / RUN_STEP)), i = Math.min(n - 2, Math.floor(f));
+    return us[i] + (us[i + 1] - us[i]) * (f - i);
+  };
+  const back = (v: number): number => {
+    let lo = 0, hi = n - 1;
+    while (hi - lo > 1) { const m = (lo + hi) >> 1; if (us[m] <= v) lo = m; else hi = m; }
+    return (lo + (v - us[lo]) / Math.max(us[hi] - us[lo], 1e-9)) * RUN_STEP;
+  };
+  return { u, s: back };
+});
+
+/** How far a plant trained in a row (vines) turns off it at most (radians). */
+const TRAINED_TWIST = 0.12;
 
 /** Debris at least this tall (m, the smallest of its kind) stands out of the snow: boulders, not stones. */
 const OUT_OF_SNOW = 0.8;
@@ -326,6 +409,19 @@ function snowKeepsOff(ecology: Ecology, sp: Species, theta: number, s: number, g
 }
 
 /** A planted cell from its plants' floats per shape. */
+/**
+ * A sphere round everything a cell draws, relative to its origin: about its plants' feet (the origin is on the profile,
+ * which on a hill lies far below them), out to the farthest, and up past the tallest (`tallest` m). For frustum culling.
+ */
+export function cellSphere(cell: PlantCell, tallest: number): { middle: Vec3; radius: number } {
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  for (const data of cell.instances) for (let i = 0; i < data.length; i += PLANT_STRIDE) for (let c = 0; c < 3; c++) {
+    lo[c] = Math.min(lo[c], data[i + c]); hi[c] = Math.max(hi[c], data[i + c]);
+  }
+  if (!(lo[0] <= hi[0])) return { middle: [0, 0, 0], radius: tallest };
+  return { middle: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2], radius: Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2 + tallest * 1.2 };
+}
+
 function finished(t: Ecology['terrain'], k: CellKey, b: { theta0: number; theta1: number; s0: number; s1: number }, origin: Vec3, lists: number[][]): PlantCell {
   const instances = lists.map((l) => new Float32Array(l));
   const horizon = horizonAt(t, (b.theta0 + b.theta1) / 2, (b.s0 + b.s1) / 2);
