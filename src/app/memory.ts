@@ -112,16 +112,19 @@ export class MemoryWatchdog {
     const s: MemorySample = { t: this.opts.now(), heap, owners, total, level };
     this.samples.push(s);
     if (this.samples.length > (this.opts.keep ?? 120)) this.samples.shift();
-    if (shed) {
-      // A hard crossing sheds the cheap caches too.
-      const run = shed === 'hard' ? [...this.shedders.soft, ...this.shedders.hard] : this.shedders.soft;
-      for (const f of run) { try { f(); } catch (e) { console.error('memory: a shedder failed', e); } }
-    }
+    // A hard crossing sheds the cheap caches too.
+    if (shed) this.shedNow(shed);
     if (level !== this.level) {
       this.level = level;
       this.opts.onLevel?.(level, s);
     }
     return s;
+  }
+
+  /** Give memory back now, as on crossing a budget (the debug menu): `soft` drops caches, `hard` everything not on screen. */
+  shedNow(level: 'soft' | 'hard'): void {
+    const run = level === 'hard' ? [...this.shedders.soft, ...this.shedders.hard] : this.shedders.soft;
+    for (const f of run) { try { f(); } catch (e) { console.error('memory: a shedder failed', e); } }
   }
 
   /** Sample every `ms` milliseconds until `stop`. */
@@ -160,6 +163,15 @@ export class MemoryWatchdog {
     const parts = Object.entries(s.owners).sort((x, y) => y[1] - x[1]).slice(0, 3).map(([k, v]) => `${k} ${mb(v)}`);
     const heap = s.heap === null ? 'heap n/a' : `heap ${mb(s.heap)}`;
     return `memory ${mb(s.total)} of ${mb(this.budget.soft)}/${mb(this.budget.hard)} (${this.budget.device}), ${heap}${parts.length ? ', ' + parts.join(', ') : ''}, ${this.growth() < 0 ? '−' : '+'}${mb(Math.abs(this.growth()))}/min`;
+  }
+
+  /** Every owner, largest first, and the totals of the last `n` samples, oldest first (the debug menu's details). */
+  details(n = 15): string {
+    const s = this.samples[this.samples.length - 1];
+    if (!s) return '';
+    const owners = Object.entries(s.owners).sort((x, y) => y[1] - x[1]).map(([k, v]) => `  ${k}: ${mb(v)}`);
+    const totals = this.samples.slice(-n).map((x) => Math.round(x.total / MB)).join(' ');
+    return [`memory by owner:`, ...owners, `last totals (MB): ${totals}`].join('\n');
   }
 }
 

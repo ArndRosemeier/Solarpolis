@@ -29,6 +29,7 @@ import { slopeAt } from '../gen/scatter';
 import { setFloorEye } from './groundShaders';
 import { UNDER_CROWNS, crownsClosed, makeEcology, type Ecology } from '../gen/ecology';
 import { FrameLoop, dragToLook, draw, fitCanvas, moveKeys } from './surface';
+import { freeMesh } from './geometry';
 
 /** Running is this many times the walking speed. */
 const RUN = 8;
@@ -220,7 +221,7 @@ export class InteriorView {
 
   /** Remove every ball. */
   clearBalls(): void {
-    for (const [id, mesh] of this.balls) { this.physics?.remove(id); this.stage.remove(mesh); }
+    for (const [id, mesh] of this.balls) { this.physics?.remove(id); this.stage.remove(mesh); freeMesh(mesh, 'none'); }
     this.balls.clear();
     this.drop = null;
   }
@@ -296,7 +297,7 @@ export class InteriorView {
         }
       }
     }
-    for (const [id, mesh] of this.balls) if (!alive.has(id)) { this.stage.remove(mesh); this.balls.delete(id); }
+    for (const [id, mesh] of this.balls) if (!alive.has(id)) { this.stage.remove(mesh); freeMesh(mesh, 'none'); this.balls.delete(id); }
   }
 
   /** Show another habitat (the Lab changed it). */
@@ -317,7 +318,7 @@ export class InteriorView {
   private async build(): Promise<void> {
     if (this.tiles) { this.scene.remove(this.tiles.group); this.tiles.dispose(); }
     if (this.plants) { this.scene.remove(this.plants.group); this.plants.dispose(); }
-    if (this.sunline) { this.stage.remove(this.sunline); this.sunline.geometry.dispose(); }
+    if (this.sunline) { this.stage.remove(this.sunline); freeMesh(this.sunline); }
     const h = this.habitat;
     this.norm = sunlineNorm(h);
     setSunline(h.length, this.norm, nearestLit(h));

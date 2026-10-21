@@ -2,8 +2,8 @@
  * The one way the view streams things the worker pool builds (terrain tiles, plant cells): a cache of built entries
  * by id, the jobs in flight, and what they hold for the memory watchdog. Each frame the view says which ids it wants,
  * most needed first (`want`); missing ones are asked of the pool, a few at a time, and jobs no longer wanted are
- * dropped from its queue. Entries not drawn for longest go first when the cache is full (`evict`) or memory runs
- * short (`shed`).
+ * dropped from its queue. Entries not drawn for longest go first when the cache is full, by count or by bytes (`evict`),
+ * or memory runs short (`shed`).
  */
 import type { GenAnswer, GenRequest } from '../workers/gen.worker';
 import type { WorkerPool } from '../workers/pool';
@@ -17,8 +17,9 @@ export interface Streamed {
 export interface StreamOptions<T extends Streamed> {
   /** The id of one of its jobs. */
   id: (r: GenRequest) => string;
-  /** Entries kept, drawn or not, and jobs in flight at once. */
+  /** Entries kept, drawn or not, and the bytes they may hold together (whichever is reached first); jobs in flight at once. */
   limit: number;
+  maxBytes: number;
   inFlight: number;
   /** Turns a finished job into an entry (ready to draw), or null to keep nothing. */
   make: (answer: GenAnswer, id: string) => Promise<T | null>;
@@ -67,10 +68,12 @@ export class StreamCache<T extends Streamed> {
     this.asked.add(id);
     this.sent.add(request);
     const answer = await this.pool.job(request);
-    if (this.built.has(id)) return;
+    // Built by another ask meanwhile, or no longer wanted: nothing to make (making would compile it for nothing).
+    if (this.built.has(id) || !this.asked.has(id)) return;
     const e = await this.opts.make(answer, id);
     if (!e) return;
-    if (!this.asked.has(id)) { this.opts.free(e); return; } // no longer wanted while it was made
+    // No longer wanted while it was made, or made twice (asked again while an older job ran): keep one, free the other.
+    if (!this.asked.has(id) || this.built.has(id)) { this.opts.free(e); return; }
     this.built.set(id, e);
     this.held += e.bytes;
     this.asked.delete(id);
@@ -90,9 +93,13 @@ export class StreamCache<T extends Streamed> {
   }
 
   private evict(): void {
-    if (this.built.size <= this.opts.limit) return;
+    const over = (): boolean => this.built.size > this.opts.limit || this.held > this.opts.maxBytes;
+    if (!over()) return;
     const old = [...this.built].filter(([, e]) => e.lastDrawn < this.frameNo).sort((a, b) => a[1].lastDrawn - b[1].lastDrawn);
-    for (const [id, e] of old.slice(0, this.built.size - this.opts.limit)) this.forget(id, e);
+    for (const [id, e] of old) {
+      if (!over()) break;
+      this.forget(id, e);
+    }
   }
 
   private forget(id: string, e: T): void {

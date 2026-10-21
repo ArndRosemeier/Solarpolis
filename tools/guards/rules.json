@@ -6,6 +6,7 @@
     { "id": "camera .project(", "pattern": "\\.project\\(\\s*[\\w.]*cam", "flags": "gi", "only": ["src/render/screen.ts"], "why": "world-to-screen goes through screen.toScreen" },
     { "id": "new Worker", "pattern": "\\bnew\\s+Worker\\s*\\(", "only": ["src/workers/pool.ts"], "why": "workers are created by the one worker pool" },
     { "id": "new Material", "pattern": "\\bnew\\s+\\w*Material\\s*\\(", "only": ["src/render/materials.ts"], "why": "every material is a kind in the registry, so warm-up knows every shader (docs/SHADERS.md)" },
+    { "id": "geometry.dispose", "pattern": "\\.geometry\\.dispose\\s*\\(", "only": ["src/render/geometry.ts"], "why": "a mesh given up goes through freeMesh (render/geometry.ts): disposing only its geometry leaves three's WebGPU renderer holding the whole mesh" },
     { "id": "onBeforeCompile", "pattern": "\\bonBeforeCompile\\b", "only": [], "why": "shader variants come from the registry's TSL kinds, not from patched source (docs/SHADERS.md)" },
     { "id": "renderer.compile", "pattern": "\\.compile(Async)?\\s*\\(", "only": [], "why": "compiling is the Stage's job (@futuremagic/stage): warmUp(), warmLater() and add() (docs/SHADERS.md)" },
     { "id": "new Light", "pattern": "\\bnew\\s+(PointLight|SpotLight|DirectionalLight|HemisphereLight|AmbientLight|RectAreaLight)\\s*\\(", "only": ["src/render/lights.ts"], "why": "lights are a fixed pool made before the warm-up: the light count is part of every shader's cache key (docs/SHADERS.md)" },
