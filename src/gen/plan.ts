@@ -407,7 +407,10 @@ export function makePlan(h: Habitat): Plan {
     for (let j = 0; j < near.length; j++) {
       const k = near[j];
       if (k === own) continue;
-      const apart = dist(own.theta, own.s, k.theta, k.s);
+      // The border is no nearer than half the difference of the two distances: most seeds are passed by on that.
+      const lower = (Math.sqrt(near2[j]) - Math.sqrt(near2[i])) / 2;
+      if (lower >= edge) continue;
+      const a = k.theta - own.theta, du = (a - TURN * Math.round(a / TURN)) * R, ds = k.s - own.s, apart = Math.sqrt(du * du + ds * ds);
       if (apart <= 0) continue;
       const e = (near2[j] - near2[i]) / (2 * apart);
       if (e < edge) { edge = e; other = k; }
