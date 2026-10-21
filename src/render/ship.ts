@@ -7,7 +7,7 @@ import { Mesh, Vector4, type BufferGeometry } from 'three/webgpu';
 import type { Stage } from '@futuremagic/stage';
 import { v3cross, v3norm, type Vec3 } from '@futuremagic/core';
 import type { Mat3, ShipRole, ShipShape } from '../space';
-import { ShapeBuilder, setPose, type RGB } from './geometry';
+import { ShapeBuilder, freeMesh, setPose, type RGB } from './geometry';
 import { FLAME, HARDWARE } from './materials';
 import { FLAME_GLOW, type FlameUniforms } from './hullShaders';
 
@@ -112,7 +112,7 @@ export class ShipMeshes {
   }
 
   removeFrom(stage: Stage): void {
-    for (const m of this.meshes) { stage.remove(m); m.geometry.dispose(); }
+    for (const m of this.meshes) { stage.remove(m); freeMesh(m); }
   }
 
   /** Where it is (its axes in the scene, its stern relative to the eye) and how hard its torch thrusts (0–1). */

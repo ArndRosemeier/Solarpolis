@@ -9,7 +9,7 @@ import { Mesh } from 'three/webgpu';
 import type { Stage } from '@futuremagic/stage';
 import { v3add, v3dot, v3len, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
 import { apply, mul, shipShape, trafficAt, transpose, type Mat3, type PlacedHabitat, type ShipNow, type ShipShape, type Space } from '../space';
-import { pointsChanged, pointsGeometry, setPoint } from './geometry';
+import { freeMesh, pointsChanged, pointsGeometry, setPoint } from './geometry';
 import { STARS } from './materials';
 import { SHIP_ALBEDO, ShipMeshes, shipAxes, shipFlux } from './ship';
 import type { Hull } from './necklace';
@@ -113,6 +113,6 @@ export class TrafficView {
     for (const d of this.ships.values()) d.meshes?.removeFrom(this.stage);
     this.ships.clear();
     this.stage.remove(this.points);
-    this.points.geometry.dispose();
+    freeMesh(this.points);
   }
 }
