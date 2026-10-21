@@ -146,8 +146,13 @@ function layCourt(t: Terrain, index: number): CourtLayout | null {
   if (!c || !hr) return null;
   const R = h.profile.at(c.s).r, outer = c.radius + PART.walk * hr;
   const ground = (r: number, a: number): number => t.heightAt(c.theta + (r * Math.sin(a)) / R, c.s + r * Math.cos(a)) - c.floor;
-  const rim = new Float64Array(RIM);
-  for (let i = 0; i < RIM; i++) rim[i] = Math.max(0, ground(c.radius, (i / RIM) * TAU), ground(outer, (i / RIM) * TAU));
+  // Each sample the highest ground near it (between its neighbours, at the rim and the walk's outer edge), so the walk
+  // drawn straight between samples never dips under a bump of the land.
+  const raw = new Float64Array(RIM), rim = new Float64Array(RIM);
+  for (let i = 0; i < RIM; i++) {
+    for (const f of [-1 / 3, 0, 1 / 3]) for (const r of [c.radius, outer]) raw[i] = Math.max(raw[i], ground(r, ((i + f) / RIM) * TAU));
+  }
+  for (let i = 0; i < RIM; i++) rim[i] = Math.max(raw[(i + RIM - 1) % RIM], raw[i], raw[(i + 1) % RIM]);
   const face = c.radius * 0.9 - PART.face * hr, inner = face - PART.stair * hr, mid = (face + inner) / 2;
   if (inner < c.radius * 0.4) return null;
   const pave = PART.pave * hr, coping = PART.coping * hr;

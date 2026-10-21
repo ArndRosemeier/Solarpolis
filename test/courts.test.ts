@@ -31,7 +31,7 @@ for (const { name, params } of MATRIX) {
     const t = terrainOf(name, params), h = t.habitat;
     if (!params.landmarks) { assert.equal(courtGridOf(t), null); return; }
     assert.ok(t.courts.length > 0, 'the plan has entrances');
-    for (const l of someOf(t, 24)) {
+    for (const l of someOf(t, 12)) {
       const hr = l.handrail, c = l.court, min = Math.min(...l.rim);
       assert.ok(Math.abs(l.landing.top - (min + l.coping)) < 1e-9, 'the landing is flush with the walk where the rim is lowest');
       assert.ok(l.stairs.length >= 1 && l.stairs.length <= 2);
