@@ -2,7 +2,8 @@
  * The ground for the physics: a square of terrain around a point, as a triangle mesh at a fixed cell size, kept
  * relative to its own origin (the point on the ground at its centre) so the physics engine's 32-bit floats stay
  * precise (docs/ARCHITECTURE.md, "Where does the camera sit?"). The same heights as the tiles (`terrain.heightAt`),
- * on a grid of (θ, s), so it wraps around the axis and climbs the endcaps like everything else. Pure.
+ * on a grid of (θ, s), so it wraps around the axis and climbs the endcaps like everything else, with the solid parts of
+ * the landmarks and the Lift Stair near it. Pure.
  */
 import { toWorld, type Vec3 } from '../blueprint';
 import type { Terrain } from './terrain';
@@ -10,6 +11,7 @@ import { frameOf, landmarksOf, reachOf, type Landmark } from './landmarks';
 import { buildPavilion } from './pavilion';
 import { outOfPlace } from './shapes';
 import { kept } from './kept';
+import { buildStairSolid } from './liftStairMesh';
 
 export interface GroundPatch {
   /** Where it was asked for (θ, s), and its world origin (float64). */
@@ -45,13 +47,17 @@ export function buildPatch(terrain: Terrain, theta: number, s: number, size: num
     const a = j * row + i, b = a + 1, d = a + row, e = d + 1;
     index[k++] = a; index[k++] = d; index[k++] = b; index[k++] = b; index[k++] = d; index[k++] = e;
   }
-  const solids = landmarkSolids(terrain, origin, size);
-  if (!solids.index.length) return { theta, s, origin, size, positions, index };
-  // The landmarks' solid parts follow the ground's triangles, in the same frame.
-  const all = new Float32Array(positions.length + solids.positions.length), base = positions.length / 3;
-  all.set(positions); all.set(solids.positions, positions.length);
-  const idx = new Uint32Array(index.length + solids.index.length);
-  idx.set(index); idx.set(solids.index.map((i) => i + base), index.length);
+  // The landmarks' and the Lift Stair's solid parts follow the ground's triangles, in the same frame.
+  const parts = [{ positions, index }, landmarkSolids(terrain, origin, size), buildStairSolid(terrain.habitat, origin, size * 0.75)].filter((a): a is { positions: Float32Array; index: Uint32Array } => !!a && a.index.length > 0);
+  if (parts.length === 1) return { theta, s, origin, size, positions, index };
+  const all = new Float32Array(parts.reduce((n, a) => n + a.positions.length, 0)), idx = new Uint32Array(parts.reduce((n, a) => n + a.index.length, 0));
+  let vertices = 0, at = 0;
+  for (const a of parts) {
+    all.set(a.positions, vertices * 3);
+    idx.set(a.index.map((i) => i + vertices), at);
+    vertices += a.positions.length / 3;
+    at += a.index.length;
+  }
   return { theta, s, origin, size, positions: all, index: idx };
 }
 
