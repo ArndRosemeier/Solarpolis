@@ -17,7 +17,7 @@
  * (`HabitatParams.landmarks`), so a small habitat's pavilion is small and a large one's large, with steps and seats of
  * human size in all of them.
  *
- * Drawn at three levels (`PAVILION_LEVELS`): far (the deck, the seats as a cone, the columns, the roof: its outline
+ * Drawn at three levels (`LANDMARK_LEVELS`): far (the deck, the seats as a cone, the columns, the roof: its outline
  * from across the habitat), mid (the rows and stairs, piers, column capitals, roof edges, the top rails) and near
  * (fluted columns, railings with posts and rails, benches, lamps, the ribs under the roof). Each level is the whole
  * pavilion, finer; the finest parts of each are under a pixel where the next coarser one takes over. `solid` is what
@@ -30,8 +30,9 @@ import type { Pavilion } from './landmarks';
 /** What the surfaces are made of (the BUILT kind reads it, render/materials.ts). */
 export const FINISH = { stone: 0, timber: 1, bronze: 2, ceramic: 3 } as const;
 
-export const PAVILION_LEVELS = ['far', 'mid', 'near'] as const;
-export type PavilionLevel = (typeof PAVILION_LEVELS)[number] | 'solid';
+/** The levels every landmark is drawn at (the summit hut's too, gen/summitHut.ts), and `solid` for the physics. */
+export const LANDMARK_LEVELS = ['far', 'mid', 'near'] as const;
+export type LandmarkLevel = (typeof LANDMARK_LEVELS)[number] | 'solid';
 
 /** Linear albedo of each material. */
 const STONE: RGB = [0.52, 0.49, 0.43];
@@ -118,7 +119,7 @@ const STAIR_ANGLES = [0.25, 0.75, 1.25, 1.75].map((k) => k * Math.PI);
 export const stairsOf = (q: PavilionPlan): number[] => ((Math.PI / 4) * q.floor > (q.passage + q.stair) / 2 + q.handrail ? STAIR_ANGLES : []);
 
 /** Segments around a full circle at each level. */
-function around(q: PavilionPlan, level: PavilionLevel): number {
+function around(q: PavilionPlan, level: LandmarkLevel): number {
   if (level === 'far') return 48;
   if (level === 'mid' || level === 'solid') return 128;
   return Math.min(512, Math.max(128, 8 * Math.round((2 * Math.PI * q.radius) / q.handrail / 8)));
@@ -127,7 +128,7 @@ function around(q: PavilionPlan, level: PavilionLevel): number {
 const polar = (r: number, a: number, z: number): Vec3 => [r * Math.cos(a), r * Math.sin(a), z];
 
 /** The pavilion at one level, in its own frame, as a mapped and coloured shape. */
-export function buildPavilion(p: Pavilion, level: PavilionLevel): Shape {
+export function buildPavilion(p: Pavilion, level: LandmarkLevel): Shape {
   const q = pavilionPlan(p), n = around(q, level), sh = new Shape(n, true, true);
   const far = level === 'far', near = level === 'near', solid = level === 'solid';
   // Steps for an arc: as many as the level's full circle has, fewer at a smaller radius (the same length each).
@@ -156,7 +157,7 @@ export function buildPavilion(p: Pavilion, level: PavilionLevel): Shape {
 }
 
 /** The seats: rows rising outward between the passages and stairs, the stairs in their gaps, the skirt outside. */
-function seats(sh: Shape, q: PavilionPlan, level: PavilionLevel, steps: (a0: number, a1: number, r?: number) => number): void {
+function seats(sh: Shape, q: PavilionPlan, level: LandmarkLevel, steps: (a0: number, a1: number, r?: number) => number): void {
   const top = q.deck + q.rows * q.riser;
   if (level === 'far') {
     // From afar the rows read as one cone: from the floor's edge up to the top, and the skirt back down.
@@ -232,7 +233,7 @@ function piers(sh: Shape, q: PavilionPlan): void {
 }
 
 /** The ring of columns: each a tapering shaft that branches into four struts under the roof. */
-function columns(sh: Shape, q: PavilionPlan, level: PavilionLevel): void {
+function columns(sh: Shape, q: PavilionPlan, level: LandmarkLevel): void {
   const under = (r: number) => roofAt(q, r) - q.shell;
   const t = new Shape(8, true, true), r = q.ring, c = q.column, h = under(r) - q.deck;
   t.finish = FINISH.stone;
@@ -272,7 +273,7 @@ function columns(sh: Shape, q: PavilionPlan, level: PavilionLevel): void {
 }
 
 /** The shell roof: its top, its underside, the eaves' edge and the oculus's bronze ring; ribs under it up close. */
-function roof(sh: Shape, q: PavilionPlan, level: PavilionLevel): void {
+function roof(sh: Shape, q: PavilionPlan, level: LandmarkLevel): void {
   // Around, half the level's steps: the shell is smooth, and its edge is the only outline it has.
   const pieces = level === 'far' ? 6 : level === 'mid' ? 10 : 16, n = Math.max(48, around(q, level) / 2);
   const shellRing = (z0: number, r0: number, z1: number, r1: number, nz: number, nr: number, c: RGB) => sh.arc(z0, r0, z1, r1, nz, nr, 0, 2 * Math.PI, n, c);
@@ -309,7 +310,7 @@ function roof(sh: Shape, q: PavilionPlan, level: PavilionLevel): void {
 }
 
 /** A bridge from the deck's edge to the shore: arched deck, edges, underside, and piers in pairs. */
-function bridge(sh: Shape, q: PavilionPlan, b: { dir: 1 | -1; from: number; to: number; end: number }, level: PavilionLevel): void {
+function bridge(sh: Shape, q: PavilionPlan, b: { dir: 1 | -1; from: number; to: number; end: number }, level: LandmarkLevel): void {
   const len = b.to - b.from, k = level === 'far' ? 4 : level === 'near' ? Math.ceil(len / (q.handrail * 1.5)) : 12;
   const w = q.bridge / 2, slab = q.slab * 0.8, s = b.dir;
   const station = (j: number) => b.from + (len * j) / k;
@@ -334,11 +335,10 @@ function bridge(sh: Shape, q: PavilionPlan, b: { dir: 1 | -1; from: number; to: 
 }
 
 /**
- * A railing along a line of points (each with its height): posts about a handrail and a third apart, a top rail and a
- * cable between them; or, for the physics (`solid`), a wall as high as the rail.
+ * A railing along a line of points (each with its height), `hr` high: posts about a handrail and a third apart, a top
+ * rail and a cable between them; or, for the physics (`solid`), a wall as high as the rail. Every landmark's railings.
  */
-function railing(sh: Shape, q: PavilionPlan, line: readonly Vec3[], solid: boolean): void {
-  const hr = q.handrail;
+export function railing(sh: Shape, hr: number, line: readonly Vec3[], solid: boolean): void {
   if (solid) {
     for (let i = 0; i + 1 < line.length; i++) {
       const a = line[i], b = line[i + 1], n = v3norm(v3cross([b[0] - a[0], b[1] - a[1], b[2] - a[2]], [0, 0, 1]));
@@ -371,51 +371,53 @@ function railing(sh: Shape, q: PavilionPlan, line: readonly Vec3[], solid: boole
 const circle = (r: number, z: number, n: number, a0 = 0, a1 = 2 * Math.PI): Vec3[] => Array.from({ length: n + 1 }, (_, i) => polar(r, a0 + ((a1 - a0) * i) / n, z));
 
 /** The railings: round the pool, the deck's edge (open to the bridges), the top of the seats, the passages, the bridges. */
-function railings(sh: Shape, q: PavilionPlan, p: Pavilion, level: PavilionLevel): void {
+function railings(sh: Shape, q: PavilionPlan, p: Pavilion, level: LandmarkLevel): void {
   const solid = level === 'solid', n = around(q, level), top = q.deck + q.rows * q.riser, inset = q.handrail * 0.1;
-  railing(sh, q, circle(q.pool + inset, q.deck, Math.ceil(n / 4)), solid);
+  railing(sh, q.handrail, circle(q.pool + inset, q.deck, Math.ceil(n / 4)), solid);
   // The deck's edge, open where each bridge leaves.
   const gap = (q.bridge / 2) / q.radius;
-  for (const [a0, a1] of [[gap, Math.PI - gap], [Math.PI + gap, 2 * Math.PI - gap]]) railing(sh, q, circle(q.radius - inset, q.deck, Math.ceil((n * (a1 - a0)) / (2 * Math.PI)), a0, a1), solid);
+  for (const [a0, a1] of [[gap, Math.PI - gap], [Math.PI + gap, 2 * Math.PI - gap]]) railing(sh, q.handrail, circle(q.radius - inset, q.deck, Math.ceil((n * (a1 - a0)) / (2 * Math.PI)), a0, a1), solid);
   // Along the top of the seats, between the passages, and down each passage's sides.
   for (let g = 0; g < 4; g++) {
     const w = q.passage / 2, a0 = PASSAGES[g] + w / q.stand, a1 = PASSAGES[g] + Math.PI / 2 - w / q.stand;
-    railing(sh, q, circle(q.stand - inset, top, Math.ceil((n * (a1 - a0)) / (2 * Math.PI)), a0, a1), solid);
+    railing(sh, q.handrail, circle(q.stand - inset, top, Math.ceil((n * (a1 - a0)) / (2 * Math.PI)), a0, a1), solid);
     for (const side of [-1, 1]) {
       const line: Vec3[] = [];
       for (let i = 0; i <= q.rows; i++) {
         const r = Math.min(q.stand, q.floor + i * q.tread), a = PASSAGES[g] + (side * w) / r;
         line.push(polar(r, a, q.deck + Math.min(i + 1, q.rows) * q.riser));
       }
-      railing(sh, q, line, solid);
+      railing(sh, q.handrail, line, solid);
     }
   }
   for (const b of p.bridges) {
     const k = Math.ceil((b.to - b.from) / q.handrail);
     for (const side of [-1, 1]) {
       const y = side * (q.bridge / 2 - inset);
-      railing(sh, q, Array.from({ length: k + 1 }, (_, j) => { const x = b.from + ((b.to - b.from) * j) / k; return [b.dir * x, b.dir * y, bridgeAt(q, b, x)] as Vec3; }), solid);
+      railing(sh, q.handrail, Array.from({ length: k + 1 }, (_, j) => { const x = b.from + ((b.to - b.from) * j) / k; return [b.dir * x, b.dir * y, bridgeAt(q, b, x)] as Vec3; }), solid);
     }
+  }
+}
+
+/** A railing's top rail alone along a line of points (`hr` over them): from the middle distance only that shows. */
+export function topRail(sh: Shape, hr: number, line: readonly Vec3[]): void {
+  sh.finish = FINISH.bronze;
+  const rail: [number, number][] = [[-0.03 * hr, -0.05 * hr], [0.03 * hr, -0.05 * hr], [0.03 * hr, 0], [-0.03 * hr, 0]];
+  for (let i = 0; i + 1 < line.length; i++) {
+    const a = line[i], b = line[i + 1], d = v3norm([b[0] - a[0], b[1] - a[1], b[2] - a[2]]);
+    const across = v3norm(v3cross([0, 0, 1], d));
+    sh.sweep(rail, [a[0], a[1], a[2] + hr], [b[0], b[1], b[2] + hr], across, v3cross(d, across), BRONZE);
   }
 }
 
 /** From the middle distance only the railings' top rails show (posts and cables are under a pixel). */
 function topRails(sh: Shape, q: PavilionPlan, p: Pavilion): void {
-  sh.finish = FINISH.bronze;
   const hr = q.handrail, top = q.deck + q.rows * q.riser;
-  const rail: [number, number][] = [[-0.03 * hr, -0.05 * hr], [0.03 * hr, -0.05 * hr], [0.03 * hr, 0], [-0.03 * hr, 0]];
-  const railAlong = (line: Vec3[]) => {
-    for (let i = 0; i + 1 < line.length; i++) {
-      const a = line[i], b = line[i + 1], d = v3norm([b[0] - a[0], b[1] - a[1], b[2] - a[2]]);
-      const across = v3norm(v3cross([0, 0, 1], d));
-      sh.sweep(rail, [a[0], a[1], a[2] + hr], [b[0], b[1], b[2] + hr], across, v3cross(d, across), BRONZE);
-    }
-  };
-  railAlong(circle(q.pool, q.deck, 32));
-  railAlong(circle(q.radius, q.deck, 96));
-  railAlong(circle(q.stand, top, 96));
+  topRail(sh, hr, circle(q.pool, q.deck, 32));
+  topRail(sh, hr, circle(q.radius, q.deck, 96));
+  topRail(sh, hr, circle(q.stand, top, 96));
   for (const b of p.bridges) for (const side of [-1, 1]) {
-    railAlong(Array.from({ length: 13 }, (_, j) => { const x = b.from + ((b.to - b.from) * j) / 12; return [b.dir * x, b.dir * side * q.bridge / 2, bridgeAt(q, b, x)] as Vec3; }));
+    topRail(sh, hr, Array.from({ length: 13 }, (_, j) => { const x = b.from + ((b.to - b.from) * j) / 12; return [b.dir * x, b.dir * side * q.bridge / 2, bridgeAt(q, b, x)] as Vec3; }));
   }
 }
 

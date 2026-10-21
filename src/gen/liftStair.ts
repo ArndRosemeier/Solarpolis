@@ -24,6 +24,7 @@
 import { toWorld, type Habitat, type Vec3 } from '../blueprint';
 import { landformOf, planOf, siteOf } from './plan';
 import { kept } from './kept';
+import { standThrough } from './standing';
 
 /** The face the stair climbs, in plan (z, w) and height e above the floor. */
 export interface Ramp {
@@ -511,25 +512,9 @@ export function stairStandAt(h: Habitat, theta: number, s: number): number | nul
   if (!st) return null;
   const b = boundsOf(h), ramp = rampOf(h);
   if (s < b.s0 - b.tall * 4 || s > b.s1 + b.tall) return null;
-  const outAt = (k: number): { z: number; w: number; e: number } => ramp.plan(toWorld(h.profile, { theta, s, h: k }));
-  const p0 = outAt(0);
-  if (Math.abs(p0.w) > ramp.halfWidth + b.tall) return null;
-  /** How far under the stair's top a height k is: > 0 inside, < 0 above it, null off it. */
-  const under = (k: number): number | null => {
-    const p = outAt(k), top = stairTopAt(st, [p.z, p.w]);
-    return top === null ? null : top - p.e;
-  };
-  const step = st.handrail / 4, most = b.tall * 4;
-  let inside = (under(0) ?? -1) > 0;
-  for (let k = step; k <= most; k += step) {
-    const u = under(k);
-    if (u !== null && u <= 0 && inside) {
-      // Out through its top between k − step and k: halve to a millimetre or so.
-      let lo = k - step, hi = k;
-      for (let i = 0; i < 12; i++) { const m = (lo + hi) / 2; if ((under(m) ?? -1) > 0) lo = m; else hi = m; }
-      return hi;
-    }
-    inside = u !== null && u > 0;
-  }
-  return null;
+  if (Math.abs(ramp.plan(toWorld(h.profile, { theta, s, h: 0 })).w) > ramp.halfWidth + b.tall) return null;
+  return standThrough(h, theta, s, 0, b.tall * 4, st.handrail / 4, (p) => {
+    const q = ramp.plan(p), top = stairTopAt(st, [q.z, q.w]);
+    return top === null ? null : top - q.e;
+  });
 }

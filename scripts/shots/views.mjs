@@ -94,6 +94,10 @@ export const views = {
   'stair-beside': { query: 'view=inside', about: 'floating some tens of metres off the Lift Stair halfway up, looking at its legs and platforms', settle: 6000, steps: [{ debug: 'Fly: beside the Lift Stair' }, { wait: 12000 }] },
   'stair-close': { query: 'view=inside', about: 'floating a few metres off a leg of the Lift Stair: steps, nosings, parapets, copings, handrails', settle: 6000, steps: [{ debug: 'Fly: the Lift Stair close up' }, { wait: 12000 }] },
   'stair-hub': { query: 'view=inside', about: 'floating off the Lift Stair near the hub, where the steps are ledges', settle: 6000, steps: [{ debug: 'Fly: the Lift Stair near the hub' }, { wait: 12000 }] },
+  'hut-terrace': { query: 'view=inside', about: 'on the summit hut\'s terrace high on the Mountain, looking out down the cylinder, then back at the hall', settle: 6000, steps: [{ debug: 'To the summit hut: on its terrace' }, { wait: 9000 }, { shot: 'ahead' }, { look: [1800, 60] }, { wait: 1500 }] },
+  'hut-beside': { query: 'view=inside', about: 'floating beside the summit hut on its cliff: roof, hall, terrace, prow, buttress', settle: 6000, steps: [{ debug: 'Fly: by the summit hut' }, { wait: 12000 }] },
+  'hut-under': { query: 'view=inside', about: 'floating under the summit hut: corbels and struts raking back into the rock', settle: 6000, steps: [{ debug: 'Fly: under the summit hut' }, { wait: 12000 }] },
+  'hut-far': { query: 'view=inside', about: 'the summit hut from a few hundred metres out, small on the Mountain\'s face', settle: 6000, steps: [{ debug: 'Fly: the summit hut from afar' }, { wait: 12000 }] },
   // The founders' grove (gen/planted.ts): inside its ring, over it, and from afar.
   'grove-in': { query: 'view=inside', about: 'standing inside the founders\' grove, looking across its clearing at the ring of trees', settle: 6000, steps: [{ debug: 'To the founders\' grove' }, { wait: 9000 }] },
   'grove-over': { query: 'view=inside', about: 'floating above the founders\' grove, looking down at the ring', settle: 6000, steps: [{ debug: 'Fly: over the founders\' grove' }, { wait: 9000 }] },

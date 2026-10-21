@@ -19,8 +19,8 @@ import { groundLayer } from '../gen/groundTex';
 import { makeSkin, type Skin } from '../gen/skin';
 import { buildPartTile, detailParts, type DetailPart, type PartTile } from '../gen/hullParts';
 import type { TileKey as DetailKey } from '../gen/detailTree';
-import { landmarksOf } from '../gen/landmarks';
-import { buildPavilion, type PavilionLevel } from '../gen/pavilion';
+import { buildLandmark, landmarksOf } from '../gen/landmarks';
+import type { LandmarkLevel } from '../gen/pavilion';
 import type { MappedArrays } from '../gen/shapes';
 import { buildStairTile, type StairTile } from '../gen/liftStairMesh';
 
@@ -35,7 +35,7 @@ export type GenRequest =
   | { kind: 'foliage'; params: HabitatParams }
   | { kind: 'floor'; params: HabitatParams; layer: number }
   | { kind: 'hull'; params: HabitatParams; part: string; key: DetailKey }
-  | { kind: 'landmark'; params: HabitatParams; index: number; level: PavilionLevel }
+  | { kind: 'landmark'; params: HabitatParams; index: number; level: LandmarkLevel }
   | { kind: 'stair'; params: HabitatParams; key: DetailKey };
 export type GenAnswer =
   | { kind: 'tile'; tile: TileMesh }
@@ -48,7 +48,7 @@ export type GenAnswer =
   | { kind: 'foliage'; bark: BarkAtlas; leaves: Uint8Array; leafMeans: Float32Array }
   | { kind: 'floor'; layer: number; albedo: Uint8Array; relief: Uint8Array; mean: [number, number, number] }
   | { kind: 'hull'; partTile: PartTile }
-  | { kind: 'landmark'; index: number; level: PavilionLevel; mesh: MappedArrays }
+  | { kind: 'landmark'; index: number; level: LandmarkLevel; mesh: MappedArrays }
   | { kind: 'stair'; stairTile: StairTile }
   | { error: string };
 
@@ -126,7 +126,7 @@ self.onmessage = (e: MessageEvent<GenRequest>) => {
     if (req.kind === 'landmark') {
       const l = landmarksOf(terrain)[req.index];
       if (!l) throw new Error(`no landmark ${req.index}`);
-      post({ kind: 'landmark', index: req.index, level: req.level, mesh: buildPavilion(l, req.level).mappedArrays() });
+      post({ kind: 'landmark', index: req.index, level: req.level, mesh: buildLandmark(l, req.level).mappedArrays() });
       return;
     }
     if (req.kind === 'stair') {
