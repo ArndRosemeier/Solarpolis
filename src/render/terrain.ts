@@ -40,7 +40,7 @@ export class TerrainView {
     this.sphereOf = spheres(terrain, this.layout);
     this.group.name = 'terrain';
     this.cache = new StreamCache<Entry>(pool, {
-      kind: 'tile', limit: CACHE, inFlight: IN_FLIGHT,
+      limit: CACHE, inFlight: IN_FLIGHT,
       id: (r) => (r.kind === 'tile' ? keyId(r.key) : ''),
       make: (answer, id) => this.make(answer, id),
       free: (e) => {

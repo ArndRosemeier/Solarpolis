@@ -3,7 +3,7 @@
  * The generation worker: builds what the pool asks for from the habitat's parameters. Everything it makes is a pure
  * function of those parameters, so any worker gives the same answer.
  */
-import { derive, type HabitatParams } from '../blueprint';
+import { derive, type Habitat, type HabitatParams } from '../blueprint';
 import { makeTerrain, type Terrain } from '../gen/terrain';
 import { makeEcology, type Ecology } from '../gen/ecology';
 import { buildPatch, type GroundPatch } from '../gen/patch';
@@ -15,7 +15,8 @@ import type { PlantForm } from '../blueprint';
 import { leafAtlas } from './leaves';
 import { groundLayer } from '../gen/groundTex';
 import { makeSkin, type Skin } from '../gen/skin';
-import { buildHullTile, type HullTile, type HullTileKey } from '../gen/hullDetail';
+import { buildPartTile, detailParts, type DetailPart, type PartTile } from '../gen/hullParts';
+import type { TileKey as DetailKey } from '../gen/detailTree';
 
 export type GenRequest =
   | { kind: 'tile'; params: HabitatParams; key: TileKey }
@@ -24,7 +25,7 @@ export type GenRequest =
   | { kind: 'tree'; params: HabitatParams; form: PlantForm; variant: number }
   | { kind: 'foliage'; params: HabitatParams }
   | { kind: 'floor'; params: HabitatParams; layer: number }
-  | { kind: 'hull'; params: HabitatParams; key: HullTileKey };
+  | { kind: 'hull'; params: HabitatParams; part: string; key: DetailKey };
 export type GenAnswer =
   | { kind: 'tile'; tile: TileMesh }
   | { kind: 'patch'; patch: GroundPatch }
@@ -32,7 +33,7 @@ export type GenAnswer =
   | { kind: 'tree'; full: TreeModel; lite: TreeModel }
   | { kind: 'foliage'; bark: BarkAtlas; leaves: Uint8Array }
   | { kind: 'floor'; layer: number; albedo: Uint8Array; relief: Uint8Array; mean: [number, number, number] }
-  | { kind: 'hull'; hullTile: HullTile }
+  | { kind: 'hull'; partTile: PartTile }
   | { error: string };
 
 /** Every typed array's buffer in an answer, to transfer rather than copy. */
@@ -41,12 +42,15 @@ function buffers(o: unknown, out: Transferable[] = []): Transferable[] {
   return out;
 }
 
-/** The skin needs only the blueprint, not the terrain: hull tiles never wait for the interior to be made. */
-let skinCached: { json: string; skin: Skin } | null = null;
-function skinFor(params: HabitatParams): Skin {
+/** The hull's parts need only the blueprint, not the terrain: hull tiles never wait for the interior to be made. */
+let hullCached: { json: string; habitat: Habitat; skin: Skin; parts: Map<string, DetailPart> } | null = null;
+function hullFor(params: HabitatParams): NonNullable<typeof hullCached> {
   const json = JSON.stringify(params);
-  if (skinCached?.json !== json) skinCached = { json, skin: makeSkin(derive(params)) };
-  return skinCached.skin;
+  if (hullCached?.json !== json) {
+    const habitat = derive(params), skin = makeSkin(habitat);
+    hullCached = { json, habitat, skin, parts: new Map(detailParts(habitat, skin).map((p) => [p.id, p])) };
+  }
+  return hullCached;
 }
 
 let cached: { json: string; terrain: Terrain; ecology: Ecology; layout: TileLayout; plants: Species[] } | null = null;
@@ -80,7 +84,9 @@ self.onmessage = (e: MessageEvent<GenRequest>) => {
       return;
     }
     if (req.kind === 'hull') {
-      post({ kind: 'hull', hullTile: buildHullTile(skinFor(req.params), req.key) });
+      const { habitat, skin, parts } = hullFor(req.params), part = parts.get(req.part);
+      if (!part) throw new Error(`no hull part ${req.part}`);
+      post({ kind: 'hull', partTile: buildPartTile(habitat, skin, part, req.key) });
       return;
     }
     const { terrain, ecology, layout, plants } = terrainFor(req.params);

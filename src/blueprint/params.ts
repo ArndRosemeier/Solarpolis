@@ -110,8 +110,10 @@ export interface ExteriorShape {
   /**
    * What a panel is made of up close: solar modules about `module` m a side (each panel holds a whole number of them
    * around and along), each a grid of cells about `cell` m a side. Light collectors hold lenses in the cells' place.
+   * The spindle's plating, and the dishes' petals, are about `plate` m a side; `handrail` is how high handrails stand
+   * for people working outside (m), the one human-scale size of the hardware.
    */
-  parts: { module: number; cell: number };
+  parts: { module: number; cell: number; plate: number; handrail: number };
 }
 
 export interface HabitatParams {

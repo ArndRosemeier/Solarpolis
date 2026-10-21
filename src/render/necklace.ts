@@ -9,22 +9,33 @@
  */
 import { Mesh, type BufferGeometry } from 'three/webgpu';
 import type { Stage } from '@futuremagic/stage';
-import { v3add, v3len, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
+import { smoothstep, v3add, v3len, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
 import { exteriorDistance, type Habitat } from '../blueprint';
 import { columnsOf, makeSkin, skinFlux, type Columns, type Skin } from '../gen/skin';
 import { apply, mul, rotZ, sunlightFrom, transpose, type Mat3, type PlacedHabitat, type SkyView, type Space } from '../space';
 import { HARDWARE, RADIATOR, SKIN, STARS } from './materials';
 import { skinUniforms, type SkinUniforms } from './hullShaders';
 import { hullGeometry } from './hull';
-import { meshGeometry, setPose } from './geometry';
-import { HullDetailView } from './hullDetail';
+import { arraysGeometry, meshGeometry, setPose } from './geometry';
+import { HullDetailView, type Frames } from './hullDetail';
 import { sharedPool } from '../workers/pool';
-import { ROOT_LEVEL, ROOT_REACH, bayEdge } from '../gen/hullDetail';
+import { DISH, detailParts, partDistance, wholeTile, type DetailPart, type PartFrame } from '../gen/hullParts';
+import { reachOf } from '../gen/detailTree';
 import { DRONES_WITHIN, DroneMesh } from './drones';
 
-/** The free camera holds station with a drum within HOLD_NEAR outer radii of it, and lets go beyond HOLD_FAR. */
+/**
+ * The free camera holds station with a drum within HOLD_NEAR outer radii of it, and lets go beyond HOLD_FAR; and lets
+ * go as it comes nearer the despun spindle and its arms than the drum (its share of the two distances from
+ * SPINDLE_NEAR to SPINDLE_FAR).
+ */
 const HOLD_NEAR = 0.05;
 const HOLD_FAR = 0.5;
+const SPINDLE_NEAR = 0.35;
+const SPINDLE_FAR = 0.65;
+
+/** The hardware's albedo as the meter sees it, and the share of a truss's outline its members fill. */
+const HARDWARE_ALBEDO = 0.5;
+const TRUSS_FILL = 0.3;
 
 /** A neighbour this many pixels across switches from a glint to its meshes, and back below the lower number. */
 const MESH_ABOVE = 10;
@@ -38,17 +49,20 @@ interface Drawn {
   uniforms: SkinUniforms;
   /** Size across, for the switch to meshes (m). */
   span: number;
-  meshes: { skin: Mesh; radiators: Mesh; mast: Mesh; spindle: Mesh; drones: DroneMesh } | null;
+  meshes: { skin: Mesh; radiators: Mesh; mast: Mesh; spindle: Mesh; drones: DroneMesh; pieces: { id: string; frame: PartFrame; origin: Vec3; mesh: Mesh }[] } | null;
   building: boolean;
-  /** The skin's detail tiles, while the eye is near this habitat's drum. */
+  /** The detailed parts (gen/hullParts.ts), and their tiles while the eye is near any of them. */
+  parts: DetailPart[];
   detail: HullDetailView | null;
+  /** This frame: the spindle's axes in the scene (the body's without the spin). */
+  spindleAxes: Mat3;
   /** This frame: the body's axes in the scene and its origin relative to the eye; the drum's centre relative to the eye. */
   axes: Mat3;
   origin: Vec3;
   center: Vec3;
 }
 
-/** A habitat's drum as the exposure meter and the fly camera see it. */
+/** A habitat's drum, spindle, truss or dish as the exposure meter sees it: a cylinder. */
 export interface Hull {
   center: Vec3;
   axis: Vec3;
@@ -67,7 +81,7 @@ export class NecklaceView {
     this.drawn = space.habitats.map((placed) => {
       const habitat = placed.habitat, skin = makeSkin(habitat), cols = columnsOf(skin), x = habitat.exterior;
       const span = Math.max(x.spindle.to - x.mast.from, 2 * Math.max(x.radius, ...x.brims.map((b) => b.tip)));
-      return { placed, habitat, skin, cols, uniforms: skinUniforms(skin, cols), span, meshes: null, building: false, detail: null, axes: [1, 0, 0, 0, 1, 0, 0, 0, 1], origin: [0, 0, 0], center: [0, 0, 0] };
+      return { placed, habitat, skin, cols, uniforms: skinUniforms(skin, cols), span, meshes: null, building: false, parts: detailParts(habitat, skin), detail: null, axes: [1, 0, 0, 0, 1, 0, 0, 0, 1], spindleAxes: [1, 0, 0, 0, 1, 0, 0, 0, 1], origin: [0, 0, 0], center: [0, 0, 0] };
     });
     // One quad per neighbour, drawn as stars are (STARS): their light spread over a few pixels, hidden behind Earth.
     const n = this.drawn.length - 1;
@@ -114,9 +128,17 @@ export class NecklaceView {
     };
     const drones = new DroneMesh(d.skin, HARDWARE.material, STARS.material);
     drones.mesh.name = `${d.placed.id} drones`;
-    const meshes = { skin: mesh(g.skin, SKIN, 'skin'), radiators: mesh(g.radiators, RADIATOR, 'radiators'), mast: mesh(g.mast, HARDWARE, 'mast'), spindle: mesh(g.spindle, HARDWARE, 'spindle'), drones };
+    // The berth arms, the mast and the dishes from afar: each its detail part's root tile, built in the pool.
+    const whole = d.parts.filter((p) => p.kind === 'truss' || p.kind === 'dish');
+    const answers = await Promise.all(whole.map((p) => sharedPool().job({ kind: 'hull', params: d.habitat.params, part: p.id, key: wholeTile(p) })));
+    const pieces = answers.flatMap((a, k) => {
+      if (!('partTile' in a)) return [];
+      const q = a.partTile.parts, p = whole[k];
+      return [{ id: p.id, frame: p.frame, origin: a.partTile.origin, mesh: mesh(arraysGeometry(q), HARDWARE, p.id) }];
+    });
+    const meshes = { skin: mesh(g.skin, SKIN, 'skin'), radiators: mesh(g.radiators, RADIATOR, 'radiators'), mast: mesh(g.mast, HARDWARE, 'mast'), spindle: mesh(g.spindle, HARDWARE, 'spindle'), drones, pieces };
     this.poseMeshes(d, meshes);
-    await Promise.all([meshes.skin, meshes.radiators, meshes.mast, meshes.spindle, drones.mesh, drones.points].map((m) => this.stage.add(m)));
+    await Promise.all([meshes.skin, meshes.radiators, meshes.mast, meshes.spindle, drones.mesh, drones.points, ...pieces.map((x) => x.mesh)].map((m) => this.stage.add(m)));
     d.building = false;
     d.meshes = meshes;
   }
@@ -126,13 +148,20 @@ export class NecklaceView {
     d.detail = null;
     if (!d.meshes) return;
     const m = d.meshes;
-    for (const x of [m.skin, m.radiators, m.mast, m.spindle, m.drones.mesh, m.drones.points]) { this.stage.remove(x); x.geometry.dispose(); }
+    for (const x of [m.skin, m.radiators, m.mast, m.spindle, m.drones.mesh, m.drones.points, ...m.pieces.map((p) => p.mesh)]) { this.stage.remove(x); x.geometry.dispose(); }
     d.meshes = null;
   }
 
   private poseMeshes(d: Drawn, m: NonNullable<Drawn['meshes']>): void {
     for (const k of ['skin', 'radiators', 'mast'] as const) setPose(m[k], d.axes, d.origin);
-    setPose(m.spindle, mul(d.axes, rotZ(-d.placed.spinAt(this.time))), d.origin);
+    d.spindleAxes = mul(d.axes, rotZ(-d.placed.spinAt(this.time)));
+    setPose(m.spindle, d.spindleAxes, d.origin);
+    // Each whole part from afar, until its near tiles cover it.
+    for (const p of m.pieces) {
+      const axes = p.frame === 'body' ? d.axes : d.spindleAxes;
+      p.mesh.visible = !d.detail?.covers(p.id);
+      setPose(p.mesh, axes, v3add(d.origin, apply(axes, p.origin)));
+    }
     // The drones only near the skin: the eye's distance to the body, in its own frame.
     const eye = apply(transpose(d.axes), v3scale(d.origin, -1));
     const near = exteriorDistance(d.habitat.exterior, eye) < DRONES_WITHIN * d.skin.droneSize;
@@ -194,17 +223,21 @@ export class NecklaceView {
   }
 
   /**
-   * The skin's detail tiles around the eye (render/hullDetail.ts) while it is within their reach of this drum; made
-   * when the eye comes near, given back when it has gone twice as far.
+   * The hull's detail tiles around the eye (render/hullDetail.ts) while it is within their reach of any detailed part
+   * of this habitat; made when the eye comes near, given back when it has gone twice as far.
    */
   private followDetail(d: Drawn): void {
-    const eye = apply(transpose(d.axes), v3scale(d.origin, -1)), s = d.skin;
-    const reach = ROOT_REACH * Math.pow(2, ROOT_LEVEL) * bayEdge(s);
-    const away = Math.hypot(Math.max(0, Math.hypot(eye[0], eye[1]) - s.radius), Math.max(0, s.z0 - eye[2], eye[2] - s.z1));
-    if (away > 2 * reach) { d.detail?.dispose(); d.detail = null; return; }
-    if (away > reach && !d.detail) return;
-    d.detail ??= new HullDetailView(this.stage, sharedPool(), d.habitat.params, s, d.uniforms, d.placed.id);
-    d.detail.follow(eye, d.axes, d.origin);
+    const frames = this.framesOf(d), away = Math.min(...d.parts.map((p) => partDistance(p, d.skin, frames[p.frame].eye) / reachOf(p.grid)));
+    if (away > 2) { d.detail?.dispose(); d.detail = null; return; }
+    if (away > 1 && !d.detail) return;
+    d.detail ??= new HullDetailView(this.stage, sharedPool(), d.habitat, d.skin, d.uniforms, d.placed.id);
+    d.detail.follow(frames, d.origin);
+  }
+
+  /** The eye in the body's and the spindle's frames, and their axes in the scene, this frame. */
+  private framesOf(d: Drawn): Frames {
+    const eye = v3scale(d.origin, -1);
+    return { body: { eye: apply(transpose(d.axes), eye), axes: d.axes }, spindle: { eye: apply(transpose(d.spindleAxes), eye), axes: d.spindleAxes } };
   }
 
   /** Bytes the skins' detail tiles hold (memory watchdog). */
@@ -234,8 +267,10 @@ export class NecklaceView {
     for (const d of this.drawn) {
       const body = sp.frames.position(eye, frame, d.placed.bodyFrame, t0), s = d.skin;
       const away = Math.hypot(Math.max(0, Math.hypot(body[0], body[1]) - s.radius), Math.max(0, s.z0 - body[2], body[2] - s.z1));
-      const t = (away / s.radius - HOLD_NEAR) / (HOLD_FAR - HOLD_NEAR), share = 1 - Math.min(1, Math.max(0, t));
-      const smooth = share * share * (3 - 2 * share);
+      // The spindle turns against the body: near it, hold still in the orbit's frame instead.
+      const despun = apply(rotZ(d.placed.spinAt(t0)), body);
+      const spindle = Math.min(...d.parts.filter((p) => p.frame === 'spindle').map((p) => partDistance(p, s, despun)));
+      const smooth = (1 - smoothstep(HOLD_NEAR, HOLD_FAR, away / s.radius)) * (1 - smoothstep(SPINDLE_NEAR, SPINDLE_FAR, away / (away + spindle + 1e-9)));
       if (smooth > 0 && (!best || smooth > best.share)) best = { d, share: smooth };
     }
     if (!best) return { eye, look };
@@ -246,11 +281,25 @@ export class NecklaceView {
     return { eye: v3add(eye, v3scale(v3sub(moved, eye), k)), look: v3add(v3scale(look, 1 - k), v3scale(turned, k)) };
   }
 
-  /** The drums of the habitats drawn as meshes (the exposure meter's view of them). */
+  /**
+   * The habitats drawn as meshes as the exposure meter sees them: each drum, its spindle, and its trusses and dishes
+   * (bowl to feed) as the cylinders around them (a truss's albedo thinned by how much of it is open), so the eyes adapt to sunlit
+   * hardware in view as they do to the skin.
+   */
   hulls(): Hull[] {
-    return this.drawn.filter((d) => d.meshes).map((d) => {
-      const a = d.cols.mean.albedo;
-      return { center: d.center, axis: [d.axes[2], d.axes[5], d.axes[8]], radius: d.habitat.exterior.radius, halfLength: (d.skin.z1 - d.skin.z0) / 2, albedo: 0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2] };
+    return this.drawn.filter((d) => d.meshes).flatMap((d) => {
+      const a = d.cols.mean.albedo, s = d.habitat.exterior.spindle, axis: Vec3 = [d.axes[2], d.axes[5], d.axes[8]];
+      const out: Hull[] = [
+        { center: d.center, axis, radius: d.habitat.exterior.radius, halfLength: (d.skin.z1 - d.skin.z0) / 2, albedo: 0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2] },
+        { center: v3add(d.origin, apply(d.axes, [0, 0, (s.from + s.to) / 2])), axis, radius: s.radius, halfLength: (s.to - s.from) / 2, albedo: HARDWARE_ALBEDO },
+      ];
+      for (const p of d.parts) {
+        if (p.kind !== 'truss' && p.kind !== 'dish') continue;
+        const axes = p.frame === 'body' ? d.axes : d.spindleAxes, along = apply(axes, p.place.ez), foot = v3add(d.origin, apply(axes, p.place.at));
+        if (p.kind === 'truss') out.push({ center: v3add(foot, v3scale(along, p.length / 2)), axis: along, radius: p.width / 2, halfLength: p.length / 2, albedo: HARDWARE_ALBEDO * TRUSS_FILL });
+        else out.push({ center: v3add(foot, v3scale(along, p.boom + p.diameter * DISH.focal * 0.5)), axis: along, radius: p.diameter / 2, halfLength: p.diameter * DISH.focal * 0.5, albedo: HARDWARE_ALBEDO });
+      }
+      return out;
     });
   }
 
@@ -261,8 +310,12 @@ export class NecklaceView {
       // Far habitats bound the distance from their centre without the exact shape.
       const rough = v3len(v3sub(p, d.center)) - d.span;
       if (rough > best) continue;
-      const local = apply(transpose(d.axes), v3sub(p, d.origin));
+      const rel = v3sub(p, d.origin), local = apply(transpose(d.axes), rel);
       best = Math.min(best, exteriorDistance(d.habitat.exterior, local));
+      // The trusses and dishes are not in the exterior's pieces: near them, their own distance.
+      if (best > d.span) continue;
+      const despun = apply(transpose(d.spindleAxes), rel);
+      for (const q of d.parts) if (q.kind === 'truss' || q.kind === 'dish') best = Math.min(best, partDistance(q, d.skin, q.frame === 'body' ? local : despun));
     }
     return best;
   }
