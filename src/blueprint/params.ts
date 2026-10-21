@@ -144,7 +144,7 @@ export interface HabitatParams {
   relief: Relief;
   day: DayCycle;
   exterior: ExteriorShape;
-  /** The climate and biome profile, by name (catalogue comes with the ecology stage). */
+  /** The climate and biome profile, by name (`CLIMATES` in climates.ts; laid out by the ecology stage). */
   climate: string;
   population: number;
   /** Years since the habitat was finished: drives history (rebuilds, abandoned chambers, overgrowth). */

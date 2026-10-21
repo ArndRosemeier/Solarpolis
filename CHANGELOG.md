@@ -2,6 +2,11 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.019 — Biomes
+
+- The land is planted: meadows and woods on the floor, reed beds by the lake, pinewoods and heath up the endcaps, in patches with clear edges like designed parkland.
+- A habitat's climate picks its biomes. A Mediterranean one (golden grass, olive groves, holm oak, maquis) is in the catalogue too.
+
 ## v0.018 — The mouse wheel shows you
 
 - On foot, the mouse wheel glides the camera smoothly from your own eyes out to behind you and back, instead of the V key. Flying still shows no body.

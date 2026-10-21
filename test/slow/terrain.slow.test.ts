@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MATRIX, derive, toWorld } from '../../src/blueprint';
 import { makeTerrain } from '../../src/gen/terrain';
+import { makeEcology } from '../../src/gen/ecology';
 import { makeLayout, bounds, buildTile, select, keyId, type TileKey } from '../../src/gen/tiles';
 import { startOf, EYE_HEIGHT } from '../../src/world/walker';
 
@@ -10,7 +11,7 @@ const PX_PER_RAD = 1440 / (70 * Math.PI / 180);
 
 for (const { name, params } of MATRIX) {
   const h = derive(params);
-  const t = makeTerrain(h);
+  const t = makeTerrain(h), eco = makeEcology(t);
   const layout = makeLayout(t);
   test(`tiles (${name}): standing on the floor, fine tiles underfoot, coarse ones overhead, within the draw budget`, () => {
     const at = startOf(h.profile);
@@ -20,7 +21,7 @@ for (const { name, params } of MATRIX) {
     const errorOf = (k: TileKey) => built.get(keyId(k));
     let sel = select(t, layout, eye, PX_PER_RAD, 2, errorOf);
     for (let round = 0; round < 40 && sel.want.length; round++) {
-      for (const k of sel.want) built.set(keyId(k), buildTile(t, layout, k).error);
+      for (const k of sel.want) built.set(keyId(k), buildTile(eco, layout, k).error);
       sel = select(t, layout, eye, PX_PER_RAD, 2, errorOf);
     }
     // The plan's budget is about 1,000 terrain tiles; the large habitat's tall hills need a little more (still within 1,500 draws).
