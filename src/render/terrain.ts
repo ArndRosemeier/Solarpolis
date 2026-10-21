@@ -4,7 +4,7 @@
  * is full, least recently drawn first.
  */
 import { Group, Mesh, type BufferGeometry } from 'three/webgpu';
-import { freeMesh, meshGeometry } from './geometry';
+import { dropUploaded, freeMesh, meshGeometry } from './geometry';
 import type { Stage } from '@futuremagic/stage';
 import { toView, type Vec3 } from '../blueprint';
 import type { Terrain } from '../gen/terrain';
@@ -25,7 +25,8 @@ const CACHE_BYTES = 384 * 1024 * 1024;
 const IN_FLIGHT = 16;
 
 interface Entry extends Streamed {
-  tile: TileMesh;
+  /** What the view reads of the tile; its arrays are on the GPU only (`dropUploaded`). */
+  tile: Pick<TileMesh, 'key' | 'origin' | 'error'>;
   mesh: Mesh;
   water: Mesh | null;
 }
@@ -104,14 +105,17 @@ export class TerrainView {
     const tile = answer.tile;
     const mesh = new Mesh(geometry(tile.positions, tile.normals, tile.index, tile.colors, tile.morph, tile.horizon, tile.canopy, tile.floorA, tile.floorB), GROUND.material);
     mesh.name = `tile ${id}`;
-    mesh.visible = false;
     const water = tile.water ? new Mesh(geometry(tile.water.positions, tile.water.normals, tile.water.index), WATER.material) : null;
-    if (water) { water.name = `water ${id}`; water.visible = false; }
-    await this.stage.prepare(mesh);
-    if (water) await this.stage.prepare(water);
-    this.group.add(mesh);
-    if (water) this.group.add(water);
-    return { tile, mesh, water, bytes: tileBytes(tile), lastDrawn: 0 };
+    if (water) water.name = `water ${id}`;
+    // Prepared while visible (three's compile skips hidden objects), so its arrays go to the GPU now and the CPU's
+    // copies can go: only the GPU reads them (most of the JS heap was tile copies, 2026-10-21).
+    for (const m of water ? [mesh, water] : [mesh]) {
+      await this.stage.prepare(m);
+      m.visible = false;
+      dropUploaded(m, this.stage.renderer);
+      this.group.add(m);
+    }
+    return { tile: { key: tile.key, origin: tile.origin, error: tile.error }, mesh, water, bytes: tileBytes(tile), lastDrawn: 0 };
   }
 
   dispose(): void {
