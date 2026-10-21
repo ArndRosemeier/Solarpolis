@@ -25,16 +25,29 @@ export interface Piece {
  * nearest unbuilt piece of the finer level that reaches past where that level starts, keeping the fade's width. A level
  * with no room left draws nothing (its band folds onto its fade-in), and the next coarser one takes over where the
  * level before it ends. Only the last level's far edge never moves: nothing stands behind it.
+ *
+ * With `now` (the boundaries as drawn so far, `[z, w]` of each level but the last; updated in place), each boundary
+ * moves toward that from where the boundary before it now is, `dt` seconds on (`sweepTo`): in at once, out over a
+ * moment, never behind the boundary before it. Judging each level from where it really starts this frame (not where
+ * it will start once the sweep is done) is what keeps a level from drawing over its own missing pieces.
  */
-export function handover(bands: readonly Band[], pieces: readonly (readonly Piece[])[]): Band[] {
+export function handover(bands: readonly Band[], pieces: readonly (readonly Piece[])[], now?: [number, number][], dt = 0): Band[] {
   const out = bands.map((b) => [...b] as Band);
   for (let k = 0; k < out.length - 1; k++) {
     const b = out[k], from = k === 0 ? -Infinity : b[0];
     let gap = Infinity;
     for (const p of pieces[k] ?? []) if (!p.ready && p.far > from && p.near < gap) gap = p.near;
-    if (gap >= b[3]) continue;
-    if (gap <= b[1]) { b[2] = b[0]; b[3] = b[1]; } // no room: draws nothing
-    else { b[2] = Math.max(b[1], gap - (b[3] - b[2])); b[3] = gap; }
+    if (gap < b[3]) {
+      if (gap <= b[1]) { b[2] = b[0]; b[3] = b[1]; } // no room: draws nothing
+      else { b[2] = Math.max(b[1], gap - (b[3] - b[2])); b[3] = gap; }
+    }
+    if (now) {
+      let [z, w] = sweepTo(now[k], [b[2], b[3]], dt);
+      // Never nearer than the boundary before it: the level between would draw nothing and the two around it both.
+      if (z < b[0] || w < b[1]) [z, w] = [b[0], b[1]];
+      now[k] = [z, w];
+      [b[2], b[3]] = [z, w];
+    }
     out[k + 1][0] = b[2];
     out[k + 1][1] = b[3];
   }

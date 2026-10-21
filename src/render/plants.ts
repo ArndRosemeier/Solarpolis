@@ -18,7 +18,7 @@
  * every cell: a cell's geometry holds only its own instances.
  */
 import { BufferAttribute, Group, InstancedBufferGeometry, InstancedInterleavedBuffer, Mesh, Sphere, Vector2, Vector3, Vector4, type Material } from 'three/webgpu';
-import { handover, holes, sweepTo, type Band, type Piece } from '../gen/handover';
+import { handover, holes, type Band, type Piece } from '../gen/handover';
 import type { Stage } from '@futuremagic/stage';
 import { toView, type CoverSpec, type DebrisSpec, type PlantSpec, type Vec3 } from '../blueprint';
 import type { Ecology } from '../gen/ecology';
@@ -37,6 +37,12 @@ const CACHE = 6000;
 const CACHE_BYTES = 192 * 1024 * 1024;
 /** Cell jobs in flight at once. */
 const IN_FLIGHT = 12;
+/**
+ * How much of its leaves' colour a crown shows: its cards shade each other (shadows, the dark gaps between them), which
+ * a hull's smooth surface does not. Measured on the render PC (shots view `bushes-levels`, 2026-10-21): a bush's and a
+ * wood's far level was a quarter brighter than its lite and full levels without it, the same in every channel.
+ */
+const LEAVES_SHADED = 0.8;
 /** The eye moves this share of the smallest cell before the cells in view are chosen again. */
 const RECHOOSE = 0.25;
 
@@ -191,7 +197,7 @@ export class PlantView {
     if (!means) return;
     for (const [key, look] of this.looks) {
       const tint = this.tintOf(key), c = look.leaf.cell * 3;
-      tint.set(...([0, 1, 2].map((i) => (means[c + i] * look.leaf.shade[i]) / Math.max(look.hullColor[i], 1e-4)) as [number, number, number]));
+      tint.set(...([0, 1, 2].map((i) => (LEAVES_SHADED * means[c + i] * look.leaf.shade[i]) / Math.max(look.hullColor[i], 1e-4)) as [number, number, number]));
     }
   }
 
@@ -219,7 +225,7 @@ export class PlantView {
           return { ...c, piece };
         });
     }
-    this.handOver(eye, dt);
+    this.setBands(eye, dt);
     for (const e of this.drawn) for (const m of e.meshes) m.visible = false;
     this.drawn = [];
     const wanted: { id: string; request: GenRequest }[] = [];
@@ -238,9 +244,9 @@ export class PlantView {
 
   /**
    * Set each species' bands for this frame: each boundary between two levels where `handover` allows it (in to the
-   * nearest cell of the finer level not built yet), in at once, out over a moment (`sweepTo`); then count the holes.
+   * nearest cell of the finer level not built yet), in at once, out over a moment; then count the holes.
    */
-  private handOver(eye: Vec3, dt: number): void {
+  private setBands(eye: Vec3, dt: number): void {
     const at = this.chosenAt!, moved = Math.hypot(eye[0] - at[0], eye[1] - at[1], eye[2] - at[2]);
     // Each piece as seen from where the eye is now: its distances were measured where the cells were chosen.
     for (const c of this.chosen) {
@@ -257,11 +263,8 @@ export class PlantView {
       if (this.only !== null) {
         for (let k = 0; k < L - 1; k++) bounds[k] = k < this.only ? [-2, -1] : [1e9, 2e9];
       } else {
-        const want = handover(sp.band, pieces);
-        for (let k = 0; k < L - 1; k++) {
-          bounds[k] = sweepTo(bounds[k], [want[k][2], want[k][3]], dt);
-          if (bounds[k][1] < sp.band[k][3]) lod.held++;
-        }
+        handover(sp.band, pieces, bounds, dt);
+        for (let k = 0; k < L - 1; k++) if (bounds[k][1] < sp.band[k][3]) lod.held++;
       }
       const drawn: Band[] = sp.band.map((b, k) => {
         const lo = k ? bounds[k - 1] : [b[0], b[1]], hi = k < L - 1 ? bounds[k] : [b[2], b[3]];

@@ -44,23 +44,30 @@ test('handover: where a finer level is not built yet, the coarser one draws ther
   }
 });
 
-test('handover: the boundary sweeps in at once and out over a moment, and while it moves nothing is missing', () => {
-  // A walk: the finest level's pieces are built a while after they come into reach; the sweep never runs ahead.
-  let now: [number, number] = [BANDS[0][2], BANDS[0][3]];
-  const builtAt = new Map<number, number>();
-  for (let frame = 0; frame < 600; frame++) {
-    const eye = frame * 0.05; // m along, at a walking pace of 3 m/s
-    const pieces: Piece[][] = BANDS.map((b, k) => ring(Math.floor(eye / 4) * 4 - eye, b[3], 4 * (k + 1), () => true));
-    pieces[0] = pieces[0].map((p) => {
-      const id = Math.round(p.near + eye);
-      if (!builtAt.has(id)) builtAt.set(id, frame + 20 + (id % 7) * 5); // 20 to 50 frames to build
-      return { ...p, ready: frame >= builtAt.get(id)! };
-    });
-    const want = handover(BANDS, pieces);
-    now = sweepTo(now, [want[0][2], want[0][3]], 1 / 60);
-    assert.ok(now[0] <= want[0][2] + 1e-9 && now[1] <= want[0][3] + 1e-9, `frame ${frame}: not past where the handover allows`);
-    const drawn: Band[] = [[BANDS[0][0], BANDS[0][1], now[0], now[1]], [now[0], now[1], want[1][2], want[1][3]], want[2]];
-    assert.deepEqual(holes(drawn, pieces).slice(0, -1), [0, 0], `frame ${frame}`);
+test('handover: the boundaries sweep in at once and out over a moment, and while they move no level draws a missing piece', () => {
+  // Walks and jumps: pieces of the finer levels are built a while after they come into reach, the far level's always
+  // there; after a jump nothing near is built. Every frame, no level but the last draws where a piece is missing.
+  for (const pace of [0.05, 0.8]) {
+    const now: [number, number][] = BANDS.slice(0, -1).map((b) => [b[2], b[3]]);
+    const builtAt = new Map<string, number>();
+    let base = 0;
+    for (let frame = 0; frame < 400; frame++) {
+      if (frame === 200) base += 5000; // a jump
+      const eye = base + frame * pace;
+      const pieces: Piece[][] = BANDS.map((b, k) => {
+        const size = 4 * (k + 1) + k * 3, first = Math.floor(eye / size) * size;
+        return ring(first - eye, b[3], size, () => true).map((p) => {
+          if (k === BANDS.length - 1) return p;
+          const id = `${k}:${Math.round(p.near + eye)}`;
+          if (!builtAt.has(id)) builtAt.set(id, frame + 10 + (Math.round(p.near + eye) % 7) * 6 + k * 15);
+          return { ...p, ready: frame >= builtAt.get(id)! };
+        });
+      });
+      const want = handover(BANDS, pieces), drawn = handover(BANDS, pieces, now, 1 / 60);
+      for (let k = 0; k < BANDS.length - 1; k++) assert.ok(drawn[k][3] <= Math.max(want[k][3], drawn[k][1]) + 1e-9, `pace ${pace} frame ${frame}: level ${k} not past where the handover allows`);
+      assert.deepEqual(holes(drawn, pieces).slice(0, -1), [0, 0], `pace ${pace} frame ${frame}: ${JSON.stringify(drawn)}`);
+      for (let k = 1; k < drawn.length; k++) assert.deepEqual(drawn[k].slice(0, 2), drawn[k - 1].slice(2), 'contiguous');
+    }
   }
   // Out again once all is built: over about the sweep, not at once.
   let t = 0, b: [number, number] = [0, 6];
