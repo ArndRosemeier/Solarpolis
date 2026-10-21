@@ -253,7 +253,11 @@ export function plantCell(ecology: Ecology, plants: readonly Species[], k: CellK
       const ground = t.heightAt(pt, ps);
       if (t.standAt(pt, ps) > ground + 0.05) continue; // under water
       if (!cover) {
-        ecology.biomesAt(pt, ps, ground, slopeAt(ecology, pt, ps, ground, gap), shares);
+        const slope = slopeAt(ecology, pt, ps, ground, gap);
+        // Where the ground is too steep for any biome, the nearest fit still claims it (its colour is rock), but nothing
+        // grows on a wall steeper than its biome holds: the woods from afar (`colorAt`'s canopy) leave it bare too.
+        if (slope > ecology.climate.biomes[sp.biome].slope + 0.1) continue;
+        ecology.biomesAt(pt, ps, ground, slope, shares);
         if (f(2) >= shares[sp.biome]) continue;
       }
       const p = toWorld(profile, { theta: pt, s: ps, h: ground });
