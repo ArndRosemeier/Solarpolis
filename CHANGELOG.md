@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.070 — Ground tiles build a little faster again
+
+- The ground streams in a little faster: the district lookup skips neighbours that cannot be nearest, and a few slow distance calculations in the ground's inner loops are done the quick way.
+
 ## v0.069 — The floor has its valleys, and the entrances their courts
 
 - The floor now rises from each valley's middle to the ridges between the valleys, so each valley is a long room: a broad meadow floor with its river down the middle, and rolling, drier ground up its sides, where heath takes the driest ridge tops.
