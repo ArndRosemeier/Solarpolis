@@ -4,20 +4,26 @@
  * and the world moves. Hold the right mouse button to look around (the pointer stays free for clicking things);
  * W A S D or the arrow keys to move, Shift to run; F takes off or lands, and in the air E or Space climbs, Q or C sinks.
  */
-import { Color, CylinderGeometry, Mesh, PerspectiveCamera, Scene, type WebGPURenderer } from 'three/webgpu';
+import { Color, CylinderGeometry, Mesh, PerspectiveCamera, Scene, SphereGeometry, type WebGPURenderer } from 'three/webgpu';
 import { Stage, createRenderer } from '@futuremagic/stage';
-import { fromWorld, toView, type Habitat } from '../blueprint';
+import { fromWorld, toView, toWorld, type Habitat, type Vec3 } from '../blueprint';
 import { makeTerrain, type Terrain } from '../gen/terrain';
 import { Walker, type View } from '../world/walker';
 import { Flyer } from '../world/flyer';
+import { PhysicsWorld } from '../physics/world';
 import { WorkerPool } from '../workers/pool';
-import { SUNLINE, air, allKinds, setAir, setEmission, setSunline, standInAttribute, view } from './materials';
+import { BALL, SUNLINE, air, allKinds, setAir, setEmission, setSunline, standInAttribute, view } from './materials';
 import { dayPhase, emissionMean, nearestLit, sunlineEmission, sunlineNorm, EMISSION_SAMPLES } from '../world/sunline';
 import { densityFalloff, seenMid } from '../world/air';
 import { TerrainView, describeLayout } from './terrain';
 
 /** Running is this many times the walking speed. */
 const RUN = 8;
+/** The physics' ground patch: side (m) and cell (m). */
+const PATCH_SIZE = 192;
+const PATCH_CELL = 1;
+/** One sphere shared by every test ball (the kind's attributes: position and normal). */
+const BALL_GEOMETRY = new SphereGeometry(0.25, 20, 14).deleteAttribute('uv');
 /** Clock seconds per real second by default: a day in about 24 minutes, so the sun is seen to travel. */
 const DAY_SPEED = 60;
 
@@ -46,6 +52,13 @@ export class InteriorView {
   time = 0;
   timeScale = DAY_SPEED;
   private readonly emission = new Float32Array(EMISSION_SAMPLES);
+  /** The physics bubble around the player, made on first use (Rapier loads then), and its ground patch request. */
+  private physics: PhysicsWorld | null = null;
+  private physicsLoading: Promise<PhysicsWorld> | null = null;
+  private patchAsked = false;
+  private readonly balls = new Map<number, Mesh>();
+  /** The last dropped ball: where it was let go (θ) and from how high, and how far it landed behind, once it has. */
+  private drop: { id: number; theta: number; height: number; landed: number | null } | null = null;
 
   private constructor(private habitat: Habitat) {
     // Start in the morning: a quarter of the way through the daylight hours.
@@ -109,12 +122,94 @@ export class InteriorView {
     this.time += seconds;
   }
 
+  /** Let a ball fall from `height` metres, a few steps ahead: it lands behind the spot below it (Coriolis). */
+  async dropBall(height: number): Promise<void> {
+    const physics = await this.physicsReady();
+    const v = this.current();
+    const ahead = fromWorld(this.habitat.profile, v.eye[0] + v.look[0] * 4, v.eye[1] + v.look[1] * 4, v.eye[2] + v.look[2] * 4);
+    const radius = 0.25;
+    const ground = this.terrain.standAt(ahead.theta, ahead.s);
+    const id = physics.addBall(toWorld(this.habitat.profile, { theta: ahead.theta, s: ahead.s, h: ground + height + radius }), [0, 0, 0], radius);
+    const mesh = new Mesh(BALL_GEOMETRY, BALL.material);
+    mesh.name = `ball ${id}`;
+    mesh.frustumCulled = false;
+    this.balls.set(id, mesh);
+    await this.stage.add(mesh);
+    this.drop = { id, theta: ahead.theta, height, landed: null };
+  }
+
+  /** Remove every ball. */
+  clearBalls(): void {
+    for (const [id, mesh] of this.balls) { this.physics?.remove(id); this.stage.remove(mesh); }
+    this.balls.clear();
+    this.drop = null;
+  }
+
+  /** The physics line for the debug menu. */
+  physicsLine(): string {
+    if (!this.physics) return 'physics: not started (drop a ball)';
+    const d = this.drop;
+    const last = !d ? '' : d.landed === null ? `, ball falling from ${d.height} m`
+      : `, last ball from ${d.height} m landed ${d.landed.toFixed(2)} m antispinward (blueprint: ${this.habitat.dropOffset(d.height).toFixed(2)} m)`;
+    return `physics: ${this.physics.count} bodies${last}`;
+  }
+
+  private physicsReady(): Promise<PhysicsWorld> {
+    this.physicsLoading ??= PhysicsWorld.create(this.habitat).then(async (p) => {
+      this.physics = p;
+      await this.groundFor(this.current().eye);
+      return p;
+    });
+    return this.physicsLoading;
+  }
+
+  /** Ask the workers for the ground patch under `eye` and stand the physics on it. */
+  private async groundFor(eye: Vec3): Promise<void> {
+    if (!this.physics || this.patchAsked) return;
+    this.patchAsked = true;
+    const at = fromWorld(this.habitat.profile, ...eye);
+    const answer = await this.pool.job({ kind: 'patch', params: this.habitat.params, theta: at.theta, s: at.s, size: PATCH_SIZE, cell: PATCH_CELL });
+    if ('patch' in answer && this.physics) this.physics.setGround(answer.patch);
+    this.patchAsked = false;
+  }
+
+  /** Step the physics and put the balls where it says. */
+  private simulate(dt: number, eye: Vec3): void {
+    const p = this.physics;
+    if (!p) return;
+    if (p.needsGround(eye)) void this.groundFor(eye);
+    p.advance(dt);
+    const alive = new Set<number>();
+    for (const b of p.states()) {
+      alive.add(b.id);
+      const mesh = this.balls.get(b.id);
+      if (!mesh) continue;
+      mesh.position.set(...toView(eye, b.position));
+      mesh.quaternion.set(...b.rotation);
+      const d = this.drop;
+      if (d && d.id === b.id && d.landed === null) {
+        const at = fromWorld(this.habitat.profile, ...b.position);
+        if (at.h - this.terrain.heightAt(at.theta, at.s) < b.radius + 0.05) {
+          // Behind = against the spin (−θ), along the ground.
+          let dTheta = at.theta - d.theta;
+          dTheta -= 2 * Math.PI * Math.round(dTheta / (2 * Math.PI));
+          d.landed = -dTheta * this.habitat.profile.at(at.s).r;
+        }
+      }
+    }
+    for (const [id, mesh] of this.balls) if (!alive.has(id)) { this.stage.remove(mesh); this.balls.delete(id); }
+  }
+
   /** Show another habitat (the Lab changed it). */
   async setHabitat(h: Habitat): Promise<void> {
     if (h === this.habitat) return;
     this.habitat = h;
     this.terrain = makeTerrain(h);
     this.flyer = null;
+    this.clearBalls();
+    this.physics?.dispose();
+    this.physics = null;
+    this.physicsLoading = null;
     this.walker.setProfile(h.profile, this.terrain.standAt);
     await this.build();
   }
@@ -242,6 +337,7 @@ export class InteriorView {
     }
     this.time += dt * this.timeScale;
     this.shine();
+    this.simulate(dt, this.current().eye);
     this.place();
     this.stage.frame();
     this.renderer.render(this.scene, this.camera);

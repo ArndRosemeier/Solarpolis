@@ -23,6 +23,7 @@ Each row is a question you will have while coding, and the one place that answer
 | How high is the ground at (θ, s), and what is it (meadow, forest, rock, shore, lake bed)? | `makeTerrain(habitat)` (`terrain.ts`): `heightAt`, `standAt` (ground or water surface), `colorAt`, `lake`; sizes from `HabitatParams.relief`. Noise is sampled at world positions, so it wraps. |
 | What hides the sunline from a ground point? | `horizonAt(terrain, θ, s)` (`horizon.ts`): the horizon angles toward the port and the wild end, from the ground in the point's meridian; tiles bake them per point (`TileMesh.horizon`). |
 | How is the ground cut into pieces for drawing, and which pieces does a view need? | The tile tree (`tiles.ts`): `makeLayout` (bands along s, columns by circumference), `roots`, `children`, `parent`, `select(terrain, layout, eye, pixelsPerRadian, maxPixels, errorOf)` by measured error on screen, `buildTile` (mesh relative to its `origin`, skirts, water, `morph` towards the parent's surface). |
+| What ground does the physics stand on? | `buildPatch(terrain, θ, s, size, cell)` (`patch.ts`): a square trimesh of the ground around a point, relative to its `origin`; built in the worker pool (request kind `'patch'`). |
 
 ## Being in the habitat (`src/world`, pure)
 
@@ -31,6 +32,7 @@ Each row is a question you will have while coding, and the one place that answer
 | How thick is the air, and how much haze lies between two points? | `world/air.ts`: `densityFalloff(h)` from the blueprint's `pressureAt`, `hazeAlong(h, emission, extinction, sky, eye, p)` (transmittance and in-scatter, the shaders' reference). |
 | How does the camera fly? | `Flyer` (`flyer.ts`): world eye, look and up; up swings toward the axis (rolls over when crossing it), speed grows with height, never below the ground. `walker.land(θ, s, look)` sets down under it. |
 | How much light from the sunline reaches a point? | `irradiance(h, emission, p, n, towardPort, towardWild)` (`sunline.ts`), the reference of the shaders' sum; `sunlineEmission(h, t)` is the brightness along the axis at clock time t (the travelling sun, `HabitatParams.day`), `dayPhase`, `dayLevel`, `emissionMean`, `sunlineNorm(h)` makes the mid floor 1. |
+| How does something move in the turning habitat? | `apparentAcceleration(h, p, v)` (`motion.ts`): centrifugal plus Coriolis in the habitat's own frame (Ω = +ω ẑ); `coast` is the RK4 reference the physics is tested against. |
 | Where is the player, which way is up, where do they look? | `Walker` (`walker.ts`): position in (θ, s, h), heading and pitch → `view()` eye, look, up (up is the ground's normal). `startOf(profile)` is where a walk begins; the eye stands on a ground function (`terrain.standAt`). |
 
 ## Space around the habitats (`src/space`, pure)
@@ -48,7 +50,7 @@ Each row is a question you will have while coding, and the one place that answer
 | Question | The one way |
 |---|---|
 | How do I get a renderer? | `createRenderer(canvas, { backends: 'webgpu', depth: 'reversed' })` from `@futuremagic/stage`, called once in `view.ts`. |
-| How does a mesh get a material? | A kind from `materials.ts` (`GROUND`, `WATER`, `SUNLINE`, `allKinds`; own attributes on warm-up stand-ins via `standInAttribute`); the mesh carries exactly the kind's attributes. |
+| How does a mesh get a material? | A kind from `materials.ts` (`GROUND`, `WATER`, `SUNLINE`, `BALL`, `allKinds`; own attributes on warm-up stand-ins via `standInAttribute`); the mesh carries exactly the kind's attributes. |
 | How does a thing enter the scene? | `stage.add(obj)` (the Stage from `@futuremagic/stage`, made in `view.ts`). |
 | How are things lit? | By the sunline as a line light, in the kinds' shaders (no three.js lights): `sunlit(horizon)` in `materials.ts` integrates the emission texture along the axis past the two horizon angles, plus `air.skyLight` scaled by the open sky. `setSunline` loads a habitat's scale and length, `setEmission` the hour's emission profile. |
 | How does distance look? | `throughAir` in `materials.ts`: every kind sees through the air, marched per pixel in `HAZE_STEPS` pieces with the sunline's halo integrated exactly; `air` (colour, extinction from `HAZE_DIAMETER`, sky light) and `airShape` (`setAir`) uniforms. Reference: `hazeAlong` (`world/air.ts`). |
@@ -56,6 +58,13 @@ Each row is a question you will have while coding, and the one place that answer
 | How does the terrain reach the screen? | `TerrainView` (`render/terrain.ts`): `follow(eye, pixelsPerRadian)` each frame selects tiles, asks the worker pool for missing ones, caches and evicts; sets each tile's `userData.morphFar` so GROUND geomorphs it into its parent's shape before they swap. |
 | What is drawn inside? | `InteriorView` (`view.ts`): terrain tiles, sunline, the walker's or the flyer's camera (`toggleFlying`, key F). |
 | What time is it in the habitat? | `InteriorView.time` (clock s since the first dawn), advanced by frame time × `timeScale`; the debug menu's Time group changes it. Nothing reads the wall clock. |
+| How does the view run physics? | `InteriorView.simulate(dt, eye)`: asks the pool for a ground patch when the bubble needs one, advances the `PhysicsWorld`, draws each body as a BALL mesh. `dropBall(height)` and `clearBalls()` are in the debug menu's Physics group. |
+
+## Physics (`src/physics`, the only place that imports Rapier)
+
+| Question | The one way |
+|---|---|
+| How do bodies fall, roll and collide? | `PhysicsWorld` (`world.ts`): `create(habitat)` loads Rapier; no engine gravity, each fixed step (`PHYSICS_STEP`) adds `apparentAcceleration` as a force. A bubble around the player: `needsGround(p)` / `setGround(patch)` move its origin and rebase the bodies, so floats stay precise anywhere. `addBall`, `remove`, `advance(dt)`, `states()` in world coordinates. |
 
 ## Workers (`src/workers`)
 

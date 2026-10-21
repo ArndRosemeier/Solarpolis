@@ -116,6 +116,10 @@ debug.add({ label: 'Clock speed: ×60 → ×600 → paused → real time', group
   view.timeScale = speeds[(speeds.indexOf(view.timeScale) + 1) % speeds.length];
 } });
 debug.add({ label: 'Two hours later', group: 'Time', run: () => view?.skip(7200) });
+debug.addInfo(() => (view ? view.physicsLine() : ''));
+debug.add({ label: 'Drop a ball from 20 m', group: 'Physics', run: () => void view?.dropBall(20) });
+debug.add({ label: 'Drop a ball from 100 m', group: 'Physics', run: () => void view?.dropBall(100) });
+debug.add({ label: 'Remove the balls', group: 'Physics', run: () => view?.clearBalls() });
 debug.add({ label: 'Log the shader report', group: 'Render', run: () => console.log((globalThis as { shaders?: { report(): string } }).shaders?.report() ?? 'no renderer yet') });
 debug.add({ label: 'Take a memory sample now', group: 'Memory', run: () => console.log(memory.sample()) });
 debug.add({ label: 'Log the memory history', group: 'Memory', run: () => console.table(memory.history.map((s) => ({ t: Math.round(s.t), totalMB: Math.round(s.total / 1048576), level: s.level }))) });
