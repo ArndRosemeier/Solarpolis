@@ -19,8 +19,8 @@ import { DAY, EARTH, MOON, REFERENCE_SPACE, SpaceFlyer, TORCH_SHIP, attractLoop,
 import { FLAME, HARDWARE, SKY, STARS, outsideKinds, standInAttribute } from './materials';
 import { outside, skyMaps } from './skyShaders';
 import { DARKEST, PERIPHERY, adapt, exposureFor, starExposure, sunInView, type Meterable } from './exposure';
-import { NecklaceView, setPose } from './necklace';
-import { meshGeometry } from './geometry';
+import { NecklaceView } from './necklace';
+import { meshGeometry, setPose } from './geometry';
 import { SHIP_ALBEDO, shipGeometry } from './ship';
 import type { FlameUniforms } from './hullShaders';
 import { FrameLoop, dragToLook, draw, fitCanvas, moveKeys } from './surface';
@@ -105,14 +105,15 @@ export class OutsideView {
     return v;
   }
 
-  /** Bytes this view holds (memory watchdog): the surface maps with their mipmaps, and the star field. */
+  /** Bytes this view holds (memory watchdog): the surface maps with their mipmaps, the star field, the skin's detail tiles. */
   bytes(): number {
-    return this.textureBytes + this.starBytes;
+    return this.textureBytes + this.starBytes + (this.necklace?.detailBytes() ?? 0);
   }
 
-  /** Give memory back (memory watchdog): Earth's day map drops to half resolution. */
+  /** Give memory back (memory watchdog): Earth's day map drops to half resolution, detail tiles out of sight go. */
   shed(): void {
     if (this.dayDetail === 'full') void this.loadMaps('reduced');
+    this.necklace?.shed();
   }
 
   private async loadMaps(detail: 'full' | 'reduced'): Promise<void> {
@@ -199,6 +200,7 @@ export class OutsideView {
       `${dateOf(jd)} UT · clock ×${this.timeScale} · exposure ${this.exposure.toExponential(1)}${this.nightEyes ? ' (night eyes)' : ''}`,
       s ? `sunlight ${(s.sunlight * 100).toFixed(0)}% · Earth ${(2 * Math.asin(s.earth.radius / Math.hypot(...s.earth.center)) * 180 / Math.PI).toFixed(1)}° across · ${this.flyer ? 'flying' : `looking at ${this.look}`}` : '',
       `${distanceOf(this.clearance([0, 0, 0]))} from the nearest surface · nearest neighbour ${distanceOf(v3len(this.necklace?.nearestNeighbour() ?? [0, 0, 0]))} away`,
+      this.necklace?.detailInfo() ?? '',
     ].join('\n');
   }
 
@@ -387,7 +389,13 @@ export class OutsideView {
       a.frame = next;
       this.onTitle?.(next.title);
     }
+    const before = this.time;
     this.time += dt * speed;
+    if (this.flyer && this.necklace) {
+      const held = this.necklace.holdStation(this.flyer.eye, this.flyer.look(), before, this.time);
+      this.flyer.eye = held.eye;
+      this.flyer.lookAlong(held.look);
+    }
     outside.clouds.value.z = outside.clouds.value.z - (dt * speed / DAY) * 0.05;
     this.place();
     // A cut is a new camera: it meters afresh instead of adapting from the last shot.

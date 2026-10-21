@@ -24,7 +24,7 @@ import { OPEN_SKY } from '../gen/horizon';
 import { EMISSION_SAMPLES, SUNLINE_STEPS } from '../world/sunline';
 import { HAZE_STEPS } from '../world/air';
 import { skyDome, starColor, starVertex } from './skyShaders';
-import { flameColor, hardwareColor, radiatorColor, skinColor } from './hullShaders';
+import { flameColor, hardwareColor, radiatorColor, skinColor, skinDetailColor } from './hullShaders';
 
 /** The air's look, shared by every kind (uniforms: changing them never builds a shader). */
 export const air = {
@@ -271,6 +271,16 @@ export const SKIN = kind('skin', ['position', 'normal'], { cast: false, receive:
   return m;
 });
 
+/**
+ * The skin up close (`skinDetailColor`): the glass of the detail tiles (gen/hullDetail.ts, render/hullDetail.ts), its
+ * modules, cells and wear per pixel. Position, normal, grid (column, row, module x, module y).
+ */
+export const SKIN_DETAIL = kind('skin detail', ['position', 'normal', 'grid'], { cast: false, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial();
+  m.colorNode = skinDetailColor();
+  return m;
+});
+
 /** The radiators: endcap faces and brims, both sides (`userData.skin` sizes their strips). Position, normal. */
 export const RADIATOR = kind('radiator', ['position', 'normal'], { cast: false, receive: false }, () => {
   const m = new MeshBasicNodeMaterial({ side: DoubleSide });
@@ -442,6 +452,7 @@ export const HULL = kind('hull', ['position', 'normal', 'color', 'kind', 'wind',
 /** The game's own attributes on the Stage's warm-up stand-ins (StageOptions.attribute): no morph, open horizons. */
 export function standInAttribute(g: BufferGeometry, name: string): boolean {
   if (name === 'morph') g.setAttribute('morph', new Float32BufferAttribute(new Array(9).fill(0), 3));
+  else if (name === 'grid') g.setAttribute('grid', new Float32BufferAttribute(new Array(12).fill(0), 4));
   else if (name === 'corner') g.setAttribute('corner', new Float32BufferAttribute([-1, -1, 1, -1, 1, 1], 2));
   else if (name === 'horizon') g.setAttribute('horizon', new Float32BufferAttribute(new Array(6).fill(OPEN_SKY), 2));
   else if (name === 'plant') plantInstances(g, new Float32Array([0, 0, 0, 1, 0]));
@@ -466,7 +477,7 @@ export function plantInstances(g: BufferGeometry, data: Float32Array | Instanced
 
 /** The kinds of the view outside, for its Stage's warm-up (windows will add them to the interior's). */
 export function outsideKinds(): readonly Kind[] {
-  return [SKY, STARS, SKIN, RADIATOR, HARDWARE, FLAME];
+  return [SKY, STARS, SKIN, SKIN_DETAIL, RADIATOR, HARDWARE, FLAME];
 }
 
 /** Things the physics moves (for now the debug menu's test balls): one colour, lit by the sunline, through the air. */

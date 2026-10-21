@@ -99,6 +99,19 @@ export interface ExteriorShape {
   panelLife: number;
   /** Share of the solar panels that are starfloor windows: rooms in the living layer looking out through the hull. */
   starfloors: number;
+  /**
+   * Maintenance drones that swap panels and clean glass, each running back and forth along its own stretch of a track
+   * laid in the seam between two columns of panels: a track every `trackEvery` columns, a drone every `spacing` m
+   * of track, each `size` m long, moving at about `speed` m/s.
+   */
+  drones: { trackEvery: number; spacing: number; size: number; speed: number };
+  /** Antennas: how many dishes the spindle's tip carries, and the largest one's diameter as a multiple of `hubRadius`. */
+  antennas: { count: number; dish: number };
+  /**
+   * What a panel is made of up close: solar modules about `module` m a side (each panel holds a whole number of them
+   * around and along), each a grid of cells about `cell` m a side. Light collectors hold lenses in the cells' place.
+   */
+  parts: { module: number; cell: number };
 }
 
 export interface HabitatParams {

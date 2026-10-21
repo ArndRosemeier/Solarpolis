@@ -157,7 +157,7 @@ class Envelope {
   }
   inside(p: V, m = 1): boolean { return this.rel(p) <= m; }
   /** Ellipsoid-ish normal and depth (0 centre, 1 surface) for lighting. */
-  shade(p: V, out: V): number {
+  normalAt(p: V, out: V): number {
     out.set((p.x - this.cx) / this.rx, (p.y - this.cy) / this.ry, (p.z - this.cz) / this.rz);
     const d = out.length();
     if (d < 1e-4) out.set(0, 1, 0); else out.multiplyScalar(1 / d);
@@ -644,7 +644,7 @@ function tube(bld: VegBuilder, b: Branch, radial: number, strip: number, maxPath
     const w = (b.d0 + b.arc[i]) / maxPath;
     let occ = 0;
     if (env) {
-      const d = env.shade(c, sh);
+      const d = env.normalAt(c, sh);
       if (d < 1.05) occ = 0.55 * (1 - smooth(0.2, 1.05, d));
     }
     occ = Math.max(occ, 0.5 * Math.exp(-Math.max(0, y) / 0.35));
@@ -718,7 +718,7 @@ function buildLeaves(cfg: FormCfg, sk: TreeSkeleton, rng: Rng, cardScale: number
       if (off.dot(toOut) < 0) off.multiplyScalar(-0.6);
       pt = pt.clone().addScaledVector(off, rng.range(0, leafSize * 0.7));
     }
-    const d = env.shade(pt, sph);
+    const d = env.normalAt(pt, sph);
     const outward = v3(pt.x - env.cx, 0, pt.z - env.cz);
     if (outward.lengthSq() < 1e-8) outward.copy(randUnit(rng)).setY(0);
     outward.normalize();
@@ -868,7 +868,7 @@ function buildHull(cfg: FormCfg, sk: TreeSkeleton, woodNoise: Noise): HullBuilde
     let e = env.extent(d) * 0.97;
     e *= 1 + 0.12 * woodNoise.n3(d.x * 1.7 + 3.1, d.y * 1.7, d.z * 1.7);
     p.copy(c).addScaledVector(d, Math.max(0.03, e));
-    env.shade(p, n);
+    env.normalAt(p, n);
     n.lerp(d, 0.4).normalize();
     const shade = 0.75 + 0.25 * clamp(d.y * 0.5 + 0.5, 0, 1);
     hb.vert(p, n, 1, [cfg.farColor[0] * shade, cfg.farColor[1] * shade, cfg.farColor[2] * shade], 0.75);

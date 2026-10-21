@@ -44,10 +44,20 @@ export interface Skin {
   panelLife: number;
   /** A lit room seen through a starfloor window, in the outside's units (white paper in full sunlight is 1). */
   roomLight: number;
+  /** A drone track runs in the seam below every `trackEvery`-th column (`isTrack`), `trackWidth` m wide. */
+  trackEvery: number;
+  trackWidth: number;
+  /** Drones per track, how long each is (m), and their mean speed (m/s). */
+  dronesPerTrack: number;
+  droneSize: number;
+  droneSpeed: number;
+  /** Solar modules a panel holds around and along (the same both ways), cells a module holds a side. */
+  modules: number;
+  cells: number;
 }
 
 /** The hash's third argument: which property of a panel or a patch is drawn. */
-export const SALT = { campaign: 0, offset: 1, replaced: 2, replacedAge: 3, shade: 4, starfloor: 5, radiator: 6 } as const;
+export const SALT = { campaign: 0, offset: 1, replaced: 2, replacedAge: 3, shade: 4, starfloor: 5, radiator: 6, drone: 7, droneSpeed: 8, module: 9, cell: 10, wear: 11, pit: 12 } as const;
 
 /** The look of each kind: albedo (linear RGB) and how glossy the glass is (0–1). The shader reads these numbers too. */
 export const LOOK = {
@@ -63,7 +73,24 @@ export const LOOK = {
   starfloorGloss: 0.8,
   /** How far one panel's shade may stray from its kind (± half of this share). */
   shade: 0.3,
+  /** How far one module's shade may stray from its panel's (± half of this share; the mean stays the panel's). */
+  moduleShade: 0.16,
+  /** Share of the cells that have died (dark, cracked), and their albedo. */
+  deadCells: 0.003,
+  cellDead: [0.045, 0.035, 0.03] as Vec3,
+  /** A panel's mean brightness with its darker frame (the shader's seams) counted in: what the far view sees. */
+  frameMean: 0.98,
+  /** A drone track: the dark steel channel, its two polished rails (centred at ±railAt of the width, railWidth wide), ties every tieEvery m. */
+  track: { channel: [0.1, 0.1, 0.105] as Vec3, rail: [0.32, 0.32, 0.33] as Vec3, railAt: 0.36, railWidth: 0.07, railGloss: 0.6, tieEvery: 2 },
 };
+
+/** A track's look averaged over its width, and the share of the drum the tracks cover: how the far view sees them. */
+export function trackMean(s: Skin): { albedo: Vec3; gloss: number; share: number } {
+  const t = LOOK.track, rails = 2 * t.railWidth * 0.75;
+  const albedo = t.channel.map((c, k) => c + (t.rail[k] - c) * rails) as Vec3;
+  const panel = (2 * Math.PI * s.radius) / s.nTheta;
+  return { albedo, gloss: rails * t.railGloss, share: s.trackWidth / (s.trackEvery * panel) };
+}
 
 /** Room light behind a starfloor window: a room lit like the floor, white walls at 40 % albedo. */
 const ROOM_ALBEDO = 0.4;
@@ -85,7 +112,55 @@ export function makeSkin(h: Habitat): Skin {
     age: h.params.age,
     panelLife: p.panelLife,
     roomLight: (ROOM_ALBEDO * h.params.lightTarget) / (SUNLIGHT_VISIBLE * flux),
+    trackEvery: Math.max(2, Math.round(p.drones.trackEvery)),
+    trackWidth: p.drones.size * TRACK_WIDTH,
+    dronesPerTrack: Math.max(1, Math.round((x.portFace - x.wildFace) / p.drones.spacing)),
+    droneSize: p.drones.size,
+    droneSpeed: p.drones.speed,
+    modules: Math.max(1, Math.round(p.panel / p.parts.module)),
+    cells: Math.max(1, Math.round(p.parts.module / p.parts.cell)),
   };
+}
+
+/** A track is this many drone lengths wide: two rails and the channel between them. */
+const TRACK_WIDTH = 1.5;
+
+/** Whether a drone track runs in the seam on column i's lower edge (θ = i / nTheta). */
+export function isTrack(s: Skin, i: number): boolean {
+  return i % s.trackEvery === 0;
+}
+
+/** Tracks around the drum. */
+export const tracksOf = (s: Skin): number => Math.ceil(s.nTheta / s.trackEvery);
+
+export interface Drone {
+  /** Which track, and the angle of its seam around the axis (rad). */
+  track: number;
+  theta: number;
+  /** Where along the axis (blueprint frame, m), and which way it is heading (+1 toward the port end, −1 back). */
+  z: number;
+  heading: 1 | -1;
+}
+
+/**
+ * Every drone at clock time t (s): each runs back and forth over its own stretch of its track (the track's length
+ * shared out evenly, so drones never meet), at its own seeded speed and phase. From the seed and the clock alone.
+ */
+export function dronesAt(s: Skin, t: number): Drone[] {
+  const out: Drone[] = [], n = s.dronesPerTrack, stretch = (s.z1 - s.z0) / n;
+  const room = Math.max(0, stretch - s.droneSize);
+  for (let k = 0; k < tracksOf(s); k++) {
+    const theta = ((k * s.trackEvery) / s.nTheta) * 2 * Math.PI;
+    for (let m = 0; m < n; m++) {
+      const speed = s.droneSpeed * (0.6 + 0.8 * u(s, k, m, SALT.droneSpeed));
+      // A triangle wave: there and back over its stretch, one round trip every 2·room/speed seconds.
+      const x = u(s, k, m, SALT.drone) + (room > 0 ? (t * speed) / (2 * room) : 0);
+      const f = x - Math.floor(x), there = f < 0.5;
+      const along = (there ? 2 * f : 2 - 2 * f) * room;
+      out.push({ track: k, theta, z: s.z0 + m * stretch + s.droneSize / 2 + along, heading: there ? 1 : -1 });
+    }
+  }
+  return out;
 }
 
 const u = (s: Skin, x: number, y: number, salt: number): number => hashToFloat(hash3i(s.seed, x, y, salt));
@@ -155,6 +230,7 @@ export interface Columns {
 export function columnsOf(s: Skin, rows = 64): Columns {
   const n = s.nTheta, albedo = new Float32Array(n * 3), gloss = new Float32Array(n);
   const step = Math.max(1, Math.floor(s.nZ / rows)), mean: Look = { albedo: [0, 0, 0], gloss: 0, emit: 0 };
+  const track = trackMean(s);
   for (let i = 0; i < n; i++) {
     let k = 0;
     for (let j = 0; j < s.nZ; j += step, k++) {
@@ -162,8 +238,13 @@ export function columnsOf(s: Skin, rows = 64): Columns {
       for (let c = 0; c < 3; c++) albedo[i * 3 + c] += l.albedo[c];
       gloss[i] += l.gloss;
     }
-    for (let c = 0; c < 3; c++) { albedo[i * 3 + c] /= k; mean.albedo[c] += albedo[i * 3 + c]; }
-    gloss[i] /= k;
+    // The drone tracks' light, spread over the columns as the far view sees it.
+    for (let c = 0; c < 3; c++) {
+      const panels = (albedo[i * 3 + c] / k) * LOOK.frameMean;
+      albedo[i * 3 + c] = panels + (track.albedo[c] - panels) * track.share;
+      mean.albedo[c] += albedo[i * 3 + c];
+    }
+    gloss[i] = gloss[i] / k + (track.gloss - gloss[i] / k) * track.share;
     mean.gloss += gloss[i];
   }
   mean.albedo = scale(mean.albedo, 1 / n);

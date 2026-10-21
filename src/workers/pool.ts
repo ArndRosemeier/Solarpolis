@@ -69,3 +69,10 @@ export class WorkerPool {
     this.pump();
   }
 }
+
+let shared: WorkerPool | null = null;
+
+/** The one pool every view shares (interior terrain and plants, the skin's detail tiles outside). */
+export function sharedPool(): WorkerPool {
+  return (shared ??= new WorkerPool());
+}

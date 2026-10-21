@@ -18,7 +18,7 @@ import { HUMAN, type Character } from '../physics/character';
 import { Figure, type MoveState } from './actors/figure';
 import { playerLook } from './actors/looks';
 import { addLights, key, shineOn } from './lights';
-import { WorkerPool } from '../workers/pool';
+import { sharedPool } from '../workers/pool';
 import { BALL, SUNLINE, air, allKinds, setAir, setEmission, setSunline, standInAttribute, view } from './materials';
 import { dayPhase, emissionMean, nearestLit, sunlineEmission, sunlineNorm, EMISSION_SAMPLES } from '../world/sunline';
 import { densityFalloff, seenMid } from '../world/air';
@@ -61,7 +61,7 @@ export class InteriorView {
   private stage!: Stage;
   private readonly scene = new Scene();
   private readonly camera = new PerspectiveCamera(70, 1, 0.3, 1e6);
-  private readonly pool = new WorkerPool();
+  private readonly pool = sharedPool();
   private terrain: Terrain;
   /** The land's biomes (built with the terrain). */
   ecology: Ecology | null = null;

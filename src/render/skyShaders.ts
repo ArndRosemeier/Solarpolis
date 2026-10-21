@@ -13,7 +13,7 @@
  */
 import { DataTexture, LinearFilter, Matrix3, RGBAFormat, SRGBColorSpace, Vector2, Vector3, type Texture } from 'three/webgpu';
 import {
-  abs, asin, atan, min, attribute, cameraProjectionMatrix, clamp, cross, dFdx, dFdy, dot, exp, float, fract, max, mix,
+  abs, asin, atan, length, log, min, attribute, cameraProjectionMatrix, clamp, cross, dFdx, dFdy, dot, exp, float, fract, max, mix,
   modelViewMatrix, modelWorldMatrix, mx_fractal_noise_float, normalize, positionLocal, positionWorld, pow,
   select, smoothstep, sqrt, texture, uniform, varying, vec2, vec3, vec4, vertexColor,
 } from 'three/tsl';
@@ -164,29 +164,76 @@ export function skyDome(): Node<'vec3'> {
   return min(skyRadiance(normalize(positionWorld)).mul(outside.exposure), DISPLAY_CAP);
 }
 
-/** Star quads: the half size of the quad (px), three σ of the spot. */
+/** Star quads: the half size of the quad (px) for a faint star, three σ of the spot. */
 export const STAR_HALF = 3 * STAR_SIGMA;
 
 /**
- * The stars: tiny quads that always face the camera, a fixed number of pixels across. Each carries its direction
- * (position), its colour × flux relative to the Sun (color) and its quad corner (corner, ±1). Its total light is the
- * star's: flux × π over the pixel's solid angle, spread in a Gaussian. Hidden where Earth or the Moon stands in front.
+ * Small lens flares around the brighter stars (Arnd, 2026-10-21): a soft halo and four thin spikes along the screen's
+ * axes, as a camera's optics would spread a point. Their light is a share of the star's peak pixel: FLARE_HALO and
+ * FLARE_SPIKE at the centre, falling off over FLARE_HALO_PX and FLARE_SPIKE_PX. They reach only as far as they show,
+ * at most FLARE_MAX_PX, so faint stars stay a few pixels and only bright ones flare.
+ */
+export const FLARE_HALO = 0.04;
+export const FLARE_HALO_PX = 2;
+export const FLARE_SPIKE = 0.1;
+export const FLARE_SPIKE_PX = 4;
+/** The spikes' half width (px, Gaussian σ). */
+export const FLARE_SPIKE_WIDTH = 0.45;
+/** The flare stops where it would add less than this on screen (after exposure, sunlit white = about 1). */
+export const FLARE_FLOOR = 0.01;
+export const FLARE_MAX_PX = 24;
+
+/**
+ * The exposure a STARS mesh draws with: the stars' own (heroic), unless the mesh's `userData.plainExposure` says it
+ * shows things lit like the hull beside them (the drones far off), which take the eyes' exposure.
+ */
+const plainExposure = uniform(0).onObjectUpdate(({ object }) => (object?.userData.plainExposure ? 1 : 0));
+const pointExposure = (): Node<'float'> => mix(outside.starExposure, outside.exposure, plainExposure);
+
+/** A star's brightest pixel (exposed): flux × π over the pixel's solid angle × the spot's centre value. */
+function starPeak(rgb: Node<'vec3'>): Node<'float'> {
+  const lum = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+  return lum.mul(Math.PI / (2 * Math.PI * STAR_SIGMA * STAR_SIGMA)).div(outside.pixelSolidAngle).mul(pointExposure());
+}
+
+/** How far a star's quad reaches (px): its spot, or as far as its spikes still show. */
+function starReach(peak: Node<'float'>): Node<'float'> {
+  const spike = log(max(peak.mul(FLARE_SPIKE / FLARE_FLOOR), 1)).mul(FLARE_SPIKE_PX);
+  return clamp(spike, STAR_HALF, FLARE_MAX_PX);
+}
+
+/**
+ * The stars: quads that always face the camera, sized in pixels by how far each star's light shows. Each carries its
+ * direction (position), its colour × flux relative to the Sun (color) and its quad corner (corner, ±1). Its core is
+ * the star's light: flux × π over the pixel's solid angle, spread in a Gaussian; the flare is added around it.
+ * Hidden where Earth or the Moon stands in front.
  */
 export function starVertex(): Node<'vec4'> {
   const clip = cameraProjectionMatrix.mul(modelViewMatrix).mul(vec4(positionLocal, 1));
   const corner = attribute<'vec2'>('corner', 'vec2');
-  return vec4(clip.xy.add(corner.mul(STAR_HALF * 2).div(outside.viewport).mul(clip.w)), clip.zw);
+  const reach = starReach(starPeak(attribute<'vec3'>('color', 'vec3')));
+  return vec4(clip.xy.add(corner.mul(reach.mul(2)).div(outside.viewport).mul(clip.w)), clip.zw);
 }
 
 export function starColor(): Node<'vec3'> {
   const corner = varying(attribute<'vec2'>('corner', 'vec2'));
+  const reach = varying(starReach(starPeak(attribute<'vec3'>('color', 'vec3'))));
   const dir = normalize(modelWorldMatrix.mul(vec4(positionLocal, 0)).xyz);
   const covered = (c: Node<'vec3'>, s: Node<'float'>): Node<'float'> => {
     const cr = cross(dir, c);
     return select(dot(dir, c).greaterThan(0).and(dot(cr, cr).lessThan(s.mul(s))), float(0), float(1));
   };
   const seen = varying(covered(outside.earthDir, outside.earthSin).mul(covered(outside.moonDir, outside.moonSin)));
-  const r2 = dot(corner, corner).mul(STAR_HALF * STAR_HALF);
-  const spot = exp(r2.div(-2 * STAR_SIGMA * STAR_SIGMA)).div(2 * Math.PI * STAR_SIGMA * STAR_SIGMA);
-  return min(vertexColor().rgb.mul(seen).mul(spot).mul(Math.PI).div(outside.pixelSolidAngle).mul(outside.starExposure), DISPLAY_CAP);
+  // The pixel's offset from the star (px).
+  const px = corner.mul(reach), r = length(px);
+  const core = exp(dot(px, px).div(-2 * STAR_SIGMA * STAR_SIGMA));
+  const halo = exp(r.div(-FLARE_HALO_PX)).mul(FLARE_HALO);
+  const spike = (along: Node<'float'>, across: Node<'float'>): Node<'float'> =>
+    exp(abs(along).div(-FLARE_SPIKE_PX)).mul(exp(across.mul(across).div(-2 * FLARE_SPIKE_WIDTH * FLARE_SPIKE_WIDTH)));
+  const spikes = spike(px.x, px.y).add(spike(px.y, px.x)).mul(FLARE_SPIKE);
+  // The quad's edge: the flare fades out over its last quarter instead of stopping in a square.
+  const edge = float(1).sub(smoothstep(0.75, 1, max(abs(corner.x), abs(corner.y))));
+  const shape = core.add(halo.add(spikes).mul(edge));
+  const peak = vertexColor().rgb.mul(Math.PI / (2 * Math.PI * STAR_SIGMA * STAR_SIGMA)).div(outside.pixelSolidAngle).mul(pointExposure());
+  return min(peak.mul(seen).mul(shape), DISPLAY_CAP);
 }

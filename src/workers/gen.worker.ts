@@ -13,25 +13,37 @@ import { buildTree, LITE_DETAIL, type TreeModel } from '../gen/trees';
 import { barkAtlas, type BarkAtlas } from '../gen/foliage';
 import type { PlantForm } from '../blueprint';
 import { leafAtlas } from './leaves';
+import { makeSkin, type Skin } from '../gen/skin';
+import { buildHullTile, type HullTile, type HullTileKey } from '../gen/hullDetail';
 
 export type GenRequest =
   | { kind: 'tile'; params: HabitatParams; key: TileKey }
   | { kind: 'patch'; params: HabitatParams; theta: number; s: number; size: number; cell: number }
   | { kind: 'plants'; params: HabitatParams; key: CellKey }
   | { kind: 'tree'; params: HabitatParams; form: PlantForm; variant: number }
-  | { kind: 'foliage'; params: HabitatParams };
+  | { kind: 'foliage'; params: HabitatParams }
+  | { kind: 'hull'; params: HabitatParams; key: HullTileKey };
 export type GenAnswer =
   | { kind: 'tile'; tile: TileMesh }
   | { kind: 'patch'; patch: GroundPatch }
   | { kind: 'plants'; cell: PlantCell }
   | { kind: 'tree'; full: TreeModel; lite: TreeModel }
   | { kind: 'foliage'; bark: BarkAtlas; leaves: Uint8Array }
+  | { kind: 'hull'; hullTile: HullTile }
   | { error: string };
 
 /** Every typed array's buffer in an answer, to transfer rather than copy. */
 function buffers(o: unknown, out: Transferable[] = []): Transferable[] {
   if (ArrayBuffer.isView(o)) { if (!out.includes(o.buffer as ArrayBuffer)) out.push(o.buffer as ArrayBuffer); } else if (o && typeof o === 'object') for (const v of Object.values(o)) buffers(v, out);
   return out;
+}
+
+/** The skin needs only the blueprint, not the terrain: hull tiles never wait for the interior to be made. */
+let skinCached: { json: string; skin: Skin } | null = null;
+function skinFor(params: HabitatParams): Skin {
+  const json = JSON.stringify(params);
+  if (skinCached?.json !== json) skinCached = { json, skin: makeSkin(derive(params)) };
+  return skinCached.skin;
 }
 
 let cached: { json: string; terrain: Terrain; ecology: Ecology; layout: TileLayout; plants: Species[] } | null = null;
@@ -57,6 +69,10 @@ self.onmessage = (e: MessageEvent<GenRequest>) => {
     if (req.kind === 'tree') {
       const seed = derive(req.params).seed;
       post({ kind: 'tree', full: buildTree(req.form, seed, req.variant), lite: buildTree(req.form, seed, req.variant, LITE_DETAIL) });
+      return;
+    }
+    if (req.kind === 'hull') {
+      post({ kind: 'hull', hullTile: buildHullTile(skinFor(req.params), req.key) });
       return;
     }
     const { terrain, ecology, layout, plants } = terrainFor(req.params);
