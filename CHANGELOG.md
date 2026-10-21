@@ -2,6 +2,11 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.042 — Half the memory inside
+
+- The ground's tiles and the hull's detail tiles no longer keep a second copy in the browser's memory once the graphics card has them. Inside, near the endcap, the page's memory drops from about 585 MB to about 200 MB.
+- For developers: `npm run shots` can take a heap snapshot and say who holds the memory (views `memory-inside` and `memory-title`).
+
 ## v0.041 — No more flicker where the sunline meets the endcaps
 
 - The ground near the endcaps' tips no longer flickers. Near the axis the terrain was cut into thousands of thin slivers, far more than the tile cache holds, so tiles kept being dropped and built again. Tiles now stay about square there, and a view at the tip needs about as many as one on the floor.
