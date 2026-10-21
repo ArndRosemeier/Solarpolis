@@ -326,5 +326,9 @@
   {
     "key": "same name: solarpolis/render/landmarks.ts#shed + solarpolis/render/streamed.ts#shed",
     "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
+  },
+  {
+    "key": "idiom: [.mul .sub] in solarpolis/render/cloudShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
+    "reason": "TSL has no operators: every shader file does its arithmetic with .mul and .sub. Shared shader steps already live in one place each (sunlit, throughAir, the hull and sky pieces); this pair is the language, not a copied procedure."
   }
 ]
