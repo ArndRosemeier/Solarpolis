@@ -13,8 +13,12 @@ for (const { name, params } of MATRIX) {
   const h = derive(params);
   const t = makeTerrain(h), eco = makeEcology(t);
   const layout = makeLayout(t);
-  test(`tiles (${name}): standing on the floor, fine tiles underfoot, coarse ones overhead, within the draw budget`, () => {
-    const at = startOf(h.profile);
+  const start = startOf(h.profile);
+  // On the floor, and where the sunline meets each endcap (the axis at the wild end, the hub at the port end).
+  const spots = [['on the floor', start.s], ['at the wild endcap\'s tip', 20], ['at the port endcap\'s hub', h.profile.length - 20]] as const;
+  let onFloor = 0;
+  for (const [where, s] of spots) test(`tiles (${name}): ${where}, fine tiles underfoot, coarse ones overhead, within the draw budget`, () => {
+    const at = { ...start, s };
     const eye = toWorld(h.profile, { ...at, h: t.standAt(at.theta, at.s) + EYE_HEIGHT });
     // Build what the selection asks for, round by round, as the renderer does.
     const built = new Map<string, number>();
@@ -25,11 +29,14 @@ for (const { name, params } of MATRIX) {
       sel = select(t, layout, eye, PX_PER_RAD, 2, errorOf);
     }
     // The plan's budget is about 1,000 terrain tiles; the large habitat's tall hills need a little more (still within 1,500 draws).
-    assert.ok(sel.draw.length <= 1200, `${sel.draw.length} tiles drawn`);
+    // At an endcap's tip the eye sees the whole floor around it: within twice the floor's (before the rings near the
+    // axis were split only along s, tens of thousands).
+    if (s === start.s) onFloor = sel.draw.length;
+    assert.ok(sel.draw.length <= (s === start.s ? 1200 : 2 * onFloor), `${sel.draw.length} tiles drawn`);
     assert.equal(sel.want.length, 0);
     const levels = sel.draw.map((k) => k.level);
     assert.ok(Math.max(...levels) >= Math.min(layout.maxLevel, 4), `fine underfoot (deepest ${Math.max(...levels)})`);
-    console.log(`  ${name}: ${sel.draw.length} tiles drawn, ${built.size} built, deepest level ${Math.max(...levels)} of ${layout.maxLevel}`);
+    console.log(`  ${name} ${where}: ${sel.draw.length} tiles drawn, ${built.size} built, deepest level ${Math.max(...levels)} of ${layout.maxLevel}`);
     // Every point of the interior is covered by exactly one drawn tile: the areas add up.
     let area = 0;
     for (const k of sel.draw) { const b = bounds(layout, k); area += (b.theta1 - b.theta0) * (b.s1 - b.s0); }

@@ -1,8 +1,13 @@
 /**
  * The terrain's tile tree: one quadtree over the interior's (θ, s) grid, which wraps around the axis. The profile is
  * cut into bands along s; each band has as many root tiles around as its circumference needs (fewer near the axis,
- * like longitude lines at a pole). A tile splits into four until its error on screen is under a pixel or two, so the
- * far side overhead stays coarse and the ground underfoot gets fine.
+ * like longitude lines at a pole). A tile splits until its error on screen is under a pixel or two, so the far side
+ * overhead stays coarse and the ground underfoot gets fine.
+ *
+ * A tile splits in two along s always, and in two around the axis only where its row is wide enough (`splitsAround`):
+ * the endcaps' rings shrink to nothing at the axis, and halving every tile around as well would cut them into
+ * slivers there (a 60° wedge at a cone's tip still halved eight times), thousands of them around the eye wherever the
+ * sunline meets an endcap. So tiles stay about square everywhere, like the bands' own columns.
  *
  * A built tile is a grid of points on the ground, kept relative to its own origin so that a renderer drawing
  * everything relative to the camera never loses precision (docs/ARCHITECTURE.md, "Where does the camera sit?").
@@ -29,9 +34,14 @@ export interface TileLayout {
   rootSize: number;
   /** Deepest level: its cells are no finer than `finest` (m). */
   maxLevel: number;
+  /** Per band, per level, per row j: how many times that row's tiles are halved around the axis (`splitsAround`). */
+  around: Uint8Array[][];
 }
 
-/** A node of the tree: root (band, column), then `level` halvings, at (i, j) within the root (i around, j along). */
+/**
+ * A node of the tree: root (band, column), then `level` halvings along s, at (i, j) within the root (j along, i around;
+ * i counts the row's own halvings around, `splitsAround`).
+ */
 export interface TileKey {
   band: number;
   column: number;
@@ -63,13 +73,35 @@ export function makeLayout(terrain: Terrain): TileLayout {
     bands.push({ s0, s1, columns: Math.max(1, Math.round(widest / rootSize)) });
   }
   const maxLevel = Math.max(0, Math.ceil(Math.log2(rootSize / TILE_CELLS / FINEST)));
-  return { bands, rootSize, maxLevel };
+  // Halvings around per row: as many as keep the row's tiles at least about as wide (at their widest circle) as they
+  // are long, but never fewer than the parent row's (tiles only split) nor more than one more (one split per level).
+  const around = bands.map((b) => {
+    const levels: Uint8Array[] = [Uint8Array.of(0)];
+    for (let l = 1; l <= maxLevel; l++) {
+      const rows = 1 << l, ds = (b.s1 - b.s0) / rows, row = new Uint8Array(rows);
+      for (let j = 0; j < rows; j++) {
+        const s0 = b.s0 + j * ds, s1 = s0 + ds;
+        const widest = Math.max(profile.circumference(s0), profile.circumference(s1), profile.circumference((s0 + s1) / 2));
+        const want = Math.round(Math.log2(Math.max(1e-9, widest / b.columns / ds)));
+        const up = levels[l - 1][j >> 1];
+        row[j] = Math.min(up + 1, Math.max(up, want));
+      }
+      levels.push(row);
+    }
+    return levels;
+  });
+  return { bands, rootSize, maxLevel, around };
+}
+
+/** How many times a node's row is halved around the axis (its `level` along s; equal to it on the floor). */
+export function splitsAround(layout: TileLayout, k: { band: number; level: number; j: number }): number {
+  return layout.around[k.band][k.level][k.j];
 }
 
 /** The (θ, s) rectangle a node covers. */
 export function bounds(layout: TileLayout, k: TileKey): { theta0: number; theta1: number; s0: number; s1: number } {
   const band = layout.bands[k.band];
-  const dTheta = (2 * Math.PI) / band.columns / (1 << k.level);
+  const dTheta = (2 * Math.PI) / band.columns / (1 << splitsAround(layout, k));
   const dS = (band.s1 - band.s0) / (1 << k.level);
   const theta0 = (2 * Math.PI * k.column) / band.columns + k.i * dTheta;
   const s0 = band.s0 + k.j * dS;
@@ -82,17 +114,24 @@ export function roots(layout: TileLayout): TileKey[] {
   return out;
 }
 
-export function children(k: TileKey): TileKey[] {
-  const l = k.level + 1, i = k.i * 2, j = k.j * 2;
-  return [
-    { ...k, level: l, i, j }, { ...k, level: l, i: i + 1, j },
-    { ...k, level: l, i, j: j + 1 }, { ...k, level: l, i: i + 1, j: j + 1 },
-  ];
+/** The node's children: its two rows along s, each in one or two tiles around (four on the floor, two at the axis). */
+export function children(layout: TileLayout, k: TileKey): TileKey[] {
+  const level = k.level + 1, here = splitsAround(layout, k), out: TileKey[] = [];
+  for (const j of [k.j * 2, k.j * 2 + 1]) {
+    if (splitsAround(layout, { band: k.band, level, j }) > here) out.push({ ...k, level, i: k.i * 2, j }, { ...k, level, i: k.i * 2 + 1, j });
+    else out.push({ ...k, level, i: k.i, j });
+  }
+  return out;
+}
+
+/** Whether a node's parent was halved around to make it (else only along s). */
+export function splitAround(layout: TileLayout, k: TileKey): boolean {
+  return k.level > 0 && splitsAround(layout, k) > splitsAround(layout, { band: k.band, level: k.level - 1, j: k.j >> 1 });
 }
 
 /** The node one level up (a root's parent is itself). */
-export function parent(k: TileKey): TileKey {
-  return k.level === 0 ? k : { ...k, level: k.level - 1, i: k.i >> 1, j: k.j >> 1 };
+export function parent(layout: TileLayout, k: TileKey): TileKey {
+  return k.level === 0 ? k : { ...k, level: k.level - 1, i: splitAround(layout, k) ? k.i >> 1 : k.i, j: k.j >> 1 };
 }
 
 /** A sphere around a node's ground (world axes), allowing for the relief. */
@@ -131,6 +170,8 @@ export function cellSize(layout: TileLayout, k: TileKey): number {
 export interface Selection {
   /** The tiles to draw this frame: together they cover the whole interior once. */
   draw: TileKey[];
+  /** The built tiles above them that were split to reach them: a cache must keep these too, or the view falls back. */
+  through: TileKey[];
   /** Tiles that should exist but are not built yet, most needed first. */
   want: TileKey[];
 }
@@ -138,30 +179,32 @@ export interface Selection {
 /**
  * Choose the tiles for a view: split a tile while its error (how far its grid strays from the true ground, measured
  * when it was built) looks bigger than `maxPixels` from `eye` (with `pixelsPerRadian` = screen height / vertical
- * field of view), provided all four children are built. `errorOf` gives a built tile's error, undefined if not built.
+ * field of view), provided all its children are built. `errorOf` gives a built tile's error, undefined if not built.
  */
 export function select(terrain: Terrain, layout: TileLayout, eye: Vec3, pixelsPerRadian: number, maxPixels: number, errorOf: (k: TileKey) => number | undefined, sphereOf = spheres(terrain, layout)): Selection {
   const ready = (k: TileKey): boolean => errorOf(k) !== undefined;
-  const draw: TileKey[] = [];
+  const draw: TileKey[] = [], through: TileKey[] = [];
   const want: { k: TileKey; need: number }[] = [];
   const visit = (k: TileKey): void => {
-    if (!ready(k)) { want.push({ k, need: Infinity }); return; }
+    const error = errorOf(k);
+    if (error === undefined) { want.push({ k, need: Infinity }); return; }
     const sp = sphereOf(k);
     const d = Math.max(1, Math.hypot(eye[0] - sp.center[0], eye[1] - sp.center[1], eye[2] - sp.center[2]) - sp.radius);
-    const pixels = (errorOf(k)! / d) * pixelsPerRadian;
+    const pixels = (error / d) * pixelsPerRadian;
     if (pixels <= maxPixels || k.level >= layout.maxLevel) { draw.push(k); return; }
-    const kids = children(k);
+    const kids = children(layout, k);
     const missing = kids.filter((c) => !ready(c));
     if (missing.length) {
       draw.push(k);
       for (const c of missing) want.push({ k: c, need: pixels });
       return;
     }
+    through.push(k);
     for (const c of kids) visit(c);
   };
   for (const r of roots(layout)) visit(r);
   want.sort((a, b) => b.need - a.need);
-  return { draw, want: want.map((w) => w.k) };
+  return { draw, through, want: want.map((w) => w.k) };
 }
 
 export interface TileMesh {
@@ -252,13 +295,15 @@ export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): Til
     }
   }
 
-  // Morph targets: the parent's grid has every other point of this one, and its cells split along the same diagonal
-  // (from (i+1, j) to (i, j+1)), so the parent's surface at a point between its points is the mean of two of them.
+  // Morph targets: the parent's grid has every other point of this one (along s, and around where the parent was
+  // halved around too), and its cells split along the same diagonal (from (i+1, j) to (i, j+1)), so the parent's
+  // surface at a point between its points is the mean of two of them.
   const morph = new Float32Array(count * 3);
   const at = (i: number, j: number): number => ((j + 1) * W + (i + 1)) * 3;
+  const halvedAround = splitAround(layout, k);
   for (let j = 0; j <= N; j++) {
     for (let i = 0; i <= N; i++) {
-      const oddI = i & 1, oddJ = j & 1;
+      const oddI = halvedAround ? i & 1 : 0, oddJ = j & 1;
       if (!oddI && !oddJ) continue;
       const [p, q] = oddI && oddJ ? [at(i + 1, j - 1), at(i - 1, j + 1)] : oddI ? [at(i - 1, j), at(i + 1, j)] : [at(i, j - 1), at(i, j + 1)];
       const w = at(i, j), v = (j * row + i) * 3;
