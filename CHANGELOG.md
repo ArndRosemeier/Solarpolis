@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.026 — Star flares
+
+- Bright stars outside now have small lens flares: a soft glow and four thin spikes, bigger for brighter stars. Faint stars stay sharp points.
+
 ## v0.025 — Jumps look like jumps
 
 - Your body now pushes off when you jump, holds a pose in the air and lands with a little give, instead of one looping clip.
