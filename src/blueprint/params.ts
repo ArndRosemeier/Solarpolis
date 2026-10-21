@@ -57,6 +57,23 @@ export interface DayCycle {
   night: number;
 }
 
+/**
+ * The cloud layer: a slab of air a kilometre or two above the floor where the habitat lets clouds form, on a schedule
+ * of its own choosing (every shower is a choice). Seen from the floor: their undersides overhead, their sunlit tops on
+ * the far side of the axis, and their shadows drifting over the land.
+ */
+export interface CloudLayer {
+  /** How high the clouds' flat bases are above the floor, and how thick the layer is (m). */
+  base: number;
+  thickness: number;
+  /** How much of the sky they cover on an average day (0 … 1). The schedule varies it by hour and by day. */
+  cover: number;
+  /** How wide one cloud is, about (m). */
+  size: number;
+  /** The wind that carries them along the axis and around it (m/s). */
+  wind: { along: number; around: number };
+}
+
 export interface Relief {
   /** The highest hills on the floor, above the mean surface (m). */
   hills: number;
@@ -164,6 +181,8 @@ export interface HabitatParams {
   sunlineRadius: number;
   endcaps: { wild: EndcapShape; port: EndcapShape };
   relief: Relief;
+  /** The cloud layer, or null for a sky without clouds (too small a habitat for them, or none wanted). */
+  clouds: CloudLayer | null;
   day: DayCycle;
   exterior: ExteriorShape;
   /** The climate and biome profile, by name (`CLIMATES` in climates.ts; laid out by the ecology stage). */

@@ -9,8 +9,8 @@
  * Everything is drawn relative to the camera (`toView`), so `positionWorld` is the offset from the eye; the eye's own
  * world position is the `view.eye` uniform, for whatever needs the true place (the axis, ground patterns).
  */
-import { MeshBasicNodeMaterial, DoubleSide, BackSide, AdditiveBlending, type Material } from 'three/webgpu';
-import { abs, atan, attribute, cross, dFdx, dFdy, floor, fract, inverseSqrt, log2, mx_noise_float, uv, cameraPosition, hash, normalLocal, step, time, varying, clamp, color, cos, log, select, sign, sqrt, dot, exp, float, max, mix, mx_fractal_noise_float, normalize, min, modelWorldMatrix, normalWorld, positionLocal, positionWorld, pow, sin, smoothstep, texture, uniform, vec2, vec3, vec4, vertexColor } from 'three/tsl';
+import { MeshBasicNodeMaterial, DoubleSide, BackSide, FrontSide, AdditiveBlending, type Material } from 'three/webgpu';
+import { abs, atan, attribute, interleavedGradientNoise, screenCoordinate, cross, dFdx, dFdy, floor, fract, inverseSqrt, log2, mx_noise_float, uv, cameraPosition, hash, normalLocal, step, time, varying, clamp, color, cos, log, select, sign, sqrt, dot, exp, float, max, mix, mx_fractal_noise_float, normalize, min, modelWorldMatrix, normalWorld, positionLocal, positionWorld, pow, sin, smoothstep, texture, uniform, vec2, vec3, vec4, vertexColor } from 'three/tsl';
 import { DataTexture, Uint8BufferAttribute, RGBAFormat, UnsignedByteType, Vector4, DataUtils, Float32BufferAttribute, HalfFloatType, InstancedInterleavedBuffer, InterleavedBufferAttribute, RedFormat, Vector2, Vector3, type BufferGeometry } from 'three/webgpu';
 import { PLANT_STRIDE } from '../gen/scatter';
 import { BARK_STRIPS } from '../gen/trees';
@@ -27,6 +27,7 @@ import { HAZE_STEPS } from '../world/air';
 import { skyDome, starColor, starVertex } from './skyShaders';
 import { floorSurface } from './groundShaders';
 import { filtered } from './textures';
+import { cloudMarch, cloudShade } from './cloudShaders';
 import { flameColor, hardwareColor, radiatorColor, skinColor, skinDetailColor, skinShown } from './hullShaders';
 
 /** The air's look, shared by every kind (uniforms: changing them never builds a shader). */
@@ -97,15 +98,12 @@ export function setSunline(length: number, norm: number, nearest: number): void 
 
 /**
  * The light on a surface from the sunline, seen past the terrain's horizon angles (x toward the port end, y toward the
- * wild end) and the near shadow map, plus the sky light: the air's scattered glow, less where the horizons close in.
- * `wrap` lets light reach past the terminator (0 a plain surface; leaves and crowns, which light shines through and
- * around, more).
+ * wild end), the near shadow map (`sunShadow`, times `shade` where something else stands in for it) and the cloud
+ * overhead (`cloudShade`; not for the clouds themselves), plus the sky light: the air's scattered glow, less where the
+ * horizons close in. `wrap` lets light reach past the terminator (0 a plain surface; leaves and crowns, which light
+ * shines through and around, more).
  */
-/**
- * The sunline's light on a surface: direct (through `sunShadow`, times `shade` where something else stands in for the
- * shadow map) plus the air's glow.
- */
-function sunlit(horizon: Node<'vec2'> = vec2(OPEN_SKY, OPEN_SKY), normal: Node<'vec3'> = normalWorld, wrap = 0, shade: Node<'float'> = float(1)): Node<'float'> {
+function sunlit(horizon: Node<'vec2'> = vec2(OPEN_SKY, OPEN_SKY), normal: Node<'vec3'> = normalWorld, wrap = 0, shade: Node<'float'> = float(1), clouded = true): Node<'float'> {
   const w = worldPosition();
   const len = max(w.xy.length(), 1e-3);
   const r = max(len, light.nearest);
@@ -123,7 +121,7 @@ function sunlit(horizon: Node<'vec2'> = vec2(OPEN_SKY, OPEN_SKY), normal: Node<'
     sum = sum.add(texture(emissionTexture, vec2(at, 0.5)).r.mul(c).mul(facing));
   }
   // Near things (the body, balls) shade it too: the near shadow map, soft along the axis (render/lights.ts).
-  const direct = sum.mul(span).div(SUNLINE_STEPS).div(r).mul(light.norm).mul(sunShadow as unknown as Node<'float'>).mul(shade);
+  const direct = sum.mul(span).div(SUNLINE_STEPS).div(r).mul(light.norm).mul(sunShadow as unknown as Node<'float'>).mul(shade).mul(clouded ? cloudShade(w) : float(1));
   // The sky light comes from the whole air above: as much as the horizons leave open of the half circle.
   const open = clamp(horizon.x.add(horizon.y).div(Math.PI), 0, 1);
   return direct.mul(float(1).sub(air.skyLight)).add(air.skyLight.mul(light.mean).mul(open));
@@ -285,6 +283,27 @@ export const WATER = kind('water', ['position', 'normal', 'flow', 'dir'], { cast
   m.colorNode = throughAir(mix(surface, vec3(0.8, 0.84, 0.86).mul(lit), foam));
   return m;
 });
+
+/**
+ * The clouds (cloudShaders.ts): a cylinder at the cloud layer's base radius, along the stretch of the axis the layer
+ * spans, carrying position only. Its outer faces (seen from under the layer) march the crossing overhead, its inner
+ * faces the crossing on the far side of the axis (or all of it, from in or above the layer); the far one is drawn
+ * first. White, lit by the sunline over the layer, seen through the air; see-through where they are thin.
+ */
+function clouds(name: string, far: boolean): Kind {
+  return kind(name, ['position'], { cast: false, receive: false }, () => {
+    const m = new MeshBasicNodeMaterial({ side: far ? BackSide : FrontSide, transparent: true, depthWrite: false });
+    const d = normalize(positionWorld.sub(cameraPosition));
+    const march = cloudMarch(view.eye.add(cameraPosition), d, far, interleavedGradientNoise(screenCoordinate.xy));
+    const w = worldPosition();
+    const lit = sunlit(vec2(OPEN_SKY, OPEN_SKY), normalize(vec3(w.x.negate(), w.y.negate(), 0)), 0, float(1), false);
+    m.colorNode = throughAir(vec3(0.93, 0.94, 0.96).mul(lit).mul(march.x.div(max(march.y, 1e-4))));
+    m.opacityNode = march.y;
+    return m;
+  });
+}
+export const CLOUDS_FAR = clouds('clouds far', true);
+export const CLOUDS_NEAR = clouds('clouds near', false);
 
 /**
  * The view outside (skyShaders.ts). The sky dome: a sphere around the eye, drawn first and behind everything, with the
@@ -603,5 +622,5 @@ export const BALL = kind('ball', ['position', 'normal'], { cast: true, receive: 
 
 /** Every kind, for the Stage's warm-up. */
 export function allKinds(): readonly Kind[] {
-  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS, STONE];
+  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS, STONE, CLOUDS_FAR, CLOUDS_NEAR];
 }

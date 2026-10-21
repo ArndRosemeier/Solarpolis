@@ -6,7 +6,7 @@
  * Q or C sinks. On foot the physics carries the player (`physics/character.ts`): up is toward the axis, and gravity
  * is the spin's. The player is an Actors human (`render/actors`); V looks at them from behind, V again from their eyes.
  */
-import { Color, CylinderGeometry, DoubleSide, FrontSide, Mesh, type Material, PerspectiveCamera, Scene, SphereGeometry, type WebGPURenderer } from 'three/webgpu';
+import { Color, CylinderGeometry, DoubleSide, FrontSide, Group, Mesh, type Material, PerspectiveCamera, Scene, SphereGeometry, type WebGPURenderer } from 'three/webgpu';
 import { Stage, createRenderer } from '@futuremagic/stage';
 import { deriveSeed, smoothstep, v3dot, v3madd, v3norm } from '@futuremagic/core';
 import { fromWorld, toView, toWorld, type Habitat, type Vec3 } from '../blueprint';
@@ -20,7 +20,7 @@ import { playerLook } from './actors/looks';
 import { addLights, key, shineOn, sky } from './lights';
 import { adapt, insideExposure, underCrowns } from './exposure';
 import { sharedPool } from '../workers/pool';
-import { BALL, SUNLINE, air, allKinds, setAir, setEmission, setSunline, standInAttribute, view } from './materials';
+import { BALL, CLOUDS_FAR, CLOUDS_NEAR, SUNLINE, air, allKinds, setAir, setEmission, setSunline, standInAttribute, view } from './materials';
 import { dayPhase, emissionMean, nearestLit, sunlineEmission, sunlineNorm, EMISSION_SAMPLES } from '../world/sunline';
 import { densityFalloff, seenMid } from '../world/air';
 import { TerrainView, describeLayout } from './terrain';
@@ -30,6 +30,8 @@ import { setFloorEye } from './groundShaders';
 import { UNDER_CROWNS, crownsClosed, makeEcology, type Ecology } from '../gen/ecology';
 import { FrameLoop, dragToLook, draw, fitCanvas, moveKeys } from './surface';
 import { freeMesh } from './geometry';
+import { cloudSpan, cloudsAt } from '../world/clouds';
+import { setCloudSpan, setCloudState } from './cloudShaders';
 
 /** Running is this many times the walking speed. */
 const RUN = 8;
@@ -72,6 +74,8 @@ export class InteriorView {
   private tiles: TerrainView | null = null;
   private plants: PlantView | null = null;
   private sunline: Mesh | null = null;
+  /** The cloud layer's two crossings (far drawn first, near over it), on one cylinder; null without a layer. */
+  private clouds: Group | null = null;
   /** In the air, or null on foot. */
   private flyer: Flyer | null = null;
   private readonly loop = new FrameLoop((dt) => this.frame(dt), (e) => {
@@ -183,10 +187,22 @@ export class InteriorView {
     ].join('\n');
   }
 
-  /** The sunline's light at the clock's hour. */
+  /** The sunline's light and the clouds at the clock's hour. */
   private shine(): void {
     sunlineEmission(this.habitat, this.time, this.emission);
     setEmission(this.emission, emissionMean(this.emission));
+    const c = cloudsAt(this.habitat, this.time);
+    setCloudState(c && this.cloudCover !== null ? { ...c, cover: this.cloudCover } : c);
+  }
+
+  /** The cloud cover set in the debug menu in place of the schedule's, or null for the schedule. */
+  cloudCover: number | null = null;
+
+  /** Take off (if on foot) and rise to `height` metres over the ground below (debug menu). */
+  flyUp(height: number): void {
+    if (!this.flyer) this.toggleFlying();
+    const f = this.flyer!, at = fromWorld(this.habitat.profile, ...f.eye);
+    f.eye = toWorld(this.habitat.profile, { theta: at.theta, s: at.s, h: this.terrain.standAt(at.theta, at.s) + height });
   }
 
   /** The hour, for the debug menu: day number, clock time on a 24-hour face, and how far the sun has travelled. */
@@ -194,7 +210,9 @@ export class InteriorView {
     const d = this.habitat.params.day, phase = dayPhase(this.habitat, this.time);
     const hours = (phase * 24 + 6) % 24, hh = Math.floor(hours), mm = Math.floor((hours - hh) * 60);
     const sun = phase < d.daylight ? `sun ${(100 * phase / d.daylight).toFixed(0)}% of the way to the port end` : 'night';
-    return `day ${Math.floor(this.time / d.length) + 1}, ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')} (dawn at 06:00), ${sun}, clock ×${this.timeScale}`;
+    const c = cloudsAt(this.habitat, this.time), cover = this.cloudCover ?? c?.cover;
+    const sky = cover === undefined ? 'no cloud layer' : `clouds ${(100 * cover).toFixed(0)}%${this.cloudCover === null ? '' : ' (set)'}`;
+    return `day ${Math.floor(this.time / d.length) + 1}, ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')} (dawn at 06:00), ${sun}, ${sky}, clock ×${this.timeScale}`;
   }
 
   /** Move the clock on by `seconds` (debug menu). */
@@ -319,6 +337,7 @@ export class InteriorView {
     if (this.tiles) { this.scene.remove(this.tiles.group); this.tiles.dispose(); }
     if (this.plants) { this.scene.remove(this.plants.group); this.plants.dispose(); }
     if (this.sunline) { this.stage.remove(this.sunline); freeMesh(this.sunline); }
+    if (this.clouds) { this.stage.remove(this.clouds); [...this.clouds.children].forEach((m, i) => freeMesh(m as Mesh, i === 0 ? 'all' : 'none')); }
     const h = this.habitat;
     this.norm = sunlineNorm(h);
     setSunline(h.length, this.norm, nearestLit(h));
@@ -332,6 +351,7 @@ export class InteriorView {
     this.sunline = new Mesh(tube, SUNLINE.material);
     this.sunline.name = 'sunline';
     this.sunline.frustumCulled = false;
+    this.clouds = this.cloudLayer();
     this.camera.far = 4 * (h.radius + h.length);
     this.camera.updateProjectionMatrix();
     this.tiles = new TerrainView(this.terrain, this.stage, this.pool);
@@ -346,10 +366,35 @@ export class InteriorView {
     const tick = (): void => { if (!loading) return; this.stage.frame(); requestAnimationFrame(tick); };
     requestAnimationFrame(tick);
     try {
-      await Promise.all([this.stage.add(this.sunline), this.tiles.load()]);
+      await Promise.all([this.stage.add(this.sunline), this.clouds && this.stage.add(this.clouds), this.tiles.load()]);
     } finally {
       loading = false;
     }
+  }
+
+  /** The cloud layer's meshes (world/clouds.ts): one cylinder at its base radius, drawn from both sides. */
+  private cloudLayer(): Group | null {
+    const h = this.habitat, span = cloudSpan(h);
+    setCloudSpan(span, h.params.clouds?.size ?? 1);
+    setCloudState(cloudsAt(h, this.time));
+    if (!span) return null;
+    // Fine enough around that its faces lie within a metre of the true cylinder (the march itself is exact).
+    const around = Math.min(1024, Math.max(64, Math.ceil(Math.PI / Math.acos(1 - 1 / span.base))));
+    const g = new CylinderGeometry(span.base, span.base, span.z1 - span.z0, around, 1, true);
+    g.deleteAttribute('uv');
+    g.deleteAttribute('normal'); // the kinds' attribute is position only (docs/SHADERS.md)
+    g.rotateX(Math.PI / 2);
+    g.translate(0, 0, (span.z0 + span.z1) / 2);
+    const layer = new Group();
+    layer.name = 'clouds';
+    [CLOUDS_FAR, CLOUDS_NEAR].forEach((k, i) => {
+      const m = new Mesh(g, k.material);
+      m.name = k.name;
+      m.frustumCulled = false;
+      m.renderOrder = 1 + i;
+      layer.add(m);
+    });
+    return layer;
   }
 
   /** Put the camera at the origin looking the walker's way, and the world around it relative to the eye. */
@@ -361,6 +406,7 @@ export class InteriorView {
     this.camera.up.set(...v.up);
     this.camera.lookAt(v.look[0], v.look[1], v.look[2]);
     if (this.sunline) this.sunline.position.set(...toView(v.eye, [0, 0, 0]));
+    this.clouds?.position.set(...toView(v.eye, [0, 0, 0]));
     this.pose(v.eye);
     const pixelsPerRadian = (this.canvas.clientHeight || 720) / (this.camera.fov * Math.PI / 180);
     this.tiles?.follow(v.eye, pixelsPerRadian);

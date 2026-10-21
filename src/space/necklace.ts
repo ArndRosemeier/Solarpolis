@@ -55,6 +55,7 @@ function neighbour(home: HabitatParams, rng: Rng, spread: number, seed: number):
         terraceStep: home.relief.terraceStep * k,
         rivers: home.relief.rivers && { ...home.relief.rivers, width: home.relief.rivers.width * k, depth: home.relief.rivers.depth * k },
       },
+      clouds: home.clouds && { ...home.clouds, base: home.clouds.base * k, thickness: home.clouds.thickness * k, size: home.clouds.size * k },
       population: Math.round((home.population * radius * length) / homeArea),
       seed,
     };
