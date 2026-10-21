@@ -18,7 +18,7 @@ import { HUMAN, type Character } from '../physics/character';
 import { Figure, type MoveState } from './actors/figure';
 import { playerLook } from './actors/looks';
 import { addLights, key, shineOn, sky } from './lights';
-import { adapt, glareOf, insideExposure, insideRayLuminance, meterRays, underCrowns, type InsideMeterable } from './exposure';
+import { adapt, glareOf, insideExposure, insideRayLuminance, landAlbedo, meterRays, underCrowns, type InsideMeterable } from './exposure';
 import { sharedPool } from '../workers/pool';
 import { BALL, CLOUDS_FAR, CLOUDS_NEAR, SUNLINE, air, allKinds, setAir, setEmission, setSunline, standInAttribute, view } from './materials';
 import { dayPhase, emissionMean, nearestLit, sunlineEmission, sunlineNorm, EMISSION_SAMPLES } from '../world/sunline';
@@ -27,7 +27,7 @@ import { TerrainView, describeLayout } from './terrain';
 import { PlantView } from './plants';
 import type { Level } from '../gen/scatter';
 import { slopeAt } from '../gen/scatter';
-import { setFloorEye, setRockBeds } from './groundShaders';
+import { setFloorEye, setRockBeds, setSnow } from './groundShaders';
 import { UNDER_CROWNS, crownsClosed, makeEcology, type Ecology } from '../gen/ecology';
 import { FrameLoop, dragToLook, draw, fitCanvas, moveKeys } from './surface';
 import { freeMesh } from './geometry';
@@ -35,6 +35,7 @@ import { cloudSpan, cloudsAt } from '../world/clouds';
 import { setCloudSpan, setCloudState } from './cloudShaders';
 import { LandmarkView } from './landmarks';
 import { landmarkTopAt, landmarksOf } from '../gen/landmarks';
+import { snowFieldOf } from '../gen/snow';
 
 /** Running is this many times the walking speed. */
 const RUN = 8;
@@ -76,6 +77,8 @@ export class InteriorView {
   private terrain: Terrain;
   /** The land's biomes (built with the terrain). */
   ecology: Ecology | null = null;
+  /** The land's albedo for the eyes' meter (`landAlbedo`: the snow where it lies). */
+  private albedoAt?: (p: Vec3) => number;
   private tiles: TerrainView | null = null;
   private plants: PlantView | null = null;
   private sunline: Mesh | null = null;
@@ -366,6 +369,7 @@ export class InteriorView {
     this.shine();
     setAir(densityFalloff(h), h.radius, seenMid(h), h.params.air.hazeDistance);
     setRockBeds(h.params.relief.terraceStep, h.radius);
+    setSnow(snowFieldOf(h));
     // The sunline: from the wild wall to the port wall along the axis.
     const tube = new CylinderGeometry(h.params.sunlineRadius, h.params.sunlineRadius, h.length, 24, 1, true);
     tube.deleteAttribute('uv'); // the kind's attributes are position and normal (docs/SHADERS.md)
@@ -380,6 +384,7 @@ export class InteriorView {
     this.tiles = new TerrainView(this.terrain, this.stage, this.pool);
     this.scene.add(this.tiles.group);
     this.ecology = makeEcology(this.terrain);
+    this.albedoAt = landAlbedo(this.ecology);
     this.plants = new PlantView(this.ecology, this.stage, this.pool);
     this.scene.add(this.plants.group);
     this.landmarks = new LandmarkView(h, landmarksOf(this.terrain), this.stage, this.pool);
@@ -506,7 +511,7 @@ export class InteriorView {
     const rays = meterRays([-m[8], -m[9], -m[10]], [m[0], m[1], m[2]], [m[4], m[5], m[6]], Math.tan((this.camera.fov * Math.PI) / 360), this.camera.aspect, GLARE_COLUMNS, GLARE_ROWS);
     const meter: InsideMeterable = {
       habitat: this.habitat, emission: this.emission, norm: this.norm, extinction: air.extinction.value as number, sky: air.skyLight.value as number,
-      hazeLuminance: 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b, heightAt: this.terrain.heightAt,
+      hazeLuminance: 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b, heightAt: this.terrain.heightAt, albedoAt: this.albedoAt,
     };
     for (let k = 0; k < GLARE_PER_FRAME; k++, this.nextSeen = (this.nextSeen + 1) % rays.length) {
       this.seen[this.nextSeen] = insideRayLuminance(meter, eye, rays[this.nextSeen]);

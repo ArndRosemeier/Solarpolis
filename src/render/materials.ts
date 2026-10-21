@@ -26,7 +26,7 @@ import { OPEN_SKY } from '../gen/horizon';
 import { EMISSION_SAMPLES, SUNLINE_STEPS } from '../world/sunline';
 import { HAZE_STEPS } from '../world/air';
 import { skyDome, starColor, starVertex } from './skyShaders';
-import { floorShare, floorSurface, rockFromAfar, woodsFromAfar } from './groundShaders';
+import { floorShare, floorSurface, rockFromAfar, snowOver, woodsFromAfar } from './groundShaders';
 import { RISE_RANGE } from '../gen/tiles';
 import { filtered } from './textures';
 import { cloudMarch, cloudShade } from './cloudShaders';
@@ -232,13 +232,16 @@ export const GROUND = kind('ground', ['position', 'normal', 'color', 'morph', 'h
   const floorUp = floorSurface(base, normalize(normalWorld));
   // From afar, crowns and the gaps between them, clumps and glades (groundShaders.ts, docs/far-view.md).
   const fromAfar = woodsFromAfar(base, canopy.rgb, horizon.z, horizon.w, worldPosition());
-  const ground = mix(floorUp.color, fromAfar, far);
+  // The Mountain's snow over both (groundShaders.ts, gen/snow.ts): where it lies, its own dunes take the floor's relief.
+  const geometric = normalize(normalWorld);
+  const snow = snowOver(mix(floorUp.color, fromAfar, far), geometric, worldPosition());
+  const ground = snow.color, surface = normalize(mix(floorUp.normal, snow.normal, snow.cover));
   // Under the woods past the shadow map's reach, the crowns' shade on average (`crownsClosed`): the floor stays in
   // the shade the near trees cast, and the canopy seen from afar keeps its sunlit tops.
   const beyond = smoothstep(SHADOW_HALF * 0.6, SHADOW_HALF * 0.9, away).mul(float(1).sub(far));
   const closed = smoothstep(0.25, 1, canopy.w.div(CLOSED_RAISE));
   const shade = mix(float(1), mix(float(1), float(UNDER_CROWNS), closed), beyond);
-  m.colorNode = throughAir(ground.mul(sunlit(horizon.xy, floorUp.normal, 0, shade)).mul(clamp(rise.mul(RELIEF_LIGHT).add(1), 0.55, 1.3)));
+  m.colorNode = throughAir(ground.mul(sunlit(horizon.xy, surface, 0, shade)).mul(clamp(rise.mul(RELIEF_LIGHT).add(1), 0.55, 1.3)));
   return m;
 });
 
