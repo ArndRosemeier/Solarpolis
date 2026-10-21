@@ -5,6 +5,7 @@ import { makeTerrain, type Terrain } from '../src/gen/terrain';
 import { frameOf, keptClear, landmarkTopAt, landmarksOf, reachOf, type Pavilion } from '../src/gen/landmarks';
 import { FINISH, PAVILION_LEVELS, bridgeAt, buildPavilion, pavilionPlan, pavilionTop, roofAt, stairsOf } from '../src/gen/pavilion';
 import { buildPatch } from '../src/gen/patch';
+import { makePlan } from '../src/gen/plan';
 import { Shape, intoPlace, outOfPlace, planeMap, type MappedArrays } from '../src/gen/shapes';
 
 const terrains = new Map<string, Terrain>();
@@ -25,12 +26,17 @@ const pavilionFor = (p: HabitatParams): Pavilion | null => {
 };
 
 for (const { name, params } of MATRIX) {
-  test(`landmarks (${name}): the pavilion stands in the lake's middle, away from the river mouths, bridged to dry land`, () => {
+  test(`landmarks (${name}): the pavilion stands on the plan's site in the lake, away from the river mouths, bridged to dry land`, () => {
     const t = terrainOf(name, params), ls = landmarksOf(t);
     if (!t.lake || !params.landmarks) { assert.equal(ls.length, 0, 'no lake, no pavilion'); return; }
     assert.equal(ls.length, 1);
     const p = ls[0], lake = t.lake;
+    // On the plan's site: where the Sunwalk crosses the lake.
+    const site = makePlan(t.habitat).sites.find((x) => x.kind === 'lake-pavilion')!;
+    assert.equal(p.theta, site.theta);
+    assert.equal(p.s, site.s);
     assert.equal(p.s, lake.s);
+    assert.ok(p.radius <= site.size, 'within the ground the plan keeps');
     assert.ok(p.radius <= params.landmarks.size / 2 && p.radius < lake.halfWidth, `radius ${p.radius}`);
     for (const r of t.rivers) {
       const mouth = r.theta[r.from === 'wild' ? r.count - 1 : 0];

@@ -334,5 +334,9 @@
   {
     "key": "idiom: [.mul .sub] in solarpolis/render/cloudShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
     "reason": "TSL has no operators: every shader file does its arithmetic with .mul and .sub. Shared shader steps already live in one place each (sunlit, throughAir, the hull and sky pieces); this pair is the language, not a copied procedure."
+  },
+  {
+    "key": "idiom: [.find .kind] in solarpolis/gen/landmarks.ts + solarpolis/gen/plan.ts + solarpolis/lab/planView.ts",
+    "reason": "Looking up one entry of a list by its kind (a plan's faces, sites or paths): a plain array find on different lists, no procedure to share."
   }
 ]
