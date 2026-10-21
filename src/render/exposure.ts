@@ -1,12 +1,17 @@
 /**
  * The eye's adaptation outside: how bright the view is, metered on a coarse grid of rays against what the sky holds
  * (sunlit Earth, the Moon, the habitat's hull, the Sun's glare), and an exposure that follows it in log space as eyes
- * do, quickly toward the light and slowly into the dark. No three.js here, so the tests run it headless.
+ * do, quickly toward the light and slowly into the dark. Inside, the eyes open in a wood's shade and stop down in the
+ * air's bright glow near the axis. No three.js here, so the tests run it headless.
  *
  * Units as in skyShaders.ts: white paper in full sunlight is 1.
  */
-import { v3add, v3cross, v3dot, v3len, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
+import { v3add, v3cross, v3dot, v3len, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
 import { fluxOfMagnitude, type SkyView } from '../space';
+import type { Habitat } from '../blueprint';
+import { hazeAlong } from '../world/air';
+import { emissionMean, rawIrradiance } from '../world/sunline';
+import { OPEN_SKY } from '../gen/horizon';
 
 /** The eye's glare around the Sun: strength (radiance × rad²) and how far it reaches (rad). The sky shader draws the same. */
 export const GLARE = 6e-4;
@@ -187,4 +192,73 @@ export function starExposure(exposure: number, pixelSolidAngle: number, sunSeen:
 export function sunInView(angle: number, halfDiagonal: number, sunlight: number): number {
   const t = Math.min(1, Math.max(0, (angle - halfDiagonal) / ((PERIPHERY - 1) * halfDiagonal)));
   return (1 - t * t * (3 - 2 * t)) * sunlight;
+}
+
+/**
+ * Rays through the centres of a `columns` × `rows` grid over a view: unit forward, right and up, the tangent of half the
+ * vertical field of view (wider than the frame for a margin), width / height. Both meters (outside and inside) use it.
+ */
+export function meterRays(fwd: Vec3, right: Vec3, up: Vec3, tanHalf: number, aspect: number, columns: number, rows: number): Vec3[] {
+  const out: Vec3[] = [];
+  for (let j = 0; j < rows; j++) for (let i = 0; i < columns; i++) {
+    const x = ((i + 0.5) / columns * 2 - 1) * tanHalf * aspect, y = ((j + 0.5) / rows * 2 - 1) * tanHalf;
+    out.push(v3norm(v3add(fwd, v3add(v3scale(right, x), v3scale(up, y)))));
+  }
+  return out;
+}
+
+/** The mean albedo the inside meter takes for the land (meadows, woods and rock in sight together). */
+export const LAND_ALBEDO = 0.15;
+
+/** The inside as the eyes' meter sees it: the habitat, the sunline's emission at this hour and its `sunlineNorm`, the air. */
+export interface InsideMeterable {
+  habitat: Habitat;
+  emission: Float32Array;
+  norm: number;
+  /** Extinction per metre at floor density, the sky-light share, and the haze colour's luminance (materials.ts `air`). */
+  extinction: number;
+  sky: number;
+  hazeLuminance: number;
+}
+
+/**
+ * What a ray inside sees, for the eyes' meter (same units as the shaders: white paper on the mid floor in full day is
+ * 1): the land where it lands (the floor's cylinder, or the end wall a ray along the axis reaches first) at
+ * `LAND_ALBEDO`, lit by the sunline and the sky light as `sunlit` lights it, seen through the air (`hazeAlong`), plus
+ * the air's own glow. A ray close past the axis gathers the sunline's halo; the line itself is a lamp, not counted.
+ */
+export function insideRayLuminance(m: InsideMeterable, eye: Vec3, d: Vec3): number {
+  const h = m.habitat, R = h.radius, L = h.length;
+  const a = d[0] * d[0] + d[1] * d[1], b = eye[0] * d[0] + eye[1] * d[1], c = eye[0] * eye[0] + eye[1] * eye[1] - R * R;
+  let t = a > 1e-12 ? (-b + Math.sqrt(Math.max(0, b * b - a * c))) / a : Infinity, n: Vec3 | null = null;
+  if (d[2] > 1e-9 && (L - eye[2]) / d[2] < t) { t = (L - eye[2]) / d[2]; n = [0, 0, -1]; }
+  else if (d[2] < -1e-9 && -eye[2] / d[2] < t) { t = -eye[2] / d[2]; n = [0, 0, 1]; }
+  if (!Number.isFinite(t) || t <= 0) return 0;
+  const p: Vec3 = v3add(eye, v3scale(d, t));
+  if (!n) { const r = Math.hypot(p[0], p[1]); n = [-p[0] / r, -p[1] / r, 0]; }
+  const direct = rawIrradiance(h, m.emission, v3add(p, n), n, OPEN_SKY, OPEN_SKY, 32) * m.norm;
+  const light = (1 - m.sky) * direct + m.sky * emissionMean(m.emission);
+  const haze = hazeAlong(h, m.emission, m.extinction, m.sky, eye, p);
+  return LAND_ALBEDO * light * haze.transmittance + m.hazeLuminance * haze.inscatter;
+}
+
+/**
+ * Past this level of a view's brightest quarter of rays the eyes stop down. In the reference habitat, views along the
+ * floor stay under it all day; looking up at the far side at noon (about 0.8) the eyes stop down by a fifth; in a
+ * habitat wider than that, with more air to glow, sooner. Near the axis the sunline lights the air around the eye about
+ * R / r times as strongly as on the floor, and toward the travelling sun twice that again, so looking down the tube
+ * from the hub the glowing air would burn out to white (docs/far-view.md). Arnd (2026-10-21): eyes adapt, the glow stays.
+ */
+export const BRIGHT_VIEW = 0.6;
+
+/**
+ * The share (≤ 1) the eyes stop down to for a view inside: the log-average of its brightest quarter of rays against
+ * `BRIGHT_VIEW`, made up by `INSIDE_MAKES_UP` as the shade is the other way (`insideExposure`). Ordinary views on the
+ * floor stay at 1; the eyes never open past it here (night and shade are the hour's and `insideExposure`'s).
+ */
+export function insideGlare(m: InsideMeterable, eye: Vec3, rays: readonly Vec3[]): number {
+  const seen = rays.map((d) => Math.max(1e-6, insideRayLuminance(m, eye, d))).sort((x, y) => y - x);
+  const top = seen.slice(0, Math.max(1, Math.ceil(seen.length / 4)));
+  const bright = Math.exp(top.reduce((sum, l) => sum + Math.log(l), 0) / top.length);
+  return Math.min(1, Math.pow(BRIGHT_VIEW / bright, INSIDE_MAKES_UP));
 }

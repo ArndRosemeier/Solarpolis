@@ -69,11 +69,22 @@ Measured with the CPU reference (`hazeAlong`, world/air.ts) for the `far-tube` e
 | midday (sun mid-tube) | T 0.93, glow 0.06 | 0.90, 0.10 | 0.78, 0.36 |
 | mid-morning (sun a quarter along, 2–5 km from the eye) | 0.93, 0.22 | 0.90, 0.39 | 0.78, 0.82 |
 
-The air is clear (T stays high); what veils the land is the air's own glow. Near the axis the line lights the air R / r times as strongly as on the floor (10× at 0.1 R), and the travelling sun's bright stretch more than doubles that near it. So in the morning, looking from the axis toward the sun, the glow is as bright as the land itself or brighter (the haze colour at glow 1 is as bright as a surface of albedo 0.67 in full light; meadows are 0.15 to 0.3). Without clouds (`far-tube-clear`) the view is still milky, so this is the air, not the clouds. It is what the model's physics gives; whether the look should win here is Arnd's call (to be asked). Options: eyes that stop down in a bright glow (the inside exposure opens only in shade so far), a phase function (dimmer at right angles to the light, brighter toward it), or less glow near the line than the R / r law.
+The air is clear (T stays high); what veils the land is the air's own glow. Near the axis the line lights the air R / r times as strongly as on the floor (10× at 0.1 R), and the travelling sun's bright stretch more than doubles that near it. So in the morning, looking from the axis toward the sun, the glow is as bright as the land itself or brighter (the haze colour at glow 1 is as bright as a surface of albedo 0.67 in full light; meadows are 0.15 to 0.3). Without clouds (`far-tube-clear`) the view is still milky, so this is the air, not the clouds. It is what the model's physics gives. Arnd's call (2026-10-21): the eyes adapt, the glow stays. `insideGlare` (render/exposure.ts) meters the frame on a 7 × 5 grid ten times a second: each ray's land (lit by the sunline and the sky light, albedo 0.15) through the air plus the air's glow. The log-average of the brightest quarter of rays against `BRIGHT_VIEW` (0.6) sets how far the eyes stop down (making up 0.8 of it, as the shade does the other way).
+
+Measured in the reference habitat (brightest quarter → eyes):
+
+| View | Morning (sun a quarter along) | Noon |
+|---|---|---|
+| on foot along the floor | 0.2 → ×1 | 0.4 → ×1 |
+| on foot looking up at the far side | 0.3 → ×1 | 0.8 → ×0.8 |
+| `far-side` (halfway up, across) | 0.5 → ×1 | 0.85 → ×0.76 |
+| `far-tube` (near the axis toward the sun) | 1.0 → ×0.67 | 0.5 → ×1 |
+| from the port hub toward the sun (afternoon) | 1.2 → ×0.6 | 0.5 → ×1 |
+
+A wider habitat has more air to glow, so its eyes stop down sooner (the large one at ×0.5 from the axis); the small one has too little air to glare at all.
 
 ## Still open
 
-- The view along the tube from near the axis (above): Arnd's call.
 - The endcaps: waterfalls where the rivers drop over the walls (the rivers already fall in cascades); landmarks.
 - The reference relief (hills 60 m in a 4 km radius) is too small to read from across the axis; the hollows-and-ridges light helps only where there is relief.
 - Clouds (the interior thread), landmarks (none yet), paths.
