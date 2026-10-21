@@ -409,6 +409,19 @@ function snowKeepsOff(ecology: Ecology, sp: Species, theta: number, s: number, g
 }
 
 /** A planted cell from its plants' floats per shape. */
+/**
+ * A sphere round everything a cell draws, relative to its origin: about its plants' feet (the origin is on the profile,
+ * which on a hill lies far below them), out to the farthest, and up past the tallest (`tallest` m). For frustum culling.
+ */
+export function cellSphere(cell: PlantCell, tallest: number): { middle: Vec3; radius: number } {
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  for (const data of cell.instances) for (let i = 0; i < data.length; i += PLANT_STRIDE) for (let c = 0; c < 3; c++) {
+    lo[c] = Math.min(lo[c], data[i + c]); hi[c] = Math.max(hi[c], data[i + c]);
+  }
+  if (!(lo[0] <= hi[0])) return { middle: [0, 0, 0], radius: tallest };
+  return { middle: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2], radius: Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2 + tallest * 1.2 };
+}
+
 function finished(t: Ecology['terrain'], k: CellKey, b: { theta0: number; theta1: number; s0: number; s1: number }, origin: Vec3, lists: number[][]): PlantCell {
   const instances = lists.map((l) => new Float32Array(l));
   const horizon = horizonAt(t, (b.theta0 + b.theta1) / 2, (b.s0 + b.s1) / 2);

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { MATRIX, derive, fromWorld, toWorld, withParams } from '../src/blueprint';
 import { makeTerrain } from '../src/gen/terrain';
 import { canopyOf, makeEcology, TREE_HEIGHT } from '../src/gen/ecology';
-import { canopyBand, cellBounds, cellsNear, LEVELS, levelRunOf, plantCell, plantsOf, PLANT_STRIDE, type CellKey, type Level, type Species } from '../src/gen/scatter';
+import { canopyBand, cellBounds, cellSphere, cellsNear, LEVELS, levelRunOf, plantCell, plantsOf, PLANT_STRIDE, type CellKey, type Level, type Species } from '../src/gen/scatter';
 import { ecologyOf } from './worlds';
 
 /** A cell of a plant near a point of the floor, and the plant. */
@@ -153,4 +153,15 @@ test('scatter: on a hilltop the plants around the eye are still near (their dist
   assert.ok(best.g > sp.band[0][3], `a hill ${best.g.toFixed(0)} m high, above the full level's reach`);
   const eye = toWorld(P, { theta: best.theta, s: best.s, h: best.g + 1.7 }), cells = cellsNear(eco, sp, 0, eye);
   assert.ok(cells.length > 0 && cells[0].near === 0, `${cells.length} cells at the full level`);
+  // Each cell's bounds hold its plants, whose feet lie far above its origin on the profile.
+  let held = 0;
+  for (const c of cells.slice(0, 8)) {
+    const cell = plantCell(eco, plants, c.key), { middle, radius } = cellSphere(cell, sp.spec.height[1]);
+    for (const list of cell.instances) for (let i = 0; i < list.length; i += PLANT_STRIDE) {
+      const top = Math.hypot(list[i] - middle[0], list[i + 1] - middle[1], list[i + 2] - middle[2]) + list[i + 3];
+      assert.ok(top <= radius + 1e-6, 'a plant outside its cell\'s bounds');
+      held++;
+    }
+  }
+  assert.ok(held > 0, 'plants near the hilltop');
 });
