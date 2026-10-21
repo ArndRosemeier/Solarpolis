@@ -2,6 +2,12 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.061 — Rock with beds, streaks and lichen
+
+- The Mountain's rock is no longer one pale grey: it shows folded beds of darker, warmer and paler stone on its walls, dark streaks where water runs down, iron-stained tones and lichen, the same colour near and far.
+- The Gate's faces read from afar by what they are: the Stair face pale dressed stone, the Vine face green, the Water face dark wet rock with pools.
+- Standing high on the Mountain near the axis, your eyes now stop down in its blazing light.
+
 ## v0.060 — Clouds on the move
 
 - The clouds drift with a breeze you can see in real time, and change shape slowly as they go: their heaps and edges slide through the big shapes. Their shadows on the land drift with them.
