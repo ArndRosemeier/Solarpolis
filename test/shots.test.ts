@@ -10,6 +10,7 @@ interface Shots {
   parseArgs(argv: string[]): { ref: string | null; views: string[] | null; size: [number, number]; publish: boolean; id: string | null };
   pickViews(catalogue: Catalogue, names: string[] | null): string[];
   checkViews(catalogue: Catalogue): string[];
+  parseRequest(name: string): { who: string; views: string[] | null; error: string | null };
 }
 // Plain .mjs scripts, loaded by path so the typecheck does not need declarations for them.
 const SHOTS = '../scripts/shots/shots.mjs', VIEWS = '../scripts/shots/views.mjs';
@@ -26,6 +27,13 @@ test('shots: a malformed view or an unknown name is refused', () => {
   assert.equal(shots.checkViews({ x: { query: 'view=inside', steps: [{ key: 'KeyF', wait: 1 }] } }).length, 1);
   assert.equal(shots.checkViews({ x: { query: 'view=inside', steps: [{ look: [1] }] } }).length, 1);
   assert.throws(() => shots.pickViews(views, ['nowhere']), /unknown view/);
+});
+
+test('shots: a request branch names the asker and the views', () => {
+  assert.deepEqual(shots.parseRequest('shots-req/interior/inside,inside-up'), { who: 'interior', views: ['inside', 'inside-up'], error: null });
+  assert.equal(shots.parseRequest('shots-req/outside/default').views, null);
+  assert.match(shots.parseRequest('shots-req/a/b/c').error ?? '', /shots-req/);
+  assert.match(shots.parseRequest('shots-req/a b/inside').error ?? '', /shots-req/);
 });
 
 test('shots: arguments', () => {

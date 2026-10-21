@@ -28,7 +28,7 @@ const BRANCH = 'renders';
 
 // ---- arguments -------------------------------------------------------------------------------------
 export function parseArgs(argv) {
-  const o = { ref: null, views: null, size: [1600, 900], publish: false, id: null, wgsl: 'errors', list: false, headed: false, keep: false };
+  const o = { ref: null, views: null, size: [1600, 900], publish: false, id: null, wgsl: 'errors', list: false, headed: false, keep: false, watch: false, interval: 30 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i], next = () => { if (i + 1 >= argv.length) throw new Error(`${a} needs a value`); return argv[++i]; };
     if (a === '--ref') o.ref = next();
@@ -40,6 +40,8 @@ export function parseArgs(argv) {
     else if (a === '--list') o.list = true;
     else if (a === '--headed') o.headed = true;
     else if (a === '--keep-server') o.keep = true;
+    else if (a === '--watch') o.watch = true;
+    else if (a === '--interval') { o.interval = Number(next()); if (!(o.interval >= 5)) throw new Error('--interval is at least 5 s'); }
     else throw new Error(`unknown argument ${a}`);
   }
   if (o.id && !/^[\w.-]+$/.test(o.id)) throw new Error('--id may hold letters, digits, . _ - only');
@@ -319,55 +321,107 @@ function publish(out, id, summary) {
   return commit;
 }
 
+// ---- one render, and the watcher -------------------------------------------------------------------------
+const firstLine = (s) => String(s).split('\n')[0];
+const timestamp = () => new Date().toISOString().replace(/[-:]/g, '').replace(/\..*/, '').replace('T', '-');
+
+/**
+ * Render `opts.ref` (or this checkout) and write the report; publish it with --publish. A failed build, or a request
+ * that is wrong from the start (`refused`), still writes and publishes its report, so whoever asked learns why.
+ */
+async function render(opts, request = null, refused = null) {
+  const t0 = performance.now();
+  const stamp = timestamp();
+  let src = null, names = [], failure = refused, out = null, id = opts.id;
+  const results = [];
+  try {
+    if (refused) throw new Error(refused);
+    src = prepare(opts.ref);
+    id ??= `${stamp}-${src.sha.slice(0, 8)}`;
+    out = join(WORK, 'out', id);
+    rmSync(out, { recursive: true, force: true });
+    mkdirSync(out, { recursive: true });
+    // The views come from the ref being rendered, so a branch can add its own.
+    const theirs = join(src.dir, 'scripts', 'shots', 'views.mjs');
+    const { views } = await import(pathToFileURL(existsSync(theirs) ? theirs : join(HERE, 'views.mjs')).href + `?t=${src.sha}`);
+    const problems = checkViews(views);
+    if (problems.length) throw new Error(['views.mjs:', ...problems].join('\n'));
+    names = pickViews(views, opts.views);
+    const server = await serve(src.dir);
+    const browser = await launch(opts.headed);
+    try {
+      for (const n of names) {
+        log(`${n}…`);
+        const r = await capture(browser, server.url, n, views[n], out, opts);
+        results.push(r);
+        const policy = /(\d+) violations/.exec(r.shaderReport ?? '')?.[1];
+        log(`${n}: ${r.ok ? 'ok' : 'PROBLEM'} in ${(r.totalMs / 1000).toFixed(1)} s, ${r.wgsl.unique} shaders${policy && policy !== '0' ? `, ${policy} shader-policy violations` : ''}${r.failure ? ` — ${firstLine(r.failure)}` : ''}`);
+      }
+    } finally {
+      await browser.close();
+      if (!opts.keep) server.stop();
+    }
+  } catch (e) {
+    failure = String(e?.message ?? e).slice(0, 4000);
+    log(`failed: ${firstLine(failure)}`);
+  }
+  id ??= `${stamp}-failed`;
+  out ??= join(WORK, 'out', id);
+  mkdirSync(out, { recursive: true });
+  const report = {
+    id, request, ref: opts.ref ?? '(working tree)', sha: src?.sha ?? null, dirty: src?.dirty ?? false, subject: src?.subject ?? null, size: opts.size,
+    adapter: results.find((r) => r.adapter)?.adapter ?? null, totalMs: Math.round(performance.now() - t0),
+    ok: !failure && results.every((r) => r.ok), failure, views: results,
+  };
+  writeFileSync(join(out, 'report.json'), JSON.stringify(report, null, 2) + '\n');
+  log(`${report.ok ? 'all ok' : 'PROBLEMS'}: ${results.length} views in ${(report.totalMs / 1000).toFixed(1)} s → ${out}`);
+  if (opts.publish) {
+    const summary = { id, request, ref: report.ref, sha: report.sha, ok: report.ok, failure: failure ? firstLine(failure) : null, views: names, files: results.flatMap((r) => r.shots.map((x) => x.file)) };
+    const commit = publish(out, id, summary);
+    log(`published to ${BRANCH} (${commit.slice(0, 8)}): git fetch origin ${BRANCH} && git show origin/${BRANCH}:${id}/report.json`);
+  }
+  return report;
+}
+
+/** A request is a branch `shots-req/<who>/<views>` pointing at the commit to render (README). */
+export const REQUEST_PREFIX = 'shots-req/';
+
+/** The asker and the views of a request branch (`default` for the default set), or why its name is malformed. */
+export function parseRequest(name) {
+  const parts = name.slice(name.startsWith(REQUEST_PREFIX) ? REQUEST_PREFIX.length : 0).split('/');
+  if (parts.length !== 2 || !/^[\w.-]+$/.test(parts[0]) || !/^[\w,-]+$/.test(parts[1])) return { who: 'bad', views: null, error: `a request is ${REQUEST_PREFIX}<who>/<view,view,…>, not ${name}` };
+  return { who: parts[0], views: parts[1] === 'default' ? null : parts[1].split(',').filter(Boolean), error: null };
+}
+
+/** Look for request branches every `interval` s; render, publish and delete each, in name order. */
+async function watch(opts) {
+  log(`watching ${REQUEST_PREFIX}* on origin every ${opts.interval} s (Ctrl+C stops)`);
+  for (;;) {
+    let names = [];
+    try {
+      names = git(['ls-remote', '--heads', 'origin', `${REQUEST_PREFIX}*`]).split('\n').filter(Boolean).map((l) => l.split('\t')[1].replace('refs/heads/', '')).sort();
+    } catch (e) { log(`ls-remote failed: ${firstLine(e.message)}`); }
+    for (const name of names) {
+      const req = parseRequest(name);
+      log(`request ${name}`);
+      await render({ ...opts, ref: name, views: req.views, publish: true, id: `${timestamp()}-${req.who}` }, name, req.error)
+        .catch((e) => log(`request ${name} failed: ${firstLine(e?.message ?? e)}`));
+      try { git(['push', '--quiet', 'origin', '--delete', name]); } catch (e) { log(`could not delete ${name}: ${firstLine(e.message)}`); }
+    }
+    await new Promise((r) => setTimeout(r, opts.interval * 1000));
+  }
+}
+
 // ---- main ----------------------------------------------------------------------------------------------------
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
-  const t0 = performance.now();
   if (opts.list) {
     const { views } = await import(pathToFileURL(join(HERE, 'views.mjs')).href);
     for (const [k, v] of Object.entries(views)) console.log(`${v.default ? '*' : ' '} ${k.padEnd(22)} ${v.about ?? ''}`);
     return;
   }
-  const src = prepare(opts.ref);
-  // The views come from the ref being rendered, so a branch can add its own.
-  const theirs = join(src.dir, 'scripts', 'shots', 'views.mjs');
-  const { views } = await import(pathToFileURL(existsSync(theirs) ? theirs : join(HERE, 'views.mjs')).href + `?t=${src.sha}`);
-  const problems = checkViews(views);
-  if (problems.length) throw new Error(`views.mjs:\n${problems.join('\n')}`);
-  const names = pickViews(views, opts.views);
-  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..*/, '').replace('T', '-');
-  const id = opts.id ?? `${stamp}-${src.sha.slice(0, 8)}`;
-  const out = join(WORK, 'out', id);
-  rmSync(out, { recursive: true, force: true });
-  mkdirSync(out, { recursive: true });
-  const buildMs = Math.round(performance.now() - t0);
-  const server = await serve(src.dir);
-  const browser = await launch(opts.headed);
-  const results = [];
-  try {
-    for (const n of names) {
-      log(`${n}…`);
-      const r = await capture(browser, server.url, n, views[n], out, opts);
-      results.push(r);
-      const policy = /(\d+) violations/.exec(r.shaderReport ?? '')?.[1];
-      log(`${n}: ${r.ok ? 'ok' : 'PROBLEM'} in ${(r.totalMs / 1000).toFixed(1)} s, ${r.wgsl.unique} shaders${policy && policy !== '0' ? `, ${policy} shader-policy violations` : ''}${r.failure ? ` — ${r.failure.split('\n')[0]}` : ''}`);
-    }
-  } finally {
-    await browser.close();
-    if (!opts.keep) server.stop();
-  }
-  const report = {
-    id, ref: opts.ref ?? '(working tree)', sha: src.sha, dirty: src.dirty, subject: src.subject, size: opts.size,
-    adapter: results.find((r) => r.adapter)?.adapter ?? null, buildMs, totalMs: Math.round(performance.now() - t0),
-    ok: results.every((r) => r.ok), views: results,
-  };
-  writeFileSync(join(out, 'report.json'), JSON.stringify(report, null, 2) + '\n');
-  log(`${report.ok ? 'all ok' : 'PROBLEMS'}: ${results.length} views in ${(report.totalMs / 1000).toFixed(1)} s → ${out}`);
-  if (opts.publish) {
-    const summary = { id, ref: report.ref, sha: src.sha, ok: report.ok, views: names, files: results.flatMap((r) => r.shots.map((s) => s.file)) };
-    const commit = publish(out, id, summary);
-    log(`published to ${BRANCH} (${commit.slice(0, 8)}): git fetch origin ${BRANCH} && git show origin/${BRANCH}:${id}/report.json`);
-  }
+  if (opts.watch) return watch(opts);
+  const report = await render(opts);
   process.exitCode = report.ok ? 0 : 1;
 }
 

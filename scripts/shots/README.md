@@ -11,6 +11,7 @@ npm run shots -- --list
 - `--views a,b` (or `all`): views from [`views.mjs`](views.mjs). Default: `title`, `lab`, `inside`, `outside`.
 - `--size 1600x900` (the default), `--id <name>` (the result folder's name), `--wgsl all` (write every shader, not only those with messages), `--headed` (a visible window, for watching).
 - `--publish`: push the result to the `renders` branch.
+- `--watch [--interval 30]`: serve requests (below) until stopped.
 
 It builds with Vite (no typecheck: a branch that does not typecheck yet can still be looked at), serves the build, opens each view in a fresh page, waits until the view has its canvas, lets it settle, runs the view's steps and takes the picture. For every view it also records:
 
@@ -36,6 +37,16 @@ git show origin/renders:<id>/inside.png > /tmp/inside.png  # then look at the fi
 
 The `renders` branch is one commit without history holding the latest 20 sets, so it never grows. Never merge it.
 
-## Asking for a render
+## Asking for a render (no person needed)
 
-The render helper is the thread "GPU rendering on Arnd's PC" in the Solarpolis project. Push your branch, then send that thread's session a message naming the ref and the views (and a size if it matters). It runs the tool with `--publish` and answers with the result's id and what it saw.
+Push the commit you want rendered to a request branch named after you and the views:
+
+```
+git push origin HEAD:refs/heads/shots-req/<who>/<view,view,…>     # e.g. shots-req/interior/inside,inside-up
+```
+
+`<who>` is a short name of your own (letters, digits, `.`, `_`, `-`); `default` as the views gives the default set. The render PC runs `npm run shots -- --watch`, which looks for `shots-req/*` every 30 s, renders each request, publishes it to `renders` as `<time>-<who>` (its `request` field in `index.json` and `report.json` is the branch name) and deletes the request branch. When your request branch is gone, read `index.json`. A request that cannot be built still gets a report, with `failure` saying why. Several requests are rendered one after the other, in name order.
+
+The watcher runs while Arnd's PC is on. If nothing happens for a few minutes, ask in the thread "GPU rendering on Arnd's PC" (through the project's coordinator).
+
+Anyone who can push to this repository can make the PC build and run a branch, which is why requests are taken from this repository only.
