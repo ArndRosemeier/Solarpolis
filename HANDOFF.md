@@ -9,10 +9,11 @@ Where the work stands, for the next thread. Update it in the PR that changes it.
 - **First look inside**: the Inside tab draws the whole interior surface (`src/gen/surface.ts`, a coarse seeded backdrop), the sunline and the haze, from a walker on the floor (`src/world/walker.ts`).
 - **Terrain tiles (milestone 2, part 1)**: `relief` in the blueprint (hills, ring lake, terrace step); `src/gen/terrain.ts` height field; `src/gen/tiles.ts` wrapping tile tree with LOD by measured error (reference view ~600 tiles, large ~1100); built in a worker pool; drawn camera-relative; WATER kind for the lake; the walker stands on the ground or the water. Arnd chose built hills and lakes, the deck below follows the ground.
 - **Geomorphing**: each tile carries a `morph` offset to its parent's surface; the GROUND kind blends it in over the last 40 % before the parent's distance, so level swaps don't pop (normals still switch; a lighting-only change).
+- **Sunline light**: `src/world/sunline.ts` (line-light integral over an emission profile along the axis) and `src/gen/horizon.ts` (two horizon angles per point, baked per tile on a 9×9 grid). The shaders sum the integral in 8 steps per pixel instead of the plan's (r, z) table: horizons need a per-point integral anyway, and it needs no compute pass. The day cycle only rewrites the emission texture.
 
 ## Next
 
-1. Milestone 2, remaining parts: the sunline table and horizon angles, the haze froxel volume, a fly camera.
+1. Milestone 2, remaining parts: the haze froxel volume, a fly camera.
 2. The sunline's day: the travelling sun and the night dimming.
 3. Physics for the walker (Rapier, Coriolis), then Actors' humanoid bodies.
 4. Dunfinity can switch to `@futuremagic/stage` and drop its own copy (its own PR, in its own thread).

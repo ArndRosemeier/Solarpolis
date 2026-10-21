@@ -10,6 +10,7 @@
  */
 import { toWorld, type Vec3 } from '../blueprint';
 import type { Terrain } from './terrain';
+import { horizonAt } from './horizon';
 
 /** Cells along each side of a tile. */
 export const TILE_CELLS = 64;
@@ -39,6 +40,9 @@ export interface TileKey {
 }
 
 export const keyId = (k: TileKey): string => `${k.band}:${k.column}:${k.level}:${k.i}:${k.j}`;
+
+/** Horizon angles are baked every this many cells (TILE_CELLS must divide by it). */
+const HORIZON_STEP = 8;
 
 /** Root tiles in the whole tree, about: enough that the far side is covered, few enough to build at load. */
 const ROOTS = 48;
@@ -172,6 +176,8 @@ export interface TileMesh {
    * no pop. Zero on points the parent shares.
    */
   morph: Float32Array;
+  /** Per point, the terrain's horizon angles toward the port and the wild end (gen/horizon.ts): its sunline shadow. */
+  horizon: Float32Array;
   index: Uint32Array;
   /** How far the grid strays from the true ground between its points (m): its error on screen decides splitting. */
   error: number;
@@ -181,7 +187,7 @@ export interface TileMesh {
 
 /** Bytes a built tile holds, for the memory watchdog. */
 export function tileBytes(t: TileMesh): number {
-  let b = t.positions.byteLength + t.normals.byteLength + t.colors.byteLength + t.morph.byteLength + t.index.byteLength;
+  let b = t.positions.byteLength + t.normals.byteLength + t.colors.byteLength + t.morph.byteLength + t.horizon.byteLength + t.index.byteLength;
   if (t.water) b += t.water.positions.byteLength + t.water.normals.byteLength + t.water.index.byteLength;
   return b;
 }
@@ -251,6 +257,24 @@ export function buildTile(terrain: Terrain, layout: TileLayout, k: TileKey): Til
     }
   }
 
+  // Horizons on a coarse grid (they change slowly: hills, banks, the endcaps), bilinear in between.
+  const horizon = new Float32Array(count * 2);
+  const H = TILE_CELLS / HORIZON_STEP, hrow = H + 1, coarse = new Float32Array(hrow * hrow * 2);
+  for (let j = 0; j <= H; j++) {
+    const s = Math.min(profile.length, Math.max(0, b.s0 + j * HORIZON_STEP * dS));
+    for (let i = 0; i <= H; i++) coarse.set(horizonAt(terrain, b.theta0 + i * HORIZON_STEP * dT, s), (j * hrow + i) * 2);
+  }
+  for (let j = 0; j <= N; j++) {
+    const cj = Math.min(H - 1, Math.floor(j / HORIZON_STEP)), fj = j / HORIZON_STEP - cj;
+    for (let i = 0; i <= N; i++) {
+      const ci = Math.min(H - 1, Math.floor(i / HORIZON_STEP)), fi = i / HORIZON_STEP - ci;
+      const a = (cj * hrow + ci) * 2, bb = a + 2, d = a + hrow * 2, e = d + 2, v = (j * row + i) * 2;
+      for (let c = 0; c < 2; c++) {
+        horizon[v + c] = (coarse[a + c] * (1 - fi) + coarse[bb + c] * fi) * (1 - fj) + (coarse[d + c] * (1 - fi) + coarse[e + c] * fi) * fj;
+      }
+    }
+  }
+
   // Skirts: each edge point again, sunk below the ground by about a cell, so a coarser neighbour's gap is covered.
   const edge: number[] = [];
   for (let i = 0; i < N; i++) edge.push(i);                       // s0 edge
@@ -266,6 +290,8 @@ export function buildTile(terrain: Terrain, layout: TileLayout, k: TileKey): Til
       colors[v + c] = colors[src + c];
       morph[v + c] = morph[src + c];
     }
+    horizon[(row * row + n) * 2] = horizon[e * 2];
+    horizon[(row * row + n) * 2 + 1] = horizon[e * 2 + 1];
   });
 
   const index: number[] = [];
@@ -300,7 +326,7 @@ export function buildTile(terrain: Terrain, layout: TileLayout, k: TileKey): Til
   // A tile that has children never claims to be finer than its cells can show at all.
   error = Math.max(error, cellSize(layout, k) * 0.02);
 
-  return { key: k, origin, positions, normals, colors, morph, index: Uint32Array.from(index), error, water: buildWater(terrain, b, origin) };
+  return { key: k, origin, positions, normals, colors, morph, horizon, index: Uint32Array.from(index), error, water: buildWater(terrain, b, origin) };
 }
 
 /** The lake's surface over a tile's rectangle: a grid at the water's level, fine enough to follow the curve. */
