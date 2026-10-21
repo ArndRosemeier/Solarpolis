@@ -14,7 +14,7 @@
  */
 import { DataArrayTexture, Vector3, type Node } from 'three/webgpu';
 import { filtered } from './textures';
-import { abs, attribute, clamp, dFdx, dFdy, float, max, min, mix, normalize, positionWorld, pow, select, smoothstep, texture, uniform, uniformArray, vec2, vec3 } from 'three/tsl';
+import { abs, attribute, clamp, dFdx, dFdy, float, int, max, min, mix, normalize, positionWorld, pow, select, smoothstep, texture, uniform, uniformArray, vec2, vec3 } from 'three/tsl';
 import { FLOOR_LAYERS, type HabitatParams } from '../blueprint';
 import type { WorkerPool } from '../workers/pool';
 import { GROUND_LAYERS, GROUND_TEX } from '../gen/groundTex';
@@ -63,14 +63,17 @@ export function setFloorEye(eye: readonly [number, number, number]): void {
   origin.value.set(m(eye[0]), m(eye[1]), m(eye[2]));
 }
 
-/** The index (as a float) of the largest of some values, and of the second largest. */
-function topTwo(w: Node<'float'>[]): { a: Node<'float'>; b: Node<'float'>; va: Node<'float'>; vb: Node<'float'> } {
-  let a: Node<'float'> = float(0), va: Node<'float'> = w[0], b: Node<'float'> = float(1), vb: Node<'float'> = float(-1);
+/**
+ * The index of the largest of some values, and of the second largest. Integers from the start: three r186 drops a
+ * float index's conversion when it feeds a texture array's layer in `.grad()` sampling, which WGSL refuses.
+ */
+function topTwo(w: Node<'float'>[]): { a: Node<'int'>; b: Node<'int'>; va: Node<'float'>; vb: Node<'float'> } {
+  let a: Node<'int'> = int(0), va: Node<'float'> = w[0], b: Node<'int'> = int(1), vb: Node<'float'> = float(-1);
   for (let k = 1; k < w.length; k++) {
     const over = w[k].greaterThan(va), second = w[k].greaterThan(vb);
-    b = select(over, a, select(second, float(k), b));
+    b = select(over, a, select(second, int(k), b));
     vb = select(over, va, select(second, w[k], vb));
-    a = select(over, float(k), a);
+    a = select(over, int(k), a);
     va = select(over, w[k], va);
   }
   return { a, b, va, vb };
@@ -102,19 +105,19 @@ export function floorSurface(color: Node<'vec3'>, normal: Node<'vec3'>): { color
   const wSum = max(w.x.add(w.y), 1e-4);
 
   // One layer, both projections: albedo (linear) × occlusion, the relief's height, and its tangent slope in world space.
-  const layerAt = (layer: Node<'float'>) => {
-    const k = scales.element(layer.toInt()) as unknown as Node<'float'>;
+  const layerAt = (layer: Node<'int'>) => {
+    const k = scales.element(layer) as unknown as Node<'float'>;
     let albedo: Node<'vec3'> = vec3(0), height: Node<'float'> = float(0), slope: Node<'vec3'> = vec3(0);
     for (const [axis, weight] of [[major, w.x], [middle, w.y]] as const) {
       const uv = across(axis, p).mul(k), gx = across(axis, dx).mul(k), gy = across(axis, dy).mul(k);
-      const c = texture(albedoTex, uv).grad(gx, gy).depth(layer.toInt());
-      const r = texture(reliefTex, uv).grad(gx, gy).depth(layer.toInt());
+      const c = texture(albedoTex, uv).grad(gx, gy).depth(layer);
+      const r = texture(reliefTex, uv).grad(gx, gy).depth(layer);
       const [t, b] = tangents(axis);
       albedo = albedo.add(c.rgb.mul(r.a).mul(weight));
       height = height.add(r.b.mul(weight));
       slope = slope.add(t.mul(r.r.mul(2).sub(1)).add(b.mul(r.g.mul(2).sub(1))).mul(weight));
     }
-    return { albedo: albedo.div(wSum), height: height.div(wSum), slope: slope.div(wSum), mean: means.element(layer.toInt()) as unknown as Node<'vec3'> };
+    return { albedo: albedo.div(wSum), height: height.div(wSum), slope: slope.div(wSum), mean: means.element(layer) as unknown as Node<'vec3'> };
   };
   const A = layerAt(top.a), B = layerAt(top.b);
   // Height blending: the layer standing higher shows where their shares are close.
