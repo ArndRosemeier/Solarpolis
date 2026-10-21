@@ -42,6 +42,8 @@ export class StreamCache<T extends Streamed> {
   get(id: string): T | undefined { return this.built.get(id); }
   /** Bytes the cached entries hold. */
   get bytes(): number { return this.held; }
+  /** Whether it holds more than its bytes even after evicting all it may (what views use is never evicted). */
+  get overBudget(): boolean { return this.held > this.opts.maxBytes; }
   /** Jobs in flight. */
   get building(): number { return this.asked.size; }
 
