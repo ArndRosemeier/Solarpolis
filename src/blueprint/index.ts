@@ -7,4 +7,4 @@ export { toWorld, fromWorld, toView, groundNormal, wrapAngle, type Interior, typ
 export { validate, isValid, COMFORT_RPM, FLYABLE_AXIS_PRESSURE, BIG_FINS, THICK_HULL, type Finding, type Severity } from './validate';
 export { REFERENCE, MATRIX, withParams } from './reference';
 export { CLIMATES, PLANT_FORMS, FLOOR_LAYERS, COVER_FORMS, DEBRIS_FORMS, climateOf, type Climate, type BiomeSpec, type PlantSpec, type PlantForm, type FloorLayer, type CoverSpec, type CoverForm, type DebrisSpec, type DebrisForm, type Rgb } from './climates';
-export { CULTURES, DISTRICT_STYLES, FACE_KINDS, cultureOf, type Culture, type DistrictStyle, type FaceKind, type StyleSpec } from './cultures';
+export { CULTURES, DISTRICT_STYLES, FACE_KINDS, STYLE_LAND, cultureOf, type Culture, type DistrictStyle, type FaceKind, type StyleLand, type StyleSpec } from './cultures';

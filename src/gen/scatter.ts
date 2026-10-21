@@ -182,18 +182,23 @@ export function cellBounds(ecology: Ecology, sp: Species, k: CellKey): { theta0:
   return { theta0: (2 * Math.PI * k.i) / n, theta1: (2 * Math.PI * (k.i + 1)) / n, s0: k.j * cell, s1: Math.min(profile.length, (k.j + 1) * cell) };
 }
 
-/** A cell in sight, and the nearest anything in it can be to the eye (m). */
+/** A cell in sight, and the nearest and farthest anything in it can be from the eye (m). */
 export interface NearCell {
   key: CellKey;
   near: number;
+  far: number;
 }
 
-/** The cells of a plant at a level that may hold something it draws seen from `eye` (world), nearest first. */
-export function cellsNear(ecology: Ecology, sp: Species, level: Level, eye: Vec3): NearCell[] {
+/**
+ * The cells of a plant at a level that may hold something it draws seen from `eye` (world), nearest first: from where
+ * its band starts, or from `from` (m) where it may have to draw nearer, standing in for a finer level that is not built
+ * yet (gen/handover.ts).
+ */
+export function cellsNear(ecology: Ecology, sp: Species, level: Level, eye: Vec3, from = sp.band[level]?.[0] ?? 0): NearCell[] {
   if (level >= sp.band.length) return []; // not drawn at this level
   const { profile } = ecology.terrain.habitat;
   const at = fromWorld(profile, eye[0], eye[1], eye[2]);
-  const [near, , , far] = sp.band[level], cell = sp.cell[level], tall = sp.tall;
+  const [, , , far] = sp.band[level], near = from, cell = sp.cell[level], tall = sp.tall;
   // Too high above the ground to see any of this plant at this level: none.
   if (at.h - tall > far) return [];
   const reach = Math.sqrt(Math.max(0, far * far - Math.max(0, at.h - tall) ** 2)) + cell;
@@ -213,7 +218,7 @@ export function cellsNear(ecology: Ecology, sp: Species, level: Level, eye: Vec3
       const c = toWorld(profile, { theta: (b.theta0 + b.theta1) / 2, s: (b.s0 + b.s1) / 2, h: 0 });
       // The nearest and farthest anything in it can be: the middle, give or take half its diagonal and the tallest plant.
       const mid = Math.hypot(c[0] - eye[0], c[1] - eye[1], c[2] - eye[2]), give = Math.hypot(b.s1 - b.s0, (b.theta1 - b.theta0) * r) / 2 + tall;
-      if (mid - give < far && mid + give > near) out.push({ key: k, near: Math.max(0, mid - give) });
+      if (mid - give < far && mid + give > near) out.push({ key: k, near: Math.max(0, mid - give), far: mid + give });
     }
   }
   return out.sort((a, b) => a.near - b.near);
@@ -276,6 +281,7 @@ export function plantCell(ecology: Ecology, plants: readonly Species[], k: CellK
       if (t.standAt(pt, ps) > ground + 0.05) continue; // under water
       if (keptClear(t, pt, ps)) continue; // under a landmark, or on the way onto it
       if (sp.what !== 'cover' && scatterKeepsOff(t, pt, ps)) continue; // a grove's clearing (its lawn stays)
+      if (ps < profile.floorStart && snowKeepsOff(ecology, sp, pt, ps, ground, f(6))) continue;
       if (!cover) {
         const slope = slopeAt(ecology, pt, ps, ground, gap);
         // Where the ground is too steep for any biome, the nearest fit still claims it (its colour is rock), but nothing
@@ -291,6 +297,22 @@ export function plantCell(ecology: Ecology, plants: readonly Species[], k: CellK
     }
   }
   return finished(t, k, b, origin, lists);
+}
+
+/** Debris at least this tall (m, the smallest of its kind) stands out of the snow: boulders, not stones. */
+const OUT_OF_SNOW = 0.8;
+/** The share of boulders the snow buries above the snow line: the rest stand out of it. */
+const BURIED = 0.97;
+
+/**
+ * Whether the Mountain's snow keeps a plant or a stone off a point (gen/snow.ts, by gravity: the snow line's band),
+ * with `chance` its own number (0 … 1): above the line nothing grows and no small stones lie (under the snow, or on
+ * walls too steep to hold them); a few boulders stand out of it.
+ */
+function snowKeepsOff(ecology: Ecology, sp: Species, theta: number, s: number, ground: number, chance: number): boolean {
+  const above = ecology.snowAt(theta, s, ground);
+  if (above === 0) return false;
+  return chance < (sp.what === 'debris' && sp.spec.height[0] >= OUT_OF_SNOW ? BURIED * above : above);
 }
 
 /** A planted cell from its plants' floats per shape. */
@@ -363,6 +385,11 @@ function tiltAt(ecology: Ecology, theta: number, s: number, p: Vec3): [number, n
 
 /** How steep the ground is at a point (0 flat … 1 a wall), from its height a step either way (m). */
 export function slopeAt(ecology: Ecology, theta: number, s: number, ground: number, step: number): number {
+  return groundSlope(normalAt(ecology, theta, s, ground, step), theta);
+}
+
+/** The ground's unit normal at a point (world, into the air), from its height a step either way (m). */
+export function normalAt(ecology: Ecology, theta: number, s: number, ground: number, step: number): Vec3 {
   const t = ecology.terrain, { profile } = t.habitat;
   const r = Math.max(profile.at(s).r, 1e-6), d = Math.max(step * 0.5, 0.5);
   // The ground's normal from a step around the axis and a step along the profile (back where it ends).
@@ -377,7 +404,7 @@ export function slopeAt(ecology: Ecology, theta: number, s: number, ground: numb
     const facing = n[0] * air[0] + n[1] * air[1] + n[2] * air[2] < 0 ? -1 : 1;
     n = [(n[0] / len) * facing, (n[1] / len) * facing, (n[2] / len) * facing];
   }
-  return groundSlope(n, theta);
+  return n;
 }
 
 /**

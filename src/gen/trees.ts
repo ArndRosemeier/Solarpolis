@@ -109,6 +109,13 @@ export interface TreeModel {
   /** The crown's radius around the axis, as a share of the height; and the canopy colour from afar (linear). */
   crown: number;
   canopy: [number, number, number];
+  /**
+   * How its leaf cards look on average, for the far hull to match (`leafLook`): the leaf atlas cell they show, and what
+   * their tint and occlusion make of its colour (per channel, as the LEAF kind shades them), the outer cards counting most.
+   */
+  leaf: { cell: number; shade: [number, number, number] };
+  /** The hull's crown colour on average (linear): what `leaf` is matched against. */
+  hullColor: [number, number, number];
   /** Whether it keeps its leaves. */
   evergreen: boolean;
 }
@@ -949,8 +956,36 @@ export function buildTree(form: PlantForm, seed: number, variant: number, detail
     form, wood: woodMesh, leaves: leaves.mesh(k), hull: hull.mesh(k),
     crown: Math.max(sk.env.rx, sk.env.rz) * k,
     canopy: [lin(cfg.farColor[0]), lin(cfg.farColor[1]), lin(cfg.farColor[2])],
+    leaf: { cell: cfg.leafCell, shade: leafShade(leaves.tint, leaves.occ) },
+    hullColor: crownColor(hull),
     evergreen: !!cfg.evergreen,
   };
+}
+
+/**
+ * What a crown's cards make of the leaf atlas's colour on average, per channel: the LEAF kind's tint (lighter and
+ * yellower or darker per card) and occlusion (deep cards darker), each card weighted by how much of it is seen from
+ * outside (1 − occlusion). Keep in step with LEAF in render/materials.ts.
+ */
+function leafShade(tint: readonly number[], occ: readonly number[]): [number, number, number] {
+  const sum = [0, 0, 0];
+  let seen = 0;
+  for (let i = 0; i < tint.length; i++) {
+    const tv = tint[i] - 0.5, base = (1 + tv * 0.4) * (1 - occ[i] * 0.62), warm = Math.max(tv, 0) * 0.5, w = 1 - occ[i];
+    sum[0] += base * (1 + 0.12 * warm) * w;
+    sum[1] += base * (1 + 0.06 * warm) * w;
+    sum[2] += base * (1 - 0.3 * warm) * w;
+    seen += w;
+  }
+  return seen > 0 ? [sum[0] / seen, sum[1] / seen, sum[2] / seen] : [1, 1, 1];
+}
+
+/** The mean colour of a hull's crown points (linear). */
+function crownColor(hb: HullBuilder): [number, number, number] {
+  const sum = [0, 0, 0];
+  let n = 0;
+  for (let i = 0; i < hb.kind.length; i++) if (hb.kind[i] > 0.5) { for (let c = 0; c < 3; c++) sum[c] += hb.col[i * 3 + c]; n++; }
+  return n ? [sum[0] / n, sum[1] / n, sum[2] / n] : [1, 1, 1];
 }
 
 /** The canopy colour of a form from afar (linear), without building it. */

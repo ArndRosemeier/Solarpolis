@@ -31,6 +31,19 @@ async function logTiles(page) {
   await page.locator('.dbg-panel .dbg-close').click().catch(() => {});
   await page.evaluate((ls) => { for (const l of ls) console.warn(`tiles: ${l}`); }, lines);
 }
+/**
+ * Read the debug menu's plant LOD line once and log it as a console warning (report.json): its holes must be 0, and
+ * so must the frames with holes so far.
+ */
+async function logPlantLod(page) {
+  await page.keyboard.press('Control+Shift+F12');
+  const text = await page.locator('.dbg-panel .dbg-info').innerText({ timeout: 3000 }).catch(() => '');
+  await page.locator('.dbg-panel .dbg-close').click().catch(() => {});
+  const lines = text.split('\n').filter((l) => l.startsWith('plant LOD') || l.startsWith('plants'));
+  await page.evaluate((ls) => { for (const l of ls) console.warn(l); }, lines.length ? lines : ['(no plant LOD line)']);
+}
+/** Walk ahead (W) for `steps` stretches of `ms`, a picture after each (`-w1`, `-w2`, ...), then log the plant LOD line. */
+const walk = (steps, ms) => [...Array.from({ length: steps }, (_, i) => [{ key: 'KeyW', hold: ms }, { shot: `w${i + 1}` }]).flat(), { run: logPlantLod }];
 /** A heap snapshot step (heap.mjs, loaded fresh: the render PC's watcher runs for hours and would keep an old copy). */
 const heap = (label) => ({ run: async (page) => { await (await import(`./heap.mjs?t=${Date.now()}`)).heapStep(page, label); } });
 /** Turn on the debug menu's memory details, so the report's debug info lists every owner. */
@@ -56,6 +69,10 @@ export const views = {
   'ground-river': { query: 'view=inside', about: 'on the bank of the nearest river, looking upstream at it: ahead (-ahead), then down at the water', settle: 6000, steps: [{ debug: 'To the nearest river' }, { wait: 7000 }, { shot: 'ahead' }, { look: [0, 120] }, { wait: 1500 }] },
   'ground-falls': { query: 'view=inside', about: 'halfway up the wild endcap, 200 m below the nearest falls, looking up at them', settle: 6000, steps: [{ debug: 'Halfway up the wild endcap' }, { wait: 5000 }, { debug: 'Below the nearest falls' }, { wait: 7000 }, { look: [0, -90] }, { wait: 2000 }] },
   'river-above': { query: 'view=inside', about: 'flown up over the nearest river on the floor, looking down along it', settle: 6000, steps: [{ debug: 'To the nearest river' }, { wait: 6000 }, { key: 'KeyF' }, { key: 'KeyE', hold: 3500 }, { look: [0, 200] }, { wait: 3000 }] },
+  'walk-meadow': { query: 'view=inside', about: 'walking (5 m/s) across the nearest meadow, a picture every 0.8 s (-w1 … -w10): no bush, tuft or stone may blink out; logs the plant LOD line', settle: 6000, steps: [{ debug: 'Into the nearest meadow' }, { wait: 8000 }, { look: [0, -15] }, { wait: 1000 }, { shot: 'w0' }, ...walk(10, 800)] },
+  'walk-wood': { query: 'view=inside', about: 'walking (5 m/s) into the nearest wood, a picture every 0.8 s (-w1 … -w10); logs the plant LOD line', settle: 6000, steps: [{ debug: 'Before the nearest wood' }, { wait: 8000 }, { look: [0, -15] }, { wait: 1000 }, { shot: 'w0' }, ...walk(10, 800)] },
+  'run-meadow': { query: 'view=inside', about: 'travelling 10× (50 m/s) across the nearest meadow, a picture every 0.5 s (-w1 … -w8): coarser levels stand in where cells are still planted; logs the plant LOD line', settle: 6000, steps: [{ debug: 'Into the nearest meadow' }, { wait: 8000 }, { debug: 'Travel 10× faster' }, { look: [0, -15] }, { wait: 1000 }, { shot: 'w0' }, ...walk(8, 500)] },
+  'bushes-levels': { query: 'view=inside', about: 'in the nearest meadow: every level (-all), then only the full (-full), only the lite (-lite), only the far level (-far), to compare their size and colour', settle: 6000, steps: [{ debug: 'Into the nearest meadow' }, { wait: 8000 }, { look: [0, -15] }, { wait: 1500 }, { shot: 'all' }, { debug: 'Plants: every level' }, { wait: 2500 }, { shot: 'full' }, { debug: 'Plants: every level' }, { wait: 2500 }, { shot: 'lite' }, { debug: 'Plants: every level' }, { wait: 2500 }, { shot: 'far' }, { debug: 'Plants: every level' }, { wait: 500 }] },
   'bushes-meadow': { query: 'view=inside', about: 'in the nearest meadow, looking out across it at the bushes near and far', settle: 6000, steps: [{ debug: 'Into the nearest meadow' }, { wait: 7000 }, { look: [0, -20] }, { wait: 1500 }] },
   'bushes-above': { query: 'view=inside', about: 'flown up over the nearest meadow, looking out and down at the bushes', settle: 6000, steps: [{ debug: 'Into the nearest meadow' }, { wait: 6000 }, { key: 'KeyF' }, { key: 'KeyE', hold: 3000 }, { look: [0, 90] }, { wait: 3000 }] },
   'ground-endcap': { query: 'view=inside', about: 'at the foot of the wild endcap, looking a little down', steps: [{ debug: 'The foot of the wild endcap' }, { wait: 6000 }, { look: [0, 120] }, { wait: 1000 }] },
@@ -91,6 +108,8 @@ export const views = {
   'far-tube': { query: 'view=inside', about: 'near the axis at the wild end, looking along the tube', steps: [{ debug: 'Fly: near the axis' }, { wait: 9000 }] },
   'far-tube-clear': { query: 'view=inside', about: 'as far-tube, with no clouds (to tell the air from the clouds)', steps: [...Array(4).fill({ debug: 'Clouds: schedule' }), { debug: 'Fly: near the axis' }, { wait: 9000 }] },
   'far-endcap': { query: 'view=inside', about: 'over the floor near the wild end, looking up its endcap', steps: [{ debug: 'Fly: over the floor, looking up' }, { wait: 9000 }] },
+  'snow-line': { query: 'view=inside', about: 'a few metres over the Mountain\'s snow line, looking up into the snow', settle: 6000, steps: [{ debug: 'Fly: at the Mountain\'s snow line, looking up into the snow' }, { wait: 9000 }] },
+  'snow-over': { query: 'view=inside', about: 'high over the Mountain\'s snowfield, looking up toward the axis', settle: 6000, steps: [{ debug: 'Fly: over the Mountain\'s snowfield' }, { wait: 9000 }] },
   'far-gate': { query: 'view=inside', about: 'over the floor near the port end, looking up the Gate', steps: [{ debug: 'Fly: over the floor, looking up the port endcap' }, { wait: 9000 }] },
   'far-meadow-up': { query: 'view=inside', about: 'standing in a meadow, looking up at the far side', settle: 6000, steps: [{ debug: 'Into the nearest meadow' }, { wait: 5000 }, { look: [0, -260] }, { wait: 3000 }] },
   outside: { query: 'view=outside', about: 'the home habitat from outside', default: true },
@@ -104,5 +123,10 @@ export const views = {
     query: 'view=inside', about: 'up the wild endcap and flying toward the sunline, looking around, then a heap snapshot', settle: 6000,
     steps: [memoryDetails, { debug: 'The foot of the wild endcap' }, { wait: 5000 }, { debug: 'Halfway up the wild endcap' }, { wait: 5000 }, { key: 'KeyF' }, { key: 'KeyE', hold: 6000 },
       { look: [700, 0] }, { wait: 3000 }, { look: [700, 0] }, { wait: 3000 }, { look: [700, 0] }, { wait: 3000 }, { look: [0, 250] }, { wait: 6000 }, { shot: 'before-heap' }, heap('inside')],
+  },
+  'memory-gate': {
+    query: 'view=inside', about: 'flown up over the foot of the Gate, looking at it (Arnd: 4,214 tiles, 2.8 GB there); logs the terrain line, then a heap snapshot', settle: 6000,
+    steps: [memoryDetails, { debug: 'The foot of the port endcap' }, { wait: 5000 }, { key: 'KeyF' }, { key: 'KeyE', hold: 2500 }, { look: [0, -40] }, { wait: 8000 },
+      { run: logTiles }, { shot: 'before-heap' }, heap('gate')],
   },
 };

@@ -8,10 +8,13 @@
  */
 import { v3add, v3cross, v3dot, v3len, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
 import { fluxOfMagnitude, type SkyView } from '../space';
-import type { Habitat } from '../blueprint';
+import { fromWorld, groundNormal, type Habitat } from '../blueprint';
 import { hazeAlong } from '../world/air';
 import { emissionMean, rawIrradiance } from '../world/sunline';
 import { OPEN_SKY } from '../gen/horizon';
+import type { Ecology } from '../gen/ecology';
+import { normalAt } from '../gen/scatter';
+import { SNOW_ALBEDO, snowCover, snowFieldOf, snowLies } from '../gen/snow';
 
 /** The eye's glare around the Sun: strength (radiance × rad²) and how far it reaches (rad). The sky shader draws the same. */
 export const GLARE = 6e-4;
@@ -219,27 +222,82 @@ export interface InsideMeterable {
   extinction: number;
   sky: number;
   hazeLuminance: number;
+  /** The land's height over the profile (`Terrain.heightAt`); without it the meter sees the bare profile's tube and walls. */
+  heightAt?: (theta: number, s: number) => number;
+  /** The land's albedo where a ray lands (`landAlbedo`); without it, `LAND_ALBEDO` everywhere. */
+  albedoAt?: (p: Vec3) => number;
 }
 
+/** The snow's albedo as the meter counts it (its luminance). */
+const SNOW_LUMINANCE = 0.2126 * SNOW_ALBEDO[0] + 0.7152 * SNOW_ALBEDO[1] + 0.0722 * SNOW_ALBEDO[2];
+
 /**
- * What a ray inside sees, for the eyes' meter (same units as the shaders: white paper on the mid floor in full day is
- * 1): the land where it lands (the floor's cylinder, or the end wall a ray along the axis reaches first) at
- * `LAND_ALBEDO`, lit by the sunline and the sky light as `sunlit` lights it, seen through the air (`hazeAlong`), plus
- * the air's own glow. A ray close past the axis gathers the sunline's halo; the line itself is a lamp, not counted.
+ * The land's albedo for the meter (`albedoAt`): `LAND_ALBEDO`, and the snow's where the Mountain's snow lies (gen/snow.ts,
+ * on the land's own slope there), so the eyes stop down before a sunlit snowfield near the axis.
  */
-export function insideRayLuminance(m: InsideMeterable, eye: Vec3, d: Vec3): number {
+export function landAlbedo(ecology: Ecology): (p: Vec3) => number {
+  const h = ecology.terrain.habitat, field = snowFieldOf(h);
+  return (p) => {
+    if (snowCover(field, p[0], p[1], p[2]) === 0) return LAND_ALBEDO;
+    const q = fromWorld(h.profile, p[0], p[1], p[2]), ground = ecology.terrain.heightAt(q.theta, q.s);
+    const n = normalAt(ecology, q.theta, q.s, ground, 8), r = Math.max(Math.hypot(p[0], p[1]), 1e-6);
+    const lies = snowLies(field, p[0], p[1], p[2], -(n[0] * p[0] + n[1] * p[1]) / r);
+    return LAND_ALBEDO + (SNOW_LUMINANCE - LAND_ALBEDO) * lies;
+  };
+}
+
+/** Steps a ray takes toward the tube's wall looking for the land (closer together near the eye), then halvings. */
+const MARCH = 16, HALVINGS = 3;
+
+/**
+ * Where a ray inside first meets the land, and the land's normal there: with `heightAt`, the first step under the
+ * ground on the way to the tube's wall or an end wall (a massif near the axis, a hill), else that wall itself.
+ */
+function landHit(m: InsideMeterable, eye: Vec3, d: Vec3): { p: Vec3; n: Vec3 } | null {
   const h = m.habitat, R = h.radius, L = h.length;
   const a = d[0] * d[0] + d[1] * d[1], b = eye[0] * d[0] + eye[1] * d[1], c = eye[0] * eye[0] + eye[1] * eye[1] - R * R;
   let t = a > 1e-12 ? (-b + Math.sqrt(Math.max(0, b * b - a * c))) / a : Infinity, n: Vec3 | null = null;
   if (d[2] > 1e-9 && (L - eye[2]) / d[2] < t) { t = (L - eye[2]) / d[2]; n = [0, 0, -1]; }
   else if (d[2] < -1e-9 && -eye[2] / d[2] < t) { t = -eye[2] / d[2]; n = [0, 0, 1]; }
-  if (!Number.isFinite(t) || t <= 0) return 0;
+  if (!Number.isFinite(t) || t <= 0) return null;
+  // The land rises far from the profile only on the endcaps (the massif, the Gate): a ray from over the floor that
+  // reaches the floor's tube meets only its gentle hills, where the tube is, near enough for the meter.
+  const heightAt = m.heightAt, z0 = h.profile.at(h.profile.floorStart).z, z1 = h.profile.at(h.profile.floorEnd).z;
+  const between = (z: number): boolean => z > z0 && z < z1;
+  if (heightAt && !(n === null && between(eye[2]) && between(eye[2] + d[2] * t))) {
+    const above = (u: number): { over: number; theta: number; s: number } => {
+      const q = fromWorld(h.profile, eye[0] + d[0] * u, eye[1] + d[1] * u, eye[2] + d[2] * u);
+      return { over: q.h - heightAt(q.theta, q.s), theta: q.theta, s: q.s };
+    };
+    let lo = 0;
+    for (let k = 1; k <= MARCH; k++) {
+      const hi = t * Math.pow(k / MARCH, 1.5);
+      if (above(hi).over >= 0) { lo = hi; continue; }
+      let under = hi;
+      for (let j = 0; j < HALVINGS; j++) { const mid = (lo + under) / 2; if (above(mid).over >= 0) lo = mid; else under = mid; }
+      const at = above(under);
+      return { p: v3add(eye, v3scale(d, under)), n: groundNormal(h.profile, at.theta, at.s) };
+    }
+  }
   const p: Vec3 = v3add(eye, v3scale(d, t));
   if (!n) { const r = Math.hypot(p[0], p[1]); n = [-p[0] / r, -p[1] / r, 0]; }
+  return { p, n };
+}
+
+/**
+ * What a ray inside sees, for the eyes' meter (same units as the shaders: white paper on the mid floor in full day is
+ * 1): the land where it lands (`landHit`) at its albedo (`albedoAt`, else `LAND_ALBEDO`), lit by the sunline and the sky light as `sunlit` lights it
+ * (close to the axis many times the floor's light), seen through the air (`hazeAlong`), plus the air's own glow. A ray
+ * close past the axis gathers the sunline's halo; the line itself is a lamp, not counted.
+ */
+export function insideRayLuminance(m: InsideMeterable, eye: Vec3, d: Vec3): number {
+  const hit = landHit(m, eye, d);
+  if (!hit) return 0;
+  const { p, n } = hit, h = m.habitat;
   const direct = rawIrradiance(h, m.emission, v3add(p, n), n, OPEN_SKY, OPEN_SKY, 32) * m.norm;
   const light = (1 - m.sky) * direct + m.sky * emissionMean(m.emission);
   const haze = hazeAlong(h, m.emission, m.extinction, m.sky, eye, p);
-  return LAND_ALBEDO * light * haze.transmittance + m.hazeLuminance * haze.inscatter;
+  return (m.albedoAt ? m.albedoAt(p) : LAND_ALBEDO) * light * haze.transmittance + m.hazeLuminance * haze.inscatter;
 }
 
 /**
@@ -257,8 +315,13 @@ export const BRIGHT_VIEW = 0.6;
  * floor stay at 1; the eyes never open past it here (night and shade are the hour's and `insideExposure`'s).
  */
 export function insideGlare(m: InsideMeterable, eye: Vec3, rays: readonly Vec3[]): number {
-  const seen = rays.map((d) => Math.max(1e-6, insideRayLuminance(m, eye, d))).sort((x, y) => y - x);
-  const top = seen.slice(0, Math.max(1, Math.ceil(seen.length / 4)));
+  return glareOf(rays.map((d) => insideRayLuminance(m, eye, d)));
+}
+
+/** `insideGlare` from the rays' luminances (the view meters a few rays a frame and keeps the rest from before). */
+export function glareOf(seen: ArrayLike<number>): number {
+  const sorted = Array.from(seen, (l) => Math.max(1e-6, l)).sort((x, y) => y - x);
+  const top = sorted.slice(0, Math.max(1, Math.ceil(sorted.length / 4)));
   const bright = Math.exp(top.reduce((sum, l) => sum + Math.log(l), 0) / top.length);
   return Math.min(1, Math.pow(BRIGHT_VIEW / bright, INSIDE_MAKES_UP));
 }

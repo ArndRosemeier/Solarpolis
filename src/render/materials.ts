@@ -15,7 +15,8 @@ import { DataTexture, Uint8BufferAttribute, RGBAFormat, UnsignedByteType, Vector
 import { PLANT_STRIDE } from '../gen/scatter';
 import { BARK_STRIPS } from '../gen/trees';
 import { BARK_TEXELS } from '../gen/foliage';
-import { LEAF_ATLAS_SIZE } from '../workers/leaves';
+import { LEAF_ATLAS_SIZE, LEAF_CUT } from '../workers/leaves';
+import { PICK_TURNS } from '../gen/handover';
 import type { Node } from 'three/webgpu';
 import type { StageKind } from '@futuremagic/stage';
 import { REFERENCE } from '../blueprint';
@@ -25,7 +26,7 @@ import { OPEN_SKY } from '../gen/horizon';
 import { EMISSION_SAMPLES, SUNLINE_STEPS } from '../world/sunline';
 import { HAZE_STEPS } from '../world/air';
 import { skyDome, starColor, starVertex } from './skyShaders';
-import { floorSurface, woodsFromAfar } from './groundShaders';
+import { floorShare, floorSurface, rockFromAfar, snowOver, woodsFromAfar } from './groundShaders';
 import { RISE_RANGE } from '../gen/tiles';
 import { filtered } from './textures';
 import { cloudMarch, cloudShade } from './cloudShaders';
@@ -226,16 +227,21 @@ export const GROUND = kind('ground', ['position', 'normal', 'color', 'morph', 'h
   const far = varying(woods);
   // Close up, the floor's own surface (groundShaders.ts): grass, litter, sand, rock, resolving as the eye comes near.
   const away = positionWorld.sub(cameraPosition).length();
-  const floorUp = floorSurface(vertexColor().rgb, normalize(normalWorld));
+  // Rock in beds, tones and lichen (groundShaders.ts), where the floor is rock.
+  const base = rockFromAfar(vertexColor().rgb, floorShare('rock'), worldPosition(), normalize(normalWorld));
+  const floorUp = floorSurface(base, normalize(normalWorld));
   // From afar, crowns and the gaps between them, clumps and glades (groundShaders.ts, docs/far-view.md).
-  const fromAfar = woodsFromAfar(vertexColor().rgb, canopy.rgb, horizon.z, horizon.w, worldPosition());
-  const ground = mix(floorUp.color, fromAfar, far);
+  const fromAfar = woodsFromAfar(base, canopy.rgb, horizon.z, horizon.w, worldPosition());
+  // The Mountain's snow over both (groundShaders.ts, gen/snow.ts): where it lies, its own dunes take the floor's relief.
+  const geometric = normalize(normalWorld);
+  const snow = snowOver(mix(floorUp.color, fromAfar, far), geometric, worldPosition());
+  const ground = snow.color, surface = normalize(mix(floorUp.normal, snow.normal, snow.cover));
   // Under the woods past the shadow map's reach, the crowns' shade on average (`crownsClosed`): the floor stays in
   // the shade the near trees cast, and the canopy seen from afar keeps its sunlit tops.
   const beyond = smoothstep(SHADOW_HALF * 0.6, SHADOW_HALF * 0.9, away).mul(float(1).sub(far));
   const closed = smoothstep(0.25, 1, canopy.w.div(CLOSED_RAISE));
   const shade = mix(float(1), mix(float(1), float(UNDER_CROWNS), closed), beyond);
-  m.colorNode = throughAir(ground.mul(sunlit(horizon.xy, floorUp.normal, 0, shade)).mul(clamp(rise.mul(RELIEF_LIGHT).add(1), 0.55, 1.3)));
+  m.colorNode = throughAir(ground.mul(sunlit(horizon.xy, surface, 0, shade)).mul(clamp(rise.mul(RELIEF_LIGHT).add(1), 0.55, 1.3)));
   return m;
 });
 
@@ -407,6 +413,8 @@ export const LAMP = kind('lamp', ['position', 'color'], { cast: false, receive: 
  * from the eye), so a plant is always drawn by exactly one level and nothing ever just vanishes.
  */
 const plantBand = uniform(new Vector4(-2, -1, 1e30, 2e30)).onObjectUpdate(({ object }) => (object?.userData.band as Vector4 | undefined) ?? new Vector4(-2, -1, 1e30, 2e30));
+/** How far light wraps round a crown (leaf cards and the hulls standing in for them alike). */
+const LEAF_WRAP = 0.7;
 const plantHorizon = uniform(new Vector2(OPEN_SKY, OPEN_SKY)).onObjectUpdate(({ object }) => (object?.userData.horizon as Vector2 | undefined) ?? new Vector2(OPEN_SKY, OPEN_SKY));
 
 /** The bark atlas (gen/foliage.ts) and the leaf atlas (render/foliage.ts), filled in once the workers have drawn them. */
@@ -448,10 +456,13 @@ function plantFrame() {
   const c = cos(turn), sn = sin(turn);
   const ax = side.mul(c).add(axis.mul(sn)), az = side.mul(sn.negate()).add(axis.mul(c));
   // The band: each plant has its own threshold, so in a hand-over band one level takes it where the other leaves it.
+  // The threshold comes from the plant's own turn (its lattice spot's hash, `plantCell`), which is the same in every
+  // level's cell, so the two levels agree on every plant (`handOverPick` in gen/handover.ts); a hash of where it stands
+  // in its cell would differ between the levels' cells, and some plants in the band would be drawn by neither.
   // Measured from the eye (the origin of the drawn world), not the camera: the shadow pass draws from the light's
   // camera, hundreds of metres away, and would drop every near plant from the shadow map.
   const away = foot.length();
-  const pick = hash(inst.x.mul(13.7).add(inst.z.mul(7.1)).add(inst.y.mul(3.3)));
+  const pick = fract(turn.mul(PICK_TURNS / (2 * Math.PI)));
   const into = smoothstep(plantBand.x, plantBand.y, away), out = smoothstep(plantBand.z, plantBand.w, away);
   const keep = step(pick, into.mul(1.0001)).mul(mix(step(out, pick), float(1).sub(out), plantSink));
   // Where the air's phase comes from: where the plant stands.
@@ -543,16 +554,25 @@ export const LEAF = kind('leaf', ['position', 'normal', 'uv', 'wind', 'tint', 'o
   const dxA = dFdx(st.mul(LEAF_ATLAS)), dyA = dFdy(st.mul(LEAF_ATLAS));
   const lod = max(log2(max(dot(dxA, dxA), dot(dyA, dyA))).mul(0.5), 0);
   const alpha = clamp(leaf.a.mul(lod.mul(0.32).add(1)), 0, 1);
-  m.maskNode = alpha.greaterThan(0.45);
+  m.maskNode = alpha.greaterThan(LEAF_CUT);
   const tv = tint.sub(0.5);
   let col: Node<'vec3'> = leaf.rgb.mul(tv.mul(0.4).add(1));
   col = mix(col, col.mul(vec3(1.12, 1.06, 0.7)), max(tv, 0).mul(0.5));
   col = col.mul(float(1).sub(occ.mul(0.62)));
-  m.colorNode = throughAir(col.mul(sunlit(plantHorizon, normalize(v.normal), 0.7)));
+  m.colorNode = throughAir(col.mul(sunlit(plantHorizon, normalize(v.normal), LEAF_WRAP)));
   return m;
 });
 
-/** Crown hulls for the middle distance: vertex colours, a mottle, and edges that dissolve in noise. */
+/**
+ * What a hull's crown colour is multiplied by so it looks like the leaf cards it stands for (`userData.tint`, a
+ * Vector3 per form, measured from the leaf atlas and the cards: render/plants.ts `matchLeaves`); 1 until measured.
+ */
+const hullTint = uniform(new Vector3(1, 1, 1)).onObjectUpdate(({ object }) => (object?.userData.tint as Vector3 | undefined) ?? new Vector3(1, 1, 1));
+
+/**
+ * Crown hulls for the middle distance: vertex colours matched to the leaves (`hullTint`), a mottle, and edges that
+ * dissolve in noise; lit the way the leaf cards are (the same wrap), so a plant keeps its colour when it hands over.
+ */
 export const HULL = kind('hull', ['position', 'normal', 'color', 'kind', 'wind', 'plant'], { cast: true, receive: false }, () => {
   const m = new MeshBasicNodeMaterial();
   const v = plantVertex(0);
@@ -564,8 +584,10 @@ export const HULL = kind('hull', ['position', 'normal', 'color', 'kind', 'wind',
   const n = normalize(v.normal);
   const edge = float(1).sub(abs(dot(n, normalize(positionWorld.sub(cameraPosition).negate()))));
   m.maskNode = crown.lessThan(0.5).or(edge.mul(edge).mul(1.25).lessThanEqual(nz.add(0.12)));
-  const shade = mix(float(1), nz.mul(0.45).add(0.78), step(0.5, crown));
-  m.colorNode = throughAir(vertexColor().rgb.mul(shade).mul(sunlit(plantHorizon, n, 0.4)));
+  const isCrown = step(0.5, crown);
+  const shade = mix(float(1), nz.mul(0.45).add(0.78), isCrown);
+  const color = vertexColor().rgb.mul(mix(vec3(1, 1, 1), hullTint, isCrown));
+  m.colorNode = throughAir(color.mul(shade).mul(sunlit(plantHorizon, n, LEAF_WRAP)));
   return m;
 });
 

@@ -8,17 +8,24 @@
  * is always drawn by exactly one level; past the hulls the ground's canopy layer stands in for woods. Cells stay cached,
  * least recently drawn first out, until memory runs short.
  *
+ * A level never goes before the one that replaces it is there (gen/handover.ts): where a finer level's cell is not
+ * built yet, the boundary between the two moves in to it, so the coarser level keeps drawing those plants (its cells
+ * are asked for from the eye out, not only from its band); once the cell is built the boundary sweeps back out over
+ * a moment, plant by plant. `info` counts holes (a level drawing where its cell is missing), which must stay 0. The far
+ * hulls take the leaves' colour (`matchLeaves`), so a plant does not change colour when it hands over.
+ *
  * The shapes (`buildTree` and `buildTuft`, three per form) and the bark and leaf atlases are built once by the workers and shared by
  * every cell: a cell's geometry holds only its own instances.
  */
 import { BufferAttribute, Group, InstancedBufferGeometry, InstancedInterleavedBuffer, Mesh, Sphere, Vector2, Vector3, Vector4, type Material } from 'three/webgpu';
+import { handover, holes, type Band, type Piece } from '../gen/handover';
 import type { Stage } from '@futuremagic/stage';
 import { toView, type CoverSpec, type DebrisSpec, type PlantSpec, type Vec3 } from '../blueprint';
 import type { Ecology } from '../gen/ecology';
 import type { FallenWood, TreeModel } from '../gen/trees';
 import type { StoneMesh, StoneModel } from '../gen/stones';
 import type { TuftModel } from '../gen/grass';
-import { canopyBand, cellBytes, cellId, cellsNear, LEVELS, plantsOf, PLANT_STRIDE, PLANT_VARIANTS, type CellKey, type Level, type PlantCell, type Species } from '../gen/scatter';
+import { canopyBand, cellBytes, cellId, cellsNear, LEVELS, plantsOf, PLANT_STRIDE, PLANT_VARIANTS, type Level, type NearCell, type PlantCell, type Species } from '../gen/scatter';
 import type { WorkerPool } from '../workers/pool';
 import type { GenAnswer, GenRequest } from '../workers/gen.worker';
 import { StreamCache, type Streamed } from './streamed';
@@ -30,6 +37,12 @@ const CACHE = 6000;
 const CACHE_BYTES = 192 * 1024 * 1024;
 /** Cell jobs in flight at once. */
 const IN_FLIGHT = 12;
+/**
+ * How much of its leaves' colour a crown shows: its cards shade each other (shadows, the dark gaps between them), which
+ * a hull's smooth surface does not. Measured on the render PC (shots view `bushes-levels`, 2026-10-21): a bush's and a
+ * wood's far level was a quarter brighter than its lite and full levels without it, the same in every channel.
+ */
+const LEAVES_SHADED = 0.8;
 /** The eye moves this share of the smallest cell before the cells in view are chosen again. */
 const RECHOOSE = 0.25;
 
@@ -55,9 +68,13 @@ interface Entry extends Streamed {
   cell: PlantCell;
   meshes: Mesh[];
   shaped: Shaped[];
-  /** The choice (`PlantView.generation`) its buffers were last trimmed for. */
+  /** The choice (`PlantView.generation`) its buffers were last trimmed for, and the nearest its level then drew from (m). */
   trimmed: number;
+  trimmedFrom: number;
 }
+
+/** How a form's leaf cards look and what its hull's crown is, for `matchLeaves`. */
+type LeafLook = Pick<TreeModel, 'leaf' | 'hullColor'>;
 
 export class PlantView {
   readonly group = new Group();
@@ -67,7 +84,21 @@ export class PlantView {
   private readonly cache: StreamCache<Entry>;
   private drawn: Entry[] = [];
   private chosenAt: Vec3 | null = null;
-  private chosen: CellKey[] = [];
+  /** The cells chosen at `chosenAt`, nearest first, each with its piece in `pieces` (per species and level) for the handover. */
+  private chosen: (NearCell & { piece: Piece })[] = [];
+  private pieces: Piece[][][] = [];
+  /** Per species and level: the band its meshes draw with now (`userData.band` of all its cells' meshes). */
+  private readonly bands: Vector4[][];
+  /** Per species: the boundaries between its levels as drawn now ([z, w] of each level but the last). */
+  private readonly bounds: [number, number][][];
+  /** Draw only this level of every plant, as far as its cells reach (debug: compare the levels), or every level. */
+  only: Level | null = null;
+  /** Holes this frame (must be 0), frames that had any, far cells still coming in, handovers held back for a cell. */
+  private lod = { holes: 0, holeFrames: 0, far: 0, held: 0 };
+  /** The far hulls' colour match per shape (`matchLeaves`): the tint, the leaves' look, the atlas's means. */
+  private readonly tints = new Map<string, Vector3>();
+  private readonly looks = new Map<string, LeafLook>();
+  private leafMeans: Float32Array | null = null;
   private chosenForms = 0;
   /** Counts the choices of cells (each time the eye has moved far enough). */
   private generation = 0;
@@ -77,11 +108,15 @@ export class PlantView {
   constructor(private readonly ecology: Ecology, private readonly stage: Stage, pool: WorkerPool) {
     this.group.name = 'plants';
     this.species = plantsOf(ecology);
+    this.bands = this.species.map((sp) => sp.band.map((b) => new Vector4(...b)));
+    this.bounds = this.species.map((sp) => sp.band.slice(0, -1).map((b) => [b[2], b[3]] as [number, number]));
     setCanopyBand(canopyBand(ecology));
     const params = ecology.terrain.habitat.params;
     void pool.job({ kind: 'foliage', params }).then((a) => {
       if (!('bark' in a)) return;
       setFoliage(a.bark, a.leaves);
+      this.leafMeans = a.leafMeans;
+      this.matchLeaves();
       // With their mips, a third more.
       this.shared += ((a.bark.color.byteLength + a.bark.normal.byteLength + a.leaves.byteLength) * 4) / 3;
     });
@@ -106,7 +141,11 @@ export class PlantView {
         if (d.form === 'stone') variants(key, (variant) => pool.job({ kind: 'stone', params, color: rock, moss: d.moss ?? 0, variant }), (a) => ('stone' in a ? a.stone : null), stoneShapes);
         else variants(key, (variant) => pool.job({ kind: 'fallen', params, form: d.wood ?? 'oak', piece: d.form as 'log' | 'branch', variant }), (a) => ('fallen' in a ? a.fallen : null), fallenShapes);
       } else {
-        variants(key, (variant) => pool.job({ kind: 'tree', params, form: (spec as PlantSpec).form, variant }), (a) => ('full' in a ? a : null), shapesOf);
+        variants(key, (variant) => pool.job({ kind: 'tree', params, form: (spec as PlantSpec).form, variant }), (a) => ('full' in a ? a : null), (models) => {
+          this.looks.set(key, models[0].full);
+          this.matchLeaves();
+          return shapesOf(models);
+        });
       }
     }
     this.cache = new StreamCache<Entry>(pool, {
@@ -137,32 +176,107 @@ export class PlantView {
     return `plants (plants/cells) ${levels}; ${tufts} tufts; ${debris} stones and fallen wood; ${draws} draws, ${this.cache.built.size} cached (${(this.cache.bytes / 1048576).toFixed(1)} MB; shapes and atlases ${(this.shared / 1048576).toFixed(1)} MB), ${this.cache.building} planting, ${this.shapes.size} forms`;
   }
 
-  /** Choose, request and place the plant cells for an eye. */
-  follow(eye: Vec3): void {
+  /**
+   * The handover's watchdog: holes now (a level drawing where its cell is not built: must stay 0), frames with any so
+   * far, coarser levels standing in for a finer one still being planted, far cells still coming in at the edge of sight.
+   */
+  lodLine(): string {
+    const l = this.lod, only = this.only === null ? '' : ` (drawing only the ${LEVELS[this.only].name} level)`;
+    return `plant LOD${only}: ${l.holes} holes (${l.holeFrames} frames with holes so far), ${l.held} levels standing in for a finer one being planted, ${l.far} far cells coming in`;
+  }
+
+  /** Frames so far in which some level drew where its cell was missing (for tests and the shots). */
+  get holeFrames(): number { return this.lod.holeFrames; }
+
+  /**
+   * Give each form's far hull the colour its leaf cards show: the atlas cell's mean (over the texels a card shows)
+   * through the cards' tint and occlusion, over the hull's own crown colour. Measured once both are in.
+   */
+  private matchLeaves(): void {
+    const means = this.leafMeans;
+    if (!means) return;
+    for (const [key, look] of this.looks) {
+      const tint = this.tintOf(key), c = look.leaf.cell * 3;
+      tint.set(...([0, 1, 2].map((i) => (LEAVES_SHADED * means[c + i] * look.leaf.shade[i]) / Math.max(look.hullColor[i], 1e-4)) as [number, number, number]));
+    }
+  }
+
+  private tintOf(key: string): Vector3 {
+    let t = this.tints.get(key);
+    if (!t) this.tints.set(key, (t = new Vector3(1, 1, 1)));
+    return t;
+  }
+
+  /** Choose, request and place the plant cells for an eye; `dt` (s) since the last frame, for the handover's sweep. */
+  follow(eye: Vec3, dt = 1 / 60): void {
     this.cache.frame();
     const smallest = Math.min(...this.species.map((s) => s.cell[0]));
     if (!this.chosenAt || this.chosenForms !== this.shapes.size || Math.hypot(eye[0] - this.chosenAt[0], eye[1] - this.chosenAt[1], eye[2] - this.chosenAt[2]) > smallest * RECHOOSE) {
       this.chosenAt = [...eye];
       this.chosenForms = this.shapes.size;
       this.generation++;
-      // Every plant's cells at every level, nearest first: the near ones are where a gap would show.
-      this.chosen = this.species.flatMap((sp) => (this.shapes.has(shapeKey(sp)) ? sp.band.flatMap((_, level) => cellsNear(this.ecology, sp, level as Level, eye)) : []))
-        .sort((a, b) => a.near - b.near).map((c) => c.key);
+      // Every plant's cells at every level, nearest first: the near ones are where a gap would show. A coarser level's
+      // from the eye out, since it stands in wherever the finer one's cells are not built yet.
+      this.pieces = this.species.map((sp) => sp.band.map(() => []));
+      this.chosen = this.species.flatMap((sp) => (this.shapes.has(shapeKey(sp)) ? sp.band.flatMap((_, level) => cellsNear(this.ecology, sp, level as Level, eye, level ? 0 : undefined)) : []))
+        .sort((a, b) => a.near - b.near).map((c) => {
+          const piece = { near: c.near, far: c.far, ready: false };
+          this.pieces[c.key.species][c.key.level].push(piece);
+          return { ...c, piece };
+        });
     }
+    this.setBands(eye, dt);
     for (const e of this.drawn) for (const m of e.meshes) m.visible = false;
     this.drawn = [];
     const wanted: { id: string; request: GenRequest }[] = [];
     const params = this.ecology.terrain.habitat.params;
-    for (const key of this.chosen) {
+    for (const { key } of this.chosen) {
       const id = cellId(key), e = this.cache.get(id);
       if (!e) { wanted.push({ id, request: { kind: 'plants', params, key } }); continue; }
       const [x, y, z] = toView(eye, e.cell.origin);
-      if (e.trimmed !== this.generation) this.trim(e, [x, y, z], smallest * RECHOOSE);
+      if (e.trimmed !== this.generation || this.bands[key.species][key.level].x < e.trimmedFrom) this.trim(e, [x, y, z], smallest * RECHOOSE);
       for (const m of e.meshes) { m.position.set(x, y, z); m.visible = (m.geometry as InstancedBufferGeometry).instanceCount > 0; }
       this.cache.mark(e);
       this.drawn.push(e);
     }
     this.cache.want(wanted);
+  }
+
+  /**
+   * Set each species' bands for this frame: each boundary between two levels where `handover` allows it (in to the
+   * nearest cell of the finer level not built yet), in at once, out over a moment; then count the holes.
+   */
+  private setBands(eye: Vec3, dt: number): void {
+    const at = this.chosenAt!, moved = Math.hypot(eye[0] - at[0], eye[1] - at[1], eye[2] - at[2]);
+    // Each piece as seen from where the eye is now: its distances were measured where the cells were chosen.
+    for (const c of this.chosen) {
+      const p = c.piece;
+      p.near = c.near - moved;
+      p.far = c.far + moved;
+      p.ready = this.cache.get(cellId(c.key)) !== undefined;
+    }
+    const lod = this.lod;
+    lod.held = lod.far = 0;
+    let found = 0;
+    for (const sp of this.species) {
+      const L = sp.band.length, bounds = this.bounds[sp.id], pieces = this.pieces[sp.id] ?? [];
+      if (this.only !== null) {
+        for (let k = 0; k < L - 1; k++) bounds[k] = k < this.only ? [-2, -1] : [1e9, 2e9];
+      } else {
+        handover(sp.band, pieces, bounds, dt);
+        for (let k = 0; k < L - 1; k++) if (bounds[k][1] < sp.band[k][3]) lod.held++;
+      }
+      const drawn: Band[] = sp.band.map((b, k) => {
+        const lo = k ? bounds[k - 1] : [b[0], b[1]], hi = k < L - 1 ? bounds[k] : [b[2], b[3]];
+        this.bands[sp.id][k].set(lo[0], lo[1], hi[0], hi[1]);
+        return [lo[0], lo[1], hi[0], hi[1]];
+      });
+      if (this.only !== null) continue;
+      const h = holes(drawn, pieces);
+      for (let k = 0; k < L; k++) if (k < L - 1) found += h[k]; else lod.far += h[k];
+    }
+    lod.holes = found;
+    if (found) lod.holeFrames++;
   }
 
   /**
@@ -172,7 +286,10 @@ export class PlantView {
    */
   private trim(e: Entry, at: [number, number, number], slack: number): void {
     e.trimmed = this.generation;
-    const sp = this.species[e.cell.key.species], [lo, , , hi] = sp.band[e.cell.key.level];
+    const { species, level } = e.cell.key, sp = this.species[species], drawn = this.bands[species][level];
+    // From where it draws now (nearer than its band while it stands in for a finer level), out to its band's end.
+    const lo = Math.min(sp.band[level][0], drawn.x), hi = Math.max(sp.band[level][3], drawn.w);
+    e.trimmedFrom = drawn.x;
     const near = Math.max(0, lo - slack), far = hi + slack;
     for (const s of e.shaped) {
       const out = s.buffer.array as Float32Array;
@@ -192,7 +309,7 @@ export class PlantView {
     if (!('cell' in answer)) return null;
     const cell = answer.cell, sp = this.species[cell.key.species], shapes = this.shapes.get(shapeKey(sp));
     if (!shapes) return null;
-    const band = new Vector4(...sp.band[cell.key.level]);
+    const band = this.bands[sp.id][cell.key.level], tint = sp.what === 'plant' || sp.what === 'planted' ? this.tintOf(shapeKey(sp)) : undefined;
     const horizon = new Vector2(cell.horizon[0], cell.horizon[1]);
     const meshes: Mesh[] = [], shaped: Shaped[] = [];
     cell.instances.forEach((data, v) => {
@@ -213,6 +330,7 @@ export class PlantView {
         m.castShadow = part.cast;
         m.visible = false;
         m.userData.band = band;
+        if (tint) m.userData.tint = tint;
         // The last level of what it draws, for cover: past its band the tufts sink into the floor.
         m.userData.sink = sp.what === 'cover' && cell.key.level === sp.band.length - 1 ? 1 : 0;
         m.userData.horizon = horizon;
@@ -222,7 +340,7 @@ export class PlantView {
     });
     for (const m of meshes) await this.stage.prepare(m);
     for (const m of meshes) this.group.add(m);
-    return { cell, meshes, shaped, trimmed: -1, bytes: cellBytes(cell) * 2, lastDrawn: 0 };
+    return { cell, meshes, shaped, trimmed: -1, trimmedFrom: Infinity, bytes: cellBytes(cell) * 2, lastDrawn: 0 };
   }
 
   dispose(): void {

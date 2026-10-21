@@ -18,15 +18,16 @@ import { HUMAN, type Character } from '../physics/character';
 import { Figure, type MoveState } from './actors/figure';
 import { playerLook } from './actors/looks';
 import { addLights, key, shineOn, sky } from './lights';
-import { adapt, insideExposure, insideGlare, meterRays, underCrowns } from './exposure';
+import { adapt, glareOf, insideExposure, insideRayLuminance, landAlbedo, meterRays, underCrowns, type InsideMeterable } from './exposure';
 import { sharedPool } from '../workers/pool';
 import { BALL, CLOUDS_FAR, CLOUDS_NEAR, SUNLINE, air, allKinds, setAir, setEmission, setSunline, standInAttribute, view } from './materials';
 import { dayPhase, emissionMean, nearestLit, sunlineEmission, sunlineNorm, EMISSION_SAMPLES } from '../world/sunline';
 import { densityFalloff, seenMid } from '../world/air';
 import { TerrainView, describeLayout } from './terrain';
 import { PlantView } from './plants';
+import type { Level } from '../gen/scatter';
 import { slopeAt } from '../gen/scatter';
-import { setFloorEye } from './groundShaders';
+import { setFloorEye, setRockBeds, setSnow } from './groundShaders';
 import { UNDER_CROWNS, crownsClosed, makeEcology, type Ecology } from '../gen/ecology';
 import { FrameLoop, dragToLook, draw, fitCanvas, moveKeys } from './surface';
 import { freeMesh } from './geometry';
@@ -35,6 +36,7 @@ import { setCloudSpan, setCloudState } from './cloudShaders';
 import { LandmarkView } from './landmarks';
 import { StairView } from './liftStair';
 import { landmarkTopAt, landmarksOf } from '../gen/landmarks';
+import { snowFieldOf } from '../gen/snow';
 
 /** Running is this many times the walking speed. */
 const RUN = 8;
@@ -60,6 +62,8 @@ const CHASE_UP = 0.4;
 const CHASE_RISE = 3.5;
 const CHASE_STEP = 0.003;
 const CHASE_GLIDE = 10;
+/** The eyes' meter inside: a grid of rays over the frame, a few of them metered each frame (`glare`). */
+const GLARE_COLUMNS = 5, GLARE_ROWS = 4, GLARE_PER_FRAME = 4;
 /** The layer the player's body is drawn on: the shadow map always sees it, the camera only from behind. */
 const BODY_LAYER = 1;
 
@@ -74,6 +78,8 @@ export class InteriorView {
   private terrain: Terrain;
   /** The land's biomes (built with the terrain). */
   ecology: Ecology | null = null;
+  /** The land's albedo for the eyes' meter (`landAlbedo`: the snow where it lies). */
+  private albedoAt?: (p: Vec3) => number;
   private tiles: TerrainView | null = null;
   private plants: PlantView | null = null;
   private sunline: Mesh | null = null;
@@ -199,6 +205,7 @@ export class InteriorView {
       this.stage.hudLine(),
       `${this.tiles?.info() ?? 'terrain: none'} · ${describeLayout(this.terrain)} · ${this.pool.workers} workers`,
       this.plants?.info() ?? 'plants: none',
+      this.plants?.lodLine() ?? '',
       this.landmarks?.info() ?? 'landmarks: none',
       this.stair?.info() ?? 'lift stair: none',
       `θ ${(a.theta * 180 / Math.PI).toFixed(1)}°, s ${(a.s / 1000).toFixed(2)} of ${(this.habitat.profile.length / 1000).toFixed(2)} km, ground ${this.standOn(a.theta, a.s).toFixed(1)} m, ${mode}, eyes ×${this.exposure.toFixed(2)}`,
@@ -215,6 +222,9 @@ export class InteriorView {
 
   /** The cloud cover set in the debug menu in place of the schedule's, or null for the schedule. */
   cloudCover: number | null = null;
+  /** Draw only one level of every plant (debug: compare the levels' size and colour), or null for all of them. */
+  get plantLevel(): Level | null { return this.plants?.only ?? null; }
+  set plantLevel(l: Level | null) { if (this.plants) this.plants.only = l; }
 
   /** Take off (if on foot) and rise to `height` metres over the ground below (debug menu). */
   flyUp(height: number): void {
@@ -363,6 +373,8 @@ export class InteriorView {
     setSunline(h.length, this.norm, nearestLit(h));
     this.shine();
     setAir(densityFalloff(h), h.radius, seenMid(h), h.params.air.hazeDistance);
+    setRockBeds(h.params.relief.terraceStep, h.radius);
+    setSnow(snowFieldOf(h));
     // The sunline: from the wild wall to the port wall along the axis.
     const tube = new CylinderGeometry(h.params.sunlineRadius, h.params.sunlineRadius, h.length, 24, 1, true);
     tube.deleteAttribute('uv'); // the kind's attributes are position and normal (docs/SHADERS.md)
@@ -377,6 +389,7 @@ export class InteriorView {
     this.tiles = new TerrainView(this.terrain, this.stage, this.pool);
     this.scene.add(this.tiles.group);
     this.ecology = makeEcology(this.terrain);
+    this.albedoAt = landAlbedo(this.ecology);
     this.plants = new PlantView(this.ecology, this.stage, this.pool);
     this.scene.add(this.plants.group);
     this.landmarks = new LandmarkView(h, landmarksOf(this.terrain), this.stage, this.pool);
@@ -435,7 +448,7 @@ export class InteriorView {
     this.pose(v.eye);
     const pixelsPerRadian = (this.canvas.clientHeight || 720) / (this.camera.fov * Math.PI / 180);
     this.tiles?.follow(v.eye, pixelsPerRadian);
-    this.plants?.follow(v.eye);
+    this.plants?.follow(v.eye, this.frameDt);
     this.landmarks?.follow(v.eye, pixelsPerRadian);
     this.stair?.follow(v.eye);
   }
@@ -491,25 +504,27 @@ export class InteriorView {
     sky.intensity *= this.exposure;
   }
 
-  /** How far the eyes stop down in the air's glow (`insideGlare`), and the frame time since it was last metered. */
-  private glared = 1;
-  private sinceGlare = Infinity;
+  /** The meter's rays' luminances (`insideRayLuminance`), a few refreshed each frame, and the next ray to refresh. */
+  private readonly seen = new Float32Array(GLARE_COLUMNS * GLARE_ROWS);
+  private nextSeen = 0;
 
   /**
-   * The eyes' stop-down in the air's glow near the axis (`insideGlare`), metered over the frame on a coarse grid ten
-   * times a second (a third of a millisecond each; the eyes take most of a second to follow anyway).
+   * The eyes' stop-down in the air's glow and the light near the axis (`glareOf`), metered over the frame on a coarse
+   * grid against the land itself: a few rays each frame (each walks the terrain, some tens of microseconds), the whole
+   * grid several times a second, which the eyes, taking most of a second to follow, do not outpace.
    */
   private glare(eye: Vec3): number {
-    this.sinceGlare += this.frameDt;
-    if (this.sinceGlare < 0.1) return this.glared;
-    this.sinceGlare = 0;
     this.camera.updateMatrixWorld();
     const m = this.camera.matrixWorld.elements, c = air.haze.value as Color;
-    const rays = meterRays([-m[8], -m[9], -m[10]], [m[0], m[1], m[2]], [m[4], m[5], m[6]], Math.tan((this.camera.fov * Math.PI) / 360), this.camera.aspect, 7, 5);
-    return this.glared = insideGlare({
+    const rays = meterRays([-m[8], -m[9], -m[10]], [m[0], m[1], m[2]], [m[4], m[5], m[6]], Math.tan((this.camera.fov * Math.PI) / 360), this.camera.aspect, GLARE_COLUMNS, GLARE_ROWS);
+    const meter: InsideMeterable = {
       habitat: this.habitat, emission: this.emission, norm: this.norm, extinction: air.extinction.value as number, sky: air.skyLight.value as number,
-      hazeLuminance: 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b,
-    }, eye, rays);
+      hazeLuminance: 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b, heightAt: this.terrain.heightAt, albedoAt: this.albedoAt,
+    };
+    for (let k = 0; k < GLARE_PER_FRAME; k++, this.nextSeen = (this.nextSeen + 1) % rays.length) {
+      this.seen[this.nextSeen] = insideRayLuminance(meter, eye, rays[this.nextSeen]);
+    }
+    return glareOf(this.seen);
   }
 
   /** Light the player's body where it stands and pose it for the frame (relative to the camera's eye). */

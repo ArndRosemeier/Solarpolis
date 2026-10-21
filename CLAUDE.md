@@ -17,7 +17,8 @@ Solarpolis is a detailed 3D simulation set about 1000 years from now, starting i
 13. **The mouse pointer is always visible and free** (Arnd, 2026-10-21): no pointer lock. The left button clicks things in the world; holding the right button looks around (one-finger drag on touch screens).
 14. **Developer tools go in the one debug menu** (Shift+Ctrl+F12, `debug.add` / `debug.addInfo`, made in `src/main.ts`). No thread adds its own debug key or overlay.
 15. **Merge your own PRs.** Arnd does not do Git: the thread that opens a PR squash-merges it as soon as CI is green and review findings are handled. When main has moved, bring it in first and let CI run again.
-16. **Porting from Dunfinity, SimWorld or Scale:** take the code with its tests, adapt the names, and note the source file in the header comment.
+16. **Never take a LOD level away before its replacement is built and drawn** (Arnd, 2026-10-21: "never remove a LOD before the real thing is there"). Every swap between levels (plants, grass, stones, ground tiles, hull detail, landmarks, ships, anything new) keeps the old level on screen until the new one is uploaded, then hands over, and the levels match in size, colour and silhouette. Use the seams in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) ("How does one level of detail hand over…"), never a swap by distance alone. The debug menu's `plant LOD` line counts holes; it must stay 0 (shots view `walk-meadow`).
+17. **Porting from Dunfinity, SimWorld or Scale:** take the code with its tests, adapt the names, and note the source file in the header comment.
 
 Shared packages come from the AssetGenerator submodule (`vendor/assetgenerator/packages`: `@futuremagic/core`). Clone with `--recurse-submodules`, or run `git submodule update --init`. Humanoid robot bodies and people will come from Arnd's Actors package.
 
