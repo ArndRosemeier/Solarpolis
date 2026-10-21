@@ -76,7 +76,7 @@ export class NecklaceView {
 
   /** Put the home habitat's meshes and the glints into the scene. */
   async start(): Promise<void> {
-    await Promise.all([this.stage.add(this.glints), this.build(this.drawn[0])]);
+    await Promise.all([this.stage.add(this.glints), this.buildMeshes(this.drawn[0])]);
   }
 
   /** Remove everything from the scene. */
@@ -90,7 +90,7 @@ export class NecklaceView {
     return this.drawn[0];
   }
 
-  private async build(d: Drawn): Promise<void> {
+  private async buildMeshes(d: Drawn): Promise<void> {
     if (d.meshes || d.building) return;
     d.building = true;
     const g = hullGeometry(d.habitat);
@@ -138,7 +138,7 @@ export class NecklaceView {
     }
     for (let k = 1; k < this.drawn.length; k++) {
       const d = this.drawn[k], dist = v3len(d.center), px = (d.span / dist) * pixelsPerRadian;
-      if (px > MESH_ABOVE) void this.build(d);
+      if (px > MESH_ABOVE) void this.buildMeshes(d);
       else if (px < GLINT_BELOW) this.drop(d);
       const o = (k - 1) * 12;
       const dir = v3scale(d.center, 1 / dist);
