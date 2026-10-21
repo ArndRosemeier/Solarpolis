@@ -2,6 +2,27 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.045 — Hung renders end sooner
+
+- Behind the scenes: when a view on the render PC never finishes building, the other views of the same page in that request are skipped instead of each waiting two minutes, and the report says what the page still showed.
+
+## v0.044 — Bushes: fewer, lower, and seen from afar
+
+- Bushes are lower (most below head height) and there are about half as many, in the woods and in the meadows.
+- Seen from afar a bush keeps its size: its distant version used to be much smaller than the bush, so bushes seemed to swell up as you came near. Trees' distant versions now match their crowns the same way.
+- Bushes stay in view until they are a pixel or two tall (a kilometre or so for a two-metre bush) instead of vanishing past a few hundred metres.
+
+## v0.043 — Arrival after Start
+
+- Start on the title no longer cuts straight inside. Your ship carries on: first a view from above its back, looking down its corridor past the nose at the spindle growing in front of the turning endcap, then close on the berth as the nose meets the docking collar and latches with a soft jolt. Then you go inside. Any key skips it (and on the title card, any key still goes straight in).
+- Ships at the spindle now fly nose first down their corridor, stop a couple of ship lengths out from their berth, pitch over and come straight in along the arm to the collar. Before, they slid onto the collar sideways.
+- Your ship is the same one the title shows braking, sized for this habitat's berths, and it gets a berth that no other ship is due at.
+
+## v0.042 — Half the memory inside
+
+- The ground's tiles and the hull's detail tiles no longer keep a second copy in the browser's memory once the graphics card has them. Inside, near the endcap, the page's memory drops from about 585 MB to about 200 MB.
+- For developers: `npm run shots` can take a heap snapshot and say who holds the memory (views `memory-inside` and `memory-title`).
+
 ## v0.041 — No more flicker where the sunline meets the endcaps
 
 - The ground near the endcaps' tips no longer flickers. Near the axis the terrain was cut into thousands of thin slivers, far more than the tile cache holds, so tiles kept being dropped and built again. Tiles now stay about square there, and a view at the tip needs about as many as one on the floor.

@@ -32,6 +32,14 @@ for (const form of PLANT_FORMS) {
     assert.ok(full.leaves.uvs.every((u) => u >= 0 && u <= 1), `${form}: leaf uv`);
     assert.ok(full.leaves.tint.every((v) => v >= 0 && v <= 1) && full.leaves.occ.every((v) => v >= 0 && v <= 1), `${form}: tint, occlusion`);
     assert.ok(full.canopy.every((c) => c > 0 && c < 1) && full.crown > 0, `${form}: canopy colour, crown`);
+    // The far hull is about as big as the plant it stands for, so nothing swells as it comes close (Arnd: shrubs did).
+    const size = (p: Float32Array) => {
+      let w = 0, h = 0;
+      for (let i = 0; i < p.length; i += 3) { w = Math.max(w, Math.hypot(p[i], p[i + 2])); h = Math.max(h, p[i + 1]); }
+      return { w, h };
+    };
+    const hull = size(full.hull.positions), leaves = size(full.leaves.positions);
+    assert.ok(hull.h > 0.8 * leaves.h && hull.h < 1.1 * leaves.h && hull.w > 0.65 * leaves.w && hull.w < 1.1 * leaves.w, `${form} hull ${hull.w.toFixed(2)}×${hull.h.toFixed(2)}, leaves ${leaves.w.toFixed(2)}×${leaves.h.toFixed(2)}`);
   });
 }
 

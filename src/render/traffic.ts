@@ -8,7 +8,7 @@
 import { Mesh } from 'three/webgpu';
 import type { Stage } from '@futuremagic/stage';
 import { v3add, v3dot, v3len, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
-import { apply, mul, shipShape, trafficAt, transpose, type Mat3, type PlacedHabitat, type ShipNow, type ShipShape, type Space } from '../space';
+import { apply, mul, shipShape, trafficAt, transpose, type Mat3, type PlacedHabitat, type ShipNow, type ShipShape, type Space, type Visit } from '../space';
 import { freeMesh, pointsChanged, pointsGeometry, setPoint } from './geometry';
 import { STARS } from './materials';
 import { SHIP_ALBEDO, ShipMeshes, shipAxes, shipFlux } from './ship';
@@ -47,10 +47,10 @@ export class TrafficView {
 
   /**
    * At clock time t, with the spindle's axes in the scene and the body's origin relative to the eye, the Sun's
-   * direction (scene) and unhidden share: each ship as meshes or a point.
+   * direction (scene) and unhidden share, and the passenger's ship if it is coming: each ship as meshes or a point.
    */
-  follow(t: number, spindleAxes: Mat3, origin: Vec3, sunDir: Vec3, sunlight: number, pixelsPerRadian: number): void {
-    const ships = trafficAt(this.space, this.placed, t), seen = new Set<string>();
+  follow(t: number, spindleAxes: Mat3, origin: Vec3, sunDir: Vec3, sunlight: number, pixelsPerRadian: number, guest: Visit | null = null): void {
+    const ships = trafficAt(this.space, this.placed, t, guest), seen = new Set<string>();
     this.pointCol.fill(0);
     this.now = [];
     ships.forEach((ship, k) => {
@@ -106,7 +106,7 @@ export class TrafficView {
 
   info(): string {
     const by = (phase: string): number => this.now.filter((s) => s.ship.phase === phase).length;
-    return `${this.placed.id} ships: ${by('berthed')} berthed, ${by('final') + by('coast')} on thrusters, ${by('torch')} braking or leaving on the torch`;
+    return `${this.placed.id} ships: ${by('berthed')} berthed, ${by('final') + by('turn') + by('coast')} on thrusters, ${by('torch')} braking or leaving on the torch`;
   }
 
   dispose(): void {
