@@ -93,10 +93,16 @@ export class Walker {
     this.at.theta = wrapAngle(this.at.theta - dSide / r);
   }
 
-  /** Stand at (θ, s) facing the way `look` points along the ground (after flying: landing under the flyer). */
-  land(theta: number, s: number, look: Vec3): void {
+  /** Stand at (θ, s), off any body until one carries the walker again, facing `heading` if given. */
+  place(theta: number, s: number, heading = this.heading): void {
     this.at = { theta: wrapAngle(theta), s: Math.min(this.profile.length, Math.max(0, s)), h: EYE_HEIGHT };
     this.feet = null;
+    this.heading = heading;
+  }
+
+  /** Stand at (θ, s) facing the way `look` points along the ground (after flying: landing under the flyer). */
+  land(theta: number, s: number, look: Vec3): void {
+    this.place(theta, s);
     const { along, side } = this.frame();
     const a = look[0] * along[0] + look[1] * along[1] + look[2] * along[2];
     const b = look[0] * side[0] + look[1] * side[1] + look[2] * side[2];

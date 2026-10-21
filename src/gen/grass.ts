@@ -50,8 +50,8 @@ interface FormCfg {
 }
 
 const FORMS: Record<CoverForm, FormCfg> = {
-  grass: { blades: 16, lite: 6, lean: [0.08, 0.6], droop: [0.1, 0.35], length: [0.55, 1], width: 0.04, spread: 0.32, pale: 0.25, dead: 0.08, deadColor: [0.36, 0.3, 0.15], green: 0 },
-  'dry-grass': { blades: 20, lite: 7, lean: [0.15, 0.75], droop: [0.15, 0.45], length: [0.5, 1], width: 0.028, spread: 0.36, pale: 0.35, dead: 0.25, deadColor: [0.42, 0.38, 0.27], green: 0.12 },
+  grass: { blades: 18, lite: 6, lean: [0.05, 0.42], droop: [0.05, 0.25], length: [0.55, 1], width: 0.04, spread: 0.32, pale: 0.25, dead: 0.08, deadColor: [0.36, 0.3, 0.15], green: 0 },
+  'dry-grass': { blades: 22, lite: 7, lean: [0.1, 0.55], droop: [0.1, 0.35], length: [0.5, 1], width: 0.028, spread: 0.36, pale: 0.35, dead: 0.25, deadColor: [0.42, 0.38, 0.27], green: 0.12 },
 };
 
 /** Where along a blade its rows of points sit, full and light; the tip is one point. */
