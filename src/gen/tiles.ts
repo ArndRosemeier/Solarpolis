@@ -179,6 +179,8 @@ export interface TileMesh {
   morph: Float32Array;
   /** Per point, the terrain's horizon angles toward the port and the wild end (gen/horizon.ts): its sunline shadow. */
   horizon: Float32Array;
+  /** Per point, the woods' canopy over it seen from afar (`Ecology.colorAt`): linear RGB and height (m). */
+  canopy: Float32Array;
   index: Uint32Array;
   /** How far the grid strays from the true ground between its points (m): its error on screen decides splitting. */
   error: number;
@@ -188,7 +190,7 @@ export interface TileMesh {
 
 /** Bytes a built tile holds, for the memory watchdog. */
 export function tileBytes(t: TileMesh): number {
-  let b = t.positions.byteLength + t.normals.byteLength + t.colors.byteLength + t.morph.byteLength + t.horizon.byteLength + t.index.byteLength;
+  let b = t.positions.byteLength + t.normals.byteLength + t.colors.byteLength + t.morph.byteLength + t.horizon.byteLength + t.canopy.byteLength + t.index.byteLength;
   if (t.water) b += t.water.positions.byteLength + t.water.normals.byteLength + t.water.index.byteLength;
   return b;
 }
@@ -220,6 +222,7 @@ export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): Til
   const skirt = 4 * N;
   const count = row * row + skirt + 4;
   const positions = new Float32Array(count * 3), normals = new Float32Array(count * 3), colors = new Float32Array(count * 3);
+  const canopy = new Float32Array(count * 4);
   for (let j = 0; j <= N; j++) {
     const s = Math.min(profile.length, Math.max(0, b.s0 + j * dS));
     const pp = profile.at(s);
@@ -241,7 +244,7 @@ export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): Til
       // Slope: how far the ground tilts from the profile's own direction (0 flat, 1 a wall); the profile's slope too.
       const tilt = 1 - (nx * air[0] + ny * air[1] + nz * air[2]);
       const slope = Math.min(1, Math.max(Math.abs(pp.nz), tilt * 3));
-      ecology.colorAt(theta, s, heights[(j + 1) * W + (i + 1)], slope, colors, v);
+      ecology.colorAt(theta, s, heights[(j + 1) * W + (i + 1)], slope, colors, v, canopy);
     }
   }
 
@@ -292,6 +295,7 @@ export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): Til
       colors[v + c] = colors[src + c];
       morph[v + c] = morph[src + c];
     }
+    for (let c = 0; c < 4; c++) canopy[(row * row + n) * 4 + c] = canopy[e * 4 + c];
     horizon[(row * row + n) * 2] = horizon[e * 2];
     horizon[(row * row + n) * 2 + 1] = horizon[e * 2 + 1];
   });
@@ -328,7 +332,7 @@ export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): Til
   // A tile that has children never claims to be finer than its cells can show at all.
   error = Math.max(error, cellSize(layout, k) * 0.02);
 
-  return { key: k, origin, positions, normals, colors, morph, horizon, index: Uint32Array.from(index), error, water: buildWater(terrain, b, origin) };
+  return { key: k, origin, positions, normals, colors, morph, horizon, canopy, index: Uint32Array.from(index), error, water: buildWater(terrain, b, origin) };
 }
 
 /** The lake's surface over a tile's rectangle: a grid at the water's level, fine enough to follow the curve. */
