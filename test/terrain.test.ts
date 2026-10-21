@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { MATRIX, derive, toWorld } from '../src/blueprint';
 import { CIRQUE, FLOOR_VALLEYS, GATE_TERRACES, HORN, makeTerrain } from '../src/gen/terrain';
 import { makeEcology } from '../src/gen/ecology';
+import { COURT, courtOf, planOf } from '../src/gen/plan';
 import { slopeAt } from '../src/gen/scatter';
 import { makeLayout, roots, bounds, buildTile, select, children, parent, keyId, cellSize, spheres, LodBudget, splitsAround, splitAround, packRelief, unpackRelief, CELL_PIXELS, RISE_RANGE, TILE_CELLS, type TileKey, type TileFit, type TileLayout, type TileMesh } from '../src/gen/tiles';
 
@@ -54,6 +55,30 @@ for (const { name, params } of MATRIX) {
         assert.equal(t.standAt(theta, lake.s), lake.level, 'one stands (swims) on the water');
       }
     } else assert.equal(t.lake, null);
+  });
+
+  test(`terrain (${name}): each entrance digs its court: a level floor under the ground, a steep wall up to the rim`, () => {
+    const R = h.radius, plan = planOf(h);
+    const courts = plan.sites.filter((k) => k.kind === 'entrance').slice(0, 12).map((k) => courtOf(h, k));
+    if (!params.landmarks) { assert.ok(courts.every((c) => c === null)); return; }
+    assert.ok(courts.length > 0);
+    for (const c of courts) {
+      if (!c) continue;
+      const floor = t.heightAt(c.theta, c.s), at = (d: number, a: number) => t.heightAt(c.theta + (d * Math.cos(a)) / R, c.s + d * Math.sin(a));
+      let rim = 0;
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * 2 * Math.PI;
+        assert.ok(Math.abs(at(c.radius * COURT.floor * 0.9, a) - floor) < 1e-6, 'the floor is level');
+        // At the rim the court meets the ground: no step.
+        assert.ok(Math.abs(at(c.radius * 0.999, a) - at(c.radius * 1.001, a)) < c.depth * 0.05 + 0.01, 'no step at the rim');
+        rim += at(c.radius * 1.001, a) / 8;
+        assert.deepEqual(t.courtAt(c.theta + (c.radius * 0.5 * Math.cos(a)) / R, c.s + c.radius * 0.5 * Math.sin(a))?.court, { ...c, floor });
+      }
+      assert.ok(rim - floor > c.depth * 0.6, `the floor ${(rim - floor).toFixed(1)} m under the rim`);
+      // Its floor lies at least its depth under every point of the rim, and the terrain says where.
+      for (let i = 0; i < 16; i++) assert.ok(at(c.radius * 1.001, (i / 16) * 2 * Math.PI) - floor > c.depth * 0.95, 'no daylight downhill');
+      assert.ok(Math.abs(t.courts.find((k) => k.theta === c.theta && k.s === c.s)!.floor - floor) < 1e-9);
+    }
   });
 
   test(`terrain (${name}): the floor rises from each valley's middle to the ridges between valleys`, () => {
