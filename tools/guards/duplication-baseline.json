@@ -288,7 +288,51 @@
     "reason": "The ship traffic view (render/traffic.ts) has the views' own interface (follow each frame, dispose), like the streamed and necklace views, with a body of its own."
   },
   {
-    "key": "idiom: [.add .mul] in solarpolis/render/groundShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
-    "reason": "TSL arithmetic: three's shading language writes every sum and product as node.add(…).mul(…), so the shader modules share it the way TypeScript shares + and *. It surfaced when the plan's files raised the file count (the finder weighs names by how few files use them)."
+    "key": "idiom: [.all Promise] in solarpolis/render/actors/animator.ts + solarpolis/render/necklace.ts + solarpolis/render/terrain.ts",
+    "reason": "Plain JavaScript: each waits for its own different loads at once (animation clips, stage meshes, streamed tiles). Nothing to fold; it surfaced when the plan's files raised the file count (the finder weighs names by how few files use them)."
+  },
+  {
+    "key": "same name: solarpolis/gen/shapes.ts#band + solarpolis/render/shaderMath.ts#band",
+    "reason": "Two meanings of band: Shape.band adds a ring of mesh between two radii; shaderMath's band is a smooth window function in a shader. Nothing in common but the word."
+  },
+  {
+    "key": "same name: solarpolis/render/hullDetail.ts#dispose + solarpolis/render/landmarks.ts#dispose",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
+  },
+  {
+    "key": "same name: solarpolis/render/hullDetail.ts#follow + solarpolis/render/landmarks.ts#follow",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
+  },
+  {
+    "key": "same name: solarpolis/render/landmarks.ts#bytes + solarpolis/render/outside.ts#bytes",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
+  },
+  {
+    "key": "same name: solarpolis/render/landmarks.ts#bytes + solarpolis/render/view.ts#bytes",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
+  },
+  {
+    "key": "same name: solarpolis/render/landmarks.ts#follow + solarpolis/render/necklace.ts#follow",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
+  },
+  {
+    "key": "same name: solarpolis/render/landmarks.ts#follow + solarpolis/render/plants.ts#follow",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
+  },
+  {
+    "key": "same name: solarpolis/render/landmarks.ts#follow + solarpolis/render/terrain.ts#follow",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
+  },
+  {
+    "key": "same name: solarpolis/render/landmarks.ts#follow + solarpolis/render/traffic.ts#follow",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
+  },
+  {
+    "key": "same name: solarpolis/render/landmarks.ts#shed + solarpolis/render/streamed.ts#shed",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
+  },
+  {
+    "key": "idiom: [.mul .sub] in solarpolis/render/cloudShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
+    "reason": "TSL has no operators: every shader file does its arithmetic with .mul and .sub. Shared shader steps already live in one place each (sunlit, throughAir, the hull and sky pieces); this pair is the language, not a copied procedure."
   }
 ]

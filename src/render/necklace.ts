@@ -16,7 +16,7 @@ import { apply, mul, rotZ, sunlightFrom, transpose, type Mat3, type PlacedHabita
 import { HARDWARE, RADIATOR, SKIN, STARS } from './materials';
 import { hideUnder, skinUniforms, type SkinUniforms } from './hullShaders';
 import { hullGeometry } from './hull';
-import { arraysGeometry, dropUploaded, freeMesh, pointsChanged, pointsGeometry, setPoint, setPose } from './geometry';
+import { arraysGeometry, dropUploaded, freeMesh, pointsChanged, pointsGeometry, posedMesh, setPoint, setPose } from './geometry';
 import { HullDetailView, type Frames } from './hullDetail';
 import { sharedPool } from '../workers/pool';
 import { DISH, detailParts, partDistance, wholeTile, type DetailPart, type PartFrame } from '../gen/hullParts';
@@ -120,9 +120,7 @@ export class NecklaceView {
     d.building = true;
     const g = hullGeometry(d.habitat);
     const mesh = (geo: BufferGeometry, kind: typeof SKIN, name: string): Mesh => {
-      const m = new Mesh(geo, kind.material);
-      m.name = `${d.placed.id} ${name}`;
-      m.matrixAutoUpdate = false;
+      const m = posedMesh(geo, kind.material, `${d.placed.id} ${name}`);
       m.frustumCulled = false;
       m.userData.skin = d.uniforms;
       return m;

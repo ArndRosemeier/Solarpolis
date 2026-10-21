@@ -32,6 +32,8 @@ import { FrameLoop, dragToLook, draw, fitCanvas, moveKeys } from './surface';
 import { freeMesh } from './geometry';
 import { cloudSpan, cloudsAt } from '../world/clouds';
 import { setCloudSpan, setCloudState } from './cloudShaders';
+import { LandmarkView } from './landmarks';
+import { landmarkTopAt, landmarksOf } from '../gen/landmarks';
 
 /** Running is this many times the walking speed. */
 const RUN = 8;
@@ -76,6 +78,7 @@ export class InteriorView {
   private sunline: Mesh | null = null;
   /** The cloud layer's two crossings (far drawn first, near over it), on one cylinder; null without a layer. */
   private clouds: Group | null = null;
+  private landmarks: LandmarkView | null = null;
   /** In the air, or null on foot. */
   private flyer: Flyer | null = null;
   private readonly loop = new FrameLoop((dt) => this.frame(dt), (e) => {
@@ -108,11 +111,20 @@ export class InteriorView {
   /** The last dropped ball: where it was let go (θ) and from how high, and how far it landed behind, once it has. */
   private drop: { id: number; theta: number; height: number; landed: number | null } | null = null;
 
+  /**
+   * Where something standing at (θ, s) rests: the ground or the water, or a landmark's deck or bridge over them (its
+   * height above the profile). The walker, the flyer and the camera keep to it.
+   */
+  private readonly standOn = (theta: number, s: number): number => {
+    const g = this.terrain.standAt(theta, s), top = landmarkTopAt(this.terrain, theta, s);
+    return top !== null && top > g ? top : g;
+  };
+
   private constructor(private habitat: Habitat) {
     // Start in the morning: a quarter of the way through the daylight hours.
     this.time = habitat.params.day.length * habitat.params.day.daylight * 0.25;
     this.terrain = makeTerrain(habitat);
-    this.walker = new Walker(habitat.profile, undefined, this.terrain.standAt);
+    this.walker = new Walker(habitat.profile, undefined, this.standOn);
     this.canvas.className = 'view-canvas';
     // Before the warm-up: the lights are part of every lit shader's key.
     addLights(this.scene);
@@ -164,13 +176,14 @@ export class InteriorView {
 
   /** Bytes of geometry this view holds (memory watchdog). */
   bytes(): number {
-    return (this.tiles?.bytes() ?? 0) + (this.plants?.bytes() ?? 0);
+    return (this.tiles?.bytes() ?? 0) + (this.plants?.bytes() ?? 0) + (this.landmarks?.bytes() ?? 0);
   }
 
   /** Give memory back (memory watchdog): drop every cached tile and plant cell not on screen. */
   shed(): void {
     this.tiles?.shed();
     this.plants?.shed();
+    this.landmarks?.shed();
   }
 
   /** Lines for the debug menu. */
@@ -183,7 +196,8 @@ export class InteriorView {
       this.stage.hudLine(),
       `${this.tiles?.info() ?? 'terrain: none'} · ${describeLayout(this.terrain)} · ${this.pool.workers} workers`,
       this.plants?.info() ?? 'plants: none',
-      `θ ${(a.theta * 180 / Math.PI).toFixed(1)}°, s ${(a.s / 1000).toFixed(2)} of ${(this.habitat.profile.length / 1000).toFixed(2)} km, ground ${this.terrain.standAt(a.theta, a.s).toFixed(1)} m, ${mode}, eyes ×${this.exposure.toFixed(2)}`,
+      this.landmarks?.info() ?? 'landmarks: none',
+      `θ ${(a.theta * 180 / Math.PI).toFixed(1)}°, s ${(a.s / 1000).toFixed(2)} of ${(this.habitat.profile.length / 1000).toFixed(2)} km, ground ${this.standOn(a.theta, a.s).toFixed(1)} m, ${mode}, eyes ×${this.exposure.toFixed(2)}`,
     ].join('\n');
   }
 
@@ -202,7 +216,7 @@ export class InteriorView {
   flyUp(height: number): void {
     if (!this.flyer) this.toggleFlying();
     const f = this.flyer!, at = fromWorld(this.habitat.profile, ...f.eye);
-    f.eye = toWorld(this.habitat.profile, { theta: at.theta, s: at.s, h: this.terrain.standAt(at.theta, at.s) + height });
+    f.eye = toWorld(this.habitat.profile, { theta: at.theta, s: at.s, h: this.standOn(at.theta, at.s) + height });
   }
 
   /** The hour, for the debug menu: day number, clock time on a 24-hour face, and how far the sun has travelled. */
@@ -226,7 +240,7 @@ export class InteriorView {
     const v = this.current();
     const ahead = fromWorld(this.habitat.profile, v.eye[0] + v.look[0] * 4, v.eye[1] + v.look[1] * 4, v.eye[2] + v.look[2] * 4);
     const radius = 0.25;
-    const ground = this.terrain.standAt(ahead.theta, ahead.s);
+    const ground = this.standOn(ahead.theta, ahead.s);
     const id = physics.addBall(toWorld(this.habitat.profile, { theta: ahead.theta, s: ahead.s, h: ground + height + radius }), [0, 0, 0], radius);
     const mesh = new Mesh(BALL_GEOMETRY, BALL.material);
     mesh.name = `ball ${id}`;
@@ -278,7 +292,7 @@ export class InteriorView {
     const p = this.physics;
     if (!p || this.flyer || this.character) return;
     const { theta, s } = this.walker.at;
-    const feet = toWorld(this.habitat.profile, { theta, s, h: this.terrain.standAt(theta, s) + 0.05 });
+    const feet = toWorld(this.habitat.profile, { theta, s, h: this.standOn(theta, s) + 0.05 });
     if (p.offPatch(feet, PATCH_EDGE)) return;
     this.character = p.addCharacter(feet, this.terrain.waterDepth);
   }
@@ -329,13 +343,14 @@ export class InteriorView {
     this.physics?.dispose();
     this.physics = null;
     this.physicsLoading = null;
-    this.walker.setProfile(h.profile, this.terrain.standAt);
+    this.walker.setProfile(h.profile, this.standOn);
     await this.build();
   }
 
   private async build(): Promise<void> {
     if (this.tiles) { this.scene.remove(this.tiles.group); this.tiles.dispose(); }
     if (this.plants) { this.scene.remove(this.plants.group); this.plants.dispose(); }
+    if (this.landmarks) { this.scene.remove(this.landmarks.group); this.landmarks.dispose(); }
     if (this.sunline) { this.stage.remove(this.sunline); freeMesh(this.sunline); }
     if (this.clouds) { this.stage.remove(this.clouds); [...this.clouds.children].forEach((m, i) => freeMesh(m as Mesh, i === 0 ? 'all' : 'none')); }
     const h = this.habitat;
@@ -359,6 +374,8 @@ export class InteriorView {
     this.ecology = makeEcology(this.terrain);
     this.plants = new PlantView(this.ecology, this.stage, this.pool);
     this.scene.add(this.plants.group);
+    this.landmarks = new LandmarkView(h, landmarksOf(this.terrain), this.stage, this.pool);
+    this.scene.add(this.landmarks.group);
     this.place();
     // While loading, nothing draws, but the compile cap still counts frames (one new shader per frame): keep its
     // frames ticking, or a second build here (a shadow pass's own shader) would wait for a frame that never comes.
@@ -412,6 +429,7 @@ export class InteriorView {
     const pixelsPerRadian = (this.canvas.clientHeight || 720) / (this.camera.fov * Math.PI / 180);
     this.tiles?.follow(v.eye, pixelsPerRadian);
     this.plants?.follow(v.eye);
+    this.landmarks?.follow(v.eye, pixelsPerRadian);
   }
 
   private current(): View {
@@ -421,7 +439,7 @@ export class InteriorView {
     // From behind and a little above the head, looking the same way; never under the ground.
     const d = this.chase;
     let eye = v3madd(v3madd(v.eye, v.look, -d), v.up, CHASE_UP * Math.min(1, d / CHASE_RISE));
-    const at = fromWorld(this.habitat.profile, ...eye), floor = this.terrain.standAt(at.theta, at.s) + 0.3;
+    const at = fromWorld(this.habitat.profile, ...eye), floor = this.standOn(at.theta, at.s) + 0.3;
     if (at.h < floor) eye = toWorld(this.habitat.profile, { ...at, h: floor });
     return { eye, look: v.look, up: v.up };
   }
@@ -505,7 +523,7 @@ export class InteriorView {
     this.physics?.removeCharacter();
     this.character = null;
     const r = Math.hypot(eye[0], eye[1]), up: Vec3 = r > 0 ? [-eye[0] / r, -eye[1] / r, 0] : [1, 0, 0];
-    this.flyer = new Flyer(this.habitat.profile, { eye, look, up }, this.terrain.standAt);
+    this.flyer = new Flyer(this.habitat.profile, { eye, look, up }, this.standOn);
   }
 
   /** Take off from where the walker stands, or land under the flyer. */
@@ -518,7 +536,7 @@ export class InteriorView {
     } else {
       this.physics?.removeCharacter();
       this.character = null;
-      this.flyer = new Flyer(this.habitat.profile, this.walker.view(), this.terrain.standAt);
+      this.flyer = new Flyer(this.habitat.profile, this.walker.view(), this.standOn);
     }
   }
 

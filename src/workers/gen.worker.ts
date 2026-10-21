@@ -19,6 +19,9 @@ import { groundLayer } from '../gen/groundTex';
 import { makeSkin, type Skin } from '../gen/skin';
 import { buildPartTile, detailParts, type DetailPart, type PartTile } from '../gen/hullParts';
 import type { TileKey as DetailKey } from '../gen/detailTree';
+import { landmarksOf } from '../gen/landmarks';
+import { buildPavilion, type PavilionLevel } from '../gen/pavilion';
+import type { MappedArrays } from '../gen/shapes';
 
 export type GenRequest =
   | { kind: 'tile'; params: HabitatParams; key: TileKey }
@@ -30,7 +33,8 @@ export type GenRequest =
   | { kind: 'fallen'; params: HabitatParams; form: PlantForm; piece: 'log' | 'branch'; variant: number }
   | { kind: 'foliage'; params: HabitatParams }
   | { kind: 'floor'; params: HabitatParams; layer: number }
-  | { kind: 'hull'; params: HabitatParams; part: string; key: DetailKey };
+  | { kind: 'hull'; params: HabitatParams; part: string; key: DetailKey }
+  | { kind: 'landmark'; params: HabitatParams; index: number; level: PavilionLevel };
 export type GenAnswer =
   | { kind: 'tile'; tile: TileMesh }
   | { kind: 'patch'; patch: GroundPatch }
@@ -42,6 +46,7 @@ export type GenAnswer =
   | { kind: 'foliage'; bark: BarkAtlas; leaves: Uint8Array }
   | { kind: 'floor'; layer: number; albedo: Uint8Array; relief: Uint8Array; mean: [number, number, number] }
   | { kind: 'hull'; partTile: PartTile }
+  | { kind: 'landmark'; index: number; level: PavilionLevel; mesh: MappedArrays }
   | { error: string };
 
 /** Every typed array's buffer in an answer, to transfer rather than copy. */
@@ -112,6 +117,12 @@ self.onmessage = (e: MessageEvent<GenRequest>) => {
     const { terrain, ecology, layout, plants } = terrainFor(req.params);
     if (req.kind === 'patch') {
       post({ kind: 'patch', patch: buildPatch(terrain, req.theta, req.s, req.size, req.cell) });
+      return;
+    }
+    if (req.kind === 'landmark') {
+      const l = landmarksOf(terrain)[req.index];
+      if (!l) throw new Error(`no landmark ${req.index}`);
+      post({ kind: 'landmark', index: req.index, level: req.level, mesh: buildPavilion(l, req.level).mappedArrays() });
       return;
     }
     if (req.kind === 'plants') {
