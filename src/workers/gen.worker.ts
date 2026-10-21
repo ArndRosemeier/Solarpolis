@@ -24,9 +24,10 @@ import type { LandmarkLevel } from '../gen/pavilion';
 import type { MappedArrays } from '../gen/shapes';
 import { buildStairTile, type StairTile } from '../gen/liftStairMesh';
 import { buildCourtTile, type CourtTile } from '../gen/courts';
+import { buildCrossingTile, type CrossingTile } from '../gen/crossings';
 
 /** The built things that stream in tiles. */
-export type TiledPart = 'stair' | 'courts';
+export type TiledPart = 'stair' | 'courts' | 'crossings';
 
 export type GenRequest =
   | { kind: 'tile'; params: HabitatParams; key: TileKey }
@@ -40,7 +41,7 @@ export type GenRequest =
   | { kind: 'floor'; params: HabitatParams; layer: number }
   | { kind: 'hull'; params: HabitatParams; part: string; key: DetailKey }
   | { kind: 'landmark'; params: HabitatParams; index: number; level: LandmarkLevel }
-  /** A tile of a built thing that streams in tiles (render/tiled.ts): the Lift Stair, the entrance courts. */
+  /** A tile of a built thing that streams in tiles (render/tiled.ts): the Lift Stair, the entrance courts, the river crossings. */
   | { kind: 'tiled'; part: TiledPart; params: HabitatParams; key: DetailKey };
 export type GenAnswer =
   | { kind: 'tile'; tile: TileMesh }
@@ -54,7 +55,7 @@ export type GenAnswer =
   | { kind: 'floor'; layer: number; albedo: Uint8Array; relief: Uint8Array; mean: [number, number, number] }
   | { kind: 'hull'; partTile: PartTile }
   | { kind: 'landmark'; index: number; level: LandmarkLevel; mesh: MappedArrays }
-  | { kind: 'tiled'; part: TiledPart; built: StairTile | CourtTile }
+  | { kind: 'tiled'; part: TiledPart; built: StairTile | CourtTile | CrossingTile }
   | { error: string };
 
 /** Every typed array's buffer in an answer, to transfer rather than copy. */
@@ -135,7 +136,7 @@ self.onmessage = (e: MessageEvent<GenRequest>) => {
       return;
     }
     if (req.kind === 'tiled') {
-      post({ kind: 'tiled', part: req.part, built: req.part === 'stair' ? buildStairTile(terrain.habitat, req.key) : buildCourtTile(terrain, req.key) });
+      post({ kind: 'tiled', part: req.part, built: req.part === 'stair' ? buildStairTile(terrain.habitat, req.key) : req.part === 'courts' ? buildCourtTile(terrain, req.key) : buildCrossingTile(terrain, req.key) });
       return;
     }
     if (req.kind === 'plants') {

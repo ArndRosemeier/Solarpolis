@@ -23,7 +23,8 @@ import { levelRunOf, nearestOf, onRow, plantsOf, slopeAt, type Level } from './g
 import { frameOf, landmarksOf, type Hut, type Pavilion } from './gen/landmarks';
 import { plantingsOf, type Grove } from './gen/planted';
 import type { Terrain } from './gen/terrain';
-import { outOfPlace, placeAt } from './gen/shapes';
+import { floorAt, floorPoint, outOfPlace, placeAt } from './gen/shapes';
+import { crossingsOf, type Crossing, type CrossingKind } from './gen/crossings';
 import { landformOf } from './gen/plan';
 import { pavilionPlan } from './gen/pavilion';
 import { hutPlan } from './gen/summitHut';
@@ -417,6 +418,40 @@ const overCourt = (label: string, out: number, up: number): void => debug.add({
 });
 overCourt('Fly: over an entrance court', 1.5, 0.9);
 overCourt('Fly: entrance courts from afar', 12, 5);
+/** The river crossing (gen/crossings.ts) of a kind nearest the walker. */
+const nearestCrossing = (kind?: CrossingKind): { v: InteriorView; c: Crossing } | null => {
+  const at = view()?.walker.at;
+  const f = inView((t) => {
+    if (!at) return undefined;
+    const R = t.habitat.radius, far = (c: Crossing): number => Math.hypot(Math.atan2(Math.sin(c.frame.theta - at.theta), Math.cos(c.frame.theta - at.theta)) * R, c.frame.s - at.s);
+    return crossingsOf(t).filter((c) => !kind || c.kind === kind).sort((a, b) => far(a) - far(b))[0];
+  });
+  return f && { v: f.v, c: f.x };
+};
+debug.add({
+  label: 'Onto the nearest river crossing', group: 'Go', run: () => {
+    const f = nearestCrossing(), h = lab.habitat;
+    if (!f || !h) return;
+    // On it, before the middle, facing across (the walker's heading turns toward −θ, the frame's toward +θ).
+    const c = f.c, at = floorAt(h, c.frame, c.kind === 'stepping' ? c.stones[0].x : -c.half * 0.6, c.kind === 'stepping' ? c.stones[0].y : 0);
+    f.v.goTo(at.theta, at.s, -c.frame.heading);
+  },
+});
+/** Float beside the nearest crossing of a kind, a little downstream of its middle and above it, looking at it. */
+const byCrossing = (label: string, kind: CrossingKind): void => debug.add({
+  label, group: 'Go', run: () => {
+    const f = nearestCrossing(kind), h = lab.habitat;
+    if (!f || !h) return;
+    const c = f.c, size = Math.max(c.half, 4 * c.handrail);
+    const eye = floorPoint(h, c.frame, [-size * 0.7, c.width / 2 + size * 1.6, size * 0.45 + c.handrail]), at = floorPoint(h, c.frame, [0, 0, c.hump * 0.5]);
+    const d = Math.hypot(at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]);
+    f.v.floatAt(eye, [(at[0] - eye[0]) / d, (at[1] - eye[1]) / d, (at[2] - eye[2]) / d]);
+  },
+});
+byCrossing('Fly: by the nearest stone arch bridge', 'arch');
+byCrossing('Fly: by the nearest timber bridge', 'timber');
+byCrossing('Fly: by the nearest stepping stones', 'stepping');
+byCrossing('Fly: by the nearest log across a river', 'log');
 /** The founders' grove (gen/planted.ts). */
 const grove = (): { v: InteriorView; g: Grove } | null => {
   const f = inView((t) => plantingsOf(t).groves[0]);

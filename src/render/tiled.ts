@@ -1,6 +1,6 @@
 /**
  * Built things that stream in tiles over a quadtree (gen/detailTree.ts): the Lift Stair (gen/liftStairMesh.ts), the
- * entrance courts (gen/courts.ts). The root tiles are the far form, built once and always kept; around the eye the
+ * entrance courts (gen/courts.ts), the river crossings (gen/crossings.ts). The root tiles are the far form, built once and always kept; around the eye the
  * quadtree's finer tiles stream in through a `StreamCache`. A tile is drawn once it is built, and until all four of its
  * children are, it stands in for them itself (`coverOf`): no level is taken away before the one replacing it is there
  * (Arnd, 2026-10-21), so nothing ever shows a hole or vanishes.
@@ -11,6 +11,7 @@ import { toView, type Habitat, type Vec3 } from '../blueprint';
 import { coverOf, rootTiles, tileId, type Grid, type TileKey, type WantedTile } from '../gen/detailTree';
 import { stairGridOf, stairTilesFor } from '../gen/liftStairMesh';
 import { courtGridOf, courtTilesFor } from '../gen/courts';
+import { crossingGridOf, crossingTilesFor } from '../gen/crossings';
 import type { Terrain } from '../gen/terrain';
 import { mappedBytes, type MappedArrays, type Place } from '../gen/shapes';
 import type { Mat3 } from '../space';
@@ -143,3 +144,6 @@ export const stairSource = (h: Habitat): TiledSource => ({ name: 'lift stair', p
 
 /** The entrance courts' tiles. */
 export const courtSource = (t: Terrain): TiledSource => ({ name: 'entrance courts', part: 'courts', grid: courtGridOf(t), tilesFor: (eye) => courtTilesFor(t, eye) });
+
+/** The river crossings' tiles. */
+export const crossingSource = (t: Terrain): TiledSource => ({ name: 'river crossings', part: 'crossings', grid: crossingGridOf(t), tilesFor: (eye) => crossingTilesFor(t, eye) });

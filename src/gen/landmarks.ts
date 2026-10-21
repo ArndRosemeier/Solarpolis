@@ -22,6 +22,7 @@ import { kept } from './kept';
 import { stairKeepsClear, stairStandAt } from './liftStair';
 import { standThrough } from './standing';
 import { courtTopAt } from './courts';
+import { crossingKeepsClear, crossingTopAt } from './crossings';
 
 /** A bridge along the axis from the deck's edge (`from`, m from the centre) to the shore (`to`), `end` m over the water there. */
 export interface Bridge {
@@ -254,6 +255,8 @@ export function keptClear(t: Terrain, theta: number, s: number): boolean {
   if (h.params.landmarks && stairKeepsClear(h, theta, s, h.params.landmarks.handrail * 2)) return true;
   // The entrance courts and their clear ring (gen/courts.ts).
   if (t.courtAt(theta, s)) return true;
+  // The river crossings, a handrail round them (gen/crossings.ts).
+  if (crossingKeepsClear(t, theta, s)) return true;
   for (const l of landmarksOf(t)) {
     if (l.kind === 'hut') {
       // Its whole box, a few handrails out: on the face of the rock the ground runs up past it, not under it.
@@ -283,6 +286,8 @@ export function landmarkTopAt(t: Terrain, theta: number, s: number): number | nu
   if (stair !== null) return stair;
   const court = courtTopAt(t, theta, s);
   if (court !== null) return court;
+  const crossing = crossingTopAt(t, theta, s);
+  if (crossing !== null) return crossing;
   for (const l of landmarksOf(t)) {
     if (l.kind === 'hut') {
       // Up the profile's normal (it leans far from true up on the cliff) to where it comes out through the floor.

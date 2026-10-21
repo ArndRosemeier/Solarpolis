@@ -261,3 +261,73 @@ export function placeAt(h: Habitat, theta: number, s: number, height: number): P
   const c = Math.cos(theta), sn = Math.sin(theta);
   return { at, ex: [0, 0, 1], ey: [-sn, c, 0], ez: [-c, -sn, 0] };
 }
+
+/**
+ * A frame lying on the floor at (θ, s), `height` above the profile, turned `heading` (rad) from the axis (+s) toward
+ * +θ: x along the heading, y to its left, z up (toward the axis). Things built on the land in their own frame (an
+ * entrance court, a river crossing) are bent onto the floor through it: x and y are metres along the floor (at the
+ * radius at s), so a long thing follows the floor's curve around the axis.
+ */
+export interface FloorFrame {
+  theta: number;
+  s: number;
+  height: number;
+  heading: number;
+}
+
+/** Where a point (x, y) of a floor frame lies on the floor (θ, s). */
+export function floorAt(h: Habitat, f: FloorFrame, x: number, y: number): { theta: number; s: number } {
+  const c = Math.cos(f.heading), sn = Math.sin(f.heading), r = h.profile.at(f.s).r;
+  return { theta: f.theta + (x * sn + y * c) / r, s: f.s + x * c - y * sn };
+}
+
+/** Where a point of the floor (θ, s) lies in a floor frame (x, y): the inverse of `floorAt`, the shorter way around. */
+export function inFloorFrame(h: Habitat, f: FloorFrame, theta: number, s: number): [number, number] {
+  const c = Math.cos(f.heading), sn = Math.sin(f.heading), d = theta - f.theta;
+  const along = s - f.s, around = Math.atan2(Math.sin(d), Math.cos(d)) * h.profile.at(f.s).r;
+  return [along * c + around * sn, around * c - along * sn];
+}
+
+/** A point of a floor frame in the world. */
+export function floorPoint(h: Habitat, f: FloorFrame, p: Vec3): Vec3 {
+  const at = floorAt(h, f, p[0], p[1]);
+  return toWorld(h.profile, { theta: at.theta, s: at.s, h: f.height + p[2] });
+}
+
+/** A shape built in a floor frame, bent onto the floor and put into a place's frame (normals turned with it). */
+export function bendInto(target: Shape, h: Habitat, f: FloorFrame, sh: Shape, place: Place): void {
+  const base = target.vertices, r = h.profile.at(f.s).r, c = Math.cos(f.heading), sn = Math.sin(f.heading);
+  for (let v = 0; v < sh.vertices; v++) {
+    const p: Vec3 = [sh.pos[v * 3], sh.pos[v * 3 + 1], sh.pos[v * 3 + 2]], q = intoPlace(place, floorPoint(h, f, p));
+    const th = f.theta + (p[0] * sn + p[1] * c) / r, n = [sh.nrm[v * 3], sh.nrm[v * 3 + 1], sh.nrm[v * 3 + 2]];
+    // The normal along the axis, around it, and up (toward the axis), then in the world there.
+    const ns = n[0] * c - n[1] * sn, nu = n[0] * sn + n[1] * c, nz = n[2];
+    const w: Vec3 = [-Math.sin(th) * nu - Math.cos(th) * nz, Math.cos(th) * nu - Math.sin(th) * nz, ns];
+    target.pos.push(q[0], q[1], q[2]);
+    target.nrm.push(v3dot(w, place.ex), v3dot(w, place.ey), v3dot(w, place.ez));
+    if (target.colored) target.col.push(sh.col[v * 3], sh.col[v * 3 + 1], sh.col[v * 3 + 2]);
+    if (target.mapped) { target.uv.push(sh.uv[v * 2], sh.uv[v * 2 + 1]); target.fin.push(sh.fin[v]); }
+  }
+  for (const i of sh.idx) target.idx.push(base + i);
+}
+
+/** A floor frame's solid shape (what the physics touches) bent onto the floor, in the world (m). */
+export function solidOnFloor(h: Habitat, f: FloorFrame, sh: Shape): { positions: Float32Array; index: Uint32Array } {
+  const out = new Shape(8, false);
+  bendInto(out, h, f, sh, { at: [0, 0, 0], ex: [1, 0, 0], ey: [0, 1, 0], ez: [0, 0, 1] });
+  const a = out.arrays();
+  return { positions: a.positions, index: a.index };
+}
+
+/**
+ * The height over the profile of a walkable top at (θ, s): `top`, in the floor frame of the thing found there, of the
+ * point there; null where nothing was found or it has no top there.
+ */
+export function topOnFloor<T>(h: Habitat, theta: number, s: number, found: { thing: T; frame: FloorFrame } | null, top: (thing: T, x: number, y: number) => number | null): number | null {
+  if (!found) return null;
+  const [x, y] = inFloorFrame(h, found.frame, theta, s), z = top(found.thing, x, y);
+  return z === null ? null : found.frame.height + z;
+}
+
+/** A colour darker or lighter by k. */
+export const shade = (col: RGB, k: number): RGB => [col[0] * k, col[1] * k, col[2] * k];
