@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MATRIX, REFERENCE, SUNLIGHT_VISIBLE, derive, exteriorDistance, isValid, validate, withParams } from '../src/blueprint';
-import { columnsOf, isCollector, lookOf, makeSkin, panelAt, panelOf, skinFlux, type Columns } from '../src/gen/skin';
+import { columnsOf, dronesAt, isCollector, isTrack, lookOf, makeSkin, panelAt, panelOf, skinFlux, tracksOf, trackMean, type Columns } from '../src/gen/skin';
 import { MAX_RANGE, MIN_CLEARANCE, SpaceFlyer } from '../src/space';
 import type { Vec3 } from '@futuremagic/core';
 
@@ -98,3 +98,39 @@ for (const { name, params } of MATRIX) {
 test('the matrix stays buildable with the collectors taking their share', () => {
   for (const { name, params } of MATRIX) assert.ok(isValid(validate(derive(params))), name);
 });
+
+for (const { name, params } of MATRIX) {
+  test(`drones (${name}): on their tracks, each on its own stretch, from seed and clock alone`, () => {
+    const h = derive(params), s = makeSkin(h);
+    const tracks = Array.from({ length: s.nTheta }, (_, i) => i).filter((i) => isTrack(s, i)).length;
+    assert.equal(tracks, tracksOf(s));
+    assert.ok(tracks >= 1 && s.dronesPerTrack >= 1);
+    const stretch = (s.z1 - s.z0) / s.dronesPerTrack;
+    for (const t of [0, 37.5, 3600, 86400 * 365]) {
+      const ds = dronesAt(s, t);
+      assert.equal(ds.length, tracks * s.dronesPerTrack);
+      ds.forEach((d, n) => {
+        const m = n % s.dronesPerTrack;
+        // Whole drone inside its stretch, on the drum, on a track's seam.
+        assert.ok(d.z - s.droneSize / 2 >= s.z0 + m * stretch - 1e-6 && d.z + s.droneSize / 2 <= s.z0 + (m + 1) * stretch + 1e-6);
+        const col = (d.theta / (2 * Math.PI)) * s.nTheta;
+        assert.ok(Math.abs(col - Math.round(col)) < 1e-9 && isTrack(s, Math.round(col)));
+      });
+    }
+    assert.deepEqual(dronesAt(s, 1234.5), dronesAt(s, 1234.5));
+    // They move, slower than twice the mean speed.
+    const a = dronesAt(s, 100), b = dronesAt(s, 101);
+    const moved = a.map((d, k) => Math.abs(b[k].z - d.z));
+    assert.ok(moved.some((x) => x > 0));
+    assert.ok(moved.every((x) => x <= 1.4 * s.droneSpeed + 1e-9));
+  });
+
+  test(`drone tracks (${name}): the far view counts their share of the drum`, () => {
+    const s = makeSkin(derive(params)), t = trackMean(s);
+    const panel = (2 * Math.PI * s.radius) / s.nTheta;
+    assert.ok(Math.abs(t.share - s.trackWidth / (s.trackEvery * panel)) < 1e-12);
+    assert.ok(t.share > 0 && t.share < 0.05);
+    const with_ = columnsOf(s).mean.albedo, without = columnsOf({ ...s, trackWidth: 0 }).mean.albedo;
+    for (let c = 0; c < 3; c++) assert.ok(Math.abs(with_[c] - (without[c] + (t.albedo[c] - without[c]) * t.share)) < 1e-6);
+  });
+}

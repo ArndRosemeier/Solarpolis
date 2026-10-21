@@ -183,10 +183,17 @@ export const FLARE_SPIKE_WIDTH = 0.45;
 export const FLARE_FLOOR = 0.01;
 export const FLARE_MAX_PX = 24;
 
+/**
+ * The exposure a STARS mesh draws with: the stars' own (heroic), unless the mesh's `userData.plainExposure` says it
+ * shows things lit like the hull beside them (the drones far off), which take the eyes' exposure.
+ */
+const plainExposure = uniform(0).onObjectUpdate(({ object }) => (object?.userData.plainExposure ? 1 : 0));
+const pointExposure = (): Node<'float'> => mix(outside.starExposure, outside.exposure, plainExposure);
+
 /** A star's brightest pixel (exposed): flux × π over the pixel's solid angle × the spot's centre value. */
 function starPeak(rgb: Node<'vec3'>): Node<'float'> {
   const lum = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
-  return lum.mul(Math.PI / (2 * Math.PI * STAR_SIGMA * STAR_SIGMA)).div(outside.pixelSolidAngle).mul(outside.starExposure);
+  return lum.mul(Math.PI / (2 * Math.PI * STAR_SIGMA * STAR_SIGMA)).div(outside.pixelSolidAngle).mul(pointExposure());
 }
 
 /** How far a star's quad reaches (px): its spot, or as far as its spikes still show. */
@@ -227,6 +234,6 @@ export function starColor(): Node<'vec3'> {
   // The quad's edge: the flare fades out over its last quarter instead of stopping in a square.
   const edge = float(1).sub(smoothstep(0.75, 1, max(abs(corner.x), abs(corner.y))));
   const shape = core.add(halo.add(spikes).mul(edge));
-  const peak = vertexColor().rgb.mul(Math.PI / (2 * Math.PI * STAR_SIGMA * STAR_SIGMA)).div(outside.pixelSolidAngle).mul(outside.starExposure);
+  const peak = vertexColor().rgb.mul(Math.PI / (2 * Math.PI * STAR_SIGMA * STAR_SIGMA)).div(outside.pixelSolidAngle).mul(pointExposure());
   return min(peak.mul(seen).mul(shape), DISPLAY_CAP);
 }

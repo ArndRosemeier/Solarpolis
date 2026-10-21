@@ -10,8 +10,8 @@
  */
 import { Vector4 } from 'three/webgpu';
 import {
-  atan, clamp, dot, float, floor, fract, fwidth, length, max, min, mix, normalWorld, normalize,
-  positionLocal, positionWorld, pow, select, smoothstep, uint, uniform, vec3, vertexColor,
+  abs, atan, clamp, dot, float, floor, fract, fwidth, length, max, min, mix, modelWorldMatrix, normalWorld, normalize,
+  positionLocal, positionWorld, pow, select, smoothstep, uint, uniform, vec2, vec3, vec4, vertexColor,
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { GLINT_GAIN, GLINT_POWER, LOOK, SALT, type Columns, type Skin } from '../gen/skin';
@@ -32,13 +32,13 @@ export function skinUniforms(s: Skin, c: Columns): SkinUniforms {
     campaign: new Vector4(s.around, s.along, s.collectorQ, s.starfloors),
     age: new Vector4(s.age, s.panelLife, s.roomLight, s.radius),
     // The seed in two 16-bit halves: a float holds each exactly.
-    seed: new Vector4(s.seed >>> 16, s.seed & 0xffff, 0, 0),
+    seed: new Vector4(s.seed >>> 16, s.seed & 0xffff, s.trackEvery, s.trackWidth),
     mean: new Vector4(c.mean.albedo[0], c.mean.albedo[1], c.mean.albedo[2], c.mean.gloss),
   };
 }
 
 const blank = (): SkinUniforms => skinUniforms(
-  { seed: 0, nTheta: 8, nZ: 1, z0: 0, z1: 1, radius: 1, collectorQ: 0, starfloors: 0, around: 1, along: 1, age: 0, panelLife: 1, roomLight: 0 },
+  { seed: 0, nTheta: 8, nZ: 1, z0: 0, z1: 1, radius: 1, collectorQ: 0, starfloors: 0, around: 1, along: 1, age: 0, panelLife: 1, roomLight: 0, trackEvery: 2, trackWidth: 1, dronesPerTrack: 1, droneSize: 1, droneSpeed: 1 },
   { albedo: new Float32Array(24), gloss: new Float32Array(8), mean: { albedo: [0, 0, 0], gloss: 0, emit: 0 } },
 );
 const fallback = blank();
@@ -68,6 +68,14 @@ const toFloat = (h: Node<'uint'>): Node<'float'> => float(h.shiftRight(uint(8)))
 const skinSeed = (): Node<'uint'> => uint(skin.seed.x).shiftLeft(uint(16)).bitOr(uint(skin.seed.y));
 
 const v3 = (c: readonly number[]): Node<'vec3'> => vec3(c[0], c[1], c[2]);
+
+const TRACK = LOOK.track;
+/**
+ * The panel frames stand proud of the glass: over the outer FRAME_BEVEL of each panel the surface tilts by up to
+ * FRAME_TILT (as a share of the normal) toward the panel's middle, so frames catch the Sun at their own angle.
+ */
+const FRAME_BEVEL = 0.012;
+const FRAME_TILT = 0.6;
 
 /** A seam line where x crosses a whole number, `width` wide (in x's units), faded out where thinner than a pixel. */
 function seam(x: Node<'float'>, width: number): Node<'float'> {
@@ -128,7 +136,7 @@ export function skinColor(): Node<'vec3'> {
 
   // The patch's look with its panels below a pixel: collectors and cells mixed by their share.
   const share = q.div(65536);
-  const patchAlbedo = mix(cellOf(campaignAge), collectorOf(campaignAge), share);
+  const patchAlbedo = mix(cellOf(campaignAge), collectorOf(campaignAge), share).mul(LOOK.frameMean);
   const patchGloss = mix(float(LOOK.cellGloss), collectorGloss(campaignAge), share);
   const meanEmit = share.oneMinus().mul(starfloors).mul(roomLight);
 
@@ -143,13 +151,37 @@ export function skinColor(): Node<'vec3'> {
   const frame = seam(fi, 0.01).mul(seam(fj, 0.01));
   const cells = select(collector, seam(fi.mul(8), 0.05), seam(fi.mul(16), 0.04).mul(seam(fj.mul(16), 0.04)));
   const inner = mix(float(0.5), float(1), frame).mul(mix(float(0.8), float(1), cells));
-  const albedo = near(skin.mean.xyz, patchAlbedo, panelAlbedo.mul(inner)) as Node<'vec3'>;
-  const gloss = near(skin.mean.w, patchGloss, panelGloss) as unknown as Node<'float'>;
+  let albedo = near(skin.mean.xyz, patchAlbedo, panelAlbedo.mul(inner)) as Node<'vec3'>;
+  let gloss = near(skin.mean.w, patchGloss, panelGloss) as unknown as Node<'float'>;
   const emit = near(meanEmit, meanEmit, panelEmit.mul(frame)) as unknown as Node<'float'>;
 
-  const n = normalWorld;
+  // The frames' bevel: the normal tilts toward the panel's middle near each edge, around and along (local axes).
+  const r = length(p.xy), radial = vec3(p.x.div(r), p.y.div(r), 0), tangent = vec3(p.y.negate().div(r), p.x.div(r), 0);
+  const edge = (f: Node<'float'>): Node<'float'> =>
+    float(1).sub(smoothstep(0, FRAME_BEVEL, f)).sub(float(1).sub(smoothstep(0, FRAME_BEVEL, f.oneMinus())));
+  const tilt = vec2(edge(fract(fi)), edge(fract(fj))).mul(FRAME_TILT).mul(panelDetail);
+
+  // Drone tracks in the seam below every trackEvery-th column: a channel with two rails and ties across.
+  const trackEvery = skin.seed.z, trackWidth = skin.seed.w;
+  const fromSeam = fract(fi.div(trackEvery).add(0.5)).sub(0.5).mul(trackEvery).mul(panelSize);
+  const across = fromSeam.div(trackWidth).add(0.5);
+  const onTrack = across.greaterThan(0).and(across.lessThan(1));
+  const rail = (at: number): Node<'float'> => float(1).sub(smoothstep(TRACK.railWidth * 0.5, TRACK.railWidth, abs(across.sub(at))));
+  const rails = max(rail(0.5 - TRACK.railAt), rail(0.5 + TRACK.railAt));
+  const ties = float(1).sub(seam(p.z.div(TRACK.tieEvery), 0.15));
+  const trackAlbedo = mix(v3(TRACK.channel).mul(float(1).sub(ties.mul(0.3))), v3(TRACK.rail), rails);
+  // Seen from too far for the track's width, it does not vanish: its light joins the skin's in the share of the
+  // drum it covers (Arnd, 2026-10-21: nothing vanishes with distance).
+  const trackDetail = float(1).sub(smoothstep(0.5, 2, length(fwidth(p)).div(trackWidth)));
+  const track = select(onTrack, trackDetail, float(0));
+  const trackShare = trackWidth.div(trackEvery.mul(panelSize)).mul(float(1).sub(trackDetail));
+  albedo = mix(mix(albedo, mix(v3(TRACK.channel), v3(TRACK.rail), 2 * TRACK.railWidth * 0.75), trackShare), trackAlbedo, track);
+  gloss = mix(mix(gloss, float(2 * TRACK.railWidth * 0.75 * TRACK.railGloss), trackShare), rails.mul(TRACK.railGloss), track);
+
+  const local = normalize(radial.add(tangent.mul(tilt.x)).add(vec3(0, 0, 1).mul(tilt.y)).mul(float(1).sub(track)).add(radial.mul(track)));
+  const n = normalize(modelWorldMatrix.mul(vec4(local, 0)).xyz);
   const light = lightOn(n);
-  return albedo.mul(light.all).add(glint(n, light.sun, gloss)).add(vec3(1, 0.86, 0.66).mul(emit)).mul(outside.exposure);
+  return albedo.mul(light.all).add(glint(n, light.sun, gloss)).add(vec3(1, 0.86, 0.66).mul(emit.mul(float(1).sub(track)))).mul(outside.exposure);
 }
 
 /** Radiator albedo (endcap faces and brims): a dark, matte composite, ribbed by heat pipes running out from the axis. */
