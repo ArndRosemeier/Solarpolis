@@ -49,6 +49,9 @@ const LIGHT_DEPTH = 120;
 const UNDER = 0.22;
 /** How much brighter a thin edge is, seen against the light (silver lining). */
 const FORWARD = 0.5;
+/** How far a cloud's base lifts toward its rim, and how much the wear raises and lowers it (shares of the thickness). */
+const RIM_LIFT = 0.18;
+const WORN_BASE = 0.06;
 /** How much of the sunline a cloud overhead keeps off the land at most. */
 const SHADE = 0.6;
 
@@ -146,8 +149,10 @@ export function cloudMarch(eye: V3, d: V3, D: F, far: boolean, jitter: F): Node<
       const b = cloud.base.sub(r).div(thick);
       const c = column(p, 4);
       const wear = mx_fractal_noise_float(inField(p, r).mul(3.3), 2, 2, 0.5);
-      // Domed: the column's height rounds off toward its edges, and finer noise wears the dome into heaps.
-      const inside = band(b, 0, 0.04, 0.97, 1).mul(smoothstep(0, 0.12, c));
+      // Domed: the column's height rounds off toward its edges, and finer noise wears the dome into heaps. The base is
+      // flat under the cloud's middle and lifts toward its rim and with the wear, so no two clouds' bases line up.
+      const lift = float(1).sub(smoothstep(0, 0.5, c)).mul(RIM_LIFT).add(wear.mul(WORN_BASE)).max(0);
+      const inside = band(b, lift, lift.add(0.04), 0.97, 1).mul(smoothstep(0, 0.12, c));
       const density = clamp(c.sub(b.mul(b).mul(0.9)).add(wear.mul(0.3)).mul(3), 0, 1).mul(inside);
       // Light from the sunline above, dimmed by the cloud over the sample; brighter seen against it (forward scatter).
       const through = exp(max(c.sub(b), 0).mul(thick).div(-LIGHT_DEPTH));

@@ -10,7 +10,7 @@
  * world position is the `view.eye` uniform, for whatever needs the true place (the axis, ground patterns).
  */
 import { MeshBasicNodeMaterial, DoubleSide, BackSide, FrontSide, AdditiveBlending, type Material } from 'three/webgpu';
-import { abs, atan, attribute, interleavedGradientNoise, screenCoordinate, cross, dFdx, dFdy, floor, fract, inverseSqrt, log2, mx_noise_float, uv, cameraPosition, hash, normalLocal, step, time, varying, clamp, color, cos, log, select, sign, sqrt, dot, exp, float, max, mix, normalize, min, modelWorldMatrix, normalWorld, positionLocal, positionWorld, pow, sin, smoothstep, texture, uniform, vec2, vec3, vec4, vertexColor } from 'three/tsl';
+import { abs, atan, attribute, screenCoordinate, cross, dFdx, dFdy, floor, fract, inverseSqrt, log2, mx_noise_float, uv, cameraPosition, hash, normalLocal, step, time, varying, clamp, color, cos, log, select, sign, sqrt, dot, exp, float, max, mix, normalize, min, modelWorldMatrix, normalWorld, positionLocal, positionWorld, pow, sin, smoothstep, texture, uniform, vec2, vec3, vec4, vertexColor } from 'three/tsl';
 import { DataTexture, Uint8BufferAttribute, RGBAFormat, UnsignedByteType, Vector4, DataUtils, Float32BufferAttribute, HalfFloatType, InstancedInterleavedBuffer, InterleavedBufferAttribute, RedFormat, Vector2, Vector3, type BufferGeometry } from 'three/webgpu';
 import { PLANT_STRIDE } from '../gen/scatter';
 import { BARK_STRIPS } from '../gen/trees';
@@ -305,7 +305,7 @@ function clouds(name: string, far: boolean): Kind {
   return kind(name, ['position'], { cast: false, receive: false }, () => {
     const m = new MeshBasicNodeMaterial({ side: far ? BackSide : FrontSide, transparent: true, depthWrite: false });
     const ray = positionWorld.sub(cameraPosition), D = ray.length();
-    const march = cloudMarch(view.eye.add(cameraPosition), ray.div(D), D, far, interleavedGradientNoise(screenCoordinate.xy));
+    const march = cloudMarch(view.eye.add(cameraPosition), ray.div(D), D, far, hash(floor(screenCoordinate.x).add(floor(screenCoordinate.y).mul(8192))));
     const w = worldPosition();
     const lit = sunlit(vec2(OPEN_SKY, OPEN_SKY), normalize(vec3(w.x.negate(), w.y.negate(), 0)), 0, float(1), false);
     m.colorNode = throughAir(vec3(0.93, 0.94, 0.96).mul(lit).mul(march.x.div(max(march.y, 1e-4))));
