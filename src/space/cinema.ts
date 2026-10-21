@@ -179,16 +179,19 @@ export function arrival(space: Space, after: number): Arrival {
   const guest = guestVisit(space, p, after, lead), { collar, radial } = berthOf(h, guest.arm);
   const toOrbit = (q: Vec3, t: number): Vec3 => space.frames.position(q, p.spindleFrame, p.orbitFrame, t);
   const dirOrbit = (q: Vec3, t: number): Vec3 => space.frames.direction(q, p.spindleFrame, p.orbitFrame, t);
-  const side = v3cross([0, 0, 1], radial);
+  // Shot 5 looks from the sunlit side of the arm, so the ship's flank in it is lit.
+  const sun = space.frames.direction(skyFrom(space, p.orbitFrame, [0, 0, 0], guest.docked).sunDir, p.orbitFrame, p.spindleFrame, guest.docked);
+  const across = v3cross([0, 0, 1], radial), side = v3dot(across, sun) >= 0 ? across : v3scale(across, -1);
   return {
     guest,
     at(elapsed: number): ArrivalFrame | null {
       if (elapsed < 0 || elapsed >= ARRIVAL_SHOTS[0] + ARRIVAL_SHOTS[1]) return null;
       if (elapsed < ARRIVAL_SHOTS[0]) {
-        // Shot 4: above the ship's back, toward the axis, a little to its side, looking past its nose at the spindle.
+        // Shot 4: behind and above the ship's back (toward the axis), a little to its side, looking past its nose at
+        // the spindle: the whole ship low in the frame, nose to stern within 6° to 13° below the middle.
         const clock = guest.docked - lead + elapsed, s = shipAt(h, guest, clock)!;
         const mid = v3add(s.position, v3scale(s.forward, L / 2));
-        const eye = v3add(mid, v3add(v3scale(s.forward, -1.6 * L), v3add(v3scale(s.up, 0.5 * L), v3scale(side, 0.3 * L))));
+        const eye = v3add(mid, v3add(v3scale(s.forward, -2.6 * L), v3add(v3scale(s.up, 0.38 * L), v3scale(side, 0.15 * L))));
         const target: Vec3 = [0, 0, h.exterior.spindle.arms.z];
         return { shot: 3, time: elapsed, length: ARRIVAL_SHOTS[0], eye: toOrbit(eye, clock), target: toOrbit(target, clock), up: dirOrbit(s.up, clock), fov: 50, ship: null, title: 0, clock };
       }
