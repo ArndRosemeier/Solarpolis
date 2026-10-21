@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Rng } from '@futuremagic/core';
-import { MATRIX, STYLE_LAND, derive } from '../src/blueprint';
+import { FLOOR_LAYERS, MATRIX, STYLE_LAND, derive } from '../src/blueprint';
 import { makeTerrain } from '../src/gen/terrain';
 import { makeEcology } from '../src/gen/ecology';
-import { planOf } from '../src/gen/plan';
+import { COURT, courtOf, planOf } from '../src/gen/plan';
 
 for (const { name, params } of MATRIX) {
   test(`districts (${name}): each district grows its land in its style, and belts of trees mark the borders`, () => {
@@ -39,5 +39,23 @@ for (const { name, params } of MATRIX) {
     }
     if (border.length > 15 && inside.open.length > 20) assert.ok(mean(border) > mean(inside.open) + 0.15, `belts ${mean(border).toFixed(2)} against ${mean(inside.open).toFixed(2)} inside open districts`);
     assert.ok(plan.districts.length < 3 || inside.open.length + inside.wooded.length > 0, 'some districts checked');
+  });
+}
+
+for (const { name, params } of MATRIX) {
+  test(`districts (${name}): an entrance's court is paved, with no crowns over it or its clear ring`, () => {
+    if (!params.landmarks) return;
+    const h = derive(params), eco = makeEcology(makeTerrain(h)), t = eco.terrain, plan = planOf(h), R = h.radius;
+    const out = new Float32Array(3), wood = new Float32Array(2), floor = new Uint8Array(FLOOR_LAYERS.length);
+    const gravel = FLOOR_LAYERS.indexOf('gravel');
+    for (const site of plan.sites.filter((k) => k.kind === 'entrance').slice(0, 10)) {
+      const c = courtOf(h, site)!, reach: number = c.radius + COURT.clear * params.landmarks.handrail;
+      for (const [d, a] of [[0, 0], [c.radius * 0.5, 1], [c.radius * 0.8, 2.5], [reach * 0.97, 4]] as [number, number][]) {
+        const theta = c.theta + (d * Math.cos(a)) / R, s = c.s + d * Math.sin(a);
+        eco.colorAt(theta, s, t.heightAt(theta, s), 0.05, out, 0, undefined, floor, wood);
+        assert.equal(wood[0], 0, `no crowns ${d.toFixed(1)} m from the court's middle`);
+        if (d < c.radius * 0.9) assert.ok(floor[gravel] > 200, 'paved');
+      }
+    }
   });
 }

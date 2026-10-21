@@ -13,8 +13,8 @@ const run = (world: PhysicsWorld, seconds: number, each?: () => boolean | void):
 };
 
 for (const { name, params } of MATRIX) {
-  // Flat ground: only the turning frame moves the body sideways.
-  const h = derive(withParams({ relief: { hills: 0, ringLake: null, terraceStep: params.relief.terraceStep, massif: 0, rivers: null } }, params));
+  // Flat ground: only the turning frame moves the body sideways (no landmarks either: their courts dig into it).
+  const h = derive(withParams({ relief: { hills: 0, ringLake: null, terraceStep: params.relief.terraceStep, massif: 0, rivers: null }, landmarks: null }, params));
   const t = makeTerrain(h);
   const s = (h.profile.floorStart + h.profile.floorEnd) / 2;
 
