@@ -16,13 +16,14 @@ import { apply, mul, rotZ, sunlightFrom, transpose, type Mat3, type PlacedHabita
 import { HARDWARE, RADIATOR, SKIN, STARS } from './materials';
 import { hideUnder, skinUniforms, type SkinUniforms } from './hullShaders';
 import { hullGeometry } from './hull';
-import { arraysGeometry, meshGeometry, setPose } from './geometry';
+import { arraysGeometry, pointsChanged, pointsGeometry, setPoint, setPose } from './geometry';
 import { HullDetailView, type Frames } from './hullDetail';
 import { sharedPool } from '../workers/pool';
 import { DISH, detailParts, partDistance, wholeTile, type DetailPart, type PartFrame } from '../gen/hullParts';
 import { NO_MASK, coverMask, reachOf } from '../gen/detailTree';
 import { skinEye, skinGrid } from '../gen/hullDetail';
 import { DRONES_WITHIN, DroneMesh } from './drones';
+import { TrafficView } from './traffic';
 
 /**
  * The free camera holds station with a drum within HOLD_NEAR outer radii of it, and lets go beyond HOLD_FAR; and lets
@@ -55,6 +56,8 @@ interface Drawn {
   /** The detailed parts (gen/hullParts.ts), and their tiles while the eye is near any of them. */
   parts: DetailPart[];
   detail: HullDetailView | null;
+  /** The ships at its spindle while its meshes are drawn. */
+  traffic: TrafficView | null;
   /** This frame: the spindle's axes in the scene (the body's without the spin). */
   spindleAxes: Mat3;
   /** This frame: the body's axes in the scene and its origin relative to the eye; the drum's centre relative to the eye. */
@@ -82,19 +85,13 @@ export class NecklaceView {
     this.drawn = space.habitats.map((placed) => {
       const habitat = placed.habitat, skin = makeSkin(habitat), cols = columnsOf(skin), x = habitat.exterior;
       const span = Math.max(x.spindle.to - x.mast.from, 2 * Math.max(x.radius, ...x.brims.map((b) => b.tip)));
-      return { placed, habitat, skin, cols, uniforms: skinUniforms(skin, cols), span, meshes: null, building: false, parts: detailParts(habitat, skin), detail: null, axes: [1, 0, 0, 0, 1, 0, 0, 0, 1], spindleAxes: [1, 0, 0, 0, 1, 0, 0, 0, 1], origin: [0, 0, 0], center: [0, 0, 0] };
+      return { placed, habitat, skin, cols, uniforms: skinUniforms(skin, cols), span, meshes: null, building: false, parts: detailParts(habitat, skin), detail: null, traffic: null, axes: [1, 0, 0, 0, 1, 0, 0, 0, 1], spindleAxes: [1, 0, 0, 0, 1, 0, 0, 0, 1], origin: [0, 0, 0], center: [0, 0, 0] };
     });
     // One quad per neighbour, drawn as stars are (STARS): their light spread over a few pixels, hidden behind Earth.
-    const n = this.drawn.length - 1;
-    this.glintPos = new Float32Array(n * 12);
-    this.glintCol = new Float32Array(n * 12);
-    const corner = new Float32Array(n * 8), index = new Uint32Array(n * 6), corners = [-1, -1, 1, -1, 1, 1, -1, 1];
-    for (let i = 0; i < n; i++) {
-      corner.set(corners, i * 8);
-      index.set([i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3], i * 6);
-    }
-    const g = meshGeometry(index, { position: [this.glintPos, 3], color: [this.glintCol, 3], corner: [corner, 2] });
-    this.glints = new Mesh(g, STARS.material);
+    const pts = pointsGeometry(this.drawn.length - 1);
+    this.glintPos = pts.position;
+    this.glintCol = pts.color;
+    this.glints = new Mesh(pts.geometry, STARS.material);
     this.glints.name = 'glints';
     this.glints.frustumCulled = false;
   }
@@ -139,14 +136,18 @@ export class NecklaceView {
     });
     const meshes = { skin: mesh(g.skin, SKIN, 'skin'), radiators: mesh(g.radiators, RADIATOR, 'radiators'), mast: mesh(g.mast, HARDWARE, 'mast'), spindle: mesh(g.spindle, HARDWARE, 'spindle'), drones, pieces };
     this.poseMeshes(d, meshes);
-    await Promise.all([meshes.skin, meshes.radiators, meshes.mast, meshes.spindle, drones.mesh, drones.points, ...pieces.map((x) => x.mesh)].map((m) => this.stage.add(m)));
+    const traffic = new TrafficView(this.stage, this.space, d.placed, this.far);
+    await Promise.all([traffic.start(), ...[meshes.skin, meshes.radiators, meshes.mast, meshes.spindle, drones.mesh, drones.points, ...pieces.map((x) => x.mesh)].map((m) => this.stage.add(m))]);
     d.building = false;
     d.meshes = meshes;
+    d.traffic = traffic;
   }
 
   private dropMeshes(d: Drawn): void {
     d.detail?.dispose();
     d.detail = null;
+    d.traffic?.dispose();
+    d.traffic = null;
     if (!d.meshes) return;
     const m = d.meshes;
     for (const x of [m.skin, m.radiators, m.mast, m.spindle, m.drones.mesh, m.drones.points, ...m.pieces.map((p) => p.mesh)]) { this.stage.remove(x); x.geometry.dispose(); }
@@ -199,7 +200,6 @@ export class NecklaceView {
       const d = this.drawn[k], dist = v3len(d.center), px = (d.span / dist) * pixelsPerRadian;
       if (px > MESH_ABOVE) void this.buildMeshes(d);
       else if (px < GLINT_BELOW) this.dropMeshes(d);
-      const o = (k - 1) * 12;
       const dir = v3scale(d.center, 1 / dist);
       let flux: Vec3 = [0, 0, 0];
       if (!d.meshes) {
@@ -208,17 +208,16 @@ export class NecklaceView {
         const toBody = transpose(d.axes);
         flux = skinFlux(d.skin, d.cols, apply(toBody, sky.sunDir), apply(toBody, v3scale(dir, -1)), dist, lit);
       }
-      for (let v = 0; v < 4; v++) {
-        for (let a = 0; a < 3; a++) {
-          this.glintPos[o + v * 3 + a] = dir[a] * this.far;
-          this.glintCol[o + v * 3 + a] = flux[a];
-        }
-      }
+      setPoint(this.glintPos, this.glintCol, k - 1, dir, this.far, flux);
     }
-    const g = this.glints.geometry;
-    g.attributes.position.needsUpdate = true;
-    g.attributes.color.needsUpdate = true;
-    for (const d of this.drawn) if (d.meshes) { this.poseMeshes(d, d.meshes); this.followDetail(d); this.hideCovered(d, d.meshes); }
+    pointsChanged(this.glints);
+    for (const d of this.drawn) {
+      if (!d.meshes) continue;
+      this.poseMeshes(d, d.meshes);
+      this.followDetail(d);
+      this.hideCovered(d, d.meshes);
+      d.traffic?.follow(t, d.spindleAxes, d.origin, this.sunDir, this.sunlight, pixelsPerRadian);
+    }
   }
 
   /**
@@ -257,6 +256,11 @@ export class NecklaceView {
   /** Give memory back: detail tiles not drawn this frame go. */
   shed(): void {
     for (const d of this.drawn) d.detail?.shed();
+  }
+
+  /** The ships at the drawn habitats, for the debug menu. */
+  trafficInfo(): string {
+    return this.drawn.filter((d) => d.traffic).map((d) => d.traffic!.info()).join(' · ') || 'ships: none drawn';
   }
 
   /** The detail tiles' state, for the debug menu. */
@@ -308,7 +312,7 @@ export class NecklaceView {
         if (p.kind === 'truss') out.push({ center: v3add(foot, v3scale(along, p.length / 2)), axis: along, radius: p.width / 2, halfLength: p.length / 2, albedo: HARDWARE_ALBEDO * TRUSS_FILL });
         else out.push({ center: v3add(foot, v3scale(along, p.boom + p.diameter * DISH.focal * 0.5)), axis: along, radius: p.diameter / 2, halfLength: p.diameter * DISH.focal * 0.5, albedo: HARDWARE_ALBEDO });
       }
-      return out;
+      return [...out, ...(d.traffic?.hulls() ?? [])];
     });
   }
 
@@ -325,6 +329,7 @@ export class NecklaceView {
       if (best > d.span) continue;
       const despun = apply(transpose(d.spindleAxes), rel);
       for (const q of d.parts) if (q.kind === 'truss' || q.kind === 'dish') best = Math.min(best, partDistance(q, d.skin, q.frame === 'body' ? local : despun));
+      if (d.traffic) best = Math.min(best, d.traffic.distance(p));
     }
     return best;
   }

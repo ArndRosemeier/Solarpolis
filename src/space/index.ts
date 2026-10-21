@@ -11,4 +11,5 @@ export { decodeStars, fluxOfMagnitude, temperatureOfColorIndex, colorOfTemperatu
 export { SpaceFlyer, MIN_CLEARANCE, MAX_RANGE, type FlyInput } from './flyer';
 export { skyFrom, sunlightFrom, circleOverlap, type SkyView, type SkyBody } from './sky';
 export { attractLoop, chooseStart, SHOTS, LOOP, LIT_FROM, LIT_TO, type Cinema, type Frame as CinemaFrame } from './cinema';
-export { torchShip, TORCH_SHIP, type ShipParams, type ShipPart, type ShipShape, type ShipRole } from './ship';
+export { torchShip, sailShip, shipShape, deriveShip, SHIP_DESIGN, TORCH_SHIP, type Drive, type ShipParams, type ShipPart, type ShipShape, type ShipRole } from './ship';
+export { berthOf, shipAt, trafficAt, slotLength, visitIn, visitsAt, DOCK_SPEED, FINAL_LENGTHS, TORCH_SHOWN, TURN, type Phase, type ShipNow, type TrafficParams, type Visit } from './traffic';

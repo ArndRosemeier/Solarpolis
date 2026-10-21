@@ -9,7 +9,7 @@
 import { Mesh, type BufferAttribute } from 'three/webgpu';
 import { v3len, v3scale, type Vec3 } from '@futuremagic/core';
 import { apply, transpose, type Mat3 } from '../space';
-import { meshGeometry } from './geometry';
+import { pointsChanged, pointsGeometry, setPoint } from './geometry';
 import { dronesAt, tracksOf, type Skin } from '../gen/skin';
 import { railTop } from '../gen/hullDetail';
 import { ShapeBuilder, type RGB } from './geometry';
@@ -61,15 +61,10 @@ export class DroneMesh {
     this.mesh.name = 'drones';
     this.mesh.matrixAutoUpdate = false;
     this.mesh.frustumCulled = false;
-    const n = this.count, corners = [-1, -1, 1, -1, 1, 1, -1, 1];
-    this.pointPos = new Float32Array(n * 12);
-    this.pointCol = new Float32Array(n * 12);
-    const corner = new Float32Array(n * 8), index = new Uint32Array(n * 6);
-    for (let i = 0; i < n; i++) {
-      corner.set(corners, i * 8);
-      index.set([i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3], i * 6);
-    }
-    this.points = new Mesh(meshGeometry(index, { position: [this.pointPos, 3], color: [this.pointCol, 3], corner: [corner, 2] }), pointMaterial);
+    const pts = pointsGeometry(this.count);
+    this.pointPos = pts.position;
+    this.pointCol = pts.color;
+    this.points = new Mesh(pts.geometry, pointMaterial);
     this.points.name = 'drones far';
     this.points.userData.plainExposure = true;
     this.points.frustumCulled = false;
@@ -90,18 +85,9 @@ export class DroneMesh {
       // Its top faces out: μ0 to the Sun, μ to the eye (both in the body frame).
       const toEye = apply(transpose(axes), v3scale(dir, -1));
       const mu0 = Math.max(0, nx * sunBody[0] + ny * sunBody[1]), mu = Math.max(0, nx * toEye[0] + ny * toEye[1]);
-      const flux = (TOP_ALBEDO * area * mu0 * mu * sunlight) / (Math.PI * dist * dist);
-      for (let v = 0; v < 4; v++) {
-        for (let a = 0; a < 3; a++) {
-          P[o + v * 3 + a] = dir[a] * far;
-          C[o + v * 3 + a] = flux;
-        }
-      }
-      o += 12;
+      setPoint(P, C, o++, dir, far, (TOP_ALBEDO * area * mu0 * mu * sunlight) / (Math.PI * dist * dist));
     }
-    const g = this.points.geometry;
-    g.attributes.position.needsUpdate = true;
-    g.attributes.color.needsUpdate = true;
+    pointsChanged(this.points);
   }
 
   /** Bytes of its buffers. */

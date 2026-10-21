@@ -382,7 +382,7 @@ export interface FlameUniforms {
 const noFlame: FlameUniforms = { flame: new Vector4(1, 0, 1, 0) };
 const flameOf = uniform(new Vector4()).onObjectUpdate(({ object }) => ((object?.userData.flame as FlameUniforms | undefined) ?? noFlame).flame);
 /** The plasma's glow at the nozzle at full thrust, in the outside's radiance units. */
-const FLAME_GLOW = 60;
+export const FLAME_GLOW = 60;
 
 /**
  * The exhaust of a fusion torch: hot plasma glowing violet-white at the nozzle and fading to blue down the plume. The
