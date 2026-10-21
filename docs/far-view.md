@@ -55,6 +55,11 @@ PR "Endcaps in ledges and walls" (renders …-farview-endcap0 → …-farview-en
 - `fromWorld` undoes `toWorld` exactly also far above or below the profile (the endcap's ledges sink tens of metres under it): it was centimetres off, enough to misplace a stone on a wall.
 - **The dark square under a high flyer** (finding 7): fixed in `sunlineFilter` (render/lights.ts), see above.
 
+PR "Woods seen at a slant" (renders …-farview-endcap2 → …-farview-slant):
+
+- At a slant a pixel's footprint is long down the view and short across it (at 3 km from 200 m up about 60 m by 4 m). `woodsFromAfar` faded each pattern by the long side, so groves and clumps were gone from 1.5 km on and far woods smeared. Now a pattern fades by the footprint's area (the geometric mean of the two sides) and only past where the long side still samples it twice, so it can't alias into streaks.
+- What is left of the smear is foreshortening: a 200 m wood 3 km off, seen from 200 m up, is fifteen times wider than tall on screen. Real woods there show as a dark wall of trees with a bumpy top (25 m trees are 6 px tall at 3 km), not a flat stain. The canopy layer raises the ground by the trees' height, but smoothly over the tile's cells (tens of metres), so a wood's edge is a gentle slope. Next: give wood edges their wall and silhouette (a steeper raise at the edge, or the hull level drawn farther out).
+
 ## The view along the tube from near the axis
 
 Measured with the CPU reference (`hazeAlong`, world/air.ts) for the `far-tube` eye (0.1 R from the axis, at the foot of the wild endcap), at 60 km haze distance:
