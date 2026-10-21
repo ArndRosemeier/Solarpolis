@@ -2,6 +2,11 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.009 — The sky gets a clock
+
+- The habitat now has a place in space: the geostationary ring ("the Necklace"), 42,164 km above Earth, with 24 habitats strung around it and yours hanging over 10° East.
+- The Sun, Earth and Moon move as they really will in 3026, from one game clock, so the windows and the title flight to come show the right sky at every moment.
+
 ## v0.008 — Haze that glows around the sunline
 
 - The air is now thinner toward the axis, as its pressure says, so in a large cylinder the far side shows through more clearly.
