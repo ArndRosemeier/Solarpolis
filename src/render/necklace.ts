@@ -16,7 +16,7 @@ import { apply, mul, rotZ, sunlightFrom, transpose, type Mat3, type PlacedHabita
 import { HARDWARE, RADIATOR, SKIN, STARS } from './materials';
 import { hideUnder, skinUniforms, type SkinUniforms } from './hullShaders';
 import { hullGeometry } from './hull';
-import { arraysGeometry, freeMesh, pointsChanged, pointsGeometry, setPoint, setPose } from './geometry';
+import { arraysGeometry, dropUploaded, freeMesh, pointsChanged, pointsGeometry, setPoint, setPose } from './geometry';
 import { HullDetailView, type Frames } from './hullDetail';
 import { sharedPool } from '../workers/pool';
 import { DISH, detailParts, partDistance, wholeTile, type DetailPart, type PartFrame } from '../gen/hullParts';
@@ -143,6 +143,8 @@ export class NecklaceView {
     this.poseMeshes(d, meshes);
     const traffic = new TrafficView(this.stage, this.space, d.placed, this.far);
     await Promise.all([traffic.start(), ...[meshes.skin, meshes.radiators, meshes.mast, meshes.spindle, drones.mesh, drones.points, ...pieces.map((x) => x.mesh), ...(bore?.all ?? [])].map((m) => this.stage.add(m))]);
+    // The bore's arrays are on the GPU now; nothing reads them back (it is never culled), so the CPU's copies go.
+    for (const m of bore?.all ?? []) dropUploaded(m, this.stage.renderer);
     d.building = false;
     d.meshes = meshes;
     d.traffic = traffic;
