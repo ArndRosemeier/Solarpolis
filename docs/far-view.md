@@ -36,7 +36,7 @@ In the reference habitat (R 4 km, 1600×900, 70° field of view: 740 px per radi
 4. **No relief.** The sunline lights from overhead, so slopes barely change the light, and the tile normals come from the same 68 m grid. Hills (60 m) and valleys don't read. Nothing darkens hollows or lightens ridges.
 5. **Water reads, barely.** The ring lake is a grey-blue band (it mirrors the haze colour). Rivers show as thin lines on the far side. Both lose their banks and valleys.
 6. **No landmarks or clouds yet.** Nothing stands up from the land to give scale. Clouds belong to the interior thread (Implementation tech plan).
-7. A dark square showed under the eye in `far-down` (one tile shaded differently). Not yet explained.
+7. A dark square showed under the eye in `far-down`. It was the near shadow map (80 m, following the eye): three r186 tests only depth ≤ 1 for a shadow map, which in a reversed depth buffer lets everything past the map's far plane through, so the floor 2 km under a flyer compared against an empty map and read as shaded. Fixed in `sunlineFilter` (render/lights.ts).
 
 ## Changes
 
@@ -52,5 +52,4 @@ PR "The interior from far away" (renders 20261021-165354-farview-before → 2026
 - The view along the tube from near the axis is still white: the eye sits in the sunline's halo (the R / r term). A phase function for the halo, or less of it, would open it up.
 - The far endcaps read as a grey ringed disc (terraces of rock). The look target has a mountain with waterfalls; the endcaps need their own landforms and colour.
 - The reference relief (hills 60 m in a 4 km radius) is too small to read from across the axis; the hollows-and-ridges light helps only where there is relief.
-- The dark square under the eye in `far-down` (finding 7).
 - Clouds (the interior thread), landmarks (none yet), paths.
