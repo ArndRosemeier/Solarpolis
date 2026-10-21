@@ -22,6 +22,7 @@
  */
 import { Rng, Noise, angleDiff, deriveSeed, smoothstep } from '@futuremagic/core';
 import { cultureOf, wrapAngle, type Culture, type DistrictStyle, type FaceKind, type Habitat } from '../blueprint';
+import { kept } from './kept';
 
 const TURN = 2 * Math.PI;
 
@@ -162,6 +163,9 @@ function faceKinds(n: number): FaceKind[] {
 
 /** A plan's site of a kind: the first (a landmark has one), or undefined. */
 export const siteOf = (plan: Plan, kind: SiteKind): Site | undefined => plan.sites.find((x) => x.kind === kind);
+
+/** The habitat's plan, made once per habitat and then kept (making one walks the whole floor). */
+export const planOf: (h: Habitat) => Plan = kept(makePlan);
 
 export function makePlan(h: Habitat): Plan {
   const culture = cultureOf(h.params.culture);

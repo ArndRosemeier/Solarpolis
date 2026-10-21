@@ -9,8 +9,9 @@ import { fromWorld, toWorld, type Habitat } from '../blueprint';
 import { deriveSeed } from '@futuremagic/core';
 import type { Terrain } from './terrain';
 import { pavilionPlan, pavilionTop } from './pavilion';
-import { makePlan, siteOf } from './plan';
+import { planOf, siteOf } from './plan';
 import { intoPlace, outOfPlace, type Place } from './shapes';
+import { kept } from './kept';
 
 /** A bridge along the axis from the deck's edge (`from`, m from the centre) to the shore (`to`), `end` m over the water there. */
 export interface Bridge {
@@ -40,16 +41,11 @@ export type Landmark = Pavilion;
 
 
 /** The landmarks of a terrain (placed once per terrain, then kept). */
-export function landmarksOf(t: Terrain): readonly Landmark[] {
-  let l = placed.get(t);
-  if (!l) { l = placeLandmarks(t); placed.set(t, l); }
-  return l;
-}
-const placed = new WeakMap<Terrain, readonly Landmark[]>();
+export const landmarksOf: (t: Terrain) => readonly Landmark[] = kept(placeLandmarks);
 
 export function placeLandmarks(t: Terrain): Landmark[] {
   const h = t.habitat, spec = h.params.landmarks, lake = t.lake;
-  const site = spec && lake ? siteOf(makePlan(h), 'lake-pavilion') : undefined;
+  const site = spec && lake ? siteOf(planOf(h), 'lake-pavilion') : undefined;
   if (!spec || !lake || !site) return [];
   // The deck within the ground the plan keeps for it.
   const radius = Math.min(spec.size / 2, site.size);

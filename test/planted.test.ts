@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { CLIMATES, MATRIX, derive, fromWorld } from '../src/blueprint';
 import { makeTerrain, type Terrain } from '../src/gen/terrain';
 import { makeEcology, type Ecology } from '../src/gen/ecology';
-import { makePlan, siteOf } from '../src/gen/plan';
+import { planOf, siteOf } from '../src/gen/plan';
 import { FOUNDERS_GROWTH, plantSpec, plantedCanopy, plantingsOf, scatterKeepsOff } from '../src/gen/planted';
 import { LEVELS, cellBounds, cellsNear, plantCell, plantsOf, PLANT_STRIDE, type Level } from '../src/gen/scatter';
 import { placeAt } from '../src/gen/landmarks';
@@ -28,7 +28,7 @@ test('planted: every climate names a tree of its own biomes as the founders\' tr
 for (const { name, params } of MATRIX) {
   test(`planted (${name}): the founders' grove stands on its plan site, a ring of the tallest trees round a clearing`, () => {
     const t: Terrain = makeTerrain(derive(params)), p = plantingsOf(t);
-    const site = siteOf(makePlan(t.habitat), 'founders-grove');
+    const site = siteOf(planOf(t.habitat), 'founders-grove');
     if (!site) { assert.equal(p.groves.length, 0); return; }
     assert.equal(p.groves.length, 1);
     const g = p.groves[0], r = t.habitat.profile.at(g.s).r;

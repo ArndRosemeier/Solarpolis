@@ -12,8 +12,9 @@
 import { deriveSeed, hash3f, smoothstep } from '@futuremagic/core';
 import { climateOf, type Climate, type PlantSpec } from '../blueprint';
 import type { Terrain } from './terrain';
-import { makePlan, siteOf } from './plan';
+import { planOf, siteOf } from './plan';
 import { canopyColor } from './trees';
+import { kept } from './kept';
 
 /** One planted plant: its species (a plant of the climate, by name), where it stands, its height (m) and turn. */
 export interface Planted {
@@ -55,12 +56,7 @@ const RING_GAP = 1.15;
 const RING_MIN = 6;
 
 /** The plantings of a terrain (made once per terrain, then kept). */
-export function plantingsOf(t: Terrain): Plantings {
-  let p = made.get(t);
-  if (!p) { p = makePlantings(t); made.set(t, p); }
-  return p;
-}
-const made = new WeakMap<Terrain, Plantings>();
+export const plantingsOf: (t: Terrain) => Plantings = kept(makePlantings);
 
 /** The climate's plant of that name, if one of its biomes grows it. */
 export function plantSpec(climate: Climate, name: string): PlantSpec | null {
@@ -70,7 +66,7 @@ export function plantSpec(climate: Climate, name: string): PlantSpec | null {
 
 function makePlantings(t: Terrain): Plantings {
   const groves: Grove[] = [];
-  const site = siteOf(makePlan(t.habitat), 'founders-grove');
+  const site = siteOf(planOf(t.habitat), 'founders-grove');
   const climate = climateOf(t.habitat.params.climate), spec = climate && plantSpec(climate, climate.grove);
   if (site && spec) groves.push(foundersGrove(t, site.theta, site.s, site.size, spec));
   const bySpecies = new Map<string, Planted[]>();
