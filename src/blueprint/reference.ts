@@ -31,7 +31,7 @@ export const REFERENCE: HabitatParams = {
   relief: { hills: 60, ringLake: { width: 500, depth: 15 }, terraceStep: 150, rivers: { count: 6, width: 14, depth: 1.6 } },
   // An Earth day, two thirds lit; the bright stretch a seventh of the length; a dim blue-hour glow at night.
   day: { length: 86400, daylight: 0.65, peakWidth: 0.14, base: 0.3, night: 0.03 },
-  exterior: { brimReach: 1.6, brimSpacing: 0.4, maxBrims: 8, brimThickness: 2, brimMaterial: { density: 1800, strength: 3e9, safetyFactor: 1.5 }, spindleLength: 0.25, mastLength: 0.05, berthArms: 6, keepOut: 500, panel: 40, campaign: { around: 12, along: 30 }, panelLife: 120, starfloors: 0.004, drones: { trackEvery: 24, spacing: 2500, size: 3, speed: 1.5 }, antennas: { count: 5, dish: 0.6 }, parts: { module: 2.5, cell: 0.156, plate: 3, handrail: 1.1 } },
+  exterior: { brimReach: 1.6, brimSpacing: 0.4, maxBrims: 8, brimThickness: 2, brimMaterial: { density: 1800, strength: 3e9, safetyFactor: 1.5 }, spindleLength: 0.25, mastLength: 0.05, berthArms: 6, bore: 0.12, keepOut: 500, panel: 40, campaign: { around: 12, along: 30 }, panelLife: 120, starfloors: 0.004, drones: { trackEvery: 24, spacing: 2500, size: 3, speed: 1.5 }, antennas: { count: 5, dish: 0.6 }, parts: { module: 2.5, cell: 0.156, plate: 3, handrail: 1.1 } },
   climate: 'temperate-mild',
   population: 300000,
   age: 200,

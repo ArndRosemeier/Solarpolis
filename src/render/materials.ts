@@ -27,7 +27,7 @@ import { HAZE_STEPS } from '../world/air';
 import { skyDome, starColor, starVertex } from './skyShaders';
 import { floorSurface } from './groundShaders';
 import { filtered } from './textures';
-import { flameColor, hardwareColor, radiatorColor, skinColor, skinDetailColor, skinShown } from './hullShaders';
+import { boreColor, flameColor, hardwareColor, lampColor, radiatorColor, skinColor, skinDetailColor, skinShown } from './hullShaders';
 
 /** The air's look, shared by every kind (uniforms: changing them never builds a shader). */
 export const air = {
@@ -348,6 +348,20 @@ export const FLAME = kind('flame', ['position', 'normal'], { cast: false, receiv
   return m;
 });
 
+/** Hardware inside the spindle's bore, lit by its own lamp strips (hullShaders.ts, `boreColor`). Position, normal, color. */
+export const BORE = kind('bore', ['position', 'normal', 'color'], { cast: false, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial();
+  m.colorNode = boreColor();
+  return m;
+});
+
+/** Lamps: their own light (hullShaders.ts, `lampColor`), the vertex colour as luminance. Position, color. */
+export const LAMP = kind('lamp', ['position', 'color'], { cast: false, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial();
+  m.colorNode = lampColor();
+  return m;
+});
+
 /**
  * Trees and plants (gen/trees.ts, ported from Scale; gen/scatter.ts plants them). Each cell of a species is drawn at
  * one of three levels by its distance: the full tree (BARK + LEAF), a lighter one (fewer, larger leaf cards), the
@@ -593,7 +607,7 @@ export const isPlantInstance = (attribute: string): boolean => attribute === 'pl
 
 /** The kinds of the view outside, for its Stage's warm-up (windows will add them to the interior's). */
 export function outsideKinds(): readonly Kind[] {
-  return [SKY, STARS, SKIN, SKIN_DETAIL, RADIATOR, HARDWARE, FLAME];
+  return [SKY, STARS, SKIN, SKIN_DETAIL, RADIATOR, HARDWARE, FLAME, BORE, LAMP];
 }
 
 /** Things the physics moves (for now the debug menu's test balls): one colour, lit by the sunline, through the air. */

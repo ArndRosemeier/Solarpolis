@@ -106,7 +106,10 @@ function seam(x: Node<'float'>, width: number): Node<'float'> {
 }
 
 /** The light on a surface with this normal: the Sun (less what Earth or the Moon hide) and earthshine. */
-function lightOn(n: Node<'vec3'>): { sun: Node<'float'>; all: Node<'float'> } {
+/** The light on a surface: the Sun's share (for its glint) and all of it, relative to full sunlight. */
+type Light = { sun: Node<'float'>; all: Node<'float'> };
+
+function lightOn(n: Node<'vec3'>): Light {
   const sun = max(dot(n, outside.sunDir), 0).mul(outside.sunlight);
   return { sun, all: sun.add(max(dot(n, outside.earthDir), 0).mul(outside.earthshine)) };
 }
@@ -405,8 +408,8 @@ const GRIME = [1.5, 0.3, 0.06, 0.012];
  * dull metal sheen, and grime and scuffs octave by octave as the eye comes closer, keeping the mean. An octave also
  * fades where the mesh's own coordinates are too large for float32 to hold it (big meshes far from their origin).
  */
-export function hardwareColor(): Node<'vec3'> {
-  const p = positionLocal, n = normalWorld, light = lightOn(n);
+export function hardwareColor(lighting: (n: Node<'vec3'>) => Light = lightOn): Node<'vec3'> {
+  const p = positionLocal, n = normalWorld, light = lighting(n);
   const precision = max(abs(p.x), max(abs(p.y), abs(p.z))).mul(1.2e-7);
   let grime = float(0) as Node<'float'>;
   GRIME.forEach((l, k) => {
@@ -415,4 +418,27 @@ export function hardwareColor(): Node<'vec3'> {
   });
   const albedo = vertexColor().rgb.mul(grime.mul(0.35).add(1));
   return albedo.mul(light.all).add(glint(n, light.sun, float(0.15).mul(float(1).sub(grime.mul(0.5))))).mul(outside.exposure);
+}
+
+/**
+ * The light inside the spindle's bore (relative to full sunlight, about 400 lux): its lamp strips run along the tube
+ * at BORE_LAMPS angles around it, and the pale walls pass their light around.
+ */
+export const BORE_LIGHT = 0.004;
+export const BORE_LAMPS = 4;
+/** A lamp strip's own luminance, as a share of BORE_LIGHT's white paper. */
+export const LAMP_GLOW = 12;
+
+/** Hardware lit from inside the bore (the BORE kind): brightest under the strips, half as bright between them. */
+export function boreColor(): Node<'vec3'> {
+  return hardwareColor(() => {
+    // The strips at angles 2πk / BORE_LAMPS around the axis (render/bore.ts lays them there).
+    const around = atan(positionLocal.y, positionLocal.x).mul(BORE_LAMPS);
+    return { sun: float(0), all: float(BORE_LIGHT).mul(around.cos().mul(0.25).add(0.75)) };
+  });
+}
+
+/** Lamps (the LAMP kind): their own light, vertex colour as luminance relative to white paper in full sunlight. */
+export function lampColor(): Node<'vec3'> {
+  return min(vertexColor().rgb.mul(outside.exposure), DISPLAY_CAP);
 }

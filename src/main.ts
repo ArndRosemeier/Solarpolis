@@ -15,6 +15,7 @@ import { BlueprintLab } from './lab/blueprintLab';
 import { GraphicsUnavailable } from '@futuremagic/stage';
 import { InteriorView } from './render/view';
 import { OutsideView } from './render/outside';
+import { hubView } from './space';
 import { fromWorld, toWorld, type DebrisSpec, type Habitat } from './blueprint';
 import { nearestOf, plantsOf } from './gen/scatter';
 
@@ -99,21 +100,42 @@ const insideSlot = new ViewSlot('Hold the right mouse button to look around · W
   return v;
 });
 const outsideSlot = new ViewSlot('Hold the right mouse button to swing around · wheel to come closer · 1 habitat, 2 Earth, 3 Moon, 4 nearest neighbour · F to fly (W A S D, E up, Q down, Shift faster)', 'Building the sky…', 'sky maps, stars and skin detail', (h) => OutsideView.create(h));
+/** A black curtain over the views for the short fade from the crossing into the Hub (Arnd, 2026-10-21). */
+const curtain = el('div', 'curtain');
+app.append(curtain);
 // The views fill the window below the header, whatever height the header wraps to.
-const fit = (): void => { for (const s of [insideSlot, outsideSlot]) s.box.style.setProperty('--top', `${header.getBoundingClientRect().bottom}px`); };
+const fit = (): void => { for (const box of [insideSlot.box, outsideSlot.box, curtain]) box.style.setProperty('--top', `${header.getBoundingClientRect().bottom}px`); };
 new ResizeObserver(fit).observe(header);
 let starting: Promise<void> | null = null;
 
 // The title: the Outside view flying its attract loop, with the card over it. It is where the page opens.
 const title = new TitleCard(() => void startArrival(), () => showTab('inside'));
-/** Start: the passenger's ship comes in to its berth, then in we go (the crossing into the Hub comes next, O6). */
+const FADE_MS = 500;
+function drawCurtain(closed: boolean): Promise<void> {
+  curtain.classList.toggle('closed', closed);
+  return new Promise((done) => setTimeout(done, FADE_MS));
+}
+/**
+ * Start: the passenger's ship comes in to its berth and they float through the bore (OutsideView.arrive), then a
+ * short fade and they float on at the Hub in the Inside view, looking down the sunline, in control. The interior
+ * builds behind it while the ship comes in.
+ */
 async function startArrival(): Promise<void> {
   const v = outsideSlot.view;
   if (!v?.attracting) { showTab('inside'); return; }
   title.arriving();
   v.onTitle = null;
+  starting = (starting ?? Promise.resolve()).then(() => insideSlot.show());
   await v.arrive();
-  if (tab === 'title') showTab('inside');
+  if (tab !== 'title') return;
+  await drawCurtain(true);
+  if (tab === 'title') {
+    showTab('inside');
+    await starting;
+    const h = lab.habitat, inside = insideSlot.view;
+    if (h && inside) { const hub = hubView(h); inside.floatAt(hub.eye, hub.look); }
+  }
+  await drawCurtain(false);
 }
 outsideSlot.box.append(title.root);
 
