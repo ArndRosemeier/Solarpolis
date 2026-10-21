@@ -2,6 +2,12 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.025 — Jumps look like jumps
+
+- Your body now pushes off when you jump, holds a pose in the air and lands with a little give, instead of one looping clip.
+- Stepping off a small ledge no longer flips into the jump pose; landing while running carries straight on into the stride.
+- The Inside clock now runs in real time by default, like the Outside; faster speeds are in the debug menu.
+
 ## v0.024 — Woods, groves and reeds
 
 - Trees, shrubs and reeds now grow in the cylinder: oaks and hazel in the woods, pines up the endcaps, willows and reeds by the lake, heather and juniper on the heath (olive groves in rows, holm oaks and stone pines in the Mediterranean climate).
