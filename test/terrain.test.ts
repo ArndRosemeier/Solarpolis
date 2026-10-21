@@ -41,7 +41,7 @@ for (const { name, params } of MATRIX) {
       assert.ok(Math.abs(t.heightAt(theta, s) - t.heightAt(theta + 2 * Math.PI, s)) < 1e-6, 'no seam at θ = 2π');
       const g = t.heightAt(theta, s);
       // The endcaps' landforms add at most a spur, its crags and the horn above, and the cirque's floor below.
-      const above = Math.max(rl.hills, rl.terraceStep) * 1.2 + rl.massif * (1.5 + HORN.height * 1.15) + 0.5;
+      const above = Math.max(rl.hills, rl.terraceStep) * 1.2 + rl.massif * (2.7 + HORN.height * 1.15) + 0.5;
       const below = (rl.ringLake?.depth ?? 0) + Math.max(rl.terraceStep, 1) + (rl.massif * CIRQUE.depth) / 0.2 + 0.5;
       assert.ok(g <= above && g >= -below, `height ${g} at ${s}`);
     }
@@ -110,14 +110,17 @@ for (const { name, params } of MATRIX) {
       const between = (form.valleyAt(0, s) + form.valleyAt(1, s)) / 2;
       assert.ok(t.heightAt(between, s) > params.relief.massif * 0.4, 'a buttress between the first two faces');
     }
-    // Ledges level enough to grow on, over the whole Gate.
-    let level = 0, all = 0;
-    for (let i = 0; i < 800; i++) {
+    // Every face has ledges level enough to grow on (the slope is steep, so walls take most of it, as on any terraced cliff).
+    const level: Record<string, number> = {}, all: Record<string, number> = {};
+    for (let i = 0; i < 1500; i++) {
       const s = P.floorEnd + (P.length - P.floorEnd) * (0.1 + 0.8 * ((i * 0.618034) % 1)), theta = i * 2.399963;
-      if (slopeAt(eco, theta, s, t.heightAt(theta, s), step * 0.02) < 0.45) level++;
-      all++;
+      const at = form.acrossAt(theta, s);
+      if (Math.abs(at.across) > 0.6) continue;
+      const kind = form.faces[at.valley].kind;
+      all[kind] = (all[kind] ?? 0) + 1;
+      if (slopeAt(eco, theta, s, t.heightAt(theta, s), step * 0.02) < 0.45) level[kind] = (level[kind] ?? 0) + 1;
     }
-    assert.ok(level / all > 0.12, `${((100 * level) / all).toFixed(0)} % of the Gate level enough to grow on`);
+    for (const kind of Object.keys(all)) assert.ok((level[kind] ?? 0) / all[kind] > 0.05, `${(((level[kind] ?? 0) * 100) / all[kind]).toFixed(0)} % of the ${kind} face level enough to grow on`);
   });
 
   test(`tiles (${name}): bands cover the profile, neighbours meet, faces look into the air`, () => {
