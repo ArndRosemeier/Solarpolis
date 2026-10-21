@@ -4,3 +4,4 @@
 - Woods have fallen trunks and branches on their floor, in the bark of the trees they fell from, greyed where they face the sky.
 - Big things are seen from far away (a boulder from kilometres), small ones only nearby, and up close every stone shows its grain.
 - Debug menu: Go to the nearest fallen trunk, or the nearest boulder.
+- On the endcaps' steep rock the eyes no longer adjust as if under trees, so it is no longer washed out.
