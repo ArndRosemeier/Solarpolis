@@ -87,7 +87,9 @@ for (const { name, params } of MATRIX) {
           // One metre around the axis and one along it, raised by the slope: about the ground there.
           for (const [dir, rise] of [[side, list[i + 5]], [[0, 0, 1], list[i + 6]]] as const) {
             const q = fromWorld(profile, w[0] + dir[0] + up[0] * rise, w[1] + dir[1] + up[1] * rise, w[2] + dir[2]);
-            if (Math.abs(rise) > 1.45) continue; // cliffs: clamped
+            // Cliffs: clamped. Steep both ways at once counts too: the shear lifts only toward the axis, so on ground
+            // that is steep along the axis and across it as well (an endcap's terrace riser running aslant) it can't follow.
+            if (Math.hypot(list[i + 5], list[i + 6]) > 1.45) continue;
             errors.push(Math.abs(q.h - eco.terrain.heightAt(q.theta, q.s)));
           }
           checked++;

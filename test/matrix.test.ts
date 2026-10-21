@@ -33,13 +33,15 @@ for (const { name, params } of MATRIX) {
   });
 
   test(`matrix ${name}: world and interior coordinates convert back and forth`, () => {
-    const pts = [0.3, 0.5, 0.9].flatMap((f) => [0.1, 2.5, 5.9].map((theta) => ({ theta, s: P.length * f, h: Math.min(50, h.radius * 0.05) })));
+    // Above and below the curve, on the floor and the endcap slopes (terraces sink a slope's ground below its curve).
+    const lifts = [Math.min(50, h.radius * 0.05), -Math.min(90, h.radius * 0.03)];
+    const pts = [0.05, 0.3, 0.5, 0.9, 0.97].flatMap((f) => [0.1, 2.5, 5.9].flatMap((theta) => lifts.map((lift) => ({ theta, s: P.length * f, h: lift }))));
     for (const q of pts) {
       const [x, y, z] = toWorld(P, q);
       const back = fromWorld(P, x, y, z);
       assert.ok(Math.abs(back.theta - q.theta) < 1e-9, `θ ${q.theta} → ${back.theta}`);
-      assert.ok(Math.abs(back.s - q.s) < 1e-3 * h.radius, `s ${q.s} → ${back.s}`);
-      assert.ok(Math.abs(back.h - q.h) < 1e-3 * h.radius, `h ${q.h} → ${back.h}`);
+      assert.ok(Math.abs(back.s - q.s) < 1e-6 * h.radius, `s ${q.s} → ${back.s}`);
+      assert.ok(Math.abs(back.h - q.h) < 1e-6 * h.radius, `h ${q.h} → ${back.h}`);
       const n = groundNormal(P, q.theta, q.s);
       assert.ok(Math.abs(Math.hypot(...n) - 1) < 1e-9);
     }

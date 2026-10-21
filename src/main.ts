@@ -259,6 +259,7 @@ viewpoint('Fly: a quarter of the way up, looking across the curve', 0.25, Math.P
 viewpoint('Fly: halfway up, looking at the far side', 0.5, Math.PI, 0.6);
 viewpoint('Fly: high up, looking down', 0.6, 0.05, 0.25);
 viewpoint('Fly: near the axis at the wild end, looking along the tube', 0.9, 0.02, 3, 0);
+viewpoint('Fly: over the floor, looking up the wild endcap', 0.1, 0, -1.5, 0.08);
 debug.add({ label: 'Travel 10× faster (toggle)', group: 'Go', run: () => { const v = view(); if (v) v.boost = v.boost === 1 ? 10 : 1; } });
 debug.addInfo(() => view()?.clockLine() ?? '');
 /** The next of a cycle of clock speeds. */

@@ -13,8 +13,8 @@
  * everything relative to the camera never loses precision (docs/ARCHITECTURE.md, "Where does the camera sit?").
  * Edges between tiles of different size are hidden by skirts: a strip hanging down from each edge. Pure: no three.js.
  */
-import { toWorld, wrapAngle, type Vec3 } from '../blueprint';
-import type { Terrain } from './terrain';
+import { groundNormal, toWorld, wrapAngle, type Vec3 } from '../blueprint';
+import { groundSlope, type Terrain } from './terrain';
 import { horizonAt } from './horizon';
 import type { Ecology } from './ecology';
 import { buildWater, type WaterMesh } from './water';
@@ -318,7 +318,6 @@ export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): Til
   const floor = new Uint8Array(count * 8);
   for (let j = 0; j <= N; j++) {
     const s = Math.min(profile.length, Math.max(0, b.s0 + j * dS));
-    const pp = profile.at(s);
     for (let i = 0; i <= N; i++) {
       const w = ((j + 1) * W + (i + 1)) * 3, v = (j * row + i) * 3;
       positions[v] = world[w] - origin[0]; positions[v + 1] = world[w + 1] - origin[1]; positions[v + 2] = world[w + 2] - origin[2];
@@ -330,13 +329,11 @@ export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): Til
       const len = Math.hypot(nx, ny, nz);
       const theta = b.theta0 + i * dT;
       // Where the grid collapses (a tile touching the axis), fall back to the profile's normal.
-      const air = [pp.nr * Math.cos(theta), pp.nr * Math.sin(theta), pp.nz];
+      const air = groundNormal(profile, theta, s);
       if (len > 1e-9) { nx /= len; ny /= len; nz /= len; } else { [nx, ny, nz] = air; }
       if (nx * air[0] + ny * air[1] + nz * air[2] < 0) { nx = -nx; ny = -ny; nz = -nz; }
       normals[v] = nx; normals[v + 1] = ny; normals[v + 2] = nz;
-      // Slope: how far the ground tilts from the profile's own direction (0 flat, 1 a wall); the profile's slope too.
-      const tilt = 1 - (nx * air[0] + ny * air[1] + nz * air[2]);
-      const slope = Math.min(1, Math.max(Math.abs(pp.nz), tilt * 3));
+      const slope = groundSlope([nx, ny, nz], theta);
       ecology.colorAt(theta, s, heights[(j + 1) * W + (i + 1)], slope, colors, v, canopy, floor, woodAt);
     }
   }

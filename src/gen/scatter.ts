@@ -21,9 +21,10 @@
  * ground: each one carries the ground's slope under it, which its kind shears it by.
  */
 import { hash3f, deriveSeed } from '@futuremagic/core';
-import { FLOOR_LAYERS, fromWorld, toWorld, wrapAngle, type CoverSpec, type DebrisSpec, type PlantSpec, type Vec3 } from '../blueprint';
+import { FLOOR_LAYERS, fromWorld, groundNormal, toWorld, wrapAngle, type CoverSpec, type DebrisSpec, type PlantSpec, type Vec3 } from '../blueprint';
 import { TREE_HEIGHT, type Ecology } from './ecology';
 import { horizonAt } from './horizon';
+import { groundSlope } from './terrain';
 import { bytesOf } from './shapes';
 
 /** Shapes per plant form: plants of a species pick one of these by their own hash. */
@@ -252,7 +253,11 @@ export function plantCell(ecology: Ecology, plants: readonly Species[], k: CellK
       const ground = t.heightAt(pt, ps);
       if (t.standAt(pt, ps) > ground + 0.05) continue; // under water
       if (!cover) {
-        ecology.biomesAt(pt, ps, ground, slopeAt(ecology, pt, ps, ground, gap), shares);
+        const slope = slopeAt(ecology, pt, ps, ground, gap);
+        // Where the ground is too steep for any biome, the nearest fit still claims it (its colour is rock), but nothing
+        // grows on a wall steeper than its biome holds: the woods from afar (`colorAt`'s canopy) leave it bare too.
+        if (slope > ecology.climate.biomes[sp.biome].slope + 0.1) continue;
+        ecology.biomesAt(pt, ps, ground, slope, shares);
         if (f(2) >= shares[sp.biome]) continue;
       }
       const p = toWorld(profile, { theta: pt, s: ps, h: ground });
@@ -323,10 +328,20 @@ function tiltAt(ecology: Ecology, theta: number, s: number, p: Vec3): [number, n
 /** How steep the ground is at a point (0 flat … 1 a wall), from its height a step either way (m). */
 export function slopeAt(ecology: Ecology, theta: number, s: number, ground: number, step: number): number {
   const t = ecology.terrain, { profile } = t.habitat;
-  const p = profile.at(s), r = Math.max(p.r, 1e-6), d = Math.max(step * 0.5, 0.5);
-  const dh = Math.hypot(t.heightAt(theta + d / r, s) - ground, t.heightAt(theta, Math.min(profile.length, s + d)) - ground) / d;
-  const tilt = 1 - 1 / Math.sqrt(1 + dh * dh);
-  return Math.min(1, Math.max(Math.abs(p.nz), tilt * 3));
+  const r = Math.max(profile.at(s).r, 1e-6), d = Math.max(step * 0.5, 0.5);
+  // The ground's normal from a step around the axis and a step along the profile (back where it ends).
+  const ta = theta + d / r, sb = s + d <= profile.length ? s + d : s - d;
+  const o = toWorld(profile, { theta, s, h: ground });
+  const a = toWorld(profile, { theta: ta, s, h: t.heightAt(ta, s) }), b = toWorld(profile, { theta, s: sb, h: t.heightAt(theta, sb) });
+  const ax = a[0] - o[0], ay = a[1] - o[1], az = a[2] - o[2], bx = b[0] - o[0], by = b[1] - o[1], bz = b[2] - o[2];
+  let n: Vec3 = [ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx];
+  const len = Math.hypot(n[0], n[1], n[2]), air = groundNormal(profile, theta, s);
+  if (len < 1e-12) n = air;
+  else {
+    const facing = n[0] * air[0] + n[1] * air[1] + n[2] * air[2] < 0 ? -1 : 1;
+    n = [(n[0] / len) * facing, (n[1] / len) * facing, (n[2] / len) * facing];
+  }
+  return groundSlope(n, theta);
 }
 
 /**

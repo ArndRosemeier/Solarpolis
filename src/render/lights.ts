@@ -18,7 +18,7 @@
  * shadow (`sunShadow`, in the sunlit term of materials.ts); Actors' materials get it as the light's own shadow node.
  */
 import { AmbientLight, DirectionalLight, type DepthTexture, type Node, type NodeBuilder, type Scene } from 'three/webgpu';
-import { Fn, float, min, screenCoordinate, shadow, texture, uniform, uniformArray, vec2 } from 'three/tsl';
+import { Fn, float, min, screenCoordinate, select, shadow, texture, uniform, uniformArray, vec2 } from 'three/tsl';
 import { fromWorld, toView, type Habitat, type Vec3 } from '../blueprint';
 import { horizonAt } from '../gen/horizon';
 import type { Terrain } from '../gen/terrain';
@@ -75,7 +75,10 @@ const sunlineFilter = Fn(({ depthTexture, shadowCoord }: { depthTexture: DepthTe
     }
     sum = sum.add(seen);
   }
-  return sum.div(SHADOW_RAYS);
+  // Past the map's far plane nothing was drawn, so nothing shades the point. three r186 tests only z ≤ 1, which in a
+  // reversed depth buffer lets everything beyond the far plane through: the floor under a flyer high up (the map
+  // follows the eye) drew a dark square.
+  return select(shadowCoord.z.lessThan(0).or(shadowCoord.z.greaterThan(1)), float(1), sum.div(SHADOW_RAYS));
 });
 // three r186 reads `filterNode` from the shadow but does not declare it.
 (key.shadow as unknown as { filterNode: unknown }).filterNode = sunlineFilter;

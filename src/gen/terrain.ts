@@ -35,6 +35,22 @@ export interface Terrain {
   waterDepth(p: Vec3): number;
 }
 
+/** How far the terraces' levels wander around the axis, in steps (`makeTerrain`). */
+const TERRACE_WANDER = 0.8;
+/** The terraces' ledges and walls: their angles from level (radians). */
+const TERRACE_TREAD = (10 * Math.PI) / 180, TERRACE_RISER = (78 * Math.PI) / 180;
+
+/**
+ * How steep the ground is (0 level … 1 a wall), from its unit normal `n` (world, facing the air) at angle θ: three
+ * times 1 − cos of its angle from level, level being square to true up (toward the axis). Up never follows the
+ * ground, so on the endcap slopes a terrace's ledge is as level as it really is, not as steep as the slope it is cut
+ * into. The one measure for colours, biomes and plants.
+ */
+export function groundSlope(n: Vec3, theta: number): number {
+  const level = -(n[0] * Math.cos(theta) + n[1] * Math.sin(theta));
+  return Math.min(1, Math.max(0, 3 * (1 - level)));
+}
+
 export function makeTerrain(h: Habitat): Terrain {
   const { profile, params } = h;
   const relief = params.relief;
@@ -85,10 +101,27 @@ export function makeTerrain(h: Habitat): Terrain {
     const k = inLake(s);
     if (k !== null && k > 0 && lake) height -= lake.depth * Math.sqrt(smoothstep(0, 0.6, k));
     if (f < 1) {
-      // Terraces on the endcap slopes: the elevation above the floor rounded down to steps, with a short riser.
-      const e = h.radius - profile.at(s).r;
-      const q = e / step, frac = q - Math.floor(q);
-      const terrace = (smoothstep(0.75, 1, frac) - frac) * step * 0.6;
+      // Terraces on the endcap slopes: ledges nearly level (`TERRACE_TREAD` from level) and rock walls nearly sheer
+      // (`TERRACE_RISER`), one wall per `step` of elevation above the floor, so the slope climbs as a staircase. On
+      // the steep upper slopes the ledges are narrow, at the foot broad; where the slope is already flatter than a
+      // ledge or steeper than a wall there are none. Heights are along the profile's normal, so each piece leans by
+      // its angle less the slope's, and a wall never tips past sheer (no overhang to fold the ground).
+      // The steps follow the contours of a slope that is not quite round (the elevation warped by most of a step, over
+      // ten steps' length), so they wander, merge and part around the axis instead of closing into rings; and here and
+      // there the walls have worn down toward the plain slope.
+      const at = profile.at(s), e = h.radius - at.r, alpha = Math.asin(Math.min(1, Math.abs(at.nz)));
+      let terrace = 0;
+      if (alpha > TERRACE_TREAD && alpha < TERRACE_RISER) {
+        const wander = step * TERRACE_WANDER * noise.fbm3(x / (step * 10), y / (step * 10), z / (step * 10), 2);
+        const q = (e + wander) / step, frac = q - Math.floor(q);
+        const kept = smoothstep(-0.35, 0.15, detail.fbm3(x / (step * 7) + 17.3, y / (step * 7), z / (step * 7), 2));
+        // Along the slope one step is `run` long; the ledge falls back from the wall's top, the wall climbs to the next.
+        const run = step / Math.sin(alpha);
+        const ledge = Math.tan(TERRACE_TREAD - alpha) * frac * run, wall = Math.tan(TERRACE_RISER - alpha) * (frac - 1) * run;
+        // A ledge meets the wall above it in a rounded foot (a smooth maximum), its top edge stays a crisp brink.
+        const k = step * 0.06, gap = Math.abs(ledge - wall);
+        terrace = kept * (Math.max(ledge, wall) + (gap < k ? (k - gap) * (k - gap) / (4 * k) : 0));
+      }
       // Fade out near the axis and the hub, where the steps would crowd together.
       const fade = smoothstep(0, profile.length * 0.03, s) * (1 - smoothstep(profile.length * 0.97, profile.length, s));
       const rough = step * 0.08 * detail.fbm3(x / (step * 2), y / (step * 2), z / (step * 2), 3);
