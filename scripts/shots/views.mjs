@@ -115,4 +115,9 @@ export const views = {
     steps: [memoryDetails, { debug: 'The foot of the wild endcap' }, { wait: 5000 }, { debug: 'Halfway up the wild endcap' }, { wait: 5000 }, { key: 'KeyF' }, { key: 'KeyE', hold: 6000 },
       { look: [700, 0] }, { wait: 3000 }, { look: [700, 0] }, { wait: 3000 }, { look: [700, 0] }, { wait: 3000 }, { look: [0, 250] }, { wait: 6000 }, { shot: 'before-heap' }, heap('inside')],
   },
+  'memory-gate': {
+    query: 'view=inside', about: 'flown up over the foot of the Gate, looking at it (Arnd: 4,214 tiles, 2.8 GB there); logs the terrain line, then a heap snapshot', settle: 6000,
+    steps: [memoryDetails, { debug: 'The foot of the port endcap' }, { wait: 5000 }, { key: 'KeyF' }, { key: 'KeyE', hold: 2500 }, { look: [0, -40] }, { wait: 8000 },
+      { run: logTiles }, { shot: 'before-heap' }, heap('gate')],
+  },
 };

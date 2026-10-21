@@ -12,11 +12,12 @@
  * parkland does. Pure and continuous like the terrain: any point, in any order, gives the same answer.
  */
 import { Noise, deriveSeed, smoothstep } from '@futuremagic/core';
-import { FLOOR_LAYERS, climateOf, toWorld, type BiomeSpec, type Climate, type FloorLayer } from '../blueprint';
+import { FLOOR_LAYERS, STYLE_LAND, climateOf, toWorld, type BiomeSpec, type Climate, type FaceKind, type FloorLayer } from '../blueprint';
 import type { Terrain } from './terrain';
 import { riverAt } from './rivers';
 import { canopyColor } from './trees';
 import { plantedCanopy, plantedLawn } from './planted';
+import { planOf, type District } from './plan';
 
 /** Plants at least this tall (m, full grown) are trees: they make up the canopy of woods. */
 export const TREE_HEIGHT = 6;
@@ -70,6 +71,12 @@ export interface Ecology {
   colorAt(theta: number, s: number, h: number, slope: number, out: Float32Array, i: number, canopy?: Float32Array, floor?: Uint8Array, wood?: Float32Array): void;
 }
 
+/**
+ * How hard a district's style leans on the climate's patches: its favour for a biome multiplies the biome's sharpened
+ * bid by this power, so a style rules its district while the patches still show inside it.
+ */
+const STYLE_LEAN = 2;
+
 /** How soft the edges of a biome's moisture and height ranges are (in moisture units, and in shares of the radius). */
 const MOISTURE_EDGE = 0.1;
 const HEIGHT_EDGE = 0.04;
@@ -90,12 +97,37 @@ export function makeEcology(terrain: Terrain): Ecology {
   const rivers = terrain.rivers, riverWidth = h.params.relief.rivers?.width ?? 0;
   const banks = riverWidth * 3 + patch * 0.05;
 
+  // The districts (gen/plan.ts): each shapes its land in its style (`STYLE_LAND`), and belts of trees mark the borders
+  // between them, the way hedgerows and shelter belts mark out a worked land, so the plan reads from the far side.
+  const plan = planOf(h);
+  const woods = biomes.map(canopyOf);
+  // A belt is a few rows of the closest woods' trees each side of the border, or a thirtieth of a patch if wider.
+  const closest = woods.reduce((best, w, k) => (w.cover > woods[best].cover ? k : best), 0);
+  const belt = Math.max(patch * 0.03, woods[closest].spacing * 1.5);
+  const gaps = new Noise(deriveSeed(h.seed, 'ecology', 'belts'));
+  /** How a style favours each biome (1 neutral), by how close the biome's crown cover is to the style's. */
+  const favour = new Map<District['style'], Float32Array>();
+  for (const style of Object.keys(STYLE_LAND) as District['style'][]) {
+    const land = STYLE_LAND[style], f = new Float32Array(count);
+    for (let b = 0; b < count; b++) f[b] = 1 - land.hold + land.hold * (land.cover === null ? 1 : Math.exp(-(((woods[b].cover - land.cover) / 0.3) ** 2)));
+    favour.set(style, f);
+  }
+  /** A belt's pull to the closest woods, as each biome's favour. */
+  const beltFavour = woods.map((w) => Math.exp(-(((w.cover - 1) / 0.3) ** 2)));
+  /** How much of a belt runs through a point (0 … 1): along district borders, with a gap here and there for the ways. */
+  const beltAt = (edge: number, x: number, y: number, z: number): number => {
+    if (!(edge < belt)) return 0;
+    const open = smoothstep(0.25, 0.4, gaps.fbm3(x / (patch * 0.15), y / (patch * 0.15), z / (patch * 0.15), 2));
+    return (1 - smoothstep(belt * 0.6, belt, edge)) * (1 - open);
+  };
+
   /** Height above the floor's level, as a share of the radius. */
   const heightShare = (s: number, height: number): number => Math.max(0, (h.radius - profile.at(s).r + height) / h.radius);
 
-  const moistureAt = (theta: number, s: number, height: number): number => {
+  const moistureAt = (theta: number, s: number, height: number): number => moistureWith(theta, s, height, plan.districtAt(theta, s));
+  const moistureWith = (theta: number, s: number, height: number, district: District | null): number => {
     const [x, y, z] = toWorld(profile, { theta, s, h: 0 });
-    let m = climate.wetness + 0.3 * wander.fbm3(x / patch, y / patch, z / patch, 3);
+    let m = climate.wetness + (district ? STYLE_LAND[district.style].wet : 0) + 0.3 * wander.fbm3(x / patch, y / patch, z / patch, 3);
     if (lake) m += 0.55 * Math.exp(-Math.max(0, Math.abs(s - lake.s) - lake.halfWidth) / reach);
     const river = rivers.length ? riverAt(rivers, theta, s, banks * 4) : null;
     if (river) m += 0.5 * Math.exp(-Math.max(0, Math.abs(river.across) - river.halfWidth) / banks);
@@ -110,13 +142,19 @@ export function makeEcology(terrain: Terrain): Ecology {
 
   const biomesAt = (theta: number, s: number, height: number, slope: number, out: Float32Array): Float32Array => {
     const [x, y, z] = toWorld(profile, { theta, s, h: 0 });
-    const m = moistureAt(theta, s, height), e = heightShare(s, height);
+    const at = plan.borderAt(theta, s), district = at ? at.district : null;
+    const m = moistureWith(theta, s, height, district), e = heightShare(s, height);
+    const style = district ? favour.get(district.style)! : null, grain = district ? patch * STYLE_LAND[district.style].grain : patch;
+    const hedge = at ? beltAt(at.edge, x, y, z) : 0;
     let sum = 0;
     for (let b = 0; b < count; b++) {
       const spec = biomes[b];
       const suits = inRange(m, spec.moisture, MOISTURE_EDGE) * inRange(e, spec.height, HEIGHT_EDGE) * (1 - smoothstep(spec.slope - 0.1, spec.slope + 0.1, slope));
-      const bid = suits * spec.share * (0.3 + 0.7 * smoothstep(-0.6, 0.6, patterns[b].fbm3(x / patch, y / patch, z / patch, 3)));
-      out[b] = Math.pow(bid, climate.edges);
+      let bid = suits * spec.share * (0.3 + 0.7 * smoothstep(-0.6, 0.6, patterns[b].fbm3(x / grain, y / grain, z / grain, 3)));
+      // In a belt the closest woods win wherever they can grow.
+      if (hedge > 0) bid = bid * (1 - hedge) + hedge * suits * beltFavour[b];
+      // The style leans on the patches rather than painting over them: its woods keep glades, its meadows clumps.
+      out[b] = Math.pow(bid, climate.edges) * (style ? style[b] ** STYLE_LEAN : 1);
       sum += out[b];
     }
     if (sum > 0) for (let b = 0; b < count; b++) out[b] /= sum;
@@ -145,8 +183,17 @@ export function makeEcology(terrain: Terrain): Ecology {
     return grass(b) > grass(biomes[best]) ? k : best;
   }, 0);
 
+  /**
+   * Which Gate face a point of the port endcap is on and how much of it is the face (1 inside it, 0 on the buttresses
+   * between faces and on the floor), as the terrain shapes it (`gateAt` in terrain.ts).
+   */
+  const gateFace = (theta: number, s: number): { kind: FaceKind; share: number } | null => {
+    const { valley, across } = terrain.form.acrossAt(theta, s);
+    const share = (1 - smoothstep(0.6, 0.8, Math.abs(across))) * smoothstep(profile.floorEnd, profile.floorEnd + (profile.length - profile.floorEnd) * 0.1, s);
+    return share > 0 ? { kind: terrain.form.faces[valley].kind, share } : null;
+  };
+
   const shares = new Float32Array(count);
-  const woods = biomes.map(canopyOf);
   // Each biome's floor as shares of the layers (summing to 1).
   const L = FLOOR_LAYERS.length, SAND = FLOOR_LAYERS.indexOf('sand'), GRAVEL = FLOOR_LAYERS.indexOf('gravel'), DIRT = FLOOR_LAYERS.indexOf('dirt'), ROCK = FLOOR_LAYERS.indexOf('rock');
   const floors = biomes.map((b) => {
@@ -184,7 +231,23 @@ export function makeEcology(terrain: Terrain): Ecology {
       c0 += (sh[0] - c0) * sand; c1 += (sh[1] - c1) * sand; c2 += (sh[2] - c2) * sand;
       c0 += (bd[0] - c0) * bed; c1 += (bd[1] - c1) * bed; c2 += (bd[2] - c2) * bed;
     }
-    const rock = smoothstep(0.45, 0.75, slope + 0.15 * tint.fbm3(x / patch, y / patch, z / patch, 2)), r = climate.rock;
+    let rock = smoothstep(0.45, 0.75, slope + 0.15 * tint.fbm3(x / patch, y / patch, z / patch, 2)), r = climate.rock;
+    // The Gate's faces read by what they are made of (gen/plan.ts, `faceAt`): the Stair face dressed stone, paler than
+    // the rock it was cut from; the Vine face green over its walls; the Water face dark wet rock with pools on its treads.
+    const gate = s > profile.floorEnd ? gateFace(theta, s) : null;
+    if (gate) {
+      const k = gate.share;
+      if (gate.kind === 'stair') r = [r[0] * (1 + 0.6 * k), r[1] * (1 + 0.6 * k), r[2] * (1 + 0.6 * k)];
+      else if (gate.kind === 'water') {
+        r = [r[0] * (1 - 0.45 * k), r[1] * (1 - 0.45 * k), r[2] * (1 - 0.4 * k)];
+        const b = climate.bed, pool = 0.6 * k * (1 - rock);
+        c0 += (b[0] - c0) * pool; c1 += (b[1] - c1) * pool; c2 += (b[2] - c2) * pool;
+      } else if (gate.kind === 'vine') {
+        const g = biomes[open].color, vines = 0.7 * k * rock;
+        c0 += (g[0] * 0.8 - c0) * vines; c1 += (g[1] * 0.8 - c1) * vines; c2 += (g[2] * 0.8 - c2) * vines;
+        rock *= 1 - 0.7 * k;
+      }
+    }
     c0 += (r[0] - c0) * rock; c1 += (r[1] - c1) * rock; c2 += (r[2] - c2) * rock;
     out[i] = Math.min(1, Math.max(0, c0));
     out[i + 1] = Math.min(1, Math.max(0, c1));

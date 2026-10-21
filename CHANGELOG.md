@@ -2,6 +2,33 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.064 — The districts show in the land
+
+- Each district of the worked floor now grows its land in its style: groves keep closed woods with glades, herds keep wood pasture in wide sweeps, play districts open fields, water districts wet ground with reeds, orchards and makers small blocks of trees over meadow. Districts that let their land go keep the climate's own mix.
+- Belts of trees run along the borders between districts, broken here and there, like hedgerows marking out a worked land, so the plan reads from the far side.
+- District borders bend with the land instead of running straight.
+
+## v0.063 — The ground keeps to its memory budget
+
+- Near the endcaps' rock walls (Arnd saw it at the foot of the Gate) the ground no longer eats gigabytes: cliffs are drawn as finely as their cells can show, not split down to the smallest tiles everywhere they are seen.
+- The ground has a hard memory budget: if a view would need more, it is drawn a little coarser until it fits, and the debug menu says so ("coarser ×…", or "OVER BUDGET").
+- The debug menu has a Copy button that puts its whole info text on the clipboard.
+
+## v0.062 — The Mountain's summit band, the Water face's basins
+
+- Near the axis the Mountain's spurs no longer stand as a ring of thin rock fins hanging toward the floor: a spur only stands as tall as it has room to be wide, so the valleys close into one broad summit band.
+- The Gate's Water face has bigger, fewer basins (tens of metres across), so it no longer reads as a fine crinkle from afar.
+
+## v0.061 — Rock with beds, streaks and lichen
+
+- The Mountain's rock is no longer one pale grey: it shows folded beds of darker, warmer and paler stone on its walls, dark streaks where water runs down, iron-stained tones and lichen, the same colour near and far.
+- The Gate's faces read from afar by what they are: the Stair face pale dressed stone, the Vine face green, the Water face dark wet rock with pools.
+- Standing high on the Mountain near the axis, your eyes now stop down in its blazing light.
+
+## v0.060 — Clouds on the move
+
+- The clouds drift with a breeze you can see in real time, and change shape slowly as they go: their heaps and edges slide through the big shapes. Their shadows on the land drift with them.
+
 ## v0.059 — The endcaps become land: the Mountain and the Gate
 
 - The wild end is now a mountain: couloirs climb up each valley between rocky spurs, all turning a little with the spin as they rise, a horn stands at the head of the main valley, and a cirque is dug into the far side under its headwall.

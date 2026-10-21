@@ -7,6 +7,7 @@
  *    your own small control (a form). `key` (a `KeyboardEvent.code`) also runs it from the keyboard, menu shut or not.
  *  - `debug.addInfo(() => text)`: a line in the info block (read four times a second while the panel is open).
  *  - `debug.frame(ms)` once a frame: the frame times behind the FPS line.
+ *  - The head's Copy button puts the info block on the clipboard (`infoText()`).
  *
  */
 import { button, checkbox, el } from './dom';
@@ -94,7 +95,12 @@ export class DebugMenu {
     const p = el('aside', 'dbg-panel');
     p.setAttribute('aria-label', 'Debug');
     const head = el('div', 'dbg-head');
-    head.append(el('strong', '', 'Debug'), el('span', 'dbg-note', 'Shift+Ctrl+F12'), button('dbg-close', '×', () => this.close()));
+    // Copy: the info block as text, for pasting into a chat (Arnd, 2026-10-21).
+    const copy = button('dbg-copy', 'Copy', () => {
+      void navigator.clipboard?.writeText(this.infoText()).then(() => { copy.textContent = 'Copied'; setTimeout(() => { copy.textContent = 'Copy'; }, 1500); }, () => { copy.textContent = 'Copy failed'; });
+    });
+    copy.title = 'Copy the info block to the clipboard';
+    head.append(el('strong', '', 'Debug'), el('span', 'dbg-note', 'Shift+Ctrl+F12'), copy, button('dbg-close', '×', () => this.close()));
     p.append(head);
     this.infoBox = el('pre', 'dbg-info');
     p.append(this.infoBox);
@@ -123,9 +129,14 @@ export class DebugMenu {
     this.open();
   }
 
+  /** The info block's text now: every line, as shown. */
+  infoText(): string {
+    return this.info.map((f) => { try { return f(); } catch (e) { return `(${e instanceof Error ? e.message : String(e)})`; } }).filter(Boolean).join('\n');
+  }
+
   private showInfo(): void {
     if (!this.infoBox) return;
-    const text = this.info.map((f) => { try { return f(); } catch (e) { return `(${e instanceof Error ? e.message : String(e)})`; } }).filter(Boolean).join('\n');
+    const text = this.infoText();
     if (this.infoBox.textContent !== text) this.infoBox.textContent = text;
   }
 

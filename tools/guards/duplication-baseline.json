@@ -124,8 +124,8 @@
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
-    "key": "same name: solarpolis/render/hullDetail.ts#info + solarpolis/render/terrain.ts#info",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+    "key": "same name: solarpolis/render/terrain.ts#info + solarpolis/render/traffic.ts#info",
+    "reason": "Each view's own line for the debug menu's info block (debug.addInfo); the bodies say different things (tiles and memory budget vs ships by phase)."
   },
   {
     "key": "same name: solarpolis/render/hullDetail.ts#make + solarpolis/render/plants.ts#make",
