@@ -4,7 +4,7 @@
  * is full, least recently drawn first.
  */
 import { Group, Mesh, type BufferGeometry } from 'three/webgpu';
-import { arraysGeometry, dropUploaded, freeMesh, meshGeometry } from './geometry';
+import { arraysGeometry, freeMesh, meshGeometry, uploadStatic } from './geometry';
 import type { Stage } from '@futuremagic/stage';
 import { toView, type Vec3 } from '../blueprint';
 import type { Terrain } from '../gen/terrain';
@@ -126,12 +126,9 @@ export class TerrainView {
     const w = tile.water;
     const water = w ? new Mesh(arraysGeometry(w, { flow: [w.flow, 4], dir: [w.dir, 4] }), WATER.material) : null;
     if (water) water.name = `water ${id}`;
-    // Prepared while visible (three's compile skips hidden objects), so its arrays go to the GPU now and the CPU's
-    // copies can go: only the GPU reads them (most of the JS heap was tile copies, 2026-10-21).
+    // Only the GPU reads its arrays: the CPU's copies go (most of the JS heap was tile copies, 2026-10-21).
     for (const m of water ? [mesh, water] : [mesh]) {
-      await this.stage.prepare(m);
-      m.visible = false;
-      dropUploaded(m, this.stage.renderer);
+      await uploadStatic(this.stage, m);
       this.group.add(m);
     }
     this.made++;

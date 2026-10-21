@@ -29,6 +29,7 @@ import { floorSurface, woodsFromAfar } from './groundShaders';
 import { RISE_RANGE } from '../gen/tiles';
 import { filtered } from './textures';
 import { cloudMarch, cloudShade } from './cloudShaders';
+import { builtAlbedo, roofHorizons } from './builtShaders';
 import { boreColor, flameColor, hardwareColor, lampColor, radiatorColor, skinColor, skinDetailColor, skinShown } from './hullShaders';
 
 /** The air's look, shared by every kind (uniforms: changing them never builds a shader). */
@@ -98,14 +99,19 @@ export function setSunline(length: number, norm: number, nearest: number): void 
   light.nearest.value = nearest;
 }
 
+/** The sky light a surface facing straight down still gets, from the land and water under it, as a share of the open sky's. */
+const BOUNCE = 0.45;
+
 /**
  * The light on a surface from the sunline, seen past the terrain's horizon angles (x toward the port end, y toward the
  * wild end), the near shadow map (`sunShadow`, times `shade` where something else stands in for it) and the cloud
  * overhead (`cloudShade`; not for the clouds themselves), plus the sky light: the air's scattered glow, less where the
  * horizons close in. `wrap` lets light reach past the terminator (0 a plain surface; leaves and crowns, which light
- * shines through and around, more).
+ * shines through and around, more). `facing`: the sky light falls off as the surface turns from the sky ((1 + n·up) / 2,
+ * the share of the sky a tilted plane faces) down to what the ground gives back (`BOUNCE`), so steps, walls and
+ * soffits read by their light (built things; the ground and plants face the sky anyway).
  */
-function sunlit(horizon: Node<'vec2'> = vec2(OPEN_SKY, OPEN_SKY), normal: Node<'vec3'> = normalWorld, wrap = 0, shade: Node<'float'> = float(1), clouded = true): Node<'float'> {
+function sunlit(horizon: Node<'vec2'> = vec2(OPEN_SKY, OPEN_SKY), normal: Node<'vec3'> = normalWorld, wrap = 0, shade: Node<'float'> = float(1), clouded = true, facing = false): Node<'float'> {
   const w = worldPosition();
   const len = max(w.xy.length(), 1e-3);
   const r = max(len, light.nearest);
@@ -125,7 +131,8 @@ function sunlit(horizon: Node<'vec2'> = vec2(OPEN_SKY, OPEN_SKY), normal: Node<'
   // Near things (the body, balls) shade it too: the near shadow map, soft along the axis (render/lights.ts).
   const direct = sum.mul(span).div(SUNLINE_STEPS).div(r).mul(light.norm).mul(sunShadow as unknown as Node<'float'>).mul(shade).mul(clouded ? cloudShade(w) : float(1));
   // The sky light comes from the whole air above: as much as the horizons leave open of the half circle.
-  const open = clamp(horizon.x.add(horizon.y).div(Math.PI), 0, 1);
+  let open: Node<'float'> = clamp(horizon.x.add(horizon.y).div(Math.PI), 0, 1);
+  if (facing) open = open.mul(mix(float(BOUNCE), float(1), normal.x.mul(inX).add(normal.y.mul(inY)).add(1).mul(0.5)));
   return direct.mul(float(1).sub(air.skyLight)).add(air.skyLight.mul(light.mean).mul(open));
 }
 
@@ -614,7 +621,7 @@ export function standInAttribute(g: BufferGeometry, name: string): boolean {
   else if (name === 'uv') g.setAttribute('uv', new Float32BufferAttribute(new Array(6).fill(0), 2));
   else if (name === 'floorA' || name === 'floorB') g.setAttribute(name, new Uint8BufferAttribute(new Array(12).fill(name === 'floorA' ? 255 : 0), 4, true));
   else if (name === 'canopy') g.setAttribute('canopy', new Float32BufferAttribute([0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0], 4));
-  else if (name === 'wind' || name === 'occ' || name === 'tint' || name === 'kind') g.setAttribute(name, new Float32BufferAttribute([0, 0, 0], 1));
+  else if (name === 'wind' || name === 'occ' || name === 'tint' || name === 'kind' || name === 'finish') g.setAttribute(name, new Float32BufferAttribute([0, 0, 0], 1));
   else return false;
   return true;
 }
@@ -640,6 +647,23 @@ export function outsideKinds(): readonly Kind[] {
   return [SKY, STARS, SKIN, SKIN_DETAIL, RADIATOR, HARDWARE, FLAME, BORE, LAMP];
 }
 
+/**
+ * Built things: the landmarks (gen/landmarks.ts; the pavilion, gen/pavilion.ts). Vertex albedo with its finish's
+ * pattern in metres over it (builtShaders.ts: `uv` the surface's own coordinates, `finish` what it is made of), lit by
+ * the sunline as far as the mesh's round roof lets it in (`userData.roof`: outer radius, eaves' height, oculus radius
+ * and height, in the mesh's own frame; none if absent). They cast shadows.
+ */
+export const BUILT = kind('built', ['position', 'normal', 'color', 'uv', 'finish'], { cast: true, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial();
+  const roof = uniform(new Vector4()).onObjectUpdate(({ object }) => (object?.userData.roof as Vector4 | undefined) ?? NO_ROOF);
+  const h = roofHorizons(positionLocal, roof), n = normalize(normalWorld);
+  const lit = sunlit(h.past, n, 0, float(1), true, true).add(sunlit(h.back, n, 0, float(1), true, true)).add(sunlit(h.oculus, n, 0, float(1), true, true));
+  const albedo = builtAlbedo(vertexColor().rgb, uv(), attribute<'float'>('finish', 'float'));
+  m.colorNode = throughAir(albedo.mul(lit));
+  return m;
+});
+const NO_ROOF = new Vector4(0, 0, 0, 0);
+
 /** Things the physics moves (for now the debug menu's test balls): one colour, lit by the sunline, through the air. */
 export const BALL = kind('ball', ['position', 'normal'], { cast: true, receive: false }, () => {
   const m = new MeshBasicNodeMaterial();
@@ -649,5 +673,5 @@ export const BALL = kind('ball', ['position', 'normal'], { cast: true, receive: 
 
 /** Every kind, for the Stage's warm-up. */
 export function allKinds(): readonly Kind[] {
-  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS, STONE, CLOUDS_FAR, CLOUDS_NEAR];
+  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS, STONE, BUILT, CLOUDS_FAR, CLOUDS_NEAR];
 }

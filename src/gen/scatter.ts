@@ -25,6 +25,7 @@ import { FLOOR_LAYERS, fromWorld, groundNormal, toWorld, wrapAngle, type CoverSp
 import { TREE_HEIGHT, type Ecology } from './ecology';
 import { horizonAt } from './horizon';
 import { groundSlope } from './terrain';
+import { keptClear } from './landmarks';
 import { bytesOf } from './shapes';
 
 /** Shapes per plant form: plants of a species pick one of these by their own hash. */
@@ -252,6 +253,7 @@ export function plantCell(ecology: Ecology, plants: readonly Species[], k: CellK
       if (cover && f(2) >= cover(pt, ps)) continue;
       const ground = t.heightAt(pt, ps);
       if (t.standAt(pt, ps) > ground + 0.05) continue; // under water
+      if (keptClear(t, pt, ps)) continue; // under a landmark, or on the way onto it
       if (!cover) {
         const slope = slopeAt(ecology, pt, ps, ground, gap);
         // Where the ground is too steep for any biome, the nearest fit still claims it (its colour is rock), but nothing

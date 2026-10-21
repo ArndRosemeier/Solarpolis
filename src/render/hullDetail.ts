@@ -16,7 +16,7 @@ import type { Skin } from '../gen/skin';
 import { apply, type Mat3 } from '../space';
 import type { WorkerPool } from '../workers/pool';
 import type { GenAnswer } from '../workers/gen.worker';
-import { arraysGeometry, dropUploaded, freeMesh, setPose } from './geometry';
+import { arraysGeometry, freeMesh, setPose, uploadStatic } from './geometry';
 import { HARDWARE, SKIN_DETAIL } from './materials';
 import type { SkinUniforms } from './hullShaders';
 import { StreamCache, type Streamed } from './streamed';
@@ -119,11 +119,8 @@ export class HullDetailView {
       m.name = `${this.name} ${id}`;
       m.matrixAutoUpdate = false;
       m.userData.skin = this.uniforms;
-      // Prepared while visible (three's compile skips hidden objects), so its arrays go to the GPU now and the CPU's
-      // copies can go; then added hidden (nothing left to build) until `follow` draws it.
-      await this.stage.prepare(m);
-      m.visible = false;
-      dropUploaded(m, this.stage.renderer);
+      // Uploaded and its CPU copies let go; then added hidden (nothing left to build) until `follow` draws it.
+      await uploadStatic(this.stage, m);
       await this.stage.add(m);
     }
     return { origin: t.origin, meshes, bytes: partTileBytes(t), lastDrawn: 0 };

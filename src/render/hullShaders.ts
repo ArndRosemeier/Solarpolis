@@ -18,7 +18,7 @@ import type { Node } from 'three/webgpu';
 import { GLINT_GAIN, GLINT_POWER, LOOK, SALT, type Columns, type Skin } from '../gen/skin';
 import { DISPLAY_CAP, outside } from './skyShaders';
 import { MASK_WORDS, ROOT_SPAN, type CoverMask } from '../gen/detailTree';
-import { band } from './shaderMath';
+import { band, keepMean, lineAt, shows } from './shaderMath';
 
 /** A habitat's skin as the four vectors its mesh hands the shader (`mesh.userData.skin`). */
 export interface SkinUniforms {
@@ -239,26 +239,6 @@ export function skinColor(): Node<'vec3'> {
   const local = normalize(radial.add(tangent.mul(tilt.x)).add(vec3(0, 0, 1).mul(tilt.y)).mul(float(1).sub(track)).add(radial.mul(track)));
   return shade(albedo, gloss, emit.mul(float(1).sub(track)), local);
 }
-
-/**
- * How much of a pattern of period 1 shows: 1 while a period spans more than a few pixels, fading to 0 (the pattern's
- * mean) before it would alias. Every fine layer fades in this way as the eye comes closer.
- */
-const shows = (x: Node<'float'> | Node<'vec2'> | Node<'vec3'>): Node<'float'> =>
-  float(1).sub(smoothstep(0.3, 0.7, length(fwidth(x as Node<'vec2'>))));
-
-/**
- * Lines where x crosses a whole number, `width` (share of a period) wide, box-filtered over the pixel: a line thinner
- * than a pixel shows as a fainter one, so its share of the area is `width` at every distance.
- */
-const lineAt = (x: Node<'float'>, width: number): Node<'float'> => {
-  const fw = max(fwidth(x), 1e-6), f = fract(x), d = min(f, f.oneMinus());
-  return clamp(min(d.add(fw.mul(0.5)), width / 2).sub(max(d.sub(fw.mul(0.5)), -width / 2)).div(fw), 0, 1);
-};
-
-/** A brightness factor `contrast` on lines covering `share` of the area, shown by `r`, its mean kept at 1. */
-const keepMean = (line: Node<'float'>, share: number, contrast: number, r: Node<'float'>): Node<'float'> =>
-  float(1).add(line.mul(r).mul(contrast - 1)).div(r.mul(share * (contrast - 1)).add(1));
 
 /** The cells' silver: fingers across each cell, busbars along it; the white backsheet showing between cells. */
 const FINGERS = 64;

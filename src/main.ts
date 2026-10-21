@@ -18,6 +18,9 @@ import { OutsideView } from './render/outside';
 import { hubView } from './space';
 import { fromWorld, toWorld, type DebrisSpec, type Habitat } from './blueprint';
 import { nearestOf, plantsOf } from './gen/scatter';
+import { frameOf, landmarksOf, type Landmark } from './gen/landmarks';
+import { outOfPlace } from './gen/shapes';
+import { pavilionPlan } from './gen/pavilion';
 
 const app = document.getElementById('app')!;
 const debug = new DebugMenu();
@@ -260,6 +263,38 @@ viewpoint('Fly: halfway up, looking at the far side', 0.5, Math.PI, 0.6);
 viewpoint('Fly: high up, looking down', 0.6, 0.05, 0.25);
 viewpoint('Fly: near the axis at the wild end, looking along the tube', 0.9, 0.02, 3, 0);
 viewpoint('Fly: over the floor, looking up the wild endcap', 0.1, 0, -1.5, 0.08);
+/** The landmarks (gen/landmarks.ts): the first one, and where its parts are. */
+const firstLandmark = (): { v: InteriorView; l: Landmark } | null => {
+  const v = view(), t = v?.ecology?.terrain, l = t && landmarksOf(t)[0];
+  return v && l ? { v, l } : null;
+};
+debug.add({
+  label: 'To the pavilion: the shore end of its bridge', group: 'Go', run: () => {
+    const f = firstLandmark(), b = f?.l.bridges[0];
+    if (f && b) f.v.goTo(f.l.theta, f.l.s + b.dir * (b.to - f.l.handrail * 2), b.dir > 0 ? Math.PI : 0);
+  },
+});
+debug.add({
+  label: 'Onto the pavilion\'s speaking floor', group: 'Go', run: () => {
+    const f = firstLandmark();
+    if (!f) return;
+    const q = pavilionPlan(f.l);
+    f.v.goTo(f.l.theta, f.l.s - (q.pool + q.floor) / 2, 0);
+  },
+});
+/** Float `out` roof radii from the pavilion along the axis and `up` eaves' heights over the water, looking at it. */
+const overPavilion = (label: string, out: number, up: number): void => debug.add({
+  label, group: 'Go', run: () => {
+    const f = firstLandmark(), h = lab.habitat;
+    if (!f || !h) return;
+    const q = pavilionPlan(f.l), fr = frameOf(h, f.l);
+    const eye = outOfPlace(fr, [-q.reach * out, q.reach * out * 0.4, q.eaves * up]), at = outOfPlace(fr, [0, 0, q.eaves * 0.4]);
+    const d = Math.hypot(at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]);
+    f.v.floatAt(eye, [(at[0] - eye[0]) / d, (at[1] - eye[1]) / d, (at[2] - eye[2]) / d]);
+  },
+});
+overPavilion('Fly: by the pavilion', 2.2, 1.4);
+overPavilion('Fly: the pavilion from afar', 14, 5);
 debug.add({ label: 'Travel 10× faster (toggle)', group: 'Go', run: () => { const v = view(); if (v) v.boost = v.boost === 1 ? 10 : 1; } });
 debug.addInfo(() => view()?.clockLine() ?? '');
 /** The next of a cycle of clock speeds. */
