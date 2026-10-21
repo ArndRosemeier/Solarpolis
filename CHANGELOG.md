@@ -2,6 +2,12 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.027 — Up close on the hull
+
+- Fly to the hull (Outside, F) and you'll find maintenance drones running along tracks between the solar panels, each one carrying a spare panel. Seen from far away they turn into faint specks of light rather than disappearing.
+- Panel frames now catch the sunlight at their own angle.
+- The dock spindle's tip carries a cluster of antenna dishes, the far end's mast has whips and a dish, and every berth arm ends in a docking collar with clamps.
+
 ## v0.026 — Star flares
 
 - Bright stars outside now have small lens flares: a soft glow and four thin spikes, bigger for brighter stars. Faint stars stay sharp points.
