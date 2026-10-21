@@ -80,15 +80,28 @@ for (const { name, plan } of plans) {
       if (plan.culture.styles.length > 8) continue;
       for (const n of d.neighbours) assert.notEqual(plan.districts[n].style, d.style, `districts ${d.id} and ${n} share a style`);
     }
-    // Every point of the worked floor (off the lake) belongs to the district whose seed is nearest.
+    // Every point of the worked floor (off the lake) belongs to a district whose seed is about the nearest: the borders
+    // bend with the land, by less than a fifth of a district's side. borderAt agrees, and its edge is where the
+    // district changes: a step across a border starts and ends within a step of it.
+    const side = Math.sqrt((TURN * h.radius * (profile.floorEnd - plan.reserveEnd)) / plan.districts.length);
+    let crossed = 0;
     for (let i = 0; i < 300; i++) {
       const theta = (i * 2.399963) % TURN, s = plan.reserveEnd + ((i * 0.618034) % 1) * (profile.floorEnd - plan.reserveEnd);
       const d = plan.districtAt(theta, s);
-      if (plan.lake && Math.abs(s - plan.lake.s) < plan.lake.halfWidth) { assert.equal(d, null); continue; }
+      if (plan.lake && Math.abs(s - plan.lake.s) < plan.lake.halfWidth) { assert.equal(d, null); assert.equal(plan.borderAt(theta, s), null); continue; }
       assert.ok(d, `a district at ${theta.toFixed(2)}, ${s.toFixed(0)}`);
       const best = Math.min(...plan.districts.map((k) => apart(plan, k, { theta, s })));
-      assert.ok(apart(plan, d, { theta, s }) <= best + 1e-6, 'the nearest seed');
+      assert.ok(apart(plan, d, { theta, s }) <= best + side * 0.4, 'about the nearest seed');
+      const b = plan.borderAt(theta, s)!;
+      assert.equal(b.district, d);
+      assert.ok(b.edge >= 0);
+      const step = side * 0.02, next = plan.districtAt(theta + step / h.radius, s);
+      if (next && next !== d && plan.districts.length > 1) {
+        crossed++;
+        assert.ok(b.edge < step * 1.5 && plan.borderAt(theta + step / h.radius, s)!.edge < step * 1.5, `a border ${b.edge.toFixed(1)} m away`);
+      }
     }
+    if (plan.districts.length > 4) assert.ok(crossed > 0, 'some steps cross a border');
     // Each valley has a character: most of its districts keep to its styles.
     if (plan.districts.length >= 2 * plan.valleys) {
       const themed = plan.districts.filter((d) => plan.culture.valleys[plan.faces[plan.acrossAt(d.theta, d.s).valley].kind].includes(d.style)).length;
