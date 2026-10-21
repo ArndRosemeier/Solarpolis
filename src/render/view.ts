@@ -323,7 +323,7 @@ export class InteriorView {
     this.norm = sunlineNorm(h);
     setSunline(h.length, this.norm, nearestLit(h));
     this.shine();
-    setAir(densityFalloff(h), h.radius, seenMid(h));
+    setAir(densityFalloff(h), h.radius, seenMid(h), h.params.air.hazeDistance);
     // The sunline: from the wild wall to the port wall along the axis.
     const tube = new CylinderGeometry(h.params.sunlineRadius, h.params.sunlineRadius, h.length, 24, 1, true);
     tube.deleteAttribute('uv'); // the kind's attributes are position and normal (docs/SHADERS.md)

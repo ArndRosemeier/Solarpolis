@@ -10,7 +10,7 @@
  * world position is the `view.eye` uniform, for whatever needs the true place (the axis, ground patterns).
  */
 import { MeshBasicNodeMaterial, DoubleSide, BackSide, AdditiveBlending, type Material } from 'three/webgpu';
-import { abs, atan, attribute, cross, dFdx, dFdy, floor, fract, inverseSqrt, log2, mx_noise_float, uv, cameraPosition, hash, normalLocal, step, time, varying, clamp, color, cos, log, select, sign, sqrt, dot, exp, float, max, mix, mx_fractal_noise_float, normalize, min, modelWorldMatrix, normalWorld, positionLocal, positionWorld, pow, sin, smoothstep, texture, uniform, vec2, vec3, vec4, vertexColor } from 'three/tsl';
+import { abs, atan, attribute, cross, dFdx, dFdy, floor, fract, inverseSqrt, log2, mx_noise_float, uv, cameraPosition, hash, normalLocal, step, time, varying, clamp, color, cos, log, select, sign, sqrt, dot, exp, float, max, mix, normalize, min, modelWorldMatrix, normalWorld, positionLocal, positionWorld, pow, sin, smoothstep, texture, uniform, vec2, vec3, vec4, vertexColor } from 'three/tsl';
 import { DataTexture, Uint8BufferAttribute, RGBAFormat, UnsignedByteType, Vector4, DataUtils, Float32BufferAttribute, HalfFloatType, InstancedInterleavedBuffer, InterleavedBufferAttribute, RedFormat, Vector2, Vector3, type BufferGeometry } from 'three/webgpu';
 import { PLANT_STRIDE } from '../gen/scatter';
 import { BARK_STRIPS } from '../gen/trees';
@@ -18,14 +18,15 @@ import { BARK_TEXELS } from '../gen/foliage';
 import { LEAF_ATLAS_SIZE } from '../workers/leaves';
 import type { Node } from 'three/webgpu';
 import type { StageKind } from '@futuremagic/stage';
-import { HAZE_DIAMETER } from '../blueprint';
+import { REFERENCE } from '../blueprint';
 import { SHADOW_HALF, sunShadow } from './lights';
 import { CLOSED_RAISE, UNDER_CROWNS } from '../gen/ecology';
 import { OPEN_SKY } from '../gen/horizon';
 import { EMISSION_SAMPLES, SUNLINE_STEPS } from '../world/sunline';
 import { HAZE_STEPS } from '../world/air';
 import { skyDome, starColor, starVertex } from './skyShaders';
-import { floorSurface } from './groundShaders';
+import { floorSurface, woodsFromAfar } from './groundShaders';
+import { RISE_RANGE } from '../gen/tiles';
 import { filtered } from './textures';
 import { boreColor, flameColor, hardwareColor, lampColor, radiatorColor, skinColor, skinDetailColor, skinShown } from './hullShaders';
 
@@ -34,10 +35,10 @@ export const air = {
   /** The haze colour: sunlit air seen through kilometres of it. */
   haze: uniform(color(0.55, 0.68, 0.86)),
   /**
-   * Extinction per metre: across HAZE_DIAMETER of air only a quarter of the ground's own colour is left, so a
-   * cylinder wider than that fades into the haze at its far side (blueprint/validate.ts).
+   * Extinction per metre at floor density: across the habitat's `air.hazeDistance` only a quarter of the ground's own
+   * colour is left (`setAir`), so a cylinder wider than that fades into the haze at its far side (blueprint/validate.ts).
    */
-  extinction: uniform(Math.log(4) / HAZE_DIAMETER),
+  extinction: uniform(Math.log(4) / REFERENCE.air.hazeDistance),
   /** Share of the sunline's light scattered back from the air onto everything (the sky light). */
   skyLight: uniform(0.35),
 };
@@ -81,8 +82,9 @@ export function setEmission(emission: Float32Array, mean: number): void {
   light.mean.value = mean;
 }
 
-/** Load a habitat's air into the shaders' uniforms (world/air.ts). */
-export function setAir(kappa: number, radius: number, seenMid: number): void {
+/** Load a habitat's air into the shaders' uniforms (world/air.ts): its density falloff, radius, view of the sunline and clearness. */
+export function setAir(kappa: number, radius: number, seenMid: number, hazeDistance: number): void {
+  air.extinction.value = Math.log(4) / hazeDistance;
   airShape.kappa.value = kappa;
   airShape.radius.value = radius;
   airShape.seenMid.value = seenMid;
@@ -190,6 +192,11 @@ function kind(name: string, attributes: readonly string[], shadow: { cast: boole
  * last stretch before it, so a tile has the parent's shape by the time they swap.
  */
 const morphFar = uniform(0).onObjectUpdate(({ object }) => (object?.userData.morphFar as number | undefined) ?? 1e30);
+/**
+ * How much a point's rise over the ground around it (a slope, tiles.ts) changes its light: hollows hold less of the
+ * sky's light and ridges catch more, so valleys, banks and hilltops read from afar under the overhead sunline.
+ */
+const RELIEF_LIGHT = 1.2;
 /** Where the blend starts, as a share of `morphFar`. */
 const MORPH_START = 0.6;
 
@@ -202,23 +209,28 @@ export const GROUND = kind('ground', ['position', 'normal', 'color', 'morph', 'h
   const seen = modelWorldMatrix.mul(vec4(positionLocal, 1)).xyz.sub(cameraPosition).length();
   const blend = smoothstep(morphFar.mul(MORPH_START), morphFar, seen);
   // Past the trees' last level, the woods are the ground's own canopy layer: it rises to the crowns and takes their
-  // colour over the band where the crown hulls hand them over (`setCanopyBand`).
-  const canopy = attribute<'vec4'>('canopy', 'vec4');
+  // look over the band where the crown hulls hand them over (`setCanopyBand`).
+  // `horizon`: the horizons (x, y), then the crowns' cover and the trees' spacing (z, w: tiles.ts).
+  const canopy = attribute<'vec4'>('canopy', 'vec4'), horizon = attribute<'vec4'>('horizon', 'vec4');
   const woods = smoothstep(canopyBand.x, canopyBand.y, seen);
-  m.positionNode = positionLocal.add(attribute<'vec3'>('morph', 'vec3').mul(blend)).add(normalLocal.mul(canopy.w.mul(woods)));
+  const morph = attribute<'vec4'>('morph', 'vec4');
+  m.positionNode = positionLocal.add(morph.xyz.mul(blend)).add(normalLocal.mul(canopy.w.mul(woods)));
+  // Hollows and ridges (tiles.ts, `packRelief`): this tile's rise over the ground around, blended to its parent's.
+  const packed = morph.w, own = floor(packed.div(256)), parentRise = packed.sub(own.mul(256));
+  const rise = varying(mix(own, parentRise, blend).sub(127.5).div(127.5).mul(RISE_RANGE));
   const far = varying(woods);
   // Close up, the floor's own surface (groundShaders.ts): grass, litter, sand, rock, resolving as the eye comes near.
   const away = positionWorld.sub(cameraPosition).length();
   const floorUp = floorSurface(vertexColor().rgb, normalize(normalWorld));
-  // The canopy's crowns: lit tops and shaded gaps a crown across, fading where they would shimmer.
-  const crowns = mx_fractal_noise_float(worldPosition().mul(1 / 6), 2, 2.2, 0.5).mul(0.45).mul(far).mul(smoothstep(1, 5, canopy.w)).mul(float(1).sub(smoothstep(4000, 9000, away))).add(1);
-  const ground = mix(floorUp.color, canopy.rgb, far);
+  // From afar, crowns and the gaps between them, clumps and glades (groundShaders.ts, docs/far-view.md).
+  const fromAfar = woodsFromAfar(vertexColor().rgb, canopy.rgb, horizon.z, horizon.w, worldPosition());
+  const ground = mix(floorUp.color, fromAfar, far);
   // Under the woods past the shadow map's reach, the crowns' shade on average (`crownsClosed`): the floor stays in
   // the shade the near trees cast, and the canopy seen from afar keeps its sunlit tops.
   const beyond = smoothstep(SHADOW_HALF * 0.6, SHADOW_HALF * 0.9, away).mul(float(1).sub(far));
   const closed = smoothstep(0.25, 1, canopy.w.div(CLOSED_RAISE));
   const shade = mix(float(1), mix(float(1), float(UNDER_CROWNS), closed), beyond);
-  m.colorNode = throughAir(ground.mul(sunlit(attribute<'vec2'>('horizon', 'vec2'), floorUp.normal, 0, shade)).mul(crowns));
+  m.colorNode = throughAir(ground.mul(sunlit(horizon.xy, floorUp.normal, 0, shade)).mul(clamp(rise.mul(RELIEF_LIGHT).add(1), 0.55, 1.3)));
   return m;
 });
 
@@ -575,11 +587,11 @@ export const STONE = kind('stone', ['position', 'normal', 'color', 'plant'], { c
 
 /** The game's own attributes on the Stage's warm-up stand-ins (StageOptions.attribute): no morph, open horizons. */
 export function standInAttribute(g: BufferGeometry, name: string): boolean {
-  if (name === 'morph') g.setAttribute('morph', new Float32BufferAttribute(new Array(9).fill(0), 3));
+  if (name === 'morph') g.setAttribute('morph', new Float32BufferAttribute(new Array(12).fill(0), 4));
   else if (name === 'grid' || name === 'flow') g.setAttribute(name, new Float32BufferAttribute(new Array(12).fill(0), 4));
   else if (name === 'dir') g.setAttribute('dir', new Float32BufferAttribute([0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0], 4));
   else if (name === 'corner') g.setAttribute('corner', new Float32BufferAttribute([-1, -1, 1, -1, 1, 1], 2));
-  else if (name === 'horizon') g.setAttribute('horizon', new Float32BufferAttribute(new Array(6).fill(OPEN_SKY), 2));
+  else if (name === 'horizon') g.setAttribute('horizon', new Float32BufferAttribute([OPEN_SKY, OPEN_SKY, 0, 0, OPEN_SKY, OPEN_SKY, 0, 0, OPEN_SKY, OPEN_SKY, 0, 0], 4));
   else if (name === 'plant') plantInstances(g, new Float32Array([0, 0, 0, 1, 0, 0, 0]));
   else if (name === 'uv') g.setAttribute('uv', new Float32BufferAttribute(new Array(6).fill(0), 2));
   else if (name === 'floorA' || name === 'floorB') g.setAttribute(name, new Uint8BufferAttribute(new Array(12).fill(name === 'floorA' ? 255 : 0), 4, true));

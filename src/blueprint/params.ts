@@ -142,6 +142,11 @@ export interface HabitatParams {
     temperature: number;
     /** Specific gas constant (J/(kg K)); 287 for Earth air. */
     gasConstant: number;
+    /**
+     * How clear the air is: across this much air at floor density only a quarter of a surface's light gets through (m).
+     * A designed habitat filters its air far cleaner than a city's; the far side then reads clearly across the axis.
+     */
+    hazeDistance: number;
   };
   layers: LayerDepths;
   hull: HullMaterial;

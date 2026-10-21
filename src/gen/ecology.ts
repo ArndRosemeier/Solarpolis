@@ -35,21 +35,21 @@ export function crownsClosed(raise: number): number {
 
 /**
  * A biome's woods seen from afar: how much of the ground its trees' crowns cover where it is pure (a crown about half
- * as wide as the tree is tall), how high they stand on average, and their colour (linear RGB).
+ * as wide as the tree is tall), how high they stand on average, how far apart (m), and their colour (linear RGB).
  */
-export function canopyOf(b: BiomeSpec): { cover: number; height: number; color: [number, number, number] } {
-  let cover = 0, height = 0;
+export function canopyOf(b: BiomeSpec): { cover: number; height: number; spacing: number; color: [number, number, number] } {
+  let cover = 0, height = 0, spacing = 0;
   const color: [number, number, number] = [0, 0, 0];
   for (const p of b.plants) {
     if (p.height[1] < TREE_HEIGHT) continue;
     const tall = (p.height[0] + p.height[1]) / 2, crown = 0.55 * tall;
     const c = Math.min(1, (Math.PI / 4) * (crown * crown) / (p.spacing * p.spacing));
     const k = canopyColor(p.form);
-    cover += c; height += c * tall;
+    cover += c; height += c * tall; spacing += c * p.spacing;
     for (let n = 0; n < 3; n++) color[n] += c * k[n];
   }
-  if (cover > 0) { height /= cover; for (let n = 0; n < 3; n++) color[n] /= cover; }
-  return { cover: Math.min(1, cover), height, color };
+  if (cover > 0) { height /= cover; spacing /= cover; for (let n = 0; n < 3; n++) color[n] /= cover; }
+  return { cover: Math.min(1, cover), height, spacing, color };
 }
 
 export interface Ecology {
@@ -61,11 +61,12 @@ export interface Ecology {
   moistureAt(theta: number, s: number, h: number): number;
   /**
    * Linear RGB of the ground seen from a distance, with the slope (0 flat … 1 vertical), into `out` at `i`. With
-   * `canopy`, also the woods' canopy over it there, at `i / 3 * 4`: the linear RGB seen from far above (the ground
-   * where the trees stand apart, their crowns where they close up) and the canopy's height (m). With `floor`, the
-   * share of each of `FLOOR_LAYERS` there (0 … 255, summing to about 255), at `i / 3 * 8`.
+   * `canopy`, also the woods' canopy over it there, at `i / 3 * 4`: the crowns' linear RGB (the ground's where no trees
+   * stand) and the canopy's height (m). With `floor`, the share of each of `FLOOR_LAYERS` there (0 … 255, summing to
+   * about 255), at `i / 3 * 8`. With `wood`, at `i / 3 * 2`, the share of the ground the crowns cover (0 … 1) and how
+   * far apart the trees stand (m): the far view draws crowns and gaps from them (render/groundShaders.ts, `woodsFromAfar`).
    */
-  colorAt(theta: number, s: number, h: number, slope: number, out: Float32Array, i: number, canopy?: Float32Array, floor?: Uint8Array): void;
+  colorAt(theta: number, s: number, h: number, slope: number, out: Float32Array, i: number, canopy?: Float32Array, floor?: Uint8Array, wood?: Float32Array): void;
 }
 
 /** How soft the edges of a biome's moisture and height ranges are (in moisture units, and in shares of the radius). */
@@ -140,7 +141,7 @@ export function makeEcology(terrain: Terrain): Ecology {
     return f.map((x) => x / sum);
   });
   const layers = new Float32Array(L);
-  const colorAt = (theta: number, s: number, height: number, slope: number, out: Float32Array, i: number, canopy?: Float32Array, floor?: Uint8Array): void => {
+  const colorAt = (theta: number, s: number, height: number, slope: number, out: Float32Array, i: number, canopy?: Float32Array, floor?: Uint8Array, wood?: Float32Array): void => {
     biomesAt(theta, s, height, slope, shares);
     const [x, y, z] = toWorld(profile, { theta, s, h: 0 });
     let c0 = 0, c1 = 0, c2 = 0;
@@ -184,21 +185,21 @@ export function makeEcology(terrain: Terrain): Ecology {
       const at = (i / 3) * L;
       for (let l = 0; l < L; l++) floor[at + l] = Math.round(layers[l] * 255);
     }
-    if (!canopy) return;
+    if (!canopy && !wood) return;
     // The woods over it: crowns cover their biome's share of the point (rock and water hold none).
     const bare = (1 - rock) * (1 - Math.max(gravel, bed));
-    let cover = 0, tall = 0, k0 = 0, k1 = 0, k2 = 0;
+    let cover = 0, tall = 0, apart = 0, k0 = 0, k1 = 0, k2 = 0;
     for (let b = 0; b < count; b++) {
       const w = shares[b] * woods[b].cover * bare;
       if (w === 0) continue;
-      cover += w; tall += w * woods[b].height;
+      cover += w; tall += w * woods[b].height; apart += w * woods[b].spacing;
       k0 += w * woods[b].color[0]; k1 += w * woods[b].color[1]; k2 += w * woods[b].color[2];
     }
+    if (cover > 0) { tall /= cover; apart /= cover; k0 /= cover; k1 /= cover; k2 /= cover; } else { k0 = out[i]; k1 = out[i + 1]; k2 = out[i + 2]; }
+    if (wood) { wood[(i / 3) * 2] = Math.min(1, cover); wood[(i / 3) * 2 + 1] = apart; }
+    if (!canopy) return;
     const at = (i / 3) * 4;
-    if (cover > 0) { tall /= cover; k0 /= cover; k1 /= cover; k2 /= cover; }
-    canopy[at] = out[i] + (k0 - out[i]) * cover;
-    canopy[at + 1] = out[i + 1] + (k1 - out[i + 1]) * cover;
-    canopy[at + 2] = out[i + 2] + (k2 - out[i + 2]) * cover;
+    canopy[at] = k0; canopy[at + 1] = k1; canopy[at + 2] = k2;
     // Sparse trees barely raise it; closed woods raise it to their crowns' middle.
     canopy[at + 3] = tall * 0.75 * smoothstep(0.1, 0.7, cover);
   };

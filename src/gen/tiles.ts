@@ -53,8 +53,29 @@ export interface TileKey {
 
 export const keyId = (k: TileKey): string => `${k.band}:${k.column}:${k.level}:${k.i}:${k.j}`;
 
+/**
+ * A point's rise over the ground around it (as a slope: + on ridges, − in hollows), at its tile's scale and its
+ * parent's, packed into one float of the `morph` attribute's fourth place: each in 256 steps over ±`RISE_RANGE`.
+ */
+export const RISE_RANGE = 0.5;
+export function packRelief(own: number, parent: number): number {
+  const step = (k: number): number => Math.min(255, Math.max(0, Math.round(127.5 + (k / RISE_RANGE) * 127.5)));
+  return step(own) * 256 + step(parent);
+}
+export function unpackRelief(w: number): [number, number] {
+  const a = Math.floor(w / 256), b = w - a * 256;
+  return [((a - 127.5) / 127.5) * RISE_RANGE, ((b - 127.5) / 127.5) * RISE_RANGE];
+}
+
 /** Horizon angles are baked every this many cells (TILE_CELLS must divide by it). */
 const HORIZON_STEP = 8;
+
+/**
+ * A tile's cells may span at most this many pixels on screen before it splits, however flat the ground: the woods'
+ * edges, the rivers and banks, and the light on the relief are carried by the points, so a flat far tile must still be
+ * fine enough for them (docs/far-view.md). Its shape alone (`error`) would leave the far side at the roots' cells.
+ */
+export const CELL_PIXELS = 12;
 
 /** Root tiles in the whole tree, about: enough that the far side is covered, few enough to build at load. */
 const ROOTS = 48;
@@ -184,7 +205,7 @@ export interface Selection {
 /**
  * Choose the tiles for a view: split a tile while its error (how far its grid strays from the true ground, measured
  * when it was built) looks bigger than `maxPixels` from `eye` (with `pixelsPerRadian` = screen height / vertical
- * field of view), provided all its children are built. `errorOf` gives a built tile's error, undefined if not built.
+ * field of view), or its cells look bigger than `CELL_PIXELS`, provided all its children are built. `errorOf` gives a built tile's error, undefined if not built.
  */
 export function select(terrain: Terrain, layout: TileLayout, eye: Vec3, pixelsPerRadian: number, maxPixels: number, errorOf: (k: TileKey) => number | undefined, sphereOf = spheres(terrain, layout)): Selection {
   const ready = (k: TileKey): boolean => errorOf(k) !== undefined;
@@ -195,7 +216,8 @@ export function select(terrain: Terrain, layout: TileLayout, eye: Vec3, pixelsPe
     if (error === undefined) { want.push({ k, need: Infinity }); return; }
     const sp = sphereOf(k);
     const d = Math.max(1, Math.hypot(eye[0] - sp.center[0], eye[1] - sp.center[1], eye[2] - sp.center[2]) - sp.radius);
-    const pixels = (error / d) * pixelsPerRadian;
+    // How far over its limits the tile is: its error, or its cells.
+    const pixels = (Math.max(error, (cellSize(layout, k) * maxPixels) / CELL_PIXELS) / d) * pixelsPerRadian;
     if (pixels <= maxPixels || k.level >= layout.maxLevel) { draw.push(k); return; }
     const kids = children(layout, k);
     const missing = kids.filter((c) => !ready(c));
@@ -222,12 +244,17 @@ export interface TileMesh {
   /**
    * Geomorphing: per point, the offset from where it is to where the parent tile's coarser surface lies at the same
    * (θ, s). A renderer blends towards it as the tile nears the distance where its parent takes over, so the swap shows
-   * no pop. Zero on points the parent shares.
+   * no pop. Zero on points the parent shares. Fourth: the point's rise over the ground around it, at this tile's scale
+   * and the parent's (`packRelief`), blended the same way.
    */
   morph: Float32Array;
-  /** Per point, the terrain's horizon angles toward the port and the wild end (gen/horizon.ts): its sunline shadow. */
+  /**
+   * Per point, four numbers: the terrain's horizon angles toward the port and the wild end (gen/horizon.ts), its
+   * sunline shadow; then the woods as the far view draws them (`Ecology.colorAt`'s `wood`): the share of the ground
+   * the crowns cover (0 … 1) and how far apart the trees stand (m). One attribute, as WebGPU allows 8 vertex buffers.
+   */
   horizon: Float32Array;
-  /** Per point, the woods' canopy over it seen from afar (`Ecology.colorAt`): linear RGB and height (m). */
+  /** Per point, the woods' canopy over it seen from afar (`Ecology.colorAt`): the crowns' linear RGB and height (m). */
   canopy: Float32Array;
   /** Per point, the shares of the floor layers (`FLOOR_LAYERS`, 0 … 255): the first four, then the other four. */
   floorA: Uint8Array;
@@ -274,6 +301,7 @@ export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): Til
   const count = row * row + skirt + 4;
   const positions = new Float32Array(count * 3), normals = new Float32Array(count * 3), colors = new Float32Array(count * 3);
   const canopy = new Float32Array(count * 4);
+  const woodAt = new Float32Array(count * 2);
   const floor = new Uint8Array(count * 8);
   for (let j = 0; j <= N; j++) {
     const s = Math.min(profile.length, Math.max(0, b.s0 + j * dS));
@@ -296,14 +324,14 @@ export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): Til
       // Slope: how far the ground tilts from the profile's own direction (0 flat, 1 a wall); the profile's slope too.
       const tilt = 1 - (nx * air[0] + ny * air[1] + nz * air[2]);
       const slope = Math.min(1, Math.max(Math.abs(pp.nz), tilt * 3));
-      ecology.colorAt(theta, s, heights[(j + 1) * W + (i + 1)], slope, colors, v, canopy, floor);
+      ecology.colorAt(theta, s, heights[(j + 1) * W + (i + 1)], slope, colors, v, canopy, floor, woodAt);
     }
   }
 
   // Morph targets: the parent's grid has every other point of this one (along s, and around where the parent was
   // halved around too), and its cells split along the same diagonal (from (i+1, j) to (i, j+1)), so the parent's
   // surface at a point between its points is the mean of two of them.
-  const morph = new Float32Array(count * 3);
+  const morph = new Float32Array(count * 4);
   const at = (i: number, j: number): number => ((j + 1) * W + (i + 1)) * 3;
   const halvedAround = splitAround(layout, k);
   for (let j = 0; j <= N; j++) {
@@ -311,13 +339,43 @@ export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): Til
       const oddI = halvedAround ? i & 1 : 0, oddJ = j & 1;
       if (!oddI && !oddJ) continue;
       const [p, q] = oddI && oddJ ? [at(i + 1, j - 1), at(i - 1, j + 1)] : oddI ? [at(i - 1, j), at(i + 1, j)] : [at(i, j - 1), at(i, j + 1)];
-      const w = at(i, j), v = (j * row + i) * 3;
+      const w = at(i, j), v = (j * row + i) * 4;
       for (let c = 0; c < 3; c++) morph[v + c] = (world[p + c] + world[q + c]) / 2 - world[w + c];
     }
   }
 
+  // Hollows and ridges (docs/far-view.md): how far each point stands above or below the ground around it, as a slope,
+  // at two and four cells out, and for the parent at four and eight (its cells are twice as big). GROUND darkens hollows
+  // and lightens ridges by it, at whatever scale the tile shows, and blends to the parent's with the morph.
+  const OUT = 8, WW = N + 1 + 2 * OUT;
+  const wide = new Float64Array(WW * WW);
+  for (let jj = 0; jj < WW; jj++) {
+    const s = Math.min(profile.length, Math.max(0, b.s0 + (jj - OUT) * dS));
+    for (let ii = 0; ii < WW; ii++) {
+      const i = ii - OUT, j = jj - OUT;
+      wide[jj * WW + ii] = i >= -1 && i <= N + 1 && j >= -1 && j <= N + 1 ? heights[(j + 1) * W + (i + 1)] : terrain.heightAt(b.theta0 + i * dT, s);
+    }
+  }
+  const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]] as const, RADII = [2, 4, 8];
+  // Per row: each (radius, direction)'s offset in `wide` and one over its distance (m).
+  const offset = new Int32Array(RADII.length * DIRS.length), inv = new Float64Array(offset.length), rise = new Float64Array(RADII.length);
+  RADII.forEach((r, n) => DIRS.forEach(([di, dj], d) => { offset[n * DIRS.length + d] = (dj * WW + di) * r; }));
+  for (let j = 0; j <= N; j++) {
+    const across = dT * Math.max(profile.at(Math.min(profile.length, Math.max(0, b.s0 + j * dS))).r, 1e-3);
+    RADII.forEach((r, n) => DIRS.forEach(([di, dj], d) => { inv[n * DIRS.length + d] = 1 / DIRS.length / Math.hypot(di * r * across, dj * r * dS); }));
+    for (let i = 0; i <= N; i++) {
+      const c = (j + OUT) * WW + i + OUT, h = wide[c];
+      for (let n = 0; n < RADII.length; n++) {
+        let k = 0;
+        for (let d = 0; d < DIRS.length; d++) k += (h - wide[c + offset[n * DIRS.length + d]]) * inv[n * DIRS.length + d];
+        rise[n] = k;
+      }
+      morph[(j * row + i) * 4 + 3] = packRelief((rise[0] + rise[1]) / 2, (rise[1] + rise[2]) / 2);
+    }
+  }
+
   // Horizons on a coarse grid (they change slowly: hills, banks, the endcaps), bilinear in between.
-  const horizon = new Float32Array(count * 2);
+  const horizon = new Float32Array(count * 4);
   const H = TILE_CELLS / HORIZON_STEP, hrow = H + 1, coarse = new Float32Array(hrow * hrow * 2);
   for (let j = 0; j <= H; j++) {
     const s = Math.min(profile.length, Math.max(0, b.s0 + j * HORIZON_STEP * dS));
@@ -327,12 +385,15 @@ export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): Til
     const cj = Math.min(H - 1, Math.floor(j / HORIZON_STEP)), fj = j / HORIZON_STEP - cj;
     for (let i = 0; i <= N; i++) {
       const ci = Math.min(H - 1, Math.floor(i / HORIZON_STEP)), fi = i / HORIZON_STEP - ci;
-      const a = (cj * hrow + ci) * 2, bb = a + 2, d = a + hrow * 2, e = d + 2, v = (j * row + i) * 2;
+      const a = (cj * hrow + ci) * 2, bb = a + 2, d = a + hrow * 2, e = d + 2, v = (j * row + i) * 4;
       for (let c = 0; c < 2; c++) {
         horizon[v + c] = (coarse[a + c] * (1 - fi) + coarse[bb + c] * fi) * (1 - fj) + (coarse[d + c] * (1 - fi) + coarse[e + c] * fi) * fj;
       }
     }
   }
+
+  // The woods, after the horizons.
+  for (let v = 0; v < row * row; v++) { horizon[v * 4 + 2] = Math.min(1, woodAt[v * 2]); horizon[v * 4 + 3] = woodAt[v * 2 + 1]; }
 
   // Skirts: each edge point again, sunk below the ground by about a cell, so a coarser neighbour's gap is covered.
   const edge: number[] = [];
@@ -347,12 +408,11 @@ export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): Til
       positions[v + c] = positions[src + c] - normals[src + c] * sink;
       normals[v + c] = normals[src + c];
       colors[v + c] = colors[src + c];
-      morph[v + c] = morph[src + c];
     }
+    for (let c = 0; c < 4; c++) morph[(row * row + n) * 4 + c] = morph[e * 4 + c];
     for (let c = 0; c < 4; c++) canopy[(row * row + n) * 4 + c] = canopy[e * 4 + c];
     for (let c = 0; c < 8; c++) floor[(row * row + n) * 8 + c] = floor[e * 8 + c];
-    horizon[(row * row + n) * 2] = horizon[e * 2];
-    horizon[(row * row + n) * 2 + 1] = horizon[e * 2 + 1];
+    for (let c = 0; c < 4; c++) horizon[(row * row + n) * 4 + c] = horizon[e * 4 + c];
   });
 
   const index: number[] = [];
