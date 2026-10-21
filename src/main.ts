@@ -5,6 +5,7 @@
  */
 import { nearestFloor, nearestWood, type Ecology, type Found } from './gen/ecology';
 import { nearestOnPath } from './gen/paths';
+import { nearestPlace, vineFaceFoot } from './gen/places';
 import { besideRiver, nearestSample, type River } from './gen/rivers';
 import './app/style.css';
 import { el } from './app/dom';
@@ -216,6 +217,20 @@ toPlace('Into the nearest meadow', -30, (eco, t, s) => nearestFloor(eco, t, s, e
 toPlace('Onto the Sunwalk', 0, (eco, t, s) => nearestOnPath(eco.terrain.habitat, 'sunwalk', t, s));
 toPlace('Onto the nearest way', 0, (eco, t, s) => nearestOnPath(eco.terrain.habitat, 'way', t, s));
 toPlace('Onto the Mountain trail', 0, (eco, t, s) => nearestOnPath(eco.terrain.habitat, 'trail', t, s));
+toPlace('Into the nearest orchard', -10, (eco, t, s) => nearestPlace(eco.terrain, 'orchard', t, s));
+toPlace('Into the nearest vineyard', 0, (eco, t, s) => {
+  // Between two rows, looking along them.
+  const at = nearestPlace(eco.terrain, 'vineyard', t, s);
+  const vine = eco.climate.biomes.find((b) => b.name === eco.climate.places.vineyard)?.plants.find((p) => p.rowGap);
+  const gap = vine?.rowGap ?? 0;
+  return at && gap ? { ...at, s: (Math.floor(at.s / gap) + 0.5) * gap } : at;
+});
+debug.add({
+  label: 'Before the Vine face, out on the floor', group: 'Go', run: () => {
+    const v = view(), t = v?.ecology?.terrain, foot = t && vineFaceFoot(t);
+    if (v && t && foot) v.goTo(foot.theta, foot.s - t.habitat.radius * 0.3, 0);
+  },
+});
 /** A few metres before the nearest of the climate's first debris that `pick` chooses, facing it. */
 const toDebris = (label: string, back: number, pick: (d: DebrisSpec) => boolean): void => toPlace(label, back, (eco, theta, s) => {
   const { profile } = eco.terrain.habitat, plants = plantsOf(eco), sp = plants.find((p) => p.what === 'debris' && pick(p.spec as DebrisSpec));

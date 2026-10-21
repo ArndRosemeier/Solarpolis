@@ -108,7 +108,7 @@ test('handover: every plant near the eye is drawn by exactly one level while the
       const x = cell.origin[0] + list[i], y = cell.origin[1] + list[i + 1], z = cell.origin[2] + list[i + 2];
       const d = Math.hypot(x - eye[0], y - eye[1], z - eye[2]);
       if (d > reach) continue;
-      const id = `${x.toFixed(2)},${y.toFixed(2)},${z.toFixed(2)}`, b = bands[level], pick = handOverPick(list[i + 4]);
+      const id = `${x.toFixed(2)},${y.toFixed(2)},${z.toFixed(2)}`, b = bands[level], pick = handOverPick(list[i + 4], list[i + 3]);
       at.set(id, d);
       const into = smooth(b[0], b[1], d), out = smooth(b[2], b[3], d);
       if (draws(b) && pick <= into * 1.0001 && out <= pick) drawnBy.set(id, (drawnBy.get(id) ?? 0) + 1);

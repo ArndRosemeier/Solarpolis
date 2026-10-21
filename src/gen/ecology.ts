@@ -20,6 +20,7 @@ import { plantedCanopy, plantedLawn } from './planted';
 import { planOf, type District } from './plan';
 import { snowCover, snowFieldOf } from './snow';
 import { pathCover, pathsOf } from './paths';
+import { placesOf, type PlaceKind } from './places';
 
 /** Plants at least this tall (m, full grown) are trees: they make up the canopy of woods. */
 export const TREE_HEIGHT = 6;
@@ -106,12 +107,20 @@ export function makeEcology(terrain: Terrain): Ecology {
   const rivers = terrain.rivers, riverWidth = h.params.relief.rivers?.width ?? 0;
   const banks = riverWidth * 3 + patch * 0.05;
 
+  // The planted places (gen/places.ts) and the biome the climate grows each kind as.
+  const places = placesOf(terrain);
+  const placeBiome: Record<PlaceKind, number> = { orchard: 0, vineyard: 0 };
+  for (const kind of Object.keys(placeBiome) as PlaceKind[]) {
+    const b = biomes.findIndex((x) => x.name === climate.places[kind]);
+    if (b < 0) throw new Error(`climate "${climate.name}" grows its ${kind}s as "${climate.places[kind]}", which is none of its biomes`);
+    placeBiome[kind] = b;
+  }
   // The districts (gen/plan.ts): each shapes its land in its style (`STYLE_LAND`), and belts of trees mark the borders
   // between them, the way hedgerows and shelter belts mark out a worked land, so the plan reads from the far side.
   const plan = planOf(h);
   const woods = biomes.map(canopyOf);
   // A belt is a few rows of the closest woods' trees each side of the border, or a thirtieth of a patch if wider.
-  const closest = woods.reduce((best, w, k) => (w.cover > woods[best].cover ? k : best), 0);
+  const closest = woods.reduce((best, w, k) => (!biomes[k].placed && w.cover > woods[best].cover ? k : best), 0);
   const belt = Math.max(patch * 0.03, woods[closest].spacing * 1.5);
   const gaps = new Noise(deriveSeed(h.seed, 'ecology', 'belts'));
   /** How a style leans on each biome's bid (1 neutral), by how close the biome's crown cover is to the style's. */
@@ -159,6 +168,8 @@ export function makeEcology(terrain: Terrain): Ecology {
     let sum = 0;
     for (let b = 0; b < count; b++) {
       const spec = biomes[b];
+      // A biome people plant grows only in their places (below).
+      if (spec.placed) { out[b] = 0; continue; }
       const suits = inRange(m, spec.moisture, MOISTURE_EDGE) * inRange(e, spec.height, HEIGHT_EDGE) * (1 - smoothstep(spec.slope - 0.1, spec.slope + 0.1, slope));
       // A biome that cannot grow here bids nothing: its patches need no noise.
       if (suits === 0) { out[b] = 0; continue; }
@@ -177,12 +188,22 @@ export function makeEcology(terrain: Terrain): Ecology {
       for (let b = 0; b < count; b++) out[b] *= 1 - lawn;
       out[open] += lawn;
     }
+    // A planted place (gen/places.ts) is its biome's, where the ground is not too steep for it (a terrace's wall).
+    const place = places.placeAt(theta, s);
+    if (place) {
+      const b = placeBiome[place.kind], k = place.share * (1 - smoothstep(biomes[b].slope - 0.1, biomes[b].slope + 0.1, slope));
+      if (k > 0) {
+        for (let n = 0; n < count; n++) out[n] *= 1 - k;
+        out[b] += k;
+      }
+    }
     return out;
   };
   /** Nothing suits (very steep, or out of every range): the nearest fit, by moisture, takes it. */
   const nearestFit = (m: number, out: Float32Array): void => {
     let best = 0, gap = Infinity;
     for (let b = 0; b < count; b++) {
+      if (biomes[b].placed) continue;
       const [lo, hi] = biomes[b].moisture, d = m < lo ? lo - m : m > hi ? m - hi : 0;
       if (d < gap) { gap = d; best = b; }
     }
@@ -191,7 +212,7 @@ export function makeEcology(terrain: Terrain): Ecology {
   };
   /** The open, grassy biome: no trees, the most grass on its floor (a grove's lawn is it). */
   const open = biomes.reduce((best, b, k) => {
-    const grass = (x: BiomeSpec) => (x.floor.grass ?? 0) + (x.floor['dry grass'] ?? 0) - (x.plants.some((p) => p.height[1] >= TREE_HEIGHT) ? 10 : 0);
+    const grass = (x: BiomeSpec) => (x.floor.grass ?? 0) + (x.floor['dry grass'] ?? 0) - (x.plants.some((p) => p.height[1] >= TREE_HEIGHT) ? 10 : 0) - (x.placed ? 20 : 0);
     return grass(b) > grass(biomes[best]) ? k : best;
   }, 0);
 

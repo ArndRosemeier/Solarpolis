@@ -46,6 +46,21 @@ export interface Terrain {
   courtAt(theta: number, s: number): { court: PlacedCourt; distance: number } | null;
   /** Every entrance's court, with the height of its floor. */
   readonly courts: readonly PlacedCourt[];
+  /** Which of a Gate face's terraces a point of the port endcap lies on, or null off the faces (the buttresses, the floor). */
+  terraceAt(theta: number, s: number): GateTerrace | null;
+}
+
+/**
+ * A point on the Gate's terraces: its face, which terrace from the foot (one per wall), how much of it is the face
+ * (0 … 1); the level the terraces are cut at there (m: a terrace's ledge follows a line of one level, its wall is where
+ * the level crosses a whole `step`).
+ */
+export interface GateTerrace {
+  face: FaceKind;
+  tier: number;
+  body: number;
+  level: number;
+  step: number;
 }
 
 /** A court as the terrain digs it: `floor` is its floor's height above the profile (m), `depth` under its lowest rim. */
@@ -214,6 +229,21 @@ export function makeTerrain(h: Habitat): Terrain {
   /** How rough the endcap is left where `gateAt` last shaped it: 1 wild, less on the Gate's built faces. */
   let built = 1;
 
+  /**
+   * How a Gate face's terraces are cut at a world point `e` m up the endcap (`grow`: how much the faces stand out there):
+   * one wall per `tier` of the `level`, which is the elevation less the Vine face's folds, plus the levels' wander.
+   */
+  const cutOf = (kind: FaceKind, x: number, y: number, z: number, e: number, grow: number): { tier: number; folds: number; level: number } => {
+    const spec = GATE_TERRACES[kind], tier = step * spec.step;
+    // Vine face: broad folds the contour terraces curve round. Water face: basins lobed like travertine rims.
+    const fold = massif * 3 + 1;
+    const folds = kind === 'vine' ? grow * massif * 0.6 * noise.fbm3(x / fold, y / fold, z / fold, 2) : 0;
+    // The Water face's basins are tens of metres across, a few to a face's width from afar (not a fine crinkle).
+    const lobe = tier * (kind === 'water' ? 16 : 12);
+    const wander = tier * spec.wander * noise.fbm3(x / lobe, y / lobe, z / lobe, 2);
+    return { tier, folds, level: e - folds + wander };
+  };
+
   /** The Gate's shape at a point of the port endcap, as a height over the slope (and how rough it is left, `built`). */
   const gateAt = (theta: number, s: number, x: number, y: number, z: number, e: number, alpha: number, g: number): number => {
     const r = Math.max(R * g, 1e-6);
@@ -223,14 +253,8 @@ export function makeTerrain(h: Habitat): Terrain {
     const buttress = grow * massif * 1.3 * Math.pow(smoothstep(0.65, 1, a), 1.3) * (0.85 + 0.3 * crags(x, y, s, crag * 2, 2));
     const body = 1 - smoothstep(0.6, 0.8, a);
     if (body <= 0) return buttress;
-    const spec = GATE_TERRACES[face.kind], tier = step * spec.step;
-    // Vine face: broad folds the contour terraces curve round. Water face: basins lobed like travertine rims.
-    const fold = massif * 3 + 1;
-    const folds = face.kind === 'vine' ? grow * massif * 0.6 * noise.fbm3(x / fold, y / fold, z / fold, 2) : 0;
-    // The Water face's basins are tens of metres across, a few to a face's width from afar (not a fine crinkle).
-    const lobe = tier * (face.kind === 'water' ? 16 : 12);
-    const wander = tier * spec.wander * noise.fbm3(x / lobe, y / lobe, z / lobe, 2);
-    let shape = terraces(e - folds + wander, tier, alpha, spec.tread, spec.riser) + folds;
+    const spec = GATE_TERRACES[face.kind], { tier, folds, level } = cutOf(face.kind, x, y, z, e, grow);
+    let shape = terraces(level, tier, alpha, spec.tread, spec.riser) + folds;
     // Stair face: the Lift Stair's ramp, a plain even slope up the main valley's line.
     // The Stair face is dressed stone, the Vine face tilled; the Water face keeps the rock it was cut from.
     built = 1 - body * (face.kind === 'stair' ? 0.95 : face.kind === 'vine' ? 0.6 : 0);
@@ -378,5 +402,15 @@ export function makeTerrain(h: Habitat): Terrain {
     return surface > heightAt(at.theta, at.s) ? surface - at.h : 0;
   };
 
-  return { habitat: h, form, lake, rivers, riverAt: inRiver, heightAt, standAt, waterDepth, courtAt, courts: courts.map((c) => c.court) };
+  const terraceAt = (theta: number, s: number): GateTerrace | null => {
+    if (!(s > floorEnd && s < profile.length)) return null;
+    const p = profile.at(s), g = p.r / R, [x, y, z] = at(theta, s);
+    const { valley, across } = form.acrossAt(theta, s), face = form.faces[valley].kind;
+    const body = 1 - smoothstep(0.6, 0.8, Math.abs(across));
+    if (body <= 0) return null;
+    const { tier, level } = cutOf(face, x, y, z, R - p.r, smoothstep(0.97, 0.8, g));
+    return { face, tier: Math.floor(level / tier), body, level, step: tier };
+  };
+
+  return { habitat: h, form, lake, rivers, riverAt: inRiver, heightAt, standAt, waterDepth, courtAt, courts: courts.map((c) => c.court), terraceAt };
 }

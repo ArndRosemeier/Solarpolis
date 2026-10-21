@@ -183,6 +183,11 @@ export interface LandPlan {
    * ways between the entrances, and the trail up the Mountain. Human sizes: they do not grow with the habitat.
    */
   pathWidth: { sunwalk: number; way: number; trail: number };
+  /**
+   * How big the planted places are (m, gen/places.ts): an orchard block's length near an entrance, and how wide one
+   * parcel of the Vine face's terraces is around the axis (vines, an orchard or meadow). Human sizes, like the paths.
+   */
+  places: { orchard: number; parcel: number };
 }
 
 export interface HabitatParams {
