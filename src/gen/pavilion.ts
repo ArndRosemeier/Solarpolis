@@ -125,7 +125,8 @@ function around(q: PavilionPlan, level: LandmarkLevel): number {
   return Math.min(512, Math.max(128, 8 * Math.round((2 * Math.PI * q.radius) / q.handrail / 8)));
 }
 
-const polar = (r: number, a: number, z: number): Vec3 => [r * Math.cos(a), r * Math.sin(a), z];
+/** A point at radius r and angle a (from +x toward +y), height z. */
+export const polar = (r: number, a: number, z: number): Vec3 => [r * Math.cos(a), r * Math.sin(a), z];
 
 /** The pavilion at one level, in its own frame, as a mapped and coloured shape. */
 export function buildPavilion(p: Pavilion, level: LandmarkLevel): Shape {

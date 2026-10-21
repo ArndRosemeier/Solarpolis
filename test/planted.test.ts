@@ -6,7 +6,7 @@ import { makeEcology, type Ecology } from '../src/gen/ecology';
 import { planOf, siteOf } from '../src/gen/plan';
 import { FOUNDERS_GROWTH, plantSpec, plantedCanopy, plantingsOf, scatterKeepsOff } from '../src/gen/planted';
 import { LEVELS, cellBounds, cellsNear, plantCell, plantsOf, PLANT_STRIDE, type Level } from '../src/gen/scatter';
-import { placeAt } from '../src/gen/landmarks';
+import { placeAt } from '../src/gen/shapes';
 import { outOfPlace } from '../src/gen/shapes';
 import { TREE_HEIGHT } from '../src/gen/ecology';
 

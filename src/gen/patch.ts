@@ -3,7 +3,7 @@
  * relative to its own origin (the point on the ground at its centre) so the physics engine's 32-bit floats stay
  * precise (docs/ARCHITECTURE.md, "Where does the camera sit?"). The same heights as the tiles (`terrain.heightAt`),
  * on a grid of (θ, s), so it wraps around the axis and climbs the endcaps like everything else, with the solid parts of
- * the landmarks and the Lift Stair near it. Pure.
+ * the landmarks, the Lift Stair and the entrance courts near it. Pure.
  */
 import { toWorld, type Vec3 } from '../blueprint';
 import type { Terrain } from './terrain';
@@ -11,6 +11,8 @@ import { buildLandmark, frameOf, landmarksOf, reachOf, type Landmark } from './l
 import { outOfPlace } from './shapes';
 import { kept } from './kept';
 import { buildStairSolid } from './liftStairMesh';
+import { courtSolids } from './courts';
+import { v3sub } from '@futuremagic/core';
 
 export interface GroundPatch {
   /** Where it was asked for (θ, s), and its world origin (float64). */
@@ -47,7 +49,7 @@ export function buildPatch(terrain: Terrain, theta: number, s: number, size: num
     index[k++] = a; index[k++] = d; index[k++] = b; index[k++] = b; index[k++] = d; index[k++] = e;
   }
   // The landmarks' and the Lift Stair's solid parts follow the ground's triangles, in the same frame.
-  const parts = [{ positions, index }, landmarkSolids(terrain, origin, size), buildStairSolid(terrain.habitat, origin, size * 0.75)].filter((a): a is { positions: Float32Array; index: Uint32Array } => !!a && a.index.length > 0);
+  const parts = [{ positions, index }, landmarkSolids(terrain, origin, size), buildStairSolid(terrain.habitat, origin, size * 0.75), courtSolidsNear(terrain, origin, size)].filter((a): a is { positions: Float32Array; index: Uint32Array } => !!a && a.index.length > 0);
   if (parts.length === 1) return { theta, s, origin, size, positions, index };
   const all = new Float32Array(parts.reduce((n, a) => n + a.positions.length, 0)), idx = new Uint32Array(parts.reduce((n, a) => n + a.index.length, 0));
   let vertices = 0, at = 0;
@@ -65,27 +67,42 @@ export function buildPatch(terrain: Terrain, theta: number, s: number, size: num
  * to the patch's origin: the triangles with a corner within the patch.
  */
 function landmarkSolids(terrain: Terrain, origin: Vec3, size: number): { positions: Float32Array; index: Uint32Array } {
-  const pos: number[] = [], idx: number[] = [];
+  const out: Solid = { pos: [], idx: [] };
   for (const l of landmarksOf(terrain)) {
     const f = frameOf(terrain.habitat, l);
     if (Math.hypot(f.at[0] - origin[0], f.at[1] - origin[1], f.at[2] - origin[2]) > reachOf(l) + size) continue;
-    const a = solidOf(l), map = new Map<number, number>(), half = size * 0.75;
-    const toPatch = (v: number): Vec3 => {
-      const w = outOfPlace(f, [a.positions[v * 3], a.positions[v * 3 + 1], a.positions[v * 3 + 2]]);
-      return [w[0] - origin[0], w[1] - origin[1], w[2] - origin[2]];
-    };
-    const inPatch = (p: Vec3) => Math.hypot(p[0], p[1], p[2]) < half;
-    for (let t = 0; t < a.index.length; t += 3) {
-      const corners = [a.index[t], a.index[t + 1], a.index[t + 2]];
-      if (!corners.some((v) => inPatch(toPatch(v)))) continue;
-      for (const v of corners) {
-        let k = map.get(v);
-        if (k === undefined) { k = pos.length / 3; pos.push(...toPatch(v)); map.set(v, k); }
-        idx.push(k);
-      }
-    }
+    keepNear(out, solidOf(l), (p) => v3sub(outOfPlace(f, p), origin), size * 0.75);
   }
-  return { positions: new Float32Array(pos), index: new Uint32Array(idx) };
+  return arraysOf(out);
+}
+
+/** The entrance courts' solid parts near a patch (gen/courts.ts), relative to its origin. */
+function courtSolidsNear(terrain: Terrain, origin: Vec3, size: number): { positions: Float32Array; index: Uint32Array } {
+  const out: Solid = { pos: [], idx: [] };
+  for (const a of courtSolids(terrain, origin, size)) keepNear(out, a, (p) => v3sub(p, origin), size * 0.75);
+  return arraysOf(out);
+}
+
+/** Triangles gathered for a patch. */
+interface Solid {
+  pos: number[];
+  idx: number[];
+}
+
+const arraysOf = (s: Solid): { positions: Float32Array; index: Uint32Array } => ({ positions: new Float32Array(s.pos), index: new Uint32Array(s.idx) });
+
+/** Add the triangles of `a` with a corner within `half` of the patch's origin, each corner put into the patch by `toPatch`. */
+function keepNear(out: Solid, a: { positions: Float32Array; index: Uint32Array }, toPatch: (p: Vec3) => Vec3, half: number): void {
+  const map = new Map<number, number>(), corner = (v: number): Vec3 => toPatch([a.positions[v * 3], a.positions[v * 3 + 1], a.positions[v * 3 + 2]]);
+  for (let t = 0; t < a.index.length; t += 3) {
+    const corners = [a.index[t], a.index[t + 1], a.index[t + 2]], placed = corners.map(corner);
+    if (!placed.some((p) => Math.hypot(p[0], p[1], p[2]) < half)) continue;
+    corners.forEach((v, c) => {
+      let k = map.get(v);
+      if (k === undefined) { k = out.pos.length / 3; out.pos.push(...placed[c]); map.set(v, k); }
+      out.idx.push(k);
+    });
+  }
 }
 
 /** A landmark's solid parts, built once. */

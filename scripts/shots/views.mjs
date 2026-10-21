@@ -98,6 +98,11 @@ export const views = {
   'hut-beside': { query: 'view=inside', about: 'floating beside the summit hut on its cliff: roof, hall, terrace, prow, buttress', settle: 6000, steps: [{ debug: 'Fly: by the summit hut' }, { wait: 12000 }] },
   'hut-under': { query: 'view=inside', about: 'floating under the summit hut: corbels and struts raking back into the rock', settle: 6000, steps: [{ debug: 'Fly: under the summit hut' }, { wait: 12000 }] },
   'hut-far': { query: 'view=inside', about: 'the summit hut from a few hundred metres out, small on the Mountain\'s face', settle: 6000, steps: [{ debug: 'Fly: the summit hut from afar' }, { wait: 12000 }] },
+  'court-floor': { query: 'view=inside', about: 'standing on an entrance court\'s paved floor, facing the portal with its bronze lift doors, then turning to the stairs', settle: 6000, steps: [{ debug: 'To an entrance court: on its floor' }, { wait: 9000 }, { shot: 'portal' }, { look: [1800, 0] }, { wait: 1500 }] },
+  'court-rim': { query: 'view=inside', about: 'on an entrance court\'s rim walk, looking down into it: wall, stairs, portal, benches', settle: 6000, steps: [{ debug: 'To an entrance court: on its rim walk' }, { wait: 9000 }, { look: [0, 140] }, { wait: 1500 }] },
+  'court-over': { query: 'view=inside', about: 'floating over an entrance court, the whole hollow in view', settle: 6000, steps: [{ debug: 'Fly: over an entrance court' }, { wait: 12000 }] },
+  'court-far': { query: 'view=inside', about: 'entrance courts from a few hundred metres up, set into the land', settle: 6000, steps: [{ debug: 'Fly: entrance courts from afar' }, { wait: 12000 }] },
+  'court-letgo': { query: 'view=inside', about: 'in a court where the land was let go: no railings, weathered stone', settle: 6000, steps: [{ debug: 'To a court where the land was let go' }, { wait: 9000 }] },
   // The founders' grove (gen/planted.ts): inside its ring, over it, and from afar.
   'grove-in': { query: 'view=inside', about: 'standing inside the founders\' grove, looking across its clearing at the ring of trees', settle: 6000, steps: [{ debug: 'To the founders\' grove' }, { wait: 9000 }] },
   'grove-over': { query: 'view=inside', about: 'floating above the founders\' grove, looking down at the ring', settle: 6000, steps: [{ debug: 'Fly: over the founders\' grove' }, { wait: 9000 }] },

@@ -22,7 +22,7 @@
  * mid adds posts, struts, the hearth, beams and top rails, and near adds railings, table, benches, lanterns and
  * boards. Pure.
  */
-import { v3add, v3cross, v3dot, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
+import { v3add, v3cross, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
 import { Shape, type RGB } from './shapes';
 import { FINISH, railing, topRail, type LandmarkLevel } from './pavilion';
 import type { Hut } from './landmarks';
@@ -343,9 +343,7 @@ function hexa(sh: Shape, lo: readonly Vec3[], hi: readonly Vec3[], col: RGB, top
   const mid = v3scale([...lo, ...hi].reduce((a, p) => v3add(a, p), [0, 0, 0] as Vec3), 1 / 8);
   const out = (pts: Vec3[], c: RGB): void => {
     const centre = v3scale(pts.reduce((a, p) => v3add(a, p), [0, 0, 0] as Vec3), 1 / 4);
-    const n = v3cross(v3sub(pts[2], pts[0]), v3sub(pts[3], pts[1]));
-    if (v3dot(n, v3sub(centre, mid)) >= 0) sh.face(pts[0], pts[1], pts[2], pts[3], c);
-    else sh.face(pts[3], pts[2], pts[1], pts[0], c);
+    sh.faceToward(pts[0], pts[1], pts[2], pts[3], v3sub(centre, mid), c);
   };
   out([...lo], col);
   for (let i = 0; i < 4; i++) { const j = (i + 1) % 4; out([lo[i], lo[j], hi[j], hi[i]], col); }

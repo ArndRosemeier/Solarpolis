@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MATRIX, derive, fromWorld, toWorld, type Habitat, type HabitatParams } from '../src/blueprint';
 import { legShapesOf, liftStairOf, onLeg, rampOf, riserAt, stairKeepsClear, stairStandAt, stairTopAt } from '../src/gen/liftStair';
-import { buildStairSolid, buildStairTile, stairGridOf, stairPartsIn, stairRoots, stairTilesFor, type StairParts } from '../src/gen/liftStairMesh';
-import { childrenOf, coverOf, tileId } from '../src/gen/detailTree';
+import { buildStairSolid, buildStairTile, stairGridOf, stairPartsIn, stairTilesFor, type StairParts } from '../src/gen/liftStairMesh';
+import { childrenOf, coverOf, rootTiles, tileId } from '../src/gen/detailTree';
 import { FINISH } from '../src/gen/pavilion';
 import { outOfPlace } from '../src/gen/shapes';
 import { siteOf, planOf } from '../src/gen/plan';
@@ -55,7 +55,7 @@ for (const { name, params } of MATRIX) {
   test(`lift stair (${name}): tiles own every part once, faces look out, the eye's cover is whole`, () => {
     const h = habitatOf(name, params), st = liftStairOf(h), g = stairGridOf(h);
     if (!st || !g) return;
-    const ramp = rampOf(h), roots = stairRoots(g);
+    const ramp = rampOf(h), roots = rootTiles(g);
     const total = { platforms: st.platforms.length, aprons: legShapesOf(st).reduce((n, s) => n + s.aprons.length, 0), steps: st.legs.reduce((n, l) => n + l.steps, 0) };
     // The roots own every part exactly once.
     const sum = { platforms: 0, aprons: 0, steps: 0 };

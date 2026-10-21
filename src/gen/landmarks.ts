@@ -17,10 +17,11 @@ import type { Terrain } from './terrain';
 import { buildPavilion, pavilionPlan, pavilionTop, roofAt, type LandmarkLevel } from './pavilion';
 import { buildHut, hutBounds, hutPlan, hutScale, hutTop, strutDir, strutFeet } from './summitHut';
 import { planOf, siteOf } from './plan';
-import { intoPlace, outOfPlace, type Place, type Shape } from './shapes';
+import { intoPlace, outOfPlace, placeAt, type Place, type Shape } from './shapes';
 import { kept } from './kept';
 import { stairKeepsClear, stairStandAt } from './liftStair';
 import { standThrough } from './standing';
+import { courtTopAt } from './courts';
 
 /** A bridge along the axis from the deck's edge (`from`, m from the centre) to the shore (`to`), `end` m over the water there. */
 export interface Bridge {
@@ -214,13 +215,6 @@ export function sightOf(l: Landmark): Sight {
   return { near: q.handrail * 0.07, mid: q.riser, roof: [q.reach, roofAt(q, q.reach) - q.shell, q.oculus, roofAt(q, q.oculus) - q.shell], away };
 }
 
-/** A frame standing on the profile at (θ, s), `height` above it: x along the axis, y around, z toward the axis (up). */
-export function placeAt(h: Habitat, theta: number, s: number, height: number): Place {
-  const at = toWorld(h.profile, { theta, s, h: height });
-  const c = Math.cos(theta), sn = Math.sin(theta);
-  return { at, ex: [0, 0, 1], ey: [-sn, c, 0], ez: [-c, -sn, 0] };
-}
-
 /** How far out from its frame's origin a landmark reaches: bridges and eaves, or the hut's anchor and struts (m). */
 export function reachOf(l: Landmark): number {
   if (l.kind === 'hut') {
@@ -258,6 +252,8 @@ const near = (f: Place, l: Landmark, p: Vec3, margin: number): boolean => {
 export function keptClear(t: Terrain, theta: number, s: number): boolean {
   const h = t.habitat;
   if (h.params.landmarks && stairKeepsClear(h, theta, s, h.params.landmarks.handrail * 2)) return true;
+  // The entrance courts and their clear ring (gen/courts.ts).
+  if (t.courtAt(theta, s)) return true;
   for (const l of landmarksOf(t)) {
     if (l.kind === 'hut') {
       // Its whole box, a few handrails out: on the face of the rock the ground runs up past it, not under it.
@@ -285,6 +281,8 @@ export function keptClear(t: Terrain, theta: number, s: number): boolean {
 export function landmarkTopAt(t: Terrain, theta: number, s: number): number | null {
   const h = t.habitat, stair = stairStandAt(h, theta, s);
   if (stair !== null) return stair;
+  const court = courtTopAt(t, theta, s);
+  if (court !== null) return court;
   for (const l of landmarksOf(t)) {
     if (l.kind === 'hut') {
       // Up the profile's normal (it leans far from true up on the cliff) to where it comes out through the floor.
