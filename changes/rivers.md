@@ -5,4 +5,4 @@
 - The water flows: ripples move downstream, rapids and falls foam white, the shallows by the banks show the riverbed, and the sunline glints off the moving surface.
 - The banks are wetter, so reeds and willows grow along them, with gravel at the water's edge. The woods open over the water.
 - Rivers stay visible from far away, even across the cylinder.
-- Debug menu: Go to the nearest river, or the nearest falls.
+- Debug menu: Go to the nearest river, or to below the nearest falls.

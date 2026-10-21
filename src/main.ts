@@ -196,7 +196,7 @@ const toRiver = (label: string, down: number, pick: (r: River, i: number) => boo
   },
 });
 toRiver('To the nearest river', 40, (r, i) => r.steep[i] < 0.05);
-toRiver('To the nearest falls', 30, (r, i) => r.steep[i] > 0.8);
+toRiver('Below the nearest falls', 200, (r, i) => r.steep[i] > 0.8);
 go('The middle of the floor', (h) => (h.profile.floorStart + h.profile.floorEnd) / 2);
 go('The foot of the wild endcap', (h) => h.profile.floorStart + 20);
 go('Halfway up the wild endcap', (h) => h.profile.floorStart / 2);
