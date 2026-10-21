@@ -42,6 +42,13 @@ for (const { name, params } of MATRIX) {
     const t = 12345;
     assert.deepEqual(cloudsAt(derive(params), t), cloudsAt(h, t), 'same seed, same weather');
     assert.ok(Math.abs(cloudsAt(h, t)!.along - c.wind.along * t) < 1e-6);
+    // The finer shapes drift through the big ones: faster with the wind, and across it, so the clouds change as they go.
+    const a = cloudsAt(h, t)!, b = cloudsAt(h, t + 600)!, middle = h.radius - c.base - c.thickness / 2;
+    const turned = (x: number, y: number) => Math.atan2(Math.sin(y - x), Math.cos(y - x)) * middle;
+    const moved = [b.along - a.along, turned(a.turn, b.turn)], fine = [b.fine.along - a.fine.along, turned(a.fine.turn, b.fine.turn)];
+    const slip = Math.hypot(fine[0] - moved[0], fine[1] - moved[1]);
+    assert.ok(slip > 600 * 1, `the finer shapes slip ${slip.toFixed(0)} m in ten minutes`);
+    assert.ok(Math.hypot(moved[0], moved[1]) > 600 * 5, 'a breeze: the clouds cross their own width within minutes');
   });
 }
 
