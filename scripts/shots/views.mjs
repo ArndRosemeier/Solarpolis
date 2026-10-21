@@ -17,6 +17,10 @@
  */
 export const views = {
   title: { query: '', about: 'the title card over the attract flight', default: true },
+  arrival: {
+    query: '', about: 'Start: the passenger\'s ship down its corridor (-corridor), nearing the berth (-berth), then just latched',
+    steps: [{ run: async (page) => page.click('.title-start') }, { wait: 5000 }, { shot: 'corridor' }, { wait: 14000 }, { shot: 'berth' }, { wait: 3500 }],
+  },
   lab: { query: 'view=lab', about: 'the Blueprint Lab', settle: 1000, default: true },
   inside: { query: 'view=inside', about: 'standing on the floor, first look', default: true },
   'inside-up': { query: 'view=inside', about: 'from the floor, looking up across the cylinder', steps: [{ look: [0, -250] }] },

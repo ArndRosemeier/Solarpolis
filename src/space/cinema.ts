@@ -7,12 +7,21 @@
  * 2. The ship's own camera at about 50 outer radii, zooming slowly from wide to long: the glint becomes a spool.
  * 3. Alongside the drum, one outer radius off it, flying toward the port end while the patchwork streams past.
  *
+ * After Start (`arrival`), the passenger's own ship (space/traffic.ts, `guestVisit`) comes in to its berth:
+ *
+ * 4. Above the ship, looking down the corridor past its nose: the still spindle grows in front of the turning endcap.
+ * 5. Close on the berth: the nose meets the collar, a soft jolt as it latches.
+ *
+ * Each shot plays at real speed; the clock jumps at the cuts, so nothing moves faster than it would (the real
+ * approach takes many minutes).
+ *
  * Every distance is a multiple of the home habitat's outer radius, so the same shots frame the smallest and the
  * largest habitat. Positions are in the home habitat's orbit frame (its centre at the origin), float64. Pure.
  */
 import { v3add, v3cross, v3dot, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
 import type { Space } from './space';
 import { skyFrom } from './sky';
+import { beforeBerth, berthOf, guestShip, guestVisit, shipAt, type Visit } from './traffic';
 
 /** Shot lengths (s), as the plan has them. */
 export const SHOTS = [12, 13, 15] as const;
@@ -29,7 +38,7 @@ export const LIT_FROM = 0.55;
 export const LIT_TO = 0.85;
 
 export interface Frame {
-  shot: 0 | 1 | 2;
+  shot: 0 | 1 | 2 | 3 | 4;
   /** Seconds into the shot, and the shot's length. */
   time: number;
   length: number;
@@ -140,6 +149,55 @@ export function attractLoop(space: Space, start: number, keepOut: number, shipLe
       const eye = v3add(v3scale(across, 2 * Ro), v3scale(port, z));
       const target = v3add(v3scale(across, Ro * 0.6), v3scale(port, z + 2.5 * Ro));
       return { shot: 2, time: t, length: SHOTS[2], eye, target, up: across, fov: 50, ship: null, title: 1 };
+    },
+  };
+}
+
+/** The arrival's shot lengths (s): shot 4 down the corridor, shot 5 at the berth. */
+export const ARRIVAL_SHOTS = [15, 10] as const;
+/** Shot 4 starts with the ship this far up its corridor (outer radii; at most half its coast, where it slows). */
+const SHOT4_UP = 1.5;
+/** Shot 5 starts this long before the ship berths (s); the rest of it is the latch and the jolt. */
+const SHOT5_BEFORE = 7;
+
+export interface ArrivalFrame extends Frame {
+  /** The clock time this frame shows (s since the space's epoch). */
+  clock: number;
+}
+
+export interface Arrival {
+  /** The passenger's ship's visit (draw it with the traffic: `trafficAt(..., guest)`). */
+  guest: Visit;
+  /** The frame at `elapsed` seconds after Start; null once the arrival is over. */
+  at(elapsed: number): ArrivalFrame | null;
+}
+
+/** The arrival after Start, pressed at clock time `after`: the passenger's ship's last minutes in two shots. */
+export function arrival(space: Space, after: number): Arrival {
+  const p = space.home, h = p.habitat, ship = guestShip(space, p), L = ship.length, B = ship.beam;
+  const lead = beforeBerth(h, ship, SHOT4_UP * h.exterior.radius);
+  const guest = guestVisit(space, p, after, lead), { collar, radial } = berthOf(h, guest.arm);
+  const toOrbit = (q: Vec3, t: number): Vec3 => space.frames.position(q, p.spindleFrame, p.orbitFrame, t);
+  const dirOrbit = (q: Vec3, t: number): Vec3 => space.frames.direction(q, p.spindleFrame, p.orbitFrame, t);
+  const side = v3cross([0, 0, 1], radial);
+  return {
+    guest,
+    at(elapsed: number): ArrivalFrame | null {
+      if (elapsed < 0 || elapsed >= ARRIVAL_SHOTS[0] + ARRIVAL_SHOTS[1]) return null;
+      if (elapsed < ARRIVAL_SHOTS[0]) {
+        // Shot 4: above the ship's back, toward the axis, a little to its side, looking past its nose at the spindle.
+        const clock = guest.docked - lead + elapsed, s = shipAt(h, guest, clock)!;
+        const mid = v3add(s.position, v3scale(s.forward, L / 2));
+        const eye = v3add(mid, v3add(v3scale(s.forward, -1.6 * L), v3add(v3scale(s.up, 0.5 * L), v3scale(side, 0.3 * L))));
+        const target: Vec3 = [0, 0, h.exterior.spindle.arms.z];
+        return { shot: 3, time: elapsed, length: ARRIVAL_SHOTS[0], eye: toOrbit(eye, clock), target: toOrbit(target, clock), up: dirOrbit(s.up, clock), fov: 50, ship: null, title: 0, clock };
+      }
+      // Shot 5: beside the arm's tip, a little out along it, the collar in the middle; a soft jolt as it latches.
+      const time = elapsed - ARRIVAL_SHOTS[0], clock = guest.docked - SHOT5_BEFORE + time, since = clock - guest.docked;
+      const jolt = since > 0 ? 0.03 * B * Math.exp(-3 * since) * Math.sin(4 * Math.PI * since) : 0;
+      const eye = v3add(collar, v3add(v3scale(radial, 0.4 * L - jolt), v3add(v3scale(side, 2.5 * B), [0, 0, 1.2 * B])));
+      const target = v3add(collar, v3scale(radial, 0.12 * L));
+      return { shot: 4, time, length: ARRIVAL_SHOTS[1], eye: toOrbit(eye, clock), target: toOrbit(target, clock), up: dirOrbit([0, 0, 1], clock), fov: 45, ship: null, title: 0, clock };
     },
   };
 }
