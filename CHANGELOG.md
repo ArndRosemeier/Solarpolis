@@ -2,6 +2,13 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.013 — Walking with real weight
+
+- On foot you now have a body: you walk over the hills, Space jumps, and you fall off ledges.
+- Up always points to the axis. On the endcap slopes you stay upright while the ground tilts away, and gravity gets weaker the higher you climb, so jumps there carry further.
+- Walk into the lake and you float with your head out and swim slowly.
+- The debug menu shows whether you are standing, in the air or swimming, and how strong gravity is where you are.
+
 ## v0.012 — Things fall the way they do in a spinning habitat
 
 - Physics arrives: in the debug menu (Physics), drop a ball from 20 m or 100 m. It falls, bounces and rolls on the hills.
