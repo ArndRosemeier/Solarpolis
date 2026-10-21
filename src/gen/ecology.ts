@@ -105,11 +105,12 @@ export function makeEcology(terrain: Terrain): Ecology {
   const closest = woods.reduce((best, w, k) => (w.cover > woods[best].cover ? k : best), 0);
   const belt = Math.max(patch * 0.03, woods[closest].spacing * 1.5);
   const gaps = new Noise(deriveSeed(h.seed, 'ecology', 'belts'));
-  /** How a style favours each biome (1 neutral), by how close the biome's crown cover is to the style's. */
+  /** How a style leans on each biome's bid (1 neutral), by how close the biome's crown cover is to the style's. */
   const favour = new Map<District['style'], Float32Array>();
   for (const style of Object.keys(STYLE_LAND) as District['style'][]) {
     const land = STYLE_LAND[style], f = new Float32Array(count);
-    for (let b = 0; b < count; b++) f[b] = 1 - land.hold + land.hold * (land.cover === null ? 1 : Math.exp(-(((woods[b].cover - land.cover) / 0.3) ** 2)));
+    // Kept as the lean it gives (favour ** STYLE_LEAN), so the bids need no power per point.
+    for (let b = 0; b < count; b++) f[b] = (1 - land.hold + land.hold * (land.cover === null ? 1 : Math.exp(-(((woods[b].cover - land.cover) / 0.3) ** 2)))) ** STYLE_LEAN;
     favour.set(style, f);
   }
   /** A belt's pull to the closest woods, as each biome's favour. */
@@ -150,11 +151,13 @@ export function makeEcology(terrain: Terrain): Ecology {
     for (let b = 0; b < count; b++) {
       const spec = biomes[b];
       const suits = inRange(m, spec.moisture, MOISTURE_EDGE) * inRange(e, spec.height, HEIGHT_EDGE) * (1 - smoothstep(spec.slope - 0.1, spec.slope + 0.1, slope));
+      // A biome that cannot grow here bids nothing: its patches need no noise.
+      if (suits === 0) { out[b] = 0; continue; }
       let bid = suits * spec.share * (0.3 + 0.7 * smoothstep(-0.6, 0.6, patterns[b].fbm3(x / grain, y / grain, z / grain, 3)));
       // In a belt the closest woods win wherever they can grow.
       if (hedge > 0) bid = bid * (1 - hedge) + hedge * suits * beltFavour[b];
       // The style leans on the patches rather than painting over them: its woods keep glades, its meadows clumps.
-      out[b] = Math.pow(bid, climate.edges) * (style ? style[b] ** STYLE_LEAN : 1);
+      out[b] = Math.pow(bid, climate.edges) * (style ? style[b] : 1);
       sum += out[b];
     }
     if (sum > 0) for (let b = 0; b < count; b++) out[b] /= sum;

@@ -336,15 +336,15 @@ export function makePlan(h: Habitat): Plan {
     if (!(s >= reserveEnd && s <= floorEnd) || districts.length === 0) return false;
     if (lake && Math.abs(s - lake.s) < lake.halfWidth) return false;
     const u = Math.cos(theta) * R, v = Math.sin(theta) * R;
-    theta += (sway / R) * bend.fbm3(u / bendWidth, v / bendWidth, s / bendWidth, 2);
-    s += sway * bend.fbm3(u / bendWidth + 31.7, v / bendWidth, s / bendWidth, 2);
+    theta += (sway / R) * bend.fbm3(u / bendWidth, v / bendWidth, s / bendWidth, 1);
+    s += sway * bend.fbm3(u / bendWidth + 31.7, v / bendWidth, s / bendWidth, 1);
     const r0 = Math.min(rows - 1, Math.max(0, Math.floor((s - reserveEnd) / rowLength)));
     // Columns lined up with the valleys start half a valley before the first one's middle. A seed strays at most a
     // third of a row along the axis, so the rows either side hold every rival; around the axis the valleys wander more.
     const c0 = Math.floor(wrap(theta - phase + (perValley ? gap / 2 : 0)) / colWidth);
     for (let r = Math.max(0, r0 - 1); r <= Math.min(rows - 1, r0 + 1); r++) {
       for (let c = c0 - 2; c <= c0 + 2; c++) {
-        const k = cell(c, r), a = wrap(k.theta - theta) * R, b = k.s - s;
+        const k = cell(c, r), a = (k.theta - theta - TURN * Math.round((k.theta - theta) / TURN)) * R, b = k.s - s;
         near.push(k); near2.push(a * a + b * b);
       }
     }

@@ -2,6 +2,11 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.065 — Ground tiles build faster again
+
+- A biome that cannot grow at a point no longer works out its patch pattern there, and the district lookup is cheaper (one octave for the bending borders, the style's lean kept ready). The ground's colour per point is back to what it cost before the districts came, with the same result.
+- The districts' test has its own file, keeping the ecology tests under their time budget.
+
 ## v0.064 — The districts show in the land
 
 - Each district of the worked floor now grows its land in its style: groves keep closed woods with glades, herds keep wood pasture in wide sweeps, play districts open fields, water districts wet ground with reeds, orchards and makers small blocks of trees over meadow. Districts that let their land go keep the climate's own mix.
