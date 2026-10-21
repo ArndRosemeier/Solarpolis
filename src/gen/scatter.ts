@@ -344,14 +344,21 @@ function tiltAt(ecology: Ecology, theta: number, s: number, p: Vec3): [number, n
   // The frame `plantFrame` (render/materials.ts) stands a plant in: x = (up.y, −up.x, 0), z the axis.
   const t = ecology.terrain, { profile } = t.habitat, d = 0.5;
   const r = Math.max(Math.hypot(p[0], p[1]), 1e-6), up: Vec3 = [-p[0] / r, -p[1] / r, 0], side: Vec3 = [up[1], -up[0], 0];
-  const rise = (dir: Vec3, th0: number, s0: number, th1: number, s1: number): number => {
+  // Two steps over the ground, around the axis and along the profile, each in the frame (x, z, up). Where the ground's
+  // height changes around the axis on a steep endcap, the step around moves along z as well, so the plane through
+  // both steps is solved for, not read off each step alone.
+  const groundStep = (th0: number, s0: number, th1: number, s1: number): [number, number, number] => {
     const a = toWorld(profile, { theta: th0, s: s0, h: t.heightAt(th0, s0) }), b = toWorld(profile, { theta: th1, s: s1, h: t.heightAt(th1, s1) });
     const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2];
-    const run = dx * dir[0] + dy * dir[1] + dz * dir[2], lift = dx * up[0] + dy * up[1] + dz * up[2];
-    return Math.abs(run) < 1e-6 ? 0 : Math.max(-MAX_TILT, Math.min(MAX_TILT, lift / run));
+    return [dx * side[0] + dy * side[1], dz, dx * up[0] + dy * up[1]];
   };
   const dth = d / Math.max(profile.at(s).r, 1e-6), s0 = Math.max(0, s - d), s1 = Math.min(profile.length, s + d);
-  return [rise(side, theta - dth, s, theta + dth, s), rise([0, 0, 1], theta, s0, theta, s1)];
+  const [ux, uz, uu] = groundStep(theta - dth, s, theta + dth, s), [vx, vz, vu] = groundStep(theta, s0, theta, s1);
+  // up = tx·x + tz·z through both steps.
+  const det = ux * vz - uz * vx;
+  if (Math.abs(det) < 1e-9) return [0, 0];
+  const clamp = (v: number): number => Math.max(-MAX_TILT, Math.min(MAX_TILT, v));
+  return [clamp((uu * vz - uz * vu) / det), clamp((ux * vu - uu * vx) / det)];
 }
 
 /** How steep the ground is at a point (0 flat … 1 a wall), from its height a step either way (m). */

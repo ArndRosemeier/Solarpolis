@@ -1,5 +1,6 @@
 /**
- * Rivers: springs high on both endcaps (fed by the habitat's pumped return, which runs back underground in the service
+ * Rivers: where the habitat plan wants them (`Landform.rivers`: the great river, the canal, brooks and cascades, each
+ * down its valley's line, spiralling with it up the endcaps), from springs high on both endcaps (fed by the habitat's pumped return, which runs back underground in the service
  * layer), falling down the terraces in cascades and winding across the floor into the ring lake. Without a lake there
  * are no rivers: on a level floor water has nowhere else to go.
  *
@@ -10,11 +11,13 @@
  *
  * Sizes come from `HabitatParams.relief.rivers`; the meanders scale with the river's width. Pure.
  */
-import { Noise, Rng, deriveSeed } from '@futuremagic/core';
+import { Noise, deriveSeed, smoothstep } from '@futuremagic/core';
 import type { Habitat } from '../blueprint';
-import type { Lake } from './terrain';
+import type { Landform, RiverRole } from './plan';
 
 export interface River {
+  /** What the plan made it for. */
+  role: RiverRole;
   /** The end its spring is on: wild rivers flow toward larger s, port rivers toward smaller. */
   from: 'wild' | 'port';
   /** Samples along s: the first at `s0`, then every `step` metres, `count` in all (ordered by s, not by flow). */
@@ -59,34 +62,30 @@ const LEAST_FALL = 2e-5;
 /**
  * The habitat's rivers, laid over the land before it is carved (`ground`: the land's height without rivers).
  */
-export function makeRivers(h: Habitat, lake: Lake | null, ground: (theta: number, s: number) => number): River[] {
-  const spec = h.params.relief.rivers;
-  if (!spec || !lake || spec.count <= 0) return [];
+export function makeRivers(form: Landform, ground: (theta: number, s: number) => number): River[] {
+  const h = form.habitat, lake = form.lake, spec = h.params.relief.rivers;
+  if (!spec || !lake || form.rivers.length === 0) return [];
   const { profile } = h;
-  const rng = new Rng(deriveSeed(h.seed, 'rivers'));
   const meander = new Noise(deriveSeed(h.seed, 'rivers', 'meander'));
   const half = spec.width / 2, step = Math.max(half, 1);
   const out: River[] = [];
-  for (let k = 0; k < spec.count; k++) {
-    const from = k % 2 === 0 ? 'wild' : 'port';
-    // Springs spread around the axis, half on each end, partway up the endcap.
-    const theta0 = (2 * Math.PI * (Math.floor(k / 2) + rng.range(0.15, 0.85))) / Math.ceil(spec.count / 2) + (from === 'port' ? Math.PI / spec.count : 0);
-    const up = rng.range(0.55, 0.85);
-    const spring = from === 'wild' ? profile.floorStart * (1 - up) : profile.floorEnd + (profile.length - profile.floorEnd) * up;
+  for (let k = 0; k < form.rivers.length; k++) {
+    const planned = form.rivers[k], { from, spring } = planned;
     // The mouth: a little way into the lake, so the river joins its water.
     const mouth = from === 'wild' ? lake.s - lake.halfWidth * 0.9 : lake.s + lake.halfWidth * 0.9;
     const lo = Math.min(spring, mouth), hi = Math.max(spring, mouth);
     const count = Math.max(2, Math.ceil((hi - lo) / step) + 1);
     const r: River = {
-      from, s0: lo, step: (hi - lo) / (count - 1), count, depth: spec.depth,
+      role: planned.role, from, s0: lo, step: (hi - lo) / (count - 1), count, depth: spec.depth,
       theta: new Float64Array(count), surface: new Float64Array(count), halfWidth: new Float64Array(count), run: new Float64Array(count), radius: new Float64Array(count), steep: new Float32Array(count),
     };
-    // Meanders: a slow wander across, a few widths out to either side, longer bends than they are wide.
-    const swing = spec.width * 6, bend = spec.width * 40;
+    // Meanders: a slow wander across, as many widths out to either side as the plan says, longer bends than they are
+    // wide. Up the endcaps the water keeps to its channel down the valley's line (the meanders die out up the foothills).
+    const swing = spec.width * planned.meander, bend = spec.width * 40;
     for (let i = 0; i < count; i++) {
       const s = lo + i * r.step, rad = Math.max(profile.at(s).r, half);
       r.radius[i] = rad;
-      r.theta[i] = theta0 + (swing * meander.fbm2(s / bend, k * 7.3, 3)) / rad;
+      r.theta[i] = form.routeOf(planned, s) + (swing * smoothstep(0.6, 1, form.gravityAt(s)) * meander.fbm2(s / bend, k * 7.3, 3)) / rad;
     }
     // Walk downstream from the spring in elevation (how far in from the hull, which is what water runs down): the surface
     // only falls, stays under the banks, and ends no lower than the lake.
@@ -170,7 +169,7 @@ export function carve(hit: RiverHit, depth: number, ground: number): number {
 /** How far out from its banks a river may carve: as far as the valley walls climb to the highest hill. */
 export function valleyReach(h: Habitat): number {
   const r = h.params.relief;
-  return r.rivers ? (r.hills + r.terraceStep + r.rivers.depth) / VALLEY : 0;
+  return r.rivers ? (r.hills + r.terraceStep + r.massif + r.rivers.depth) / VALLEY : 0;
 }
 
 /** The river sample nearest (θ, s) that `pick` accepts (by distance over the ground), or null. */

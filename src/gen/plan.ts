@@ -109,9 +109,12 @@ export interface PlanPath {
   points: Float64Array;
 }
 
-export interface Plan {
+/**
+ * The plan's big shapes, which the land itself is made from (terrain, rivers): the gradients, the valleys, the endcaps
+ * and the rivers' roles. Cheap to make (no districts, sites or paths), so every terrain makes its own.
+ */
+export interface Landform {
   readonly habitat: Habitat;
-  readonly culture: Culture;
   readonly lake: Lake | null;
   /** Where the reserve ends and the worked floor begins, along the profile. */
   readonly reserveEnd: number;
@@ -119,25 +122,38 @@ export interface Plan {
   readonly faces: readonly Face[];
   readonly mountain: Mountain;
   readonly rivers: readonly PlannedRiver[];
-  readonly districts: readonly District[];
-  /** Every site: the landmarks first, then the entrances. */
-  readonly sites: readonly Site[];
-  readonly paths: readonly PlanPath[];
+  /** Where the first valley starts around the axis, before it wanders. */
+  readonly phase: number;
+  /** Half the width of the Lift Stair, the plain ramp up the middle of the Stair face (m). */
+  readonly stairHalfWidth: number;
   /** How made and tended the land is at s: 0 in the wild reserve, rising to 1 at the hub. */
   careAt(s: number): number;
   /** Gravity at the ground at s as a share of the floor's, and its band. */
   gravityAt(s: number): number;
   bandAt(s: number): Band;
-  /** The middle line of valley k at s (θ, unwrapped near the valley's own start). */
+  /**
+   * The middle line of valley k at s (θ, unwrapped near the valley's own start). Up the endcaps the valleys turn
+   * spinward (`LandPlan.spiral`), so their couloirs, the Gate's faces and the rivers in them spiral toward the axis.
+   */
   valleyAt(k: number, s: number): number;
   /** Where (θ, s) lies across the valleys: the nearest valley, and −1 … 1 from one ridge over its middle (0) to the next. */
   acrossAt(theta: number, s: number): { valley: number; across: number };
-  /** The port face a point of the port endcap looks out from (by θ alone; the face reaches down to the floor). */
-  faceAt(theta: number): Face;
-  /** The district a point of the worked floor belongs to, or null (the reserve, the lake, the endcaps). */
-  districtAt(theta: number, s: number): District | null;
+  /** The port face a point of the port endcap belongs to (the face of the valley it lies in). */
+  faceAt(theta: number, s: number): Face;
   /** Where a planned river's middle line runs at s (θ), before it meanders. */
   routeOf(river: PlannedRiver, s: number): number;
+  /** The point of an endcap (`wild`, or the port's) where gravity is the share `g` of the floor's, along the profile. */
+  endcapAt(wild: boolean, g: number): number;
+}
+
+export interface Plan extends Landform {
+  readonly culture: Culture;
+  readonly districts: readonly District[];
+  /** Every site: the landmarks first, then the entrances. */
+  readonly sites: readonly Site[];
+  readonly paths: readonly PlanPath[];
+  /** The district a point of the worked floor belongs to, or null (the reserve, the lake, the endcaps). */
+  districtAt(theta: number, s: number): District | null;
 }
 
 /** Brings an angle into [−π, π] (the shortest turn to it). */
@@ -167,9 +183,10 @@ export const siteOf = (plan: Plan, kind: SiteKind): Site | undefined => plan.sit
 /** The habitat's plan, made once per habitat and then kept (making one walks the whole floor). */
 export const planOf: (h: Habitat) => Plan = kept(makePlan);
 
-export function makePlan(h: Habitat): Plan {
-  const culture = cultureOf(h.params.culture);
-  if (!culture) throw new Error(`no culture "${h.params.culture}" in the catalogue`);
+/** The habitat's landform, made once per habitat and kept (the terrain and the plan share it). */
+export const landformOf: (h: Habitat) => Landform = kept(makeLandform);
+
+export function makeLandform(h: Habitat): Landform {
   const { profile, params } = h, R = h.radius, spec = params.plan;
   const { floorStart, floorEnd } = profile, floor = floorEnd - floorStart;
   const N = Math.max(1, Math.round(spec.valleys)), gap = TURN / N;
@@ -191,6 +208,8 @@ export function makePlan(h: Habitat): Plan {
     return 1;
   };
   const gravityAt = (s: number): number => Math.min(1, profile.at(s).r / R);
+  // The turn up the endcaps: none on the floor, the whole spiral at the axis.
+  const twist = (s: number): number => (s < floorStart || s > floorEnd ? spec.spiral * (1 - gravityAt(s)) : 0);
   const bandAt = (s: number): Band => {
     const g = gravityAt(s);
     return g >= GRAVITY_BANDS[0] ? 'foot' : g >= GRAVITY_BANDS[1] ? 'middle' : g >= GRAVITY_BANDS[2] ? 'high' : 'top';
@@ -200,7 +219,7 @@ export function makePlan(h: Habitat): Plan {
   // most a sixth of the gap to its neighbour, in bends about two valley widths long).
   const phase = rng.range(0, gap);
   const bend = Math.max(gap * R * 2, 1);
-  const valleyAt = (k: number, s: number): number => phase + gap * k + (gap / 6) * wander.fbm2(s / bend, k * 7.31, 2);
+  const valleyAt = (k: number, s: number): number => phase + gap * k + (gap / 6) * wander.fbm2(s / bend, k * 7.31, 2) + twist(s);
   const acrossAt = (theta: number, s: number): { valley: number; across: number } => {
     let best = 0, d = Infinity;
     for (let k = 0; k < N; k++) {
@@ -217,14 +236,14 @@ export function makePlan(h: Habitat): Plan {
   // The Gate's faces, one per valley, each centred where its valley meets the port wall.
   const kinds = faceKinds(N);
   const faces: Face[] = kinds.map((kind, index) => ({ index, kind, theta: wrap(valleyAt(index, profile.length)) }));
-  const faceAt = (theta: number): Face => faces[acrossAt(theta, profile.length).valley];
+  const faceAt = (theta: number, s: number): Face => faces[acrossAt(theta, s).valley];
 
   // The Mountain: its summit at the end of the main valley, the cirque on the far side, the snow on the top band.
   const summit = wrap(valleyAt(0, 0));
   const mountain: Mountain = { summit, cirque: wrap(summit + Math.PI), snowLine: GRAVITY_BANDS[2] };
 
   /** The point on an endcap (`wild` or port) where gravity is the given share of the floor's. */
-  const heightOnEndcap = (wild: boolean, g: number): number => {
+  const endcapAt = (wild: boolean, g: number): number => {
     let lo = wild ? 0 : floorEnd, hi = wild ? floorStart : profile.length;
     for (let i = 0; i < 40; i++) {
       const mid = (lo + hi) / 2;
@@ -254,14 +273,29 @@ export function makePlan(h: Habitat): Plan {
     else if (i === 1) { role = 'canal'; from = 'port'; valley = water.index; }
     else if (i % 2 === 0) { role = 'brook'; from = 'wild'; valley = (i / 2) % N; }
     else { role = 'cascade'; from = 'port'; valley = gateFaces[(Math.floor(i / 2) - 1) % gateFaces.length].index; }
-    const spring = role === 'great' ? heightOnEndcap(true, mountain.snowLine * 1.4)
-      : role === 'canal' ? heightOnEndcap(false, 0.7)
-      : heightOnEndcap(from === 'wild', rng.range(0.25, 0.45));
+    const spring = role === 'great' ? endcapAt(true, mountain.snowLine * 1.4)
+      : role === 'canal' ? endcapAt(false, 0.7)
+      : endcapAt(from === 'wild', rng.range(0.25, 0.45));
     const meander = role === 'great' ? 8 : role === 'canal' ? 0 : role === 'brook' ? 5 : 3;
     rivers.push({ role, from, valley, offset: offsetIn(from, valley), spring, meander });
   }
   /** Where a planned river's middle runs at s. */
-  const riverTheta = (r: PlannedRiver, s: number): number => valleyAt(r.valley, s) + r.offset * gap / 2;
+  const routeOf = (r: PlannedRiver, s: number): number => valleyAt(r.valley, s) + r.offset * gap / 2;
+
+  return {
+    habitat: h, lake, reserveEnd, valleys: N, faces, mountain, rivers, phase, stairHalfWidth: R * 0.02,
+    careAt, gravityAt, bandAt, valleyAt, acrossAt, faceAt, routeOf, endcapAt,
+  };
+}
+
+export function makePlan(h: Habitat): Plan {
+  const culture = cultureOf(h.params.culture);
+  if (!culture) throw new Error(`no culture "${h.params.culture}" in the catalogue`);
+  const form = landformOf(h);
+  const { profile, params } = h, R = h.radius, spec = params.plan;
+  const { floorStart, floorEnd } = profile, floor = floorEnd - floorStart;
+  const { lake, reserveEnd, faces, rivers, phase, careAt, valleyAt, acrossAt, routeOf, endcapAt } = form;
+  const N = form.valleys, gap = TURN / N;
   const riverWidth = params.relief.rivers?.width ?? 0;
 
   // Districts: the worked floor (from the reserve's end to the Gate's foot) cut by the seeds of a jittered grid, its
@@ -331,7 +365,7 @@ export function makePlan(h: Habitat): Plan {
   const erng = new Rng(deriveSeed(h.seed, 'plan', 'entrances'));
   const spacing = spec.entranceSpacing;
   const perDistrict = Math.max(1, Math.round((circumference * worked) / districts.length / (spacing * spacing)));
-  const nearRiver = (theta: number, s: number): boolean => rivers.some((r) => Math.abs(wrap(theta - riverTheta(r, s))) * R < riverWidth * (3 + r.meander));
+  const nearRiver = (theta: number, s: number): boolean => rivers.some((r) => Math.abs(wrap(theta - routeOf(r, s))) * R < riverWidth * (3 + r.meander));
   const placed: Site[] = [];
   const bin = new Map<string, Site[]>();
   const keyOf = (theta: number, s: number): string => `${Math.floor(wrapAngle(theta) * R / spacing)},${Math.floor(s / spacing)}`;
@@ -374,10 +408,11 @@ export function makePlan(h: Habitat): Plan {
   const paths: PlanPath[] = [{ kind: 'sunwalk', points: Float64Array.from(walk) }];
 
   // Landmarks.
-  const hutAt = heightOnEndcap(true, 0.3);
+  const hutAt = endcapAt(true, 0.3);
+  // The Lift Stair climbs the Stair face from the floor's end, up the main valley's line.
   const landmarks: Site[] = [
-    { kind: 'lift-stair', theta: faces[0].theta, s: floorEnd, size: R * 0.02, facing: 0, district: -1 },
-    { kind: 'summit-hut', theta: wrap(summit + gap * 0.12), s: hutAt, size: Math.max(R * 0.005, 1), facing: 0, district: -1 },
+    { kind: 'lift-stair', theta: wrap(valleyAt(0, floorEnd)), s: floorEnd, size: form.stairHalfWidth, facing: 0, district: -1 },
+    { kind: 'summit-hut', theta: wrap(valleyAt(0, hutAt) + gap * 0.12), s: hutAt, size: Math.max(R * 0.005, 1), facing: 0, district: -1 },
     { kind: 'founders-grove', theta: wrap(valleyAt(0, floorEnd - floor * 0.06) - gap * 0.18), s: floorEnd - floor * 0.06, size: R * 0.05, facing: 0, district: -1 },
   ];
   if (lake) landmarks.push({ kind: 'lake-pavilion', theta: wrap(walkTheta(lake.s)), s: lake.s, size: lake.halfWidth * 0.5, facing: 0, district: -1 });
@@ -420,9 +455,5 @@ export function makePlan(h: Habitat): Plan {
     relax(pick);
   }
 
-  return {
-    habitat: h, culture, lake, reserveEnd, valleys: N, faces, mountain, rivers, districts,
-    sites: [...landmarks, ...placed], paths,
-    careAt, gravityAt, bandAt, valleyAt, acrossAt, faceAt, districtAt, routeOf: riverTheta,
-  };
+  return { ...form, culture, districts, sites: [...landmarks, ...placed], paths, districtAt };
 }

@@ -92,6 +92,11 @@ export interface Relief {
   /** Height of one terrace step on the endcap slopes (m). */
   terraceStep: number;
   /**
+   * How far the endcaps' big landforms stand out of the slope (m): the Mountain's spurs between its couloirs, its
+   * summit horn and its cirque, the Gate's buttresses between its faces (gen/terrain.ts).
+   */
+  massif: number;
+  /**
    * Rivers from springs on the endcaps into the ring lake: how many (half from each end), their width at the mouth and
    * their depth (m); null (or no lake) for none.
    */
@@ -168,6 +173,11 @@ export interface LandPlan {
   districtPeople: number;
   /** About how far apart the entrances down to the living layer lie (m): how far people walk to reach one. */
   entranceSpacing: number;
+  /**
+   * How far the valleys turn spinward as they climb the endcaps, from the foot to the axis (radians). Water running down
+   * an endcap is pushed against the spin (Coriolis), so its channels, and the valleys that carry them, spiral.
+   */
+  spiral: number;
 }
 
 export interface HabitatParams {

@@ -4,18 +4,29 @@
  * of any size agree at their edges, and the same habitat always gives the same land.
  *
  * The noise is sampled at the point's world position on the profile, so it wraps around the axis without a seam. Sizes
- * come from the blueprint's relief (`HabitatParams.relief`): hills, the ring lake, the terrace step, the rivers (laid out in
- * `rivers.ts` over the land, which they then carve).
+ * come from the blueprint's relief (`HabitatParams.relief`): hills, the ring lake, the terrace step, the endcaps' massif,
+ * the rivers (laid out in `rivers.ts` over the land, which they then carve).
+ *
+ * The endcaps are the habitat plan's (`plan.ts`, `Landform`), designed at the big scale and wild only in the small:
+ *   the Mountain (wild end)  couloirs climbing up each valley's line, spiralling with it, spurs between them broken by
+ *                            side ridges and crags; a horn at the head of the main valley; a cirque on the far side, its
+ *                            floor dug level under a headwall; natural benches of rock wandering across the slope;
+ *   the Gate (port end)      one face per valley between buttresses: the Stair face in level rings of formal terraces,
+ *                            with the Lift Stair's plain ramp up its middle; the Vine face in narrow contour terraces that
+ *                            curve round its folds; the Water face in broad basins whose treads tilt back to hold pools,
+ *                            over sheer risers the rivers fall from.
  */
 import { Noise, deriveSeed, smoothstep } from '@futuremagic/core';
-import { fromWorld, toWorld, type Habitat, type Vec3 } from '../blueprint';
+import { fromWorld, toWorld, type FaceKind, type Habitat, type Vec3 } from '../blueprint';
 import { carve, makeRivers, riverAt, valleyReach, type River, type RiverHit } from './rivers';
-import { lakeOf, type Lake } from './plan';
+import { landformOf, type Lake, type Landform } from './plan';
 
 export type { Lake } from './plan';
 
 export interface Terrain {
   readonly habitat: Habitat;
+  /** The plan's big shapes the land is made from. */
+  readonly form: Landform;
   readonly lake: Lake | null;
   /** The rivers into the lake (`rivers.ts`), with the land already carved for them. */
   readonly rivers: readonly River[];
@@ -29,10 +40,52 @@ export interface Terrain {
   waterDepth(p: Vec3): number;
 }
 
-/** How far the terraces' levels wander around the axis, in steps (`makeTerrain`). */
-const TERRACE_WANDER = 0.8;
-/** The terraces' ledges and walls: their angles from level (radians). */
-const TERRACE_TREAD = (10 * Math.PI) / 180, TERRACE_RISER = (78 * Math.PI) / 180;
+const DEG = Math.PI / 180;
+/**
+ * The Mountain's natural benches: their step (in terrace steps), how far their levels wander (in steps), their ledges'
+ * and walls' angles from level, how worn their brinks are.
+ */
+const BENCH = { step: 2, wander: 0.8, tread: 10 * DEG, riser: 78 * DEG, worn: 0.15 };
+/**
+ * The Gate's faces, by kind: the step as a share of the terrace step, how far the levels wander (in steps), the
+ * ledges' and walls' angles from level (a tread below level tilts back toward its wall and holds a pool).
+ */
+export const GATE_TERRACES: Readonly<Record<FaceKind, { step: number; wander: number; tread: number; riser: number }>> = {
+  stair: { step: 0.3, wander: 0, tread: 1 * DEG, riser: 87 * DEG },
+  vine: { step: 0.25, wander: 0.3, tread: 3 * DEG, riser: 84 * DEG },
+  water: { step: 0.5, wander: 1.5, tread: -3 * DEG, riser: 88 * DEG },
+};
+/** The Mountain's horn and cirque: where they stand (gravity, as a share of the floor's), their sizes in massifs. */
+export const HORN = { gravity: 0.25, radius: 3, height: 2 };
+export const CIRQUE = { gravity: 0.6, halfWidth: 2.5, depth: 2.5 };
+
+/**
+ * Terraces cut into a slope `alpha` steep (radians from level) at elevation `e` (m above the floor): one wall per `step`
+ * of elevation, ledges `tread` from level and walls `riser`, as a height along the profile's normal. Each piece leans by
+ * its angle less the slope's, so a wall never tips past sheer; a ledge meets the wall above in a rounded foot. The brink
+ * is crisp where `worn` is 0 (cut stone) and rounded over that share of a step where it is weathered rock. Where the
+ * slope is already flatter than a ledge or steeper than a wall there are none.
+ */
+function terraces(e: number, step: number, alpha: number, tread: number, riser: number, worn = 0): number {
+  if (!(alpha > Math.max(tread, 0.01) && alpha < riser)) return 0;
+  const q = e / step, frac = q - Math.floor(q);
+  // Along the slope one step is `run` long; the ledge falls back from the wall's top, the wall climbs to the next. A
+  // ledge that tilts back holds a pool at most a tenth of a step deep, however long the ledge.
+  const run = step / Math.sin(alpha);
+  const fall = Math.max(Math.tan(tread - alpha), Math.tan(-alpha) - step * 0.1 / run), climb = Math.tan(riser - alpha);
+  const ledge = fall * frac * run, wall = climb * (frac - 1) * run;
+  const k = step * (0.06 + worn * 0.5), gap = Math.abs(ledge - wall);
+  let h = Math.max(ledge, wall) + (gap < k ? (k - gap) * (k - gap) / (4 * k) : 0);
+  if (worn > 0) {
+    // The brink, where the ledge (above it) meets the wall (below it): a smooth minimum of the two over `worn` of a step.
+    const d = frac < 0.5 ? frac : frac - 1, b = step * worn, edge = Math.abs((climb - fall) * d * run);
+    if (edge < b) h -= (b - edge) * (b - edge) / (4 * b);
+  }
+  return h;
+}
+
+/** Brings an angle into [−π, π]. */
+const turnOf = (a: number): number => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
 
 /**
  * How steep the ground is (0 level … 1 a wall), from its unit normal `n` (world, facing the air) at angle θ: three
@@ -56,7 +109,15 @@ export function makeTerrain(h: Habitat): Terrain {
   const hillWave = Math.max(hills * 40, 1);
   const step = relief.terraceStep;
 
-  const lake = lakeOf(h);
+  const form = landformOf(h), lake = form.lake;
+  const massif = relief.massif, R = h.radius;
+  const cragNoise = new Noise(deriveSeed(h.seed, 'terrain', 'crags'));
+  const hornS = form.endcapAt(true, HORN.gravity), hornRadius = Math.max(massif * HORN.radius, 1e-6);
+  // The finest crags: half a massif, but never finer than a terrace step (smaller rock is the stones' and boulders').
+  const crag = Math.max(massif * 0.5, step);
+  // Side spurs down each flank of a valley on the Mountain, about three massifs apart halfway up.
+  const flanks = Math.max(1, Math.round(((Math.PI / form.valleys) * R * 0.5) / Math.max(massif * 3, 1e-6)));
+  const cirqueLip = R * (1 - CIRQUE.gravity), cirqueHalf = Math.max(massif * CIRQUE.halfWidth, 1e-6), cirqueDepth = Math.max(massif * CIRQUE.depth, 1e-6);
   // The shore: a band as wide as the lake is deep times ten, where hills flatten to meet the water.
   const shore = lake ? Math.max(lake.depth * 10, lake.halfWidth * 0.3) : 0;
 
@@ -71,6 +132,86 @@ export function makeTerrain(h: Habitat): Terrain {
 
   /** How far into the lake (1 at the centre line, 0 at the waterline, negative outside), or null without a lake. */
   const inLake = (s: number): number | null => (lake ? 1 - Math.abs(s - lake.s) / lake.halfWidth : null);
+
+  /** The ridged crags of the endcaps: sharp crests between rounded hollows (0 … 1), stretched down the slope. */
+  const crags = (x: number, y: number, s: number, w: number, octaves: number): number => {
+    // The crest is rounded over a few hundredths of the crag's width (a soft |n|), so the rock is sharp from afar
+    // and still a surface one can stand on up close.
+    const f = cragNoise.fbm3(x / w, y / w, s / (w * 3), octaves), n = Math.max(0, 1 - Math.sqrt(f * f + 0.0225) * 1.8);
+    return n * n;
+  };
+
+  /** The Mountain's shape at a point of the wild endcap, as a height over the slope (`g`: gravity there). */
+  const mountainAt = (theta: number, s: number, x: number, y: number, e: number, alpha: number, g: number, nr: number): number => {
+    const r = Math.max(R * g, 1e-6);
+    // Spurs between the couloirs, from the foothills to the snow near the axis: the main spur on the ridge between two
+    // valleys, side spurs down each valley's flanks (sharp crests over rounded gullies, wandering a little), then crags.
+    const grow = smoothstep(0.97, 0.75, g) * smoothstep(0.03, 0.2, g);
+    const a = Math.abs(form.acrossAt(theta, s).across);
+    const spur = massif * 1.4 * Math.pow(smoothstep(0.05, 0.95, a), 1.3);
+    const q = a * flanks + 0.25 * noise.fbm3(x / (massif * 8), y / (massif * 8), s / (massif * 8), 2);
+    const crest = 0.5 - 0.5 * Math.cos(2 * Math.PI * q);
+    const sideSpur = massif * smoothstep(0.08, 0.3, a) * crest * crest;
+    // Broad fractures, not fine wrinkles: the smaller rock is the stones' and boulders'.
+    const side = sideSpur + massif * (0.1 + 0.15 * a) * (crags(x, y, s, crag * 4, 2) - 0.35);
+    // The natural benches: a few rock steps across the slope, each ending within an arc, none in the couloirs.
+    const bench = step * BENCH.step;
+    const wander = bench * BENCH.wander * noise.fbm3(x / (bench * 10), y / (bench * 10), s / (bench * 10), 2);
+    const kept = smoothstep(0.1, 0.35, detail.fbm3(x / (massif * 4) + 17.3, y / (massif * 4), s / (massif * 4), 2)) * smoothstep(0.15, 0.35, a);
+    // They follow the contours of the spurs (the elevation of the shaped slope), as strata wrap round a ridge.
+    let shape = grow * (spur + side);
+    const benches = kept * terraces(e + shape * nr + wander, bench, alpha, BENCH.tread, BENCH.riser, BENCH.worn);
+    shape += benches;
+    // The horn at the head of the main valley: a pyramid of three faces between sharp arêtes.
+    const main = form.valleyAt(0, s);
+    const hx = (turnOf(theta - main) * r) / hornRadius, hy = (s - hornS) / hornRadius;
+    if (hx * hx + hy * hy < 1.5) {
+      let d = 0;
+      for (let k = 0; k < 3; k++) { const c = Math.cos(k * 2.0944 + 0.5), sn = Math.sin(k * 2.0944 + 0.5); d = Math.max(d, hx * c + hy * sn); }
+      d *= 1.6;
+      if (d < 1) shape += massif * HORN.height * Math.pow(1 - d, 1.3) * (0.9 + 0.2 * crags(x, y, s, crag * 1.5, 2));
+    }
+    // The cirque on the far side: a floor dug level back into the slope, under a headwall, between steep sides.
+    const over = e - cirqueLip;
+    if (over > -cirqueDepth * 0.3 && over < cirqueDepth) {
+      // Round at its head (the headwall an arc), open at its lip.
+      const off = Math.abs(turnOf(theta - main - Math.PI)) * r / cirqueHalf, up = Math.max(0, over / cirqueDepth - 0.35) / 0.65;
+      const inside = 1 - smoothstep(0.6, 1, Math.hypot(off, up));
+      if (inside > 0) {
+        const bowl = over > 0 ? -over / Math.max(nr, 0.2) : 0;
+        // A low lip where the floor ends, the threshold the cirque's water spills over.
+        const lip = massif * 0.12 * Math.exp(-((over / (cirqueDepth * 0.12)) ** 2));
+        shape = shape * (1 - inside) + inside * (bowl + lip + benches * 0.2);
+      }
+    }
+    return shape;
+  };
+
+  /** How rough the endcap is left where `gateAt` last shaped it: 1 wild, less on the Gate's built faces. */
+  let built = 1;
+
+  /** The Gate's shape at a point of the port endcap, as a height over the slope (and how rough it is left, `built`). */
+  const gateAt = (theta: number, s: number, x: number, y: number, z: number, e: number, alpha: number, g: number): number => {
+    const r = Math.max(R * g, 1e-6);
+    const { valley, across } = form.acrossAt(theta, s), a = Math.abs(across), face = form.faces[valley];
+    // Buttresses between the faces: broad piers of rock from the foot to the hub.
+    const grow = smoothstep(0.97, 0.8, g);
+    const buttress = grow * massif * 1.3 * Math.pow(smoothstep(0.65, 1, a), 1.3) * (0.85 + 0.3 * crags(x, y, s, crag * 2, 2));
+    const body = 1 - smoothstep(0.6, 0.8, a);
+    if (body <= 0) return buttress;
+    const spec = GATE_TERRACES[face.kind], tier = step * spec.step;
+    // Vine face: broad folds the contour terraces curve round. Water face: basins lobed like travertine rims.
+    const fold = massif * 3 + 1;
+    const folds = face.kind === 'vine' ? grow * massif * 0.6 * noise.fbm3(x / fold, y / fold, z / fold, 2) : 0;
+    const lobe = tier * (face.kind === 'water' ? 3 : 12);
+    const wander = tier * spec.wander * noise.fbm3(x / lobe, y / lobe, z / lobe, 2);
+    let shape = terraces(e - folds + wander, tier, alpha, spec.tread, spec.riser) + folds;
+    // Stair face: the Lift Stair's ramp, a plain even slope up the main valley's line.
+    // The Stair face is dressed stone, the Vine face tilled; the Water face keeps the rock it was cut from.
+    built = 1 - body * (face.kind === 'stair' ? 0.95 : face.kind === 'vine' ? 0.6 : 0);
+    if (face.kind === 'stair') shape *= smoothstep(form.stairHalfWidth, form.stairHalfWidth * 1.3, Math.abs(turnOf(theta - form.valleyAt(0, s))) * r);
+    return body * shape + buttress;
+  };
 
   /** The land before the rivers carve it. */
   const landAt = (theta: number, s: number): number => {
@@ -87,38 +228,22 @@ export function makeTerrain(h: Habitat): Terrain {
     const k = inLake(s);
     if (k !== null && k > 0 && lake) height -= lake.depth * Math.sqrt(smoothstep(0, 0.6, k));
     if (f < 1) {
-      // Terraces on the endcap slopes: ledges nearly level (`TERRACE_TREAD` from level) and rock walls nearly sheer
-      // (`TERRACE_RISER`), one wall per `step` of elevation above the floor, so the slope climbs as a staircase. On
-      // the steep upper slopes the ledges are narrow, at the foot broad; where the slope is already flatter than a
-      // ledge or steeper than a wall there are none. Heights are along the profile's normal, so each piece leans by
-      // its angle less the slope's, and a wall never tips past sheer (no overhang to fold the ground).
-      // The steps follow the contours of a slope that is not quite round (the elevation warped by most of a step, over
-      // ten steps' length), so they wander, merge and part around the axis instead of closing into rings; and here and
-      // there the walls have worn down toward the plain slope.
-      const at = profile.at(s), e = h.radius - at.r, alpha = Math.asin(Math.min(1, Math.abs(at.nz)));
-      let terrace = 0;
-      if (alpha > TERRACE_TREAD && alpha < TERRACE_RISER) {
-        const wander = step * TERRACE_WANDER * noise.fbm3(x / (step * 10), y / (step * 10), z / (step * 10), 2);
-        const q = (e + wander) / step, frac = q - Math.floor(q);
-        const kept = smoothstep(-0.35, 0.15, detail.fbm3(x / (step * 7) + 17.3, y / (step * 7), z / (step * 7), 2));
-        // Along the slope one step is `run` long; the ledge falls back from the wall's top, the wall climbs to the next.
-        const run = step / Math.sin(alpha);
-        const ledge = Math.tan(TERRACE_TREAD - alpha) * frac * run, wall = Math.tan(TERRACE_RISER - alpha) * (frac - 1) * run;
-        // A ledge meets the wall above it in a rounded foot (a smooth maximum), its top edge stays a crisp brink.
-        const k = step * 0.06, gap = Math.abs(ledge - wall);
-        terrace = kept * (Math.max(ledge, wall) + (gap < k ? (k - gap) * (k - gap) / (4 * k) : 0));
-      }
-      // Fade out near the axis and the hub, where the steps would crowd together.
-      const fade = smoothstep(0, profile.length * 0.03, s) * (1 - smoothstep(profile.length * 0.97, profile.length, s));
-      const rough = step * 0.08 * detail.fbm3(x / (step * 2), y / (step * 2), z / (step * 2), 3);
-      height += (1 - f) * fade * (terrace + rough);
+      const p = profile.at(s), e = h.radius - p.r, alpha = Math.asin(Math.min(1, Math.abs(p.nz)));
+      const g = p.r / R, wild = s < floorStart;
+      built = 1;
+      const shaped = wild ? mountainAt(theta, s, x, y, e, alpha, g, Math.abs(p.nr)) : gateAt(theta, s, x, y, z, e, alpha, g);
+      // Fade out near the axis and the hub, where everything crowds together.
+      const fade = smoothstep(0, floorStart * 0.15, s) * (1 - smoothstep(profile.length - (profile.length - floorEnd) * 0.15, profile.length, s));
+      // Rough ground, except where the Gate is built (`gateAt` sets how much of it is left).
+      const rough = step * 0.08 * built * detail.fbm3(x / (step * 2), y / (step * 2), z / (step * 2), 3);
+      height += (1 - f) * fade * (shaped + rough);
     }
     // Small ground roughness everywhere: tufts and hollows of a few tens of centimetres.
     height += Math.min(0.3, hills * 0.01) * detail.fbm3(x / 25, y / 25, z / 25, 3);
     return height;
   };
 
-  const rivers = makeRivers(h, lake, landAt);
+  const rivers = makeRivers(form, landAt);
   const reach = valleyReach(h);
   const heightAt = (theta: number, s: number): number => {
     const g = landAt(theta, s);
@@ -143,5 +268,5 @@ export function makeTerrain(h: Habitat): Terrain {
     return surface > heightAt(at.theta, at.s) ? surface - at.h : 0;
   };
 
-  return { habitat: h, lake, rivers, riverAt: inRiver, heightAt, standAt, waterDepth };
+  return { habitat: h, form, lake, rivers, riverAt: inRiver, heightAt, standAt, waterDepth };
 }
