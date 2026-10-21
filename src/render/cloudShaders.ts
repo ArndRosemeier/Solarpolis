@@ -10,7 +10,7 @@
  * same field shades the land below (`cloudShade`).
  */
 import { Vector2, type Node } from 'three/webgpu';
-import { Break, Fn, If, Loop, abs, ceil, clamp, int, min, dot, exp, float, max, mx_fractal_noise_float, pow, select, smoothstep, sqrt, uniform, vec2, vec3 } from 'three/tsl';
+import { Break, Fn, If, Loop, abs, ceil, clamp, int, min, dot, exp, float, max, mx_fractal_noise_float, mx_noise_float, pow, select, smoothstep, sqrt, uniform, vec2, vec3 } from 'three/tsl';
 import { band } from './shaderMath';
 import { coverThreshold, type CloudSpan, type CloudState } from '../world/clouds';
 
@@ -52,6 +52,14 @@ const FORWARD = 0.5;
 /** How far a cloud's base lifts toward its rim, and how much the wear raises and lowers it (shares of the thickness). */
 const RIM_LIFT = 0.18;
 const WORN_BASE = 0.06;
+/**
+ * How far apart the clouds' bases lie, from cloud to cloud (share of the thickness): air over different land
+ * condenses at different heights. From below, the layer's lower edge, where a line of sight just grazes it, is then
+ * a row of single cloud bottoms instead of one sharp line.
+ */
+const BASE_SPREAD = 0.35;
+/** The size of a patch of clouds sharing a base height, in cloud sizes. */
+const BASE_PATCH = 1.6;
 /** How much of the sunline a cloud overhead keeps off the land at most. */
 const SHADE = 0.6;
 
@@ -150,8 +158,10 @@ export function cloudMarch(eye: V3, d: V3, D: F, far: boolean, jitter: F): Node<
       const c = column(p, 4);
       const wear = mx_fractal_noise_float(inField(p, r).mul(3.3), 2, 2, 0.5);
       // Domed: the column's height rounds off toward its edges, and finer noise wears the dome into heaps. The base is
-      // flat under the cloud's middle and lifts toward its rim and with the wear, so no two clouds' bases line up.
-      const lift = float(1).sub(smoothstep(0, 0.5, c)).mul(RIM_LIFT).add(wear.mul(WORN_BASE)).max(0);
+      // flat under the cloud's middle and lifts toward its rim and with the wear, and each patch of clouds has its own
+      // base height (`BASE_SPREAD`), so no two clouds' bases line up.
+      const level = mx_noise_float(inField(p, r).div(BASE_PATCH).add(vec3(17.3, 5.1, 2.9))).mul(0.5).add(0.5).mul(BASE_SPREAD);
+      const lift = float(1).sub(smoothstep(0, 0.5, c)).mul(RIM_LIFT).add(wear.mul(WORN_BASE)).max(0).add(level);
       const inside = band(b, lift, lift.add(0.04), 0.97, 1).mul(smoothstep(0, 0.12, c));
       const density = clamp(c.sub(b.mul(b).mul(0.9)).add(wear.mul(0.3)).mul(3), 0, 1).mul(inside);
       // Light from the sunline above, dimmed by the cloud over the sample; brighter seen against it (forward scatter).
