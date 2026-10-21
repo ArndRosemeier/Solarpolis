@@ -71,6 +71,9 @@ export function validate(h: Habitat): Finding[] {
   const pl = p.plan;
   if (!(Number.isInteger(pl.valleys) && pl.valleys >= 1 && pl.reserve >= 0 && pl.reserve <= 0.9 && pl.districtPeople > 0 && pl.entranceSpacing > 0 && Math.abs(pl.spiral) <= Math.PI / 2))
     out.push({ id: 'plan', severity: 'invalid', message: 'the land plan needs a whole number of valleys ≥ 1, a reserve from 0 to 0.9 of the floor, districts and entrance spacing > 0, and a spiral of at most a quarter turn' });
+  const pw = pl.pathWidth;
+  if (!([pw.sunwalk, pw.way, pw.trail].every((w) => w > 0 && w < pl.entranceSpacing / 8)))
+    out.push({ id: 'plan', severity: 'invalid', message: 'paths need widths > 0, each under an eighth of the entrance spacing' });
   if (!(p.population >= 0)) out.push({ id: 'population', severity: 'invalid', message: 'the population must not be negative' });
   return out;
 }

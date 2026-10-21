@@ -357,6 +357,8 @@ export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): Til
   const canopy = new Float32Array(count * 4);
   const woodAt = new Float32Array(count * 2);
   const floor = new Uint8Array(count * 8);
+  // How wide a patch of ground each point stands for (its cell), for what is narrower than that (a path).
+  const patch = Math.max(dS, dT * profile.at((b.s0 + b.s1) / 2).r);
   for (let j = 0; j <= N; j++) {
     const s = Math.min(profile.length, Math.max(0, b.s0 + j * dS));
     for (let i = 0; i <= N; i++) {
@@ -375,7 +377,7 @@ export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): Til
       if (nx * air[0] + ny * air[1] + nz * air[2] < 0) { nx = -nx; ny = -ny; nz = -nz; }
       normals[v] = nx; normals[v + 1] = ny; normals[v + 2] = nz;
       const slope = groundSlope([nx, ny, nz], theta);
-      ecology.colorAt(theta, s, heights[(j + 1) * W + (i + 1)], slope, colors, v, canopy, floor, woodAt);
+      ecology.colorAt(theta, s, heights[(j + 1) * W + (i + 1)], slope, colors, v, canopy, floor, woodAt, patch);
     }
   }
 
@@ -521,7 +523,6 @@ export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): Til
     };
     return Math.max(on(1, 1), on(halvedAround ? 2 : 1, 2));
   };
-  const cell = Math.max(dS, dT * profile.at((b.s0 + b.s1) / 2).r);
-  const water = buildWater(terrain, { ...b, cell, drawn }, origin);
+  const water = buildWater(terrain, { ...b, cell: patch, drawn }, origin);
   return { key: k, origin, positions, normals, colors, morph, horizon, canopy, floorA, floorB, index: Uint32Array.from(index), error, relief, water };
 }
