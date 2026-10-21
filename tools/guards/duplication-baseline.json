@@ -120,10 +120,6 @@
     "reason": "Both 3D views implement the page's view interface (PageView in main.ts: create, setHabitat, setRunning, bytes, shed, info, skip); their shared machinery is in render/surface.ts."
   },
   {
-    "key": "same name: solarpolis/render/plants.ts#bytes + solarpolis/render/streamed.ts#bytes",
-    "reason": "The streamed views (TerrainView, PlantView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, shed, dispose), with bodies of their own."
-  },
-  {
     "key": "same name: solarpolis/render/plants.ts#bytes + solarpolis/render/terrain.ts#bytes",
     "reason": "The streamed views (TerrainView, PlantView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, shed, dispose), with bodies of their own."
   },
