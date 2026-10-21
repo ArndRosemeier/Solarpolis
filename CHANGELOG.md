@@ -2,6 +2,12 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.063 — The ground keeps to its memory budget
+
+- Near the endcaps' rock walls (Arnd saw it at the foot of the Gate) the ground no longer eats gigabytes: cliffs are drawn as finely as their cells can show, not split down to the smallest tiles everywhere they are seen.
+- The ground has a hard memory budget: if a view would need more, it is drawn a little coarser until it fits, and the debug menu says so ("coarser ×…", or "OVER BUDGET").
+- The debug menu has a Copy button that puts its whole info text on the clipboard.
+
 ## v0.062 — The Mountain's summit band, the Water face's basins
 
 - Near the axis the Mountain's spurs no longer stand as a ring of thin rock fins hanging toward the floor: a spur only stands as tall as it has room to be wide, so the valleys close into one broad summit band.
