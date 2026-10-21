@@ -2,6 +2,11 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.051 — Endcaps in ledges and rock walls
+
+- The endcap slopes no longer look like a grey disc of perfect rings from afar. They climb in green ledges and steep rock walls that wander around the axis, merge and part, and wear down here and there. Ledges hold meadow, heath and pines; trees no longer grow on sheer rock.
+- Flying high over the floor, a dark square no longer shows on the ground below you.
+
 ## v0.050 — The ground needs a quarter of the memory
 
 - Each piece of ground now judges its distance from you by its own height, not by the tallest terrace in the habitat. Flat ground nearby no longer gets the finest detail out to 150 m, where it showed nothing more. Ground memory on the floor drops from about 300 MB to about 70 MB, and at the endcaps' tips from about 440 MB to about 230 MB. The picture stays the same.
