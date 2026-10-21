@@ -2,6 +2,20 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.037 — Memory no longer runs away
+
+- Moving around inside (most of all near the endcaps, where the sunline meets the hull) no longer eats gigabytes: ground tiles, plants and hull detail that go out of view are now really freed. Before, they were only half freed and memory grew by a few gigabytes in a couple of minutes.
+- The caches for ground tiles, plants and hull detail now also have a size limit in megabytes, not just a count.
+- Debug menu, Memory: "Show memory details" lists what holds memory and the last totals right in the panel, and "Free the caches now" gives back what is not on screen.
+
+## v0.036 — Stones and fallen wood
+
+- Stones lie on the ground now: pebbles on gravel, field stones on bare earth, rocks and big boulders on the steep rock of the endcaps. Each is a rough lump with broken faces, mossy on top in the temperate climate, and they lie along the slope.
+- Woods have fallen trunks and branches on their floor, in the bark of the trees they fell from, greyed where they face the sky.
+- Big things are seen from far away (a boulder from kilometres), small ones only nearby, and up close every stone shows its grain.
+- Debug menu: Go to the nearest fallen trunk, or the nearest boulder.
+- On the endcaps' steep rock the eyes no longer adjust as if under trees, so it is no longer washed out.
+
 ## v0.035 — The hull up close: no more flicker, details from farther away
 
 - Close to the cylinder the solar panels no longer sparkle and flicker in speckled patches. Each module's own shade and glint now only show while a module is bigger than a pixel, and half a panel no longer takes its neighbour's look.

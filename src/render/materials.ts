@@ -585,6 +585,9 @@ export function plantInstances(g: BufferGeometry, data: Float32Array | Instanced
   g.setAttribute('tilt', new InterleavedBufferAttribute(buffer, 2, 5));
 }
 
+/** Whether an attribute is one of a plant mesh's own instances (`plantInstances`), not its shape's (shared by every cell). */
+export const isPlantInstance = (attribute: string): boolean => attribute === 'plant' || attribute === 'turn' || attribute === 'tilt';
+
 /** The kinds of the view outside, for its Stage's warm-up (windows will add them to the interior's). */
 export function outsideKinds(): readonly Kind[] {
   return [SKY, STARS, SKIN, SKIN_DETAIL, RADIATOR, HARDWARE, FLAME];

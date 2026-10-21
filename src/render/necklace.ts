@@ -16,7 +16,7 @@ import { apply, mul, rotZ, sunlightFrom, transpose, type Mat3, type PlacedHabita
 import { HARDWARE, RADIATOR, SKIN, STARS } from './materials';
 import { hideUnder, skinUniforms, type SkinUniforms } from './hullShaders';
 import { hullGeometry } from './hull';
-import { arraysGeometry, meshGeometry, setPose } from './geometry';
+import { arraysGeometry, freeMesh, meshGeometry, setPose } from './geometry';
 import { HullDetailView, type Frames } from './hullDetail';
 import { sharedPool } from '../workers/pool';
 import { DISH, detailParts, partDistance, wholeTile, type DetailPart, type PartFrame } from '../gen/hullParts';
@@ -108,7 +108,7 @@ export class NecklaceView {
   dispose(): void {
     for (const d of this.drawn) this.dropMeshes(d);
     this.stage.remove(this.glints);
-    this.glints.geometry.dispose();
+    freeMesh(this.glints);
   }
 
   get home(): Drawn {
@@ -149,7 +149,7 @@ export class NecklaceView {
     d.detail = null;
     if (!d.meshes) return;
     const m = d.meshes;
-    for (const x of [m.skin, m.radiators, m.mast, m.spindle, m.drones.mesh, m.drones.points, ...m.pieces.map((p) => p.mesh)]) { this.stage.remove(x); x.geometry.dispose(); }
+    for (const x of [m.skin, m.radiators, m.mast, m.spindle, m.drones.mesh, m.drones.points, ...m.pieces.map((p) => p.mesh)]) { this.stage.remove(x); freeMesh(x); }
     d.meshes = null;
   }
 

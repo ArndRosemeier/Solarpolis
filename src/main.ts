@@ -218,8 +218,10 @@ debug.add({ label: 'Drop a ball from 20 m', group: 'Physics', run: () => void vi
 debug.add({ label: 'Drop a ball from 100 m', group: 'Physics', run: () => void view()?.dropBall(100) });
 debug.add({ label: 'Remove the balls', group: 'Physics', run: () => view()?.clearBalls() });
 debug.add({ label: 'Log the shader report', group: 'Render', run: () => console.log((globalThis as { shaders?: { report(): string } }).shaders?.report() ?? 'no renderer yet') });
-debug.add({ label: 'Take a memory sample now', group: 'Memory', run: () => console.log(memory.sample()) });
-debug.add({ label: 'Log the memory history', group: 'Memory', run: () => console.table(memory.history.map((s) => ({ t: Math.round(s.t), totalMB: Math.round(s.total / 1048576), level: s.level }))) });
+let memoryDetails = false;
+debug.addInfo(() => (memoryDetails ? memory.details() : ''));
+debug.add({ label: 'Show memory details (every owner, the last totals)', group: 'Memory', isOn: () => memoryDetails, set: (on) => { memoryDetails = on; memory.sample(); } });
+debug.add({ label: 'Free the caches now (as when memory runs short)', group: 'Memory', run: () => { memory.shedNow('soft'); memory.sample(); } });
 
 let last = performance.now();
 const frame = (t: number): void => {

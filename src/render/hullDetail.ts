@@ -16,7 +16,7 @@ import type { Skin } from '../gen/skin';
 import { apply, type Mat3 } from '../space';
 import type { WorkerPool } from '../workers/pool';
 import type { GenAnswer } from '../workers/gen.worker';
-import { arraysGeometry, setPose } from './geometry';
+import { arraysGeometry, freeMesh, setPose } from './geometry';
 import { HARDWARE, SKIN_DETAIL } from './materials';
 import type { SkinUniforms } from './hullShaders';
 import { StreamCache, type Streamed } from './streamed';
@@ -26,8 +26,9 @@ interface Entry extends Streamed {
   meshes: Mesh[];
 }
 
-/** Tiles kept, drawn or not, and jobs in flight. */
+/** Tiles kept, drawn or not, the bytes they may hold (the GPU holds a second copy), and jobs in flight. */
 const KEEP = 900;
+const KEEP_BYTES = 192 * 1024 * 1024;
 const IN_FLIGHT = 12;
 
 /** Per frame, for each of the two frames: the eye in it (m) and its axes in the scene. */
@@ -47,6 +48,7 @@ export class HullDetailView {
     this.cache = new StreamCache<Entry>(pool, {
       id: (r) => (r.kind === 'hull' ? idOf(r.part, r.key) : ''),
       limit: KEEP,
+      maxBytes: KEEP_BYTES,
       inFlight: IN_FLIGHT,
       make: (answer, id) => this.make(answer, id),
       free: (e) => this.free(e),
@@ -124,6 +126,6 @@ export class HullDetailView {
   }
 
   private free(e: Entry): void {
-    for (const m of e.meshes) { this.stage.remove(m); m.geometry.dispose(); }
+    for (const m of e.meshes) { this.stage.remove(m); freeMesh(m); }
   }
 }
