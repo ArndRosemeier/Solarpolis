@@ -9,7 +9,7 @@ import { fromWorld, toWorld, type Habitat } from '../blueprint';
 import { deriveSeed } from '@futuremagic/core';
 import type { Terrain } from './terrain';
 import { pavilionPlan, pavilionTop } from './pavilion';
-import { makePlan } from './plan';
+import { makePlan, siteOf } from './plan';
 import { intoPlace, outOfPlace, type Place } from './shapes';
 
 /** A bridge along the axis from the deck's edge (`from`, m from the centre) to the shore (`to`), `end` m over the water there. */
@@ -49,7 +49,7 @@ const placed = new WeakMap<Terrain, readonly Landmark[]>();
 
 export function placeLandmarks(t: Terrain): Landmark[] {
   const h = t.habitat, spec = h.params.landmarks, lake = t.lake;
-  const site = spec && lake ? makePlan(h).sites.find((x) => x.kind === 'lake-pavilion') : undefined;
+  const site = spec && lake ? siteOf(makePlan(h), 'lake-pavilion') : undefined;
   if (!spec || !lake || !site) return [];
   // The deck within the ground the plan keeps for it.
   const radius = Math.min(spec.size / 2, site.size);
@@ -74,8 +74,13 @@ function bridgeTo(t: Terrain, p: Pavilion, dir: 1 | -1): Bridge {
  * the axis, y around, z toward the axis (up).
  */
 export function frameOf(h: Habitat, l: Landmark): Place {
-  const at = toWorld(h.profile, { theta: l.theta, s: l.s, h: l.level });
-  const c = Math.cos(l.theta), sn = Math.sin(l.theta);
+  return placeAt(h, l.theta, l.s, l.level);
+}
+
+/** A frame standing on the profile at (θ, s), `height` above it: x along the axis, y around, z toward the axis (up). */
+export function placeAt(h: Habitat, theta: number, s: number, height: number): Place {
+  const at = toWorld(h.profile, { theta, s, h: height });
+  const c = Math.cos(theta), sn = Math.sin(theta);
   return { at, ex: [0, 0, 1], ey: [-sn, c, 0], ez: [-c, -sn, 0] };
 }
 

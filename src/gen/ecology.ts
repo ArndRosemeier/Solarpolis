@@ -16,6 +16,7 @@ import { FLOOR_LAYERS, climateOf, toWorld, type BiomeSpec, type Climate, type Fl
 import type { Terrain } from './terrain';
 import { riverAt } from './rivers';
 import { canopyColor } from './trees';
+import { plantedCanopy } from './planted';
 
 /** Plants at least this tall (m, full grown) are trees: they make up the canopy of woods. */
 export const TREE_HEIGHT = 6;
@@ -196,6 +197,15 @@ export function makeEcology(terrain: Terrain): Ecology {
       k0 += w * woods[b].color[0]; k1 += w * woods[b].color[1]; k2 += w * woods[b].color[2];
     }
     if (cover > 0) { tall /= cover; apart /= cover; k0 /= cover; k1 /= cover; k2 /= cover; } else { k0 = out[i]; k1 = out[i + 1]; k2 = out[i + 2]; }
+    // Planted crowns (gen/planted.ts: a grove's ring) over the scattered woods, or over open ground.
+    const planted = plantedCanopy(terrain, theta, s);
+    if (planted) {
+      const a = planted.cover, was = Math.min(1, cover);
+      k0 += (planted.color[0] - k0) * a; k1 += (planted.color[1] - k1) * a; k2 += (planted.color[2] - k2) * a;
+      tall = was > 0 ? tall + (planted.height - tall) * a : planted.height;
+      apart = was > 0 ? apart : planted.height * 0.55;
+      cover = was + (1 - was) * a;
+    }
     if (wood) { wood[(i / 3) * 2] = Math.min(1, cover); wood[(i / 3) * 2 + 1] = apart; }
     if (!canopy) return;
     const at = (i / 3) * 4;

@@ -160,6 +160,9 @@ function faceKinds(n: number): FaceKind[] {
   return out;
 }
 
+/** A plan's site of a kind: the first (a landmark has one), or undefined. */
+export const siteOf = (plan: Plan, kind: SiteKind): Site | undefined => plan.sites.find((x) => x.kind === kind);
+
 export function makePlan(h: Habitat): Plan {
   const culture = cultureOf(h.params.culture);
   if (!culture) throw new Error(`no culture "${h.params.culture}" in the catalogue`);

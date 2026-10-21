@@ -123,6 +123,11 @@ export interface Climate {
   rock: Rgb;
   shore: Rgb;
   bed: Rgb;
+  /**
+   * The founders' tree: the plant (by name, one of the biomes') the founders planted when the habitat was new. The oldest
+   * and tallest trees in it stand in a ring at the founders' grove (gen/planted.ts).
+   */
+  grove: string;
 }
 
 export const CLIMATES: Readonly<Record<string, Climate>> = {
@@ -156,6 +161,7 @@ export const CLIMATES: Readonly<Record<string, Climate>> = {
     rock: [0.28, 0.26, 0.22],
     shore: [0.42, 0.38, 0.27],
     bed: [0.18, 0.2, 0.16],
+    grove: 'oak',
   },
   mediterranean: {
     name: 'mediterranean',
@@ -185,6 +191,7 @@ export const CLIMATES: Readonly<Record<string, Climate>> = {
     rock: [0.36, 0.32, 0.26],
     shore: [0.5, 0.45, 0.33],
     bed: [0.2, 0.22, 0.17],
+    grove: 'stone pine',
   },
 };
 

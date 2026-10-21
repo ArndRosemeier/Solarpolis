@@ -3,7 +3,7 @@
  * numbers. Redrawn a moment after the parameters stop changing, since a map takes a few hundred milliseconds.
  */
 import { DISTRICT_STYLES, type Habitat } from '../blueprint';
-import { makePlan, type Plan, type Site } from '../gen/plan';
+import { makePlan, siteOf, type Plan, type Site } from '../gen/plan';
 import { el } from '../app/dom';
 import { FACE_COLORS, STYLE_COLORS, endcapMap, floorMap, floorPixel, type PlanImage } from './planMap';
 
@@ -89,7 +89,7 @@ export class PlanView {
     this.summary.textContent = `${plan.valleys} valleys · ${plan.districts.length} districts · ${entrances} entrances down to the living layer · rivers: ${roles || 'none'} · the wild ${Math.round(h.params.plan.reserve * 100)}% of the floor is reserve`;
 
     const floor = canvasOf(floorMap(plan, FLOOR_WIDTH));
-    const lm = (kind: Site['kind']): Site | undefined => plan.sites.find((s) => s.kind === kind);
+    const lm = (kind: Site['kind']): Site | undefined => siteOf(plan, kind);
     for (const kind of ['lake-pavilion', 'founders-grove'] as const) {
       const s = lm(kind);
       if (s) { const [x, y] = floorPixel(plan, FLOOR_WIDTH, s.theta, s.s); label(floor, LANDMARK_NAMES[kind] ?? kind, x + 8, y - 10); }
