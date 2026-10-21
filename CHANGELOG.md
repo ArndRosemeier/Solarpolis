@@ -2,6 +2,12 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.047 — The interior from far away
+
+- Clearer air: the far side across the axis keeps its colours instead of fading into pale haze. How clear a habitat's air is is now one of its parameters.
+- Woods seen from far away show crowns, shaded gaps, clumps and glades instead of soft colour blobs, and the far land is drawn in finer pieces, so wood edges, rivers and banks stay sharp across the cylinder.
+- The debug menu's Go group has viewpoints high over the land ("Fly: …") for looking at the interior from above.
+
 ## v0.046 — The crossing into the Hub
 
 - After your ship latches, the arrival goes on: you float down the spindle's bore, a pale tube lit by lamp strips, through the bearing's seal into the sleeve that turns with the habitat. The air there slowly carries you into the spin, and a small window shows the stars wheeling past. Light ahead.
