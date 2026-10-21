@@ -153,9 +153,9 @@ export function makeEcology(terrain: Terrain): Ecology {
     let sand = 0, bed = 0, gravel = 0;
     const river = rivers.length ? riverAt(rivers, theta, s, 4) : null;
     if (river) {
-      // Gravel at the river's edge (a bar a little above the water), its bed below.
-      const below = river.surface - height;
-      gravel = smoothstep(-0.8, -0.1, below);
+      // Gravel at the river's edge (a strip a little above the water, as wide as a few steps), its bed below.
+      const below = river.surface - height, out = Math.abs(river.across) - river.halfWidth;
+      gravel = smoothstep(-0.8, -0.1, below) * (1 - smoothstep(1, 2.5 + river.halfWidth * 0.2, out));
       bed = smoothstep(0.2, 0.9, below);
       const g = climate.shore, rk = climate.rock, bd = climate.bed;
       c0 += ((g[0] + rk[0]) / 2 - c0) * gravel; c1 += ((g[1] + rk[1]) / 2 - c1) * gravel; c2 += ((g[2] + rk[2]) / 2 - c2) * gravel;
