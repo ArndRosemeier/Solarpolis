@@ -2,6 +2,11 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.062 — The Mountain's summit band, the Water face's basins
+
+- Near the axis the Mountain's spurs no longer stand as a ring of thin rock fins hanging toward the floor: a spur only stands as tall as it has room to be wide, so the valleys close into one broad summit band.
+- The Gate's Water face has bigger, fewer basins (tens of metres across), so it no longer reads as a fine crinkle from afar.
+
 ## v0.061 — Rock with beds, streaks and lichen
 
 - The Mountain's rock is no longer one pale grey: it shows folded beds of darker, warmer and paler stone on its walls, dark streaks where water runs down, iron-stained tones and lichen, the same colour near and far.
