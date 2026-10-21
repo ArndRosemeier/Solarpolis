@@ -25,8 +25,11 @@ import { SHIP_ALBEDO, shipGeometry } from './ship';
 import type { FlameUniforms } from './hullShaders';
 import { FrameLoop, dragToLook, draw, fitCanvas, moveKeys } from './surface';
 
-/** Clock seconds per real second by default: Earth turns visibly, a day in 24 minutes. */
-const SPACE_SPEED = 60;
+/**
+ * Clock seconds per real second by default: real time (Arnd, 2026-10-21). A faster clock spins the habitat fast
+ * enough to make it look small; the debug menu speeds it up.
+ */
+const SPACE_SPEED = 1;
 /** The dome and the stars sit this far out; nothing in the scene is drawn beyond it. */
 const DOME = 5e7;
 const base = import.meta.env.BASE_URL;

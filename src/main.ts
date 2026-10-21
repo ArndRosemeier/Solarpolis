@@ -166,7 +166,7 @@ const nextSpeed = (speeds: number[], now: number): number => speeds[(speeds.inde
 debug.add({ label: 'Clock speed: ×60 → ×600 → paused → real time', group: 'Time', run: () => { const v = view(); if (v) v.timeScale = nextSpeed([60, 600, 0, 1], v.timeScale); } });
 debug.add({ label: 'Two hours later', group: 'Time', run: () => view()?.skip(7200) });
 debug.addInfo(() => outsideView()?.info() ?? 'outside: not started');
-debug.add({ label: 'Clock speed outside: ×60 → ×3600 → paused → real time', group: 'Outside', run: () => { const v = outsideView(); if (v) v.timeScale = nextSpeed([60, 3600, 0, 1], v.timeScale); } });
+debug.add({ label: 'Clock speed outside: real time → ×60 → ×3600 → paused', group: 'Outside', run: () => { const v = outsideView(); if (v) v.timeScale = nextSpeed([1, 60, 3600, 0], v.timeScale); } });
 debug.add({ label: 'Six hours later', group: 'Outside', run: () => outsideView()?.skip(6 * 3600) });
 debug.add({ label: "Jump to Earth's next shadow on the habitat", group: 'Outside', run: () => { const v = outsideView(); if (v && !v.nextShadow()) console.log('no shadow within a year'); } });
 debug.add({ label: 'Night eyes augmentation (toggle): the eyes open far enough for the stars', group: 'Outside', run: () => { const v = outsideView(); if (v) v.nightEyes = !v.nightEyes; } });
