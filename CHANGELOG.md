@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.003 — Look around with the right mouse button
+
+- Inside, hold the right mouse button to look around. The pointer stays visible and free, so the left button is kept for clicking things in the world. On a touch screen, drag with one finger.
+
 ## v0.002 — A first look inside
 
 - New Inside tab: stand on the floor of the habitat you designed and look around. The land curves up on both sides and overhead, the far side fades into blue haze, and the sunline runs along the axis.
