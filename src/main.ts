@@ -64,7 +64,8 @@ async function showInside(): Promise<void> {
   try {
     view = await InteriorView.create(h);
     inside.prepend(view.canvas);
-    memory.track('interior view', () => view?.bytes() ?? 0);
+    memory.track('terrain tiles', () => view?.bytes() ?? 0);
+    memory.onPressure('soft', () => view?.shed());
     note.textContent = '';
     view.setRunning(!inside.hidden);
   } catch (e) {

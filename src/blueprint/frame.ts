@@ -43,3 +43,12 @@ export function groundNormal(profile: Profile, theta: number, s: number): Vec3 {
   const p = profile.at(s);
   return [p.nr * Math.cos(theta), p.nr * Math.sin(theta), p.nz];
 }
+
+/**
+ * A world position as the renderer draws it: relative to the eye. Everything on the GPU is camera-relative, because
+ * 32-bit floats resolve only millimetres at tens of kilometres from the origin; the subtraction happens here, in
+ * 64-bit numbers, and only the small result goes to the GPU.
+ */
+export function toView(eye: Vec3, p: Vec3): Vec3 {
+  return [p[0] - eye[0], p[1] - eye[1], p[2] - eye[2]];
+}

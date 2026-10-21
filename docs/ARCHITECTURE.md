@@ -19,24 +19,33 @@ Each row is a question you will have while coding, and the one place that answer
 
 | Question | The one way |
 |---|---|
-| What does the whole interior surface look like from afar? | `buildSurface(habitat, cells?)` (`surface.ts`): the profile swept around the axis, sized by a cell budget (`SURFACE_CELLS`), seeded ground colours. |
+| How high is the ground at (θ, s), and what is it (meadow, forest, rock, shore, lake bed)? | `makeTerrain(habitat)` (`terrain.ts`): `heightAt`, `standAt` (ground or water surface), `colorAt`, `lake`; sizes from `HabitatParams.relief`. Noise is sampled at world positions, so it wraps. |
+| How is the ground cut into pieces for drawing, and which pieces does a view need? | The tile tree (`tiles.ts`): `makeLayout` (bands along s, columns by circumference), `roots`, `children`, `select(terrain, layout, eye, pixelsPerRadian, maxPixels, errorOf)` by measured error on screen, `buildTile` (mesh relative to its `origin`, skirts, water). |
 
 ## Being in the habitat (`src/world`, pure)
 
 | Question | The one way |
 |---|---|
-| Where is the player, which way is up, where do they look? | `Walker` (`walker.ts`): position in (θ, s, h), heading and pitch → `view()` eye, look, up (up is the ground's normal). `startOf(profile)` is where a walk begins. |
+| Where is the player, which way is up, where do they look? | `Walker` (`walker.ts`): position in (θ, s, h), heading and pitch → `view()` eye, look, up (up is the ground's normal). `startOf(profile)` is where a walk begins; the eye stands on a ground function (`terrain.standAt`). |
 
 ## Drawing (`src/render`)
 
 | Question | The one way |
 |---|---|
 | How do I get a renderer? | `createRenderer(canvas, { backends: 'webgpu', depth: 'reversed' })` from `@futuremagic/stage`, called once in `view.ts`. |
-| How does a mesh get a material? | A kind from `materials.ts` (`GROUND`, `SUNLINE`, `allKinds`); the mesh carries exactly the kind's attributes. |
+| How does a mesh get a material? | A kind from `materials.ts` (`GROUND`, `WATER`, `SUNLINE`, `allKinds`); the mesh carries exactly the kind's attributes. |
 | How does a thing enter the scene? | `stage.add(obj)` (the Stage from `@futuremagic/stage`, made in `view.ts`). |
 | How are things lit? | From the axis, in the kinds' shaders (no three.js lights): the sunline lights every point from the axis direction, plus `air.skyLight`. |
 | How does distance look? | `air` uniforms in `materials.ts` (haze colour, extinction from `HAZE_DIAMETER`); every kind sees through the air. |
-| What is drawn inside? | `InteriorView` (`view.ts`): surface, sunline, walker camera. |
+| Where does the camera sit, given the huge distances? | At the origin: meshes are placed at `frame.toView(eye, origin)` (float64), and shaders get the world eye from `view.eye` (`materials.ts`). |
+| How does the terrain reach the screen? | `TerrainView` (`render/terrain.ts`): `follow(eye, pixelsPerRadian)` each frame selects tiles, asks the worker pool for missing ones, caches and evicts. |
+| What is drawn inside? | `InteriorView` (`view.ts`): terrain tiles, sunline, walker camera. |
+
+## Workers (`src/workers`)
+
+| Question | The one way |
+|---|---|
+| How does heavy generation run off the main thread? | `WorkerPool.job(request)` (`pool.ts`), the only `new Worker`; requests and answers are typed in `gen.worker.ts`, buffers are transferred. |
 
 ## The app (`src/app`)
 
@@ -53,7 +62,5 @@ Each row is a question you will have while coding, and the one place that answer
 | Question | The one way (to build) |
 |---|---|
 | Which way is up, and how strong is gravity, at a world point? | `world.upAt(p)`, `world.gravityAt(p)` (`src/world`), from the blueprint. |
-| Where does the camera sit, given the huge distances? | `frame.toView` (camera-relative floats; needed once detail is drawn at the centimetre scale far from the origin). |
-| What is the ground like close up? | Chunks in (θ, s) with their own seeds (`src/gen`), replacing the coarse surface near the viewer. |
 | How is a person or a robot made? | Arnd's Actors package (`Figure`, humanoid robot bodies). |
 | Who lives here, and what are they doing now? | Derived from seed + clock (`src/sim`); only touched people are simulated. |

@@ -26,6 +26,7 @@ export const REFERENCE: HabitatParams = {
   hubRadius: 60,
   sunlineRadius: 15,
   endcaps: { wild: { reach: 0.6, rise: 1.6 }, port: { reach: 0.5, rise: 1.8 } },
+  relief: { hills: 60, ringLake: { width: 500, depth: 15 }, terraceStep: 150 },
   climate: 'temperate-mild',
   population: 300000,
   age: 200,
@@ -45,7 +46,7 @@ const peopleFor = (radius: number, length: number): number => Math.round(DENSITY
 /** The blueprint matrix: the reference, a small fast spinner, a large one at the hull's limit, a long thin one. */
 export const MATRIX: { name: string; params: HabitatParams }[] = [
   { name: 'reference', params: REFERENCE },
-  { name: 'small', params: withParams({ radius: 200, length: 1500, hubRadius: 10, sunlineRadius: 3, population: peopleFor(200, 1500), seed: 2 }) },
-  { name: 'large', params: withParams({ radius: 12000, length: 60000, hubRadius: 150, sunlineRadius: 40, population: peopleFor(12000, 60000), seed: 3 }) },
-  { name: 'long', params: withParams({ radius: 2000, length: 40000, hubRadius: 40, sunlineRadius: 10, population: peopleFor(2000, 40000), seed: 4 }) },
+  { name: 'small', params: withParams({ radius: 200, length: 1500, hubRadius: 10, sunlineRadius: 3, relief: { hills: 8, ringLake: { width: 40, depth: 4 }, terraceStep: 20 }, population: peopleFor(200, 1500), seed: 2 }) },
+  { name: 'large', params: withParams({ radius: 12000, length: 60000, hubRadius: 150, sunlineRadius: 40, relief: { hills: 150, ringLake: { width: 1500, depth: 25 }, terraceStep: 300 }, population: peopleFor(12000, 60000), seed: 3 }) },
+  { name: 'long', params: withParams({ radius: 2000, length: 40000, hubRadius: 40, sunlineRadius: 10, relief: { hills: 30, ringLake: null, terraceStep: 100 }, population: peopleFor(2000, 40000), seed: 4 }) },
 ];

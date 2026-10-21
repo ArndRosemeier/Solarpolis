@@ -7,7 +7,7 @@ import type { Habitat } from './derive';
 export type Severity = 'invalid' | 'unusual';
 
 export interface Finding {
-  id: 'spin' | 'hull' | 'hull-thick' | 'axis-air' | 'haze' | 'heat' | 'light' | 'layers' | 'population' | 'sunline';
+  id: 'spin' | 'hull' | 'hull-thick' | 'axis-air' | 'haze' | 'heat' | 'light' | 'layers' | 'population' | 'sunline' | 'relief';
   severity: Severity;
   message: string;
 }
@@ -43,6 +43,9 @@ export function validate(h: Habitat): Finding[] {
   const stack = h.layers.hull - h.layers.surface;
   if (stack >= h.radius * 0.5) out.push({ id: 'layers', severity: 'invalid', message: `the layers under the floor (${stack.toFixed(0)} m) take up half the radius or more` });
   if (!(p.sunlineRadius > 0 && p.sunlineRadius < p.hubRadius)) out.push({ id: 'sunline', severity: 'invalid', message: `the sunline (${p.sunlineRadius} m) must be thinner than the dock hub it ends in (${p.hubRadius} m)` });
+  const rl = p.relief, floor = h.profile.floorEnd - h.profile.floorStart;
+  if (!(rl.hills >= 0 && rl.terraceStep > 0) || (rl.ringLake && !(rl.ringLake.width > 0 && rl.ringLake.depth > 0 && rl.ringLake.width < floor / 2)))
+    out.push({ id: 'relief', severity: 'invalid', message: 'the relief needs hills ≥ 0, a terrace step > 0, and a ring lake narrower than half the floor' });
   if (!(p.population >= 0)) out.push({ id: 'population', severity: 'invalid', message: 'the population must not be negative' });
   return out;
 }
