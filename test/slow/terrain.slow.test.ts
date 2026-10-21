@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { MATRIX, derive, toWorld } from '../../src/blueprint';
 import { makeTerrain } from '../../src/gen/terrain';
 import { makeEcology } from '../../src/gen/ecology';
-import { makeLayout, bounds, buildTile, select, keyId, type TileKey } from '../../src/gen/tiles';
+import { makeLayout, bounds, buildTile, select, keyId, type TileKey, type TileFit } from '../../src/gen/tiles';
 import { startOf, EYE_HEIGHT } from '../../src/world/walker';
 
 // Slow (builds hundreds of tiles per habitat): run with `npm run test:slow`, not in CI's 2-minute check.
@@ -21,11 +21,11 @@ for (const { name, params } of MATRIX) {
     const at = { ...start, s };
     const eye = toWorld(h.profile, { ...at, h: t.standAt(at.theta, at.s) + EYE_HEIGHT });
     // Build what the selection asks for, round by round, as the renderer does.
-    const built = new Map<string, number>();
+    const built = new Map<string, TileFit>();
     const errorOf = (k: TileKey) => built.get(keyId(k));
     let sel = select(t, layout, eye, PX_PER_RAD, 2, errorOf);
     for (let round = 0; round < 40 && sel.want.length; round++) {
-      for (const k of sel.want) built.set(keyId(k), buildTile(eco, layout, k).error);
+      for (const k of sel.want) { const b = buildTile(eco, layout, k); built.set(keyId(k), { error: b.error, relief: b.relief }); }
       sel = select(t, layout, eye, PX_PER_RAD, 2, errorOf);
     }
     // The plan's budget is about 1,000 terrain tiles; the large habitat's tall hills need a little more (still within 1,500 draws).

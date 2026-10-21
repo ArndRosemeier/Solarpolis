@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { MATRIX, derive, toWorld } from '../src/blueprint';
 import { makeTerrain } from '../src/gen/terrain';
 import { makeEcology } from '../src/gen/ecology';
-import { makeLayout, roots, bounds, buildTile, select, children, parent, keyId, cellSize, splitsAround, splitAround, TILE_CELLS, type TileKey, type TileLayout, type TileMesh } from '../src/gen/tiles';
+import { makeLayout, roots, bounds, buildTile, select, children, parent, keyId, cellSize, splitsAround, splitAround, TILE_CELLS, type TileKey, type TileFit, type TileLayout, type TileMesh } from '../src/gen/tiles';
 
 const PX_PER_RAD = 1440 / (70 * Math.PI / 180);
 
@@ -129,7 +129,7 @@ test('tiles: the view where the sunline meets an endcap needs no more tiles than
   const h = derive(MATRIX[0].params);
   const t = makeTerrain(h), layout = makeLayout(t), { profile } = h;
   // Every tile built, each as rough as its cells: enough to count what a view splits to.
-  const errorOf = (k: TileKey): number => cellSize(layout, k) * 0.3;
+  const errorOf = (k: TileKey): TileFit => ({ error: cellSize(layout, k) * 0.3, relief: 10 });
   const count = (s: number): ReturnType<typeof select> => select(t, layout, toWorld(profile, { theta: 1, s, h: 2 }), PX_PER_RAD, 2, errorOf);
   const floor = count((profile.floorStart + profile.floorEnd) / 2).draw.length;
   for (const s of [20, profile.length - 20]) {
@@ -159,7 +159,7 @@ test('tiles: children built while a sibling is not are kept, not drawn', () => {
   const root: TileKey = { band: 3, column: 0, level: 0, i: 0, j: 0 }, kids = children(layout, root);
   const built = new Set([...roots(layout), ...kids.slice(1)].map(keyId));
   const eye = toWorld(h.profile, { theta: 0.1, s: (layout.bands[3].s0 + layout.bands[3].s1) / 2, h: 2 });
-  const sel = select(t, layout, eye, PX_PER_RAD, 2, (k) => (built.has(keyId(k)) ? cellSize(layout, k) * 0.3 : undefined));
+  const sel = select(t, layout, eye, PX_PER_RAD, 2, (k) => (built.has(keyId(k)) ? { error: cellSize(layout, k) * 0.3, relief: 10 } : undefined));
   assert.ok(sel.draw.some((k) => keyId(k) === keyId(root)));
   const want = new Set(sel.want.map(keyId)), keep = new Set(sel.keep.map(keyId)), draw = new Set(sel.draw.map(keyId));
   assert.ok(want.has(keyId(kids[0])));

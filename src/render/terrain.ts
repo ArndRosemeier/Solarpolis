@@ -81,9 +81,9 @@ export class TerrainView {
   /** Choose, request and place the tiles for an eye; `pixelsPerRadian` is the screen height over the vertical FOV. */
   follow(eye: Vec3, pixelsPerRadian: number): void {
     this.cache.frame();
-    const errorOf = (k: TileKey): number | undefined => this.cache.get(keyId(k))?.tile.error;
-    const parentError = (k: TileKey): number | undefined => (k.level === 0 ? undefined : errorOf(parent(this.layout, k)));
-    const sel = select(this.terrain, this.layout, eye, pixelsPerRadian, MAX_PIXELS, errorOf, this.sphereOf);
+    const fitOf = (k: TileKey): TileMesh | undefined => this.cache.get(keyId(k))?.tile;
+    const parentError = (k: TileKey): number | undefined => (k.level === 0 ? undefined : fitOf(parent(this.layout, k))?.error);
+    const sel = select(this.terrain, this.layout, eye, pixelsPerRadian, MAX_PIXELS, fitOf, this.sphereOf);
     const before = new Set(this.drawn);
     for (const e of this.drawn) { e.mesh.visible = false; if (e.water) e.water.visible = false; }
     this.drawn = [];
