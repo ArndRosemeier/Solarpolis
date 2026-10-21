@@ -40,7 +40,7 @@ const PART = {
   /** Benches: length, depth, seat height. */
   bench: 2.6, deep: 0.45, seat: 0.42,
   /** The wall: its darker plinth's height, the coping's overhang and thickness; pilasters' spacing, width and depth. */
-  plinth: 0.6, over: 0.15, thick: 0.22, spacing: 7, pier: 0.55, proud: 0.18,
+  plinth: 0.6, over: 0.15, thick: 0.22, spacing: 6, pier: 0.7, proud: 0.3,
   /** The light well in the middle: its glass (a share of the court's radius) set this far down, the seat round it. */
   well: 0.13, sink: 0.05, kerb: 0.55,
   /** The paving's rings and slabs across; the share of slabs gone where the land was let go. */
@@ -236,9 +236,12 @@ export function buildCourt(l: CourtLayout, detail: CourtDetail): Shape {
   // with the walk), the walk on top, its outer lip into the ground.
   const ring = arc(0, TAU, round), plinth = l.pave + PART.plinth * hr, over = PART.over * hr, thick = PART.thick * hr, dark = shade(stone, 0.72);
   for (let i = 0; i + 1 < ring.length; i++) {
-    const a = ring[i], b = ring[i + 1], wa = walkAt(l, a), wb = walkAt(l, b), lip = !solid && !within((a + b) / 2, l.landing.a0, l.landing.a1);
-    sh.wall(l.face, a, b, bury, plinth, bury, plinth, true, dark);
-    sh.wall(l.face, a, b, plinth, lip ? wa - thick : wa, plinth, lip ? wb - thick : wb, true, stone);
+    const a = ring[i], b = ring[i + 1], wa = walkAt(l, a), wb = walkAt(l, b), lip = !solid && !far && !within((a + b) / 2, l.landing.a0, l.landing.a1);
+    if (far || solid) sh.wall(l.face, a, b, bury, wa, bury, wb, true, stone);
+    else {
+      sh.wall(l.face, a, b, bury, plinth, bury, plinth, true, dark);
+      sh.wall(l.face, a, b, plinth, lip ? wa - thick : wa, plinth, lip ? wb - thick : wb, true, stone);
+    }
     const inner = lip ? l.face - over : l.face;
     if (lip) {
       sh.wall(inner, a, b, wa - thick, wa, wb - thick, wb, true, stone);
@@ -299,22 +302,23 @@ const nearAny = (a: number, at: readonly number[], margin: number): boolean => a
  * then rings of slabs out to the wall, every other ring a shade darker. Where the land was let go, slabs are missing.
  */
 function paving(sh: CourtShape, l: CourtLayout, detail: CourtDetail, stone: RGB): void {
-  const hr = l.handrail, round = ROUND[detail], far = detail === 'far', o = l.well, k = o + l.kerb, glass = l.pave - PART.sink * hr;
+  const hr = l.handrail, round = ROUND[detail], far = detail === 'far', o = l.well, k = far ? o : o + l.kerb, glass = l.pave - PART.sink * hr;
   const seat = l.pave + PART.seat * hr, was = sh.finish;
   sh.finish = FINISH.ceramic;
   sh.arc(glass, o, glass, 0, 1, 0, 0, TAU, round, LANTERN);
   sh.finish = was;
+  if (far) { sh.arc(l.pave, l.face, l.pave, o, 1, 0, 0, TAU, round, stone); return; }
   for (const [a, b] of pairs(arc(0, TAU, round))) {
     sh.wall(o, a, b, glass, seat, glass, seat, true, stone);
     sh.wall(k, a, b, l.pave, seat, l.pave, seat, false, stone);
   }
   sh.arc(seat, k, seat, o, 1, 0, 0, TAU, round, stone);
-  if (!far) {
+  if (detail !== 'solid') {
     sh.finish = FINISH.bronze;
     for (const a of [0, Math.PI / 2]) sh.block([0, 0, glass + 0.03 * hr], [Math.cos(a), Math.sin(a), 0], [-Math.sin(a), Math.cos(a), 0], [0, 0, 1], [o, 0.05 * hr, 0.03 * hr], BRONZE, true);
     sh.finish = was;
   }
-  if (far) { sh.arc(l.pave, l.face, l.pave, k, 1, 0, 0, TAU, round, stone); return; }
+  if (detail === 'solid') { sh.arc(l.pave, l.face, l.pave, k, 1, 0, 0, TAU, round, stone); return; }
   const rings = Math.max(1, Math.round((l.face - k) / (PART.ring * hr))), rng = new Rng(l.seed), gaps = l.style === 'let-go' && detail === 'near';
   for (let i = 0; i < rings; i++) {
     const r0 = k + ((l.face - k) * i) / rings, r1 = k + ((l.face - k) * (i + 1)) / rings, col = i % 2 ? shade(stone, 0.9) : stone;
