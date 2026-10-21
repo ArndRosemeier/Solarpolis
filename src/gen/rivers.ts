@@ -11,7 +11,7 @@
  * Sizes come from `HabitatParams.relief.rivers`; the meanders scale with the river's width. Pure.
  */
 import { Noise, Rng, deriveSeed } from '@futuremagic/core';
-import { wrapAngle, type Habitat } from '../blueprint';
+import type { Habitat } from '../blueprint';
 import type { Lake } from './terrain';
 
 export interface River {
@@ -21,12 +21,19 @@ export interface River {
   s0: number;
   step: number;
   count: number;
-  /** Per sample: the river's middle (θ), its water surface (height above the profile, m), its half width (m). */
+  /**
+   * Per sample: the river's middle (θ, unwrapped: it never jumps by a turn between samples, so it may stray outside
+   * [0, 2π)), its water surface (height above the profile, m), its half width (m).
+   */
   theta: Float64Array;
   surface: Float64Array;
   halfWidth: Float64Array;
   /** Per sample: how far downstream of the spring it is (m, along the water): the flow's own coordinate. */
   run: Float64Array;
+  /** Per sample: the profile's radius there (m), so a point's distance across needs no profile lookup. */
+  radius: Float64Array;
+  /** Per sample: how steeply the water falls there (m down per m run): 0 on the floor's slow stretches, high on a fall. */
+  steep: Float32Array;
   depth: number;
 }
 
@@ -40,6 +47,8 @@ export interface RiverHit {
   run: number;
 }
 
+/** A whole turn (rad). */
+const TURN = 2 * Math.PI;
 /** How steeply the valley walls rise from the bank (height per metre out). */
 const VALLEY = 0.25;
 /** How far below the ground beside it the water surface stays (m, as a share of the depth). */
@@ -70,17 +79,18 @@ export function makeRivers(h: Habitat, lake: Lake | null, ground: (theta: number
     const count = Math.max(2, Math.ceil((hi - lo) / step) + 1);
     const r: River = {
       from, s0: lo, step: (hi - lo) / (count - 1), count, depth: spec.depth,
-      theta: new Float64Array(count), surface: new Float64Array(count), halfWidth: new Float64Array(count), run: new Float64Array(count),
+      theta: new Float64Array(count), surface: new Float64Array(count), halfWidth: new Float64Array(count), run: new Float64Array(count), radius: new Float64Array(count), steep: new Float32Array(count),
     };
     // Meanders: a slow wander across, a few widths out to either side, longer bends than they are wide.
     const swing = spec.width * 6, bend = spec.width * 40;
     for (let i = 0; i < count; i++) {
       const s = lo + i * r.step, rad = Math.max(profile.at(s).r, half);
-      r.theta[i] = wrapAngle(theta0 + (swing * meander.fbm2(s / bend, k * 7.3, 3)) / rad);
+      r.radius[i] = rad;
+      r.theta[i] = theta0 + (swing * meander.fbm2(s / bend, k * 7.3, 3)) / rad;
     }
     // Walk downstream from the spring in elevation (how far in from the hull, which is what water runs down): the surface
     // only falls, stays under the banks, and ends no lower than the lake.
-    let level = Infinity, run = 0, prev: { s: number; theta: number; level: number } | null = null;
+    let level = Infinity, run = 0, prev: { s: number; theta: number; level: number; i: number } | null = null;
     for (let n = 0; n < count; n++) {
       const i = from === 'wild' ? n : count - 1 - n, s = lo + i * r.step;
       const flow = n / (count - 1);
@@ -91,8 +101,15 @@ export function makeRivers(h: Habitat, lake: Lake | null, ground: (theta: number
       level = Math.max(lake.level, Math.min(level - LEAST_FALL * r.step, bank - spec.depth * FREEBOARD));
       const surface = (h.radius - p.r - level) / p.nr;
       // Where it runs: along the profile, around the axis, and down.
-      if (prev) run += Math.hypot(s - prev.s, wrapSigned(r.theta[i] - prev.theta) * rad, level - prev.level);
-      prev = { s, theta: r.theta[i], level };
+      if (prev) {
+        const along = Math.hypot(s - prev.s, (r.theta[i] - prev.theta) * rad), drop = prev.level - level;
+        run += Math.hypot(along, drop);
+        // The fall shows on the sample above it (where the water tips over) and the one below (where it lands).
+        const steep = drop / Math.max(along, 1e-6);
+        r.steep[prev.i] = Math.max(r.steep[prev.i], steep);
+        r.steep[i] = steep;
+      }
+      prev = { s, theta: r.theta[i], level, i };
       r.surface[i] = surface;
       r.halfWidth[i] = w;
       r.run[i] = run;
@@ -102,15 +119,34 @@ export function makeRivers(h: Habitat, lake: Lake | null, ground: (theta: number
   return out;
 }
 
+/** A point of a river's middle line, between its samples (s clamped to the river's). */
+export interface RiverPoint {
+  s: number;
+  theta: number;
+  surface: number;
+  halfWidth: number;
+  run: number;
+  steep: number;
+}
+
+export function riverPoint(r: River, s: number): RiverPoint {
+  const f = Math.min(r.count - 1, Math.max(0, (s - r.s0) / r.step));
+  const i = Math.min(r.count - 2, Math.floor(f)), t = f - i;
+  const ofSample = (a: ArrayLike<number>) => a[i] + (a[i + 1] - a[i]) * t;
+  return { s, theta: ofSample(r.theta), surface: ofSample(r.surface), halfWidth: ofSample(r.halfWidth), run: ofSample(r.run), steep: Math.max(r.steep[i], r.steep[i + 1]) };
+}
+
 /** Where a point is across the nearest river whose valley reaches it, or null. */
-export function riverAt(h: Habitat, rivers: readonly River[], theta: number, s: number, reach = 0): RiverHit | null {
+export function riverAt(rivers: readonly River[], theta: number, s: number, reach = 0): RiverHit | null {
   let best: RiverHit | null = null;
   for (const river of rivers) {
     const f = (s - river.s0) / river.step;
-    if (f < 0 || f > river.count - 1) continue;
+    if (!(f >= 0 && f <= river.count - 1)) continue;
     const i = Math.min(river.count - 2, Math.floor(f)), t = f - i;
-    const mid = river.theta[i] + wrapSigned(river.theta[i + 1] - river.theta[i]) * t;
-    const across = wrapSigned(theta - mid) * Math.max(h.profile.at(s).r, 1e-6);
+    // The middle there, and how far around the point is from it (brought into a half turn either way).
+    let turn = theta - (river.theta[i] + (river.theta[i + 1] - river.theta[i]) * t);
+    turn -= TURN * Math.round(turn / TURN);
+    const across = turn * (river.radius[i] + (river.radius[i + 1] - river.radius[i]) * t);
     const halfWidth = river.halfWidth[i] + (river.halfWidth[i + 1] - river.halfWidth[i]) * t;
     if (Math.abs(across) > halfWidth + reach) continue;
     if (best && Math.abs(across) >= Math.abs(best.across)) continue;
@@ -137,8 +173,27 @@ export function valleyReach(h: Habitat): number {
   return r.rivers ? (r.hills + r.terraceStep + r.rivers.depth) / VALLEY : 0;
 }
 
-/** An angle difference brought into (−π, π]. */
-function wrapSigned(a: number): number {
-  const t = wrapAngle(a);
-  return t > Math.PI ? t - 2 * Math.PI : t;
+/** The river sample nearest (θ, s) that `pick` accepts (by distance over the ground), or null. */
+export function nearestSample(rivers: readonly River[], theta: number, s: number, pick: (r: River, i: number) => boolean = () => true): { river: River; i: number } | null {
+  let best: { river: River; i: number } | null = null, gap = Infinity;
+  for (const river of rivers) for (let i = 0; i < river.count; i++) {
+    let turn = river.theta[i] - theta;
+    turn -= TURN * Math.round(turn / TURN);
+    const d = Math.hypot(turn * river.radius[i], river.s0 + i * river.step - s);
+    if (d < gap && pick(river, i)) { gap = d; best = { river, i }; }
+  }
+  return best;
+}
+
+/**
+ * A place to watch a river from: `down` metres downstream of sample `i` (negative: upstream) and `aside` metres out
+ * from its middle, with the heading that looks back at the sample (the walker's: 0 along +s, rising toward −θ).
+ */
+export function besideRiver(r: River, i: number, down: number, aside: number): { theta: number; s: number; heading: number } {
+  const s0 = r.s0 + i * r.step, s = Math.min(r.s0 + r.step * (r.count - 1), Math.max(r.s0, s0 + (r.from === 'wild' ? down : -down)));
+  const at = riverPoint(r, s), rad = Math.max(r.radius[Math.min(r.count - 1, Math.round((s - r.s0) / r.step))], 1);
+  const theta = at.theta + aside / rad;
+  // From there back to the sample: across (θ·r) and along s.
+  const x = (r.theta[i] - theta) * rad, y = s0 - s;
+  return { theta, s, heading: Math.atan2(-x, y) };
 }

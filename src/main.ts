@@ -4,6 +4,7 @@
  * the Sun and the stars). The two views are WebGPU only.
  */
 import { nearestFloor, nearestWood, type Ecology, type Found } from './gen/ecology';
+import { besideRiver, nearestSample, type River } from './gen/rivers';
 import './app/style.css';
 import { el } from './app/dom';
 import { TitleCard } from './app/title';
@@ -183,6 +184,19 @@ const toDebris = (label: string, back: number, pick: (d: DebrisSpec) => boolean)
 });
 toDebris('To the nearest fallen trunk', 6, (d) => d.form === 'log');
 toDebris('To the nearest boulder', 8, (d) => d.form === 'stone' && d.height[1] >= 1);
+/** Beside the nearest river sample that `pick` accepts: `down` metres downstream of it and off to the side, looking at it. */
+const toRiver = (label: string, down: number, pick: (r: River, i: number) => boolean): void => debug.add({
+  label, group: 'Go', run: () => {
+    const v = view(), t = v?.ecology?.terrain, at = v?.walker.at;
+    const near = t && at && nearestSample(t.rivers, at.theta, at.s, pick);
+    if (!v || !near) return;
+    const w = near.river.halfWidth[near.i];
+    const p = besideRiver(near.river, near.i, down, w + Math.max(3, w * 0.5));
+    v.goTo(p.theta, p.s, p.heading);
+  },
+});
+toRiver('To the nearest river', 40, (r, i) => r.steep[i] < 0.05);
+toRiver('To the nearest falls', 30, (r, i) => r.steep[i] > 0.8);
 go('The middle of the floor', (h) => (h.profile.floorStart + h.profile.floorEnd) / 2);
 go('The foot of the wild endcap', (h) => h.profile.floorStart + 20);
 go('Halfway up the wild endcap', (h) => h.profile.floorStart / 2);

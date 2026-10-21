@@ -228,26 +228,61 @@ export function setCanopyBand(band: readonly [number, number]): void {
   canopyBand.value.set(band[0], band[1]);
 }
 
+/** The sunline tube's colour where its emission is `glow`: brighter than white, so the tone mapping rolls it off. */
+const tubeLight = (glow: Node<'float'>): Node<'vec3'> => vec3(6, 5.4, 4.6).mul(glow);
+
 /** The sunline: the glowing tube along the axis, brighter where the travelling sun is. Brighter than white, so the tone mapping rolls it off. */
 export const SUNLINE = kind('sunline', ['position', 'normal'], { cast: false, receive: false }, () => {
   const m = new MeshBasicNodeMaterial({ side: DoubleSide });
   // As bright along its length as the emission profile says: the travelling sun is a brighter stretch of the tube.
-  const glow = texture(emissionTexture, vec2(worldPosition().z.div(light.length), 0.5)).r;
-  m.colorNode = throughAir(vec3(6, 5.4, 4.6).mul(glow));
+  m.colorNode = throughAir(tubeLight(texture(emissionTexture, vec2(worldPosition().z.div(light.length), 0.5)).r));
   return m;
 });
 
 /**
- * Water (the ring lake): its own dark green-blue, lit like the ground, and towards grazing angles it mirrors the bright
- * haze above (Fresnel). Its meshes carry position and normal.
+ * Water (the ring lake and the rivers, gen/water.ts): a dark green-blue body, lit like the ground, with ripples that
+ * run with the river (`flow`: across, run, speed, steepness; `dir`: downstream and the half width). The ripples tilt
+ * the surface, so toward grazing angles it mirrors the bright haze (Fresnel) in moving patches, and where a ripple
+ * faces the sunline overhead it throws back a glint of it. Falls and rapids foam white; the shallows by the banks show
+ * the bed. The lake lies still under a slow breeze.
  */
-export const WATER = kind('water', ['position', 'normal'], { cast: false, receive: false }, () => {
+export const WATER = kind('water', ['position', 'normal', 'flow', 'dir'], { cast: false, receive: false }, () => {
   const m = new MeshBasicNodeMaterial();
-  const toEye = normalize(positionWorld.negate());
-  const facing = abs(dot(normalWorld, toEye));
+  const flow = attribute<'vec4'>('flow', 'vec4'), dir = attribute<'vec4'>('dir', 'vec4');
+  const up = normalize(normalWorld);
+  const side = normalize(cross(dir.xyz, up)), ahead = cross(up, side);
+  const river = step(0.01, dir.w), speed = flow.z, steep = flow.w;
+  // The ripples' own coordinates (m): across the river and downstream, carried along with the water; on the lake the
+  // world position, drifting slowly.
+  const p = worldPosition();
+  const along = vec3(flow.x.mul(dir.w), flow.y.sub(time.mul(speed)), 0);
+  const still = vec3(p.x, p.y, p.z.add(time.mul(0.3)));
+  const at = mix(still, along, river);
+  // Ripples stretched across the flow, a coarse and a fine set; their slopes by small differences.
+  const ripple = (q: Node<'vec3'>): Node<'float'> => mx_noise_float(q.mul(vec3(0.9, 0.45, 0.9))).mul(0.6).add(mx_noise_float(q.mul(vec3(3.1, 1.7, 3.1))).mul(0.25));
+  const e = 0.08, h0 = ripple(at);
+  const du = ripple(at.add(vec3(e, 0, 0))).sub(h0).div(e), dv = ripple(at.add(vec3(0, e, 0))).sub(h0).div(e);
+  // Rough water tilts more: the slow floor stretches gently, rapids and falls hard.
+  const rough = mix(float(0.12), float(0.18).add(smoothstep(0.02, 0.4, steep).mul(0.5)), river);
+  const n = normalize(up.sub(side.mul(du.mul(rough))).sub(ahead.mul(dv.mul(rough))));
+  const ray = normalize(positionWorld.sub(cameraPosition));
+  const facing = abs(dot(n, ray.negate()));
   const mirror = pow(float(1).sub(facing), 5).mul(0.9).add(0.04);
-  const deep = vec3(0.02, 0.07, 0.08).mul(sunlit());
-  m.colorNode = throughAir(mix(deep, air.haze, mirror));
+  // The sunline's glint: where the reflected ray passes the axis within the tube's glow, as bright as the tube there.
+  const r = ray.sub(n.mul(dot(n, ray).mul(2)));
+  const rxy = max(dot(r.xy, r.xy), 1e-6), t = dot(p.xy, r.xy).negate().div(rxy);
+  const miss = p.xy.add(r.xy.mul(t)).length();
+  const tube = texture(emissionTexture, vec2(p.z.add(r.z.mul(t)).div(light.length), 0.5)).r;
+  const glint = smoothstep(light.nearest.mul(1.5), light.nearest.mul(0.25), miss).mul(step(0, t)).mul(tube).mul(mirror);
+  const lit = sunlit(vec2(OPEN_SKY, OPEN_SKY), up);
+  // The body: deep in the middle, the bed showing in the shallows by the banks.
+  const shallow = smoothstep(0.55, 1, abs(flow.x)).mul(0.7).mul(river);
+  const body = mix(vec3(0.02, 0.07, 0.08), vec3(0.13, 0.12, 0.08), shallow).mul(lit);
+  // White water: on falls and rapids, broken up by the same ripples, and a little along fast banks.
+  const churn = smoothstep(0.08, 0.6, steep).add(smoothstep(0.85, 1, abs(flow.x)).mul(smoothstep(2, 5, speed)).mul(0.5));
+  const foam = clamp(churn.mul(h0.mul(1.4).add(0.75)), 0, 1).mul(river);
+  const surface = mix(body, air.haze, mirror).add(tubeLight(glint));
+  m.colorNode = throughAir(mix(surface, vec3(0.8, 0.84, 0.86).mul(lit), foam));
   return m;
 });
 

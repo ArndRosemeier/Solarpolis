@@ -103,11 +103,11 @@ export function makeTerrain(h: Habitat): Terrain {
   const reach = valleyReach(h);
   const heightAt = (theta: number, s: number): number => {
     const g = landAt(theta, s);
-    const hit = rivers.length ? riverAt(h, rivers, theta, s, reach) : null;
+    const hit = rivers.length ? riverAt(rivers, theta, s, reach) : null;
     return hit ? carve(hit, hit.river.depth, g) : g;
   };
   const inRiver = (theta: number, s: number): RiverHit | null => {
-    const hit = rivers.length ? riverAt(h, rivers, theta, s) : null;
+    const hit = rivers.length ? riverAt(rivers, theta, s) : null;
     return hit && Math.abs(hit.across) < hit.halfWidth ? hit : null;
   };
 

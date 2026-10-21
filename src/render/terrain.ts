@@ -4,7 +4,7 @@
  * is full, least recently drawn first.
  */
 import { Group, Mesh, type BufferGeometry } from 'three/webgpu';
-import { meshGeometry } from './geometry';
+import { arraysGeometry, meshGeometry } from './geometry';
 import type { Stage } from '@futuremagic/stage';
 import { toView, type Vec3 } from '../blueprint';
 import type { Terrain } from '../gen/terrain';
@@ -104,7 +104,8 @@ export class TerrainView {
     const mesh = new Mesh(geometry(tile.positions, tile.normals, tile.index, tile.colors, tile.morph, tile.horizon, tile.canopy, tile.floorA, tile.floorB), GROUND.material);
     mesh.name = `tile ${id}`;
     mesh.visible = false;
-    const water = tile.water ? new Mesh(geometry(tile.water.positions, tile.water.normals, tile.water.index), WATER.material) : null;
+    const w = tile.water;
+    const water = w ? new Mesh(arraysGeometry(w, { flow: [w.flow, 4], dir: [w.dir, 4] }), WATER.material) : null;
     if (water) { water.name = `water ${id}`; water.visible = false; }
     await this.stage.prepare(mesh);
     if (water) await this.stage.prepare(water);
