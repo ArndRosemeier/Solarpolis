@@ -145,7 +145,7 @@ export const CLIMATES: Readonly<Record<string, Climate>> = {
     ],
     debris: [
       { name: 'pebbles', form: 'stone', on: 'gravel', height: [0.04, 0.14], spacing: 0.9, moss: 0.1 },
-      { name: 'field stones', form: 'stone', on: 'dirt', height: [0.08, 0.3], spacing: 5, moss: 0.3 },
+      { name: 'field stones', form: 'stone', on: 'dirt', height: [0.08, 0.3], spacing: 5, moss: 0.55 },
       { name: 'stones', form: 'stone', on: 'rock', height: [0.15, 0.6], spacing: 2.5, moss: 0.35 },
       { name: 'boulders', form: 'stone', on: 'rock', height: [0.8, 2.4], spacing: 11, moss: 0.45 },
       { name: 'fallen oaks', form: 'log', wood: 'oak', on: 'litter', height: [4, 10], spacing: 26 },

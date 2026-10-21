@@ -979,6 +979,12 @@ export function buildFallenWood(form: PlantForm, kind: 'log' | 'branch', seed: n
     }
     const { tint: _t, ...mesh } = bld.mesh(1 / L);
     mesh.wind.fill(0);
+    // Dead wood greys where it faces the sky and darkens where it meets the ground: the bark's occlusion, below zero
+    // (lighter than the bark) on top.
+    for (let i = 0; i < mesh.occ.length; i++) {
+      const ny = mesh.normals[i * 3 + 1];
+      mesh.occ[i] = ny > 0 ? -0.45 * ny : Math.max(mesh.occ[i], 0.6 * -ny);
+    }
     return mesh;
   });
   return { full: meshes[0], lite: meshes[1], hull: meshes[2] };

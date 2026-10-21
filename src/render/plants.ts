@@ -25,7 +25,7 @@ import { StreamCache, type Streamed } from './streamed';
 import { BARK, GRASS, HULL, LEAF, STONE, plantInstances, setCanopyBand, setFoliage } from './materials';
 
 /** Cells kept, drawn or not. */
-const CACHE = 3000;
+const CACHE = 6000;
 /** Cell jobs in flight at once. */
 const IN_FLIGHT = 12;
 /** The eye moves this share of the smallest cell before the cells in view are chosen again. */
