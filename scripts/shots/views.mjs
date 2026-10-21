@@ -12,6 +12,7 @@
  *      { wait: 2000 }                 let the page run this long (ms)
  *      { shot: 'name' }               take a picture now (`<view>-<name>.png`); the view's own picture comes at the end
  *      { run: async (page) => {} }    anything else, with Playwright's page
+ *  - `heap(label)` as a `run` step: a heap snapshot of the page, who holds what (heap.mjs), as a warning in report.json.
  *  - `settle`: ms to let tiles, plants and shaders stream in before the steps (default 4000).
  *  - `default: true`: part of the set captured when no `--views` are given.
  */
@@ -30,6 +31,10 @@ async function logTiles(page) {
   await page.locator('.dbg-panel .dbg-close').click().catch(() => {});
   await page.evaluate((ls) => { for (const l of ls) console.warn(`tiles: ${l}`); }, lines);
 }
+/** A heap snapshot step (heap.mjs, loaded fresh: the render PC's watcher runs for hours and would keep an old copy). */
+const heap = (label) => ({ run: async (page) => { await (await import(`./heap.mjs?t=${Date.now()}`)).heapStep(page, label); } });
+/** Turn on the debug menu's memory details, so the report's debug info lists every owner. */
+const memoryDetails = { debug: 'Show memory details' };
 
 export const views = {
   title: { query: '', about: 'the title card over the attract flight', default: true },
@@ -56,4 +61,10 @@ export const views = {
   'outside-neighbour': { query: 'view=outside', about: 'the nearest neighbour in the Necklace (key 4)', steps: [{ key: 'Digit4' }, { wait: 3000 }] },
   'outside-night-eyes': { query: 'view=outside', about: 'the stars with the Night eyes augmentation', steps: [{ debug: 'Night eyes augmentation' }, { wait: 2000 }] },
   'outside-close': { query: 'view=outside', about: 'wheel in close to the hull', steps: [{ wheel: -2400 }, { wait: 3000 }] },
+  'memory-title': { query: '', about: 'the title flight for 40 s, then a heap snapshot: who holds the JS heap', steps: [memoryDetails, { wait: 40000 }, heap('title')] },
+  'memory-inside': {
+    query: 'view=inside', about: 'up the wild endcap and flying toward the sunline, looking around, then a heap snapshot', settle: 6000,
+    steps: [memoryDetails, { debug: 'The foot of the wild endcap' }, { wait: 5000 }, { debug: 'Halfway up the wild endcap' }, { wait: 5000 }, { key: 'KeyF' }, { key: 'KeyE', hold: 6000 },
+      { look: [700, 0] }, { wait: 3000 }, { look: [700, 0] }, { wait: 3000 }, { look: [700, 0] }, { wait: 3000 }, { look: [0, 250] }, { wait: 6000 }, { shot: 'before-heap' }, heap('inside')],
+  },
 };
