@@ -2,6 +2,15 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.023 — The outside runs in real time
+
+- The Outside view's clock now runs in real time by default, so the habitat turns at its true, stately pace. Faster clocks are still in the debug menu (Outside).
+
+## v0.022 — Heroic stars
+
+- Outside, the stars now shine bright whenever the Sun is out of view, even next to sunlit Earth or a habitat: your eyes adapt to them, as a camera would. With the Sun in view they fade, as they should.
+- The debug menu (Outside) can switch back to stars as unaugmented eyes would see them.
+
 ## v0.021 — A title screen: arriving by torch ship
 
 - The game now opens on a title screen: a torch ship brakes outside the habitat ring with Earth behind it, its camera zooms in on home, then flies along the patchwork of solar panels. Press Start or any key to go inside.
