@@ -2,6 +2,12 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.046 — The crossing into the Hub
+
+- After your ship latches, the arrival goes on: you float down the spindle's bore, a pale tube lit by lamp strips, through the bearing's seal into the sleeve that turns with the habitat. The air there slowly carries you into the spin, and a small window shows the stars wheeling past. Light ahead.
+- A short fade, and you float in the Hub beside the sunline, looking down it toward the wild end, in control (fly as usual). The interior is built while your ship comes in, so it is ready when you arrive.
+- Any key still skips the whole arrival.
+
 ## v0.045 — Hung renders end sooner
 
 - Behind the scenes: when a view on the render PC never finishes building, the other views of the same page in that request are skipped instead of each waiting two minutes, and the report says what the page still showed.
