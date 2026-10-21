@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.005 — Smooth detail changes
+
+- As you walk, the ground no longer jumps when a patch switches between finer and coarser detail: each patch eases into its coarser shape before the swap.
+
 ## v0.004 — Hills and a lake inside the cylinder
 
 - The floor is no longer flat: rolling hills, forests and meadows, terraced slopes up the endcaps, and a ring lake that runs all the way around the cylinder.
