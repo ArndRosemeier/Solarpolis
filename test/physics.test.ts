@@ -8,7 +8,7 @@ import { PhysicsWorld } from '../src/physics/world';
 
 for (const { name, params } of MATRIX) {
   // Flat ground, so the landing spot is only the turning frame's doing.
-  const h = derive(withParams({ relief: { hills: 0, ringLake: null, terraceStep: params.relief.terraceStep } }, params));
+  const h = derive(withParams({ relief: { hills: 0, ringLake: null, terraceStep: params.relief.terraceStep, rivers: null } }, params));
   const t = makeTerrain(h);
   const s = (h.profile.floorStart + h.profile.floorEnd) / 2;
   const height = Math.min(50, h.radius * 0.2);

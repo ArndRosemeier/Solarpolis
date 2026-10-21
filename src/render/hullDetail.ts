@@ -16,7 +16,7 @@ import type { Skin } from '../gen/skin';
 import { apply, type Mat3 } from '../space';
 import type { WorkerPool } from '../workers/pool';
 import type { GenAnswer } from '../workers/gen.worker';
-import { arraysGeometry, freeMesh, meshGeometry, setPose } from './geometry';
+import { arraysGeometry, freeMesh, setPose } from './geometry';
 import { HARDWARE, SKIN_DETAIL } from './materials';
 import type { SkinUniforms } from './hullShaders';
 import { StreamCache, type Streamed } from './streamed';
@@ -113,7 +113,7 @@ export class HullDetailView {
     const meshes = [new Mesh(arraysGeometry(q), HARDWARE.material)];
     if (t.glass) {
       const g = t.glass;
-      meshes.unshift(new Mesh(meshGeometry(g.index, { position: [g.positions, 3], normal: [g.normals, 3], grid: [g.grid, 4] }), SKIN_DETAIL.material));
+      meshes.unshift(new Mesh(arraysGeometry(g, { grid: [g.grid, 4] }), SKIN_DETAIL.material));
     }
     for (const m of meshes) {
       m.name = `${this.name} ${id}`;

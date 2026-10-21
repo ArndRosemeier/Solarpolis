@@ -64,6 +64,11 @@ export interface Relief {
   ringLake: { width: number; depth: number } | null;
   /** Height of one terrace step on the endcap slopes (m). */
   terraceStep: number;
+  /**
+   * Rivers from springs on the endcaps into the ring lake: how many (half from each end), their width at the mouth and
+   * their depth (m); null (or no lake) for none.
+   */
+  rivers: { count: number; width: number; depth: number } | null;
 }
 
 export type AxisOrientation = 'side-on' | 'end-on';

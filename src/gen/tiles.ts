@@ -8,10 +8,11 @@
  * everything relative to the camera never loses precision (docs/ARCHITECTURE.md, "Where does the camera sit?").
  * Edges between tiles of different size are hidden by skirts: a strip hanging down from each edge. Pure: no three.js.
  */
-import { toWorld, type Vec3 } from '../blueprint';
+import { toWorld, wrapAngle, type Vec3 } from '../blueprint';
 import type { Terrain } from './terrain';
 import { horizonAt } from './horizon';
 import type { Ecology } from './ecology';
+import { buildWater, type WaterMesh } from './water';
 
 /** Cells along each side of a tile. */
 export const TILE_CELLS = 64;
@@ -187,18 +188,18 @@ export interface TileMesh {
   index: Uint32Array;
   /** How far the grid strays from the true ground between its points (m): its error on screen decides splitting. */
   error: number;
-  /** The ring lake's water over this tile, if any: positions and normals relative to the same origin. */
-  water: { positions: Float32Array; normals: Float32Array; index: Uint32Array } | null;
+  /** The water over this tile (the lake, the rivers: `gen/water.ts`), if any, relative to the same origin. */
+  water: WaterMesh | null;
 }
 
 /** Bytes a built tile holds, for the memory watchdog. */
 export function tileBytes(t: TileMesh): number {
   let b = t.positions.byteLength + t.normals.byteLength + t.colors.byteLength + t.morph.byteLength + t.horizon.byteLength + t.canopy.byteLength + t.floorA.byteLength + t.floorB.byteLength + t.index.byteLength;
-  if (t.water) b += t.water.positions.byteLength + t.water.normals.byteLength + t.water.index.byteLength;
+  if (t.water) for (const a of [t.water.positions, t.water.normals, t.water.flow, t.water.dir, t.water.index]) b += a.byteLength;
   return b;
 }
 
-/** Build a tile's ground (and the lake's water over it). */
+/** Build a tile's ground (and the water over it). */
 export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): TileMesh {
   const terrain = ecology.terrain;
   const { profile } = terrain.habitat;
@@ -340,34 +341,24 @@ export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): Til
   // The floor shares as two four-channel attributes.
   const floorA = new Uint8Array(count * 4), floorB = new Uint8Array(count * 4);
   for (let v = 0; v < count; v++) for (let c = 0; c < 4; c++) { floorA[v * 4 + c] = floor[v * 8 + c]; floorB[v * 4 + c] = floor[v * 8 + 4 + c]; }
-  return { key: k, origin, positions, normals, colors, morph, horizon, canopy, floorA, floorB, index: Uint32Array.from(index), error, water: buildWater(terrain, b, origin) };
-}
-
-/** The lake's surface over a tile's rectangle: a grid at the water's level, fine enough to follow the curve. */
-function buildWater(terrain: Terrain, b: { theta0: number; theta1: number; s0: number; s1: number }, origin: Vec3): TileMesh['water'] {
-  const lake = terrain.lake;
-  if (!lake) return null;
-  const s0 = Math.max(b.s0, lake.s - lake.halfWidth), s1 = Math.min(b.s1, lake.s + lake.halfWidth);
-  if (s1 <= s0) return null;
-  const { profile } = terrain.habitat;
-  const N = 16, row = N + 1;
-  const positions = new Float32Array(row * row * 3), normals = new Float32Array(row * row * 3);
-  for (let j = 0; j <= N; j++) {
-    const s = s0 + ((s1 - s0) * j) / N;
-    const pp = profile.at(s);
-    for (let i = 0; i <= N; i++) {
-      const theta = b.theta0 + ((b.theta1 - b.theta0) * i) / N;
-      const p = toWorld(profile, { theta, s, h: lake.level });
-      const v = (j * row + i) * 3;
-      positions[v] = p[0] - origin[0]; positions[v + 1] = p[1] - origin[1]; positions[v + 2] = p[2] - origin[2];
-      normals[v] = pp.nr * Math.cos(theta); normals[v + 1] = pp.nr * Math.sin(theta); normals[v + 2] = pp.nz;
-    }
-  }
-  const index = new Uint32Array(N * N * 6);
-  let n = 0;
-  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
-    const a = j * row + i, bb = a + 1, d = a + row, e = d + 1;
-    index[n++] = a; index[n++] = d; index[n++] = bb; index[n++] = bb; index[n++] = d; index[n++] = e;
-  }
-  return { positions, normals, index };
+  // The water: where the cells are too coarse for a river's channel, it lies over the ground drawn here, this tile's or
+  // its parent's (every other point, the same diagonals) while it morphs.
+  const drawn = (theta: number, s: number): number => {
+    let x = wrapAngle(theta - b.theta0);
+    if (x > Math.PI + (b.theta1 - b.theta0) / 2) x -= 2 * Math.PI;
+    const fi = Math.min(N + 1, Math.max(-1, x / dT)), fj = Math.min(N + 1, Math.max(-1, (s - b.s0) / dS));
+    const on = (step: number): number => {
+      // The cell under the point, on this grid (border points included) or the parent's (even points only).
+      const lo = step === 1 ? -1 : 0, hi = step === 1 ? N : N - 2;
+      const ci = Math.min(hi, Math.max(lo, Math.floor(fi / step) * step)), cj = Math.min(hi, Math.max(lo, Math.floor(fj / step) * step));
+      const u = (fi - ci) / step, v = (fj - cj) / step;
+      const hAt = (i: number, j: number) => heights[(j + 1) * W + (i + 1)];
+      const a = hAt(ci, cj), bb = hAt(ci + step, cj), d = hAt(ci, cj + step), e = hAt(ci + step, cj + step);
+      return u + v <= 1 ? a + (bb - a) * u + (d - a) * v : e + (d - e) * (1 - u) + (bb - e) * (1 - v);
+    };
+    return Math.max(on(1), on(2));
+  };
+  const cell = Math.max(dS, dT * profile.at((b.s0 + b.s1) / 2).r);
+  const water = buildWater(terrain, { ...b, cell, drawn }, origin);
+  return { key: k, origin, positions, normals, colors, morph, horizon, canopy, floorA, floorB, index: Uint32Array.from(index), error, water };
 }

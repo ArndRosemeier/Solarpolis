@@ -4,10 +4,12 @@
  * of any size agree at their edges, and the same habitat always gives the same land.
  *
  * The noise is sampled at the point's world position on the profile, so it wraps around the axis without a seam. Sizes
- * come from the blueprint's relief (`HabitatParams.relief`): hills, the ring lake, the terrace step.
+ * come from the blueprint's relief (`HabitatParams.relief`): hills, the ring lake, the terrace step, the rivers (laid out in
+ * `rivers.ts` over the land, which they then carve).
  */
 import { Noise, Rng, deriveSeed, smoothstep } from '@futuremagic/core';
 import { fromWorld, toWorld, type Habitat, type Vec3 } from '../blueprint';
+import { carve, makeRivers, riverAt, valleyReach, type River, type RiverHit } from './rivers';
 
 export interface Lake {
   /** Where the lake's centre line lies along the profile, and its half width (m). */
@@ -21,6 +23,10 @@ export interface Lake {
 export interface Terrain {
   readonly habitat: Habitat;
   readonly lake: Lake | null;
+  /** The rivers into the lake (`rivers.ts`), with the land already carved for them. */
+  readonly rivers: readonly River[];
+  /** Where a point is across the river it is in, or null when it is in none. */
+  riverAt(theta: number, s: number): RiverHit | null;
   /** Height of the ground above the profile, along its normal (m); negative in the lake. */
   heightAt(theta: number, s: number): number;
   /** Where something standing there rests: the ground, or the water's surface over the lake. */
@@ -64,7 +70,8 @@ export function makeTerrain(h: Habitat): Terrain {
   /** How far into the lake (1 at the centre line, 0 at the waterline, negative outside), or null without a lake. */
   const inLake = (s: number): number | null => (lake ? 1 - Math.abs(s - lake.s) / lake.halfWidth : null);
 
-  const heightAt = (theta: number, s: number): number => {
+  /** The land before the rivers carve it. */
+  const landAt = (theta: number, s: number): number => {
     const [x, y, z] = at(theta, s);
     let height = 0;
     const f = onFloor(s);
@@ -92,9 +99,23 @@ export function makeTerrain(h: Habitat): Terrain {
     return height;
   };
 
+  const rivers = makeRivers(h, lake, landAt);
+  const reach = valleyReach(h);
+  const heightAt = (theta: number, s: number): number => {
+    const g = landAt(theta, s);
+    const hit = rivers.length ? riverAt(rivers, theta, s, reach) : null;
+    return hit ? carve(hit, hit.river.depth, g) : g;
+  };
+  const inRiver = (theta: number, s: number): RiverHit | null => {
+    const hit = rivers.length ? riverAt(rivers, theta, s) : null;
+    return hit && Math.abs(hit.across) < hit.halfWidth ? hit : null;
+  };
+
   const standAt = (theta: number, s: number): number => {
     const g = heightAt(theta, s);
-    return lake && g < lake.level && (inLake(s) ?? -1) > -0.1 ? lake.level : g;
+    if (lake && g < lake.level && (inLake(s) ?? -1) > -0.1) return lake.level;
+    const r = inRiver(theta, s);
+    return r && r.surface > g ? r.surface : g;
   };
 
   const waterDepth = (p: Vec3): number => {
@@ -103,5 +124,5 @@ export function makeTerrain(h: Habitat): Terrain {
     return surface > heightAt(at.theta, at.s) ? surface - at.h : 0;
   };
 
-  return { habitat: h, lake, heightAt, standAt, waterDepth };
+  return { habitat: h, lake, rivers, riverAt: inRiver, heightAt, standAt, waterDepth };
 }
