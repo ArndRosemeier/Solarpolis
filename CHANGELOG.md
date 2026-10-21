@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.045 — Hung renders end sooner
+
+- Behind the scenes: when a view on the render PC never finishes building, the other views of the same page in that request are skipped instead of each waiting two minutes, and the report says what the page still showed.
+
 ## v0.044 — Bushes: fewer, lower, and seen from afar
 
 - Bushes are lower (most below head height) and there are about half as many, in the woods and in the meadows.
