@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.052 — Woods seen at a slant keep their groves
+
+- Looking along the floor from a little height, distant woods no longer smear into soft dark streaks: their groves, clumps and ragged edges stay visible much farther out.
+
 ## v0.051 — Endcaps in ledges and rock walls
 
 - The endcap slopes no longer look like a grey disc of perfect rings from afar. They climb in green ledges and steep rock walls that wander around the axis, merge and part, and wear down here and there. Ledges hold meadow, heath and pines; trees no longer grow on sheer rock.
