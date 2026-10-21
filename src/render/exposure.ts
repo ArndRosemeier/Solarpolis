@@ -17,45 +17,72 @@ export const KEY = 0.18;
 /** The faintest scene the eyes adapt to: plain eyes, and the "night eyes" augmentation. */
 export const DARKEST = { plain: 1e-5, nightEyes: 1e-7 };
 
+export interface Cylinder {
+  center: Vec3;
+  axis: Vec3;
+  radius: number;
+  halfLength: number;
+  albedo: number;
+}
+
 export interface Meterable {
   sky: SkyView;
-  /** The habitat as a cylinder: centre relative to the eye, unit axis, radius, half length (m). */
-  hull: { center: Vec3; axis: Vec3; radius: number; halfLength: number } | null;
+  /** The habitats in sight as cylinders: centre relative to the eye, unit axis, radius, half length (m), mean albedo. */
+  hulls: Cylinder[];
   /** Irradiance from Earth on the hull, relative to full sunlight. */
   earthshine: number;
 }
 
-/** What a ray along unit d sees, as a luminance. */
+/** What a ray along unit d sees: its luminance, and the light falling where it lands (0 for open sky). */
 export function rayLuminance(m: Meterable, d: Vec3): number {
+  return rayMeter(m, d).luminance;
+}
+
+function rayMeter(m: Meterable, d: Vec3): { luminance: number; light: number } {
   const s = m.sky;
   const a = v3len(v3cross(d, s.sunDir));
   const glare = v3dot(d, s.sunDir) > 0 ? GLARE / (a * a + s.sunRadius ** 2) * Math.exp(-a / GLARE_REACH) * s.sunlight : 0;
-  const h = m.hull ? hitCylinder(m.hull, d) : null;
-  if (h) return 0.08 * (Math.max(0, v3dot(h, s.sunDir)) * s.sunlight + m.earthshine) + glare;
+  let near = Infinity, hit: { n: Vec3; albedo: number } | null = null;
+  for (const c of m.hulls) {
+    const h = hitCylinder(c, d);
+    if (h && h.t < near) { near = h.t; hit = { n: h.n, albedo: c.albedo }; }
+  }
+  if (hit) {
+    const light = Math.max(0, v3dot(hit.n, s.sunDir)) * s.sunlight + m.earthshine;
+    return { luminance: hit.albedo * light + glare, light };
+  }
   const earth = sphereNormal(d, s.earth.center, s.earth.radius);
-  if (earth) return 0.3 * Math.max(0, v3dot(earth, s.sunDir)) * s.sunlight + 1e-5 + glare;
+  if (earth) { const light = Math.max(0, v3dot(earth, s.sunDir)) * s.sunlight; return { luminance: 0.3 * light + 1e-5 + glare, light }; }
   const moon = sphereNormal(d, s.moon.center, s.moon.radius);
-  if (moon) return 0.12 * Math.max(0, v3dot(moon, s.sunDir)) * s.sunlight + glare;
-  return glare;
+  if (moon) { const light = Math.max(0, v3dot(moon, s.sunDir)) * s.sunlight; return { luminance: 0.12 * light + glare, light }; }
+  return { luminance: glare, light: 0 };
 }
 
 /** The brightest thing in sight lands here before the tone mapping: bright, not burnt out. */
 export const HIGHLIGHT_LEVEL = 1.5;
+/**
+ * In sunlight the eyes stay anchored to the light falling, not to how dark the surface it falls on is (lightness
+ * constancy): white paper in the light in view shows at this level at most, so a black panel in sunlight looks black.
+ */
+export const ANCHOR_LEVEL = 2.5;
 /** The meter looks this much wider than the view: the Sun just out of the frame still blinds. */
 export const PERIPHERY = 1.5;
 
 /**
  * The exposure the eyes would settle on for these rays: the log-average maps to mid grey, unless that would burn out
- * the brightest thing in sight (a sunlit habitat against black space, the Sun's glare), which then sets it.
+ * the brightest thing in sight (a sunlit habitat against black space, the Sun's glare), or open the eyes further than
+ * the light in view allows (`ANCHOR_LEVEL`).
  */
 export function exposureFor(m: Meterable, rays: readonly Vec3[], darkest: number): number {
-  let sum = 0, high = darkest;
+  let sum = 0, high = darkest, light = 0;
   for (const d of rays) {
-    const l = Math.max(darkest, rayLuminance(m, d));
+    const r = rayMeter(m, d), l = Math.max(darkest, r.luminance);
     sum += Math.log(l);
     high = Math.max(high, l);
+    light = Math.max(light, r.light);
   }
-  return Math.min(KEY / Math.exp(sum / rays.length), HIGHLIGHT_LEVEL / high);
+  const anchored = light > 0 ? ANCHOR_LEVEL / light : Infinity;
+  return Math.min(KEY / Math.exp(sum / rays.length), HIGHLIGHT_LEVEL / high, anchored);
 }
 
 /** Move the exposure toward the target: about a second to adapt to light, four to open up in the dark. */
@@ -73,8 +100,8 @@ function sphereNormal(d: Vec3, c: Vec3, r: number): Vec3 | null {
   return v3scale(v3sub(v3scale(d, t), c), 1 / r);
 }
 
-/** The outward normal where the ray first meets the cylinder's side or caps, or null for a miss. */
-function hitCylinder(c: NonNullable<Meterable['hull']>, d: Vec3): Vec3 | null {
+/** Where the ray first meets the cylinder's side or caps (distance, outward normal), or null for a miss. */
+function hitCylinder(c: Cylinder, d: Vec3): { t: number; n: Vec3 } | null {
   // Work in the cylinder's frame: along the axis (z) and across it.
   const o = v3scale(c.center, -1);
   const oz = v3dot(o, c.axis), dz = v3dot(d, c.axis);
@@ -96,5 +123,5 @@ function hitCylinder(c: NonNullable<Meterable['hull']>, d: Vec3): Vec3 | null {
       if (v3dot(p, p) <= c.radius * c.radius) { best = t; n = v3scale(c.axis, side); }
     }
   }
-  return n;
+  return n ? { t: best, n } : null;
 }

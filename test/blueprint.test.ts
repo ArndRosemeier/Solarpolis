@@ -16,7 +16,9 @@ test('blueprint: the reference habitat gives the design doc numbers', () => {
   near(ref.dropOffset(10), 0.5, 0.06, 'drop offset from 10 m (m)');
   near(ref.dropOffset(100), 15, 0.05, 'drop offset from 100 m (m)');
   near(ref.paddingMass / 1e12, 4.3, 0.05, 'padding (billion t)');
-  near(ref.solarPower / 1e9, 165, 0.03, 'solar power (GW)');
+  // The design doc's 165 GW counted the whole skin as solar cells; 44 % of it are light collectors now (O4).
+  near(ref.solarPower / 1e9, 92, 0.03, 'solar power (GW)');
+  near(ref.collectorShare, 0.44, 0.02, 'light collectors share of the skin');
   near(ref.lightPower / 1e9, 75, 0.02, 'light (GW)');
   assert.ok(ref.hullThickness > 1 && ref.hullThickness < 5, `a hull a few metres thick, got ${ref.hullThickness}`);
   assert.deepEqual(validate(ref), []);

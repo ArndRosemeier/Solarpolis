@@ -8,4 +8,5 @@ export { necklace, geostationaryRadius, type NecklaceParams, type Placement } fr
 export { makeSpace, type Space, type SpaceParams, type PlacedHabitat } from './space';
 export { REFERENCE_SPACE } from './reference';
 export { decodeStars, fluxOfMagnitude, temperatureOfColorIndex, colorOfTemperature, SUN_MAGNITUDE, type StarField } from './stars';
-export { skyFrom, circleOverlap, type SkyView, type SkyBody } from './sky';
+export { SpaceFlyer, MIN_CLEARANCE, MAX_RANGE, type FlyInput } from './flyer';
+export { skyFrom, sunlightFrom, circleOverlap, type SkyView, type SkyBody } from './sky';

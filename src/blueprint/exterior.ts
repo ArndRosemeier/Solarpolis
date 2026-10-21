@@ -35,12 +35,24 @@ export interface Exterior {
   /** Tip speed of the brims relative to the stars (m/s), and the hoop stress it puts in a thin ring (Pa). */
   brimTipSpeed: number;
   brimStress: number;
-  /** The despun spindle: from the port face out along the axis. */
-  spindle: { from: number; to: number; radius: number; berthArms: number };
-  /** The wild end's mast. */
-  mast: { from: number; to: number };
+  /**
+   * The despun spindle: from the port face out along the axis. Its berth arms reach out from it at `arms.z`, each
+   * `arms.length` long and `arms.width` square, where ships tie up.
+   */
+  spindle: { from: number; to: number; radius: number; berthArms: number; arms: { z: number; length: number; width: number } };
+  /** The wild end's mast, a lattice seen from afar as a rod. */
+  mast: { from: number; to: number; radius: number };
+  /** The body as solid round pieces along the axis (drum, brims, spindle, mast), for distances and hit tests. */
+  pieces: Piece[];
   /** The outline of the whole body as (z, r) points, wild tip to port tip: mast, wild face, drum, port face, spindle. */
   outline: [number, number][];
+}
+
+/** A solid cylinder around the axis from z0 to z1 (m). */
+export interface Piece {
+  z0: number;
+  z1: number;
+  radius: number;
 }
 
 export interface ExteriorInputs {
@@ -97,8 +109,16 @@ export function makeExterior(x: ExteriorInputs): Exterior {
     }
   }
   const tipSpeed = x.spin * tip;
-  const spindle = { from: portFace, to: portFace + s.spindleLength * Ro, radius: x.hubRadius, berthArms: s.berthArms };
-  const mast = { from: wildFace - s.mastLength * Ro, to: wildFace };
+  const spindleTo = portFace + s.spindleLength * Ro;
+  const arms = { z: portFace + (spindleTo - portFace) * 0.7, length: x.hubRadius * 2, width: x.hubRadius * 0.12 };
+  const spindle = { from: portFace, to: spindleTo, radius: x.hubRadius, berthArms: s.berthArms, arms };
+  const mast = { from: wildFace - s.mastLength * Ro, to: wildFace, radius: x.hubRadius * 0.1 };
+  const pieces: Piece[] = [
+    { z0: wildFace, z1: portFace, radius: Ro },
+    ...brims.map((b) => ({ z0: b.z - b.thickness / 2, z1: b.z + b.thickness / 2, radius: b.tip })),
+    { z0: portFace, z1: spindleTo, radius: x.hubRadius },
+    { z0: mast.from, z1: wildFace, radius: mast.radius },
+  ];
   return {
     radius: Ro,
     wildFace,
@@ -111,9 +131,25 @@ export function makeExterior(x: ExteriorInputs): Exterior {
     brimStress: s.brimMaterial.density * tipSpeed * tipSpeed,
     spindle,
     mast,
+    pieces,
     outline: [
       [mast.from, 0], [wildFace, 0], [wildFace, Ro], [portFace, Ro],
       [portFace, x.hubRadius], [spindle.to, x.hubRadius], [spindle.to, 0],
     ],
   };
+}
+
+/**
+ * How far a point (blueprint frame) is from the habitat's outside: the nearest of its pieces, negative inside one.
+ * Berth arms and other hardware are left out; they are smaller than any approach a camera keeps.
+ */
+export function exteriorDistance(e: Exterior, p: readonly [number, number, number]): number {
+  const rho = Math.hypot(p[0], p[1]);
+  let best = Infinity;
+  for (const c of e.pieces) {
+    const dr = rho - c.radius, dz = Math.abs(p[2] - (c.z0 + c.z1) / 2) - (c.z1 - c.z0) / 2;
+    const d = Math.hypot(Math.max(dr, 0), Math.max(dz, 0)) + Math.min(Math.max(dr, dz), 0);
+    if (d < best) best = d;
+  }
+  return best;
 }

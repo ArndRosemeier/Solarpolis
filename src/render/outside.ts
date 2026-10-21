@@ -1,25 +1,27 @@
 /**
- * The view outside (design "Solarpolis: the outside", O3): the home habitat in the geostationary ring, with Earth
- * below, the Moon, the Sun and the stars where the space model (src/space) puts them at this hour. The camera orbits
- * the habitat: hold the right mouse button to swing around it, the wheel to come closer or go farther; 1 looks at the
- * habitat, 2 at Earth, 3 at the Moon (the wheel then zooms).
+ * The view outside (design "Solarpolis: the outside", O3 and O4): the home habitat in the geostationary ring, its
+ * neighbours along the ring (necklace.ts), Earth below, the Moon, the Sun and the stars where the space model
+ * (src/space) puts them at this hour. The camera orbits the habitat: hold the right mouse button to swing around it,
+ * the wheel to come closer or go farther; 1 looks at the habitat, 2 at Earth, 3 at the Moon, 4 at the nearest
+ * neighbour (the wheel then zooms). F lets the camera fly free (W A S D, E up, Q down, Shift faster), from tens of
+ * thousands of kilometres out down to a metre off the hull (space/flyer.ts).
  *
  * The scene's axes are the habitat's orbit frame (ecliptic of date); the camera sits at the origin and everything is
  * placed relative to the eye in float64 first, so 32-bit floats only ever hold small offsets or unit directions.
  * Exposure follows what is in sight (render/exposure.ts), so the stars show only when nothing bright is in view, as
  * for eyes; the "night eyes" augmentation (debug menu) lets the eyes open much further.
  */
-import { Color, Matrix4, Mesh, PerspectiveCamera, Scene, SphereGeometry, Texture, LinearFilter, LinearMipmapLinearFilter, SRGBColorSpace, type WebGPURenderer } from 'three/webgpu';
+import { Color, Mesh, PerspectiveCamera, Scene, SphereGeometry, Texture, LinearFilter, LinearMipmapLinearFilter, SRGBColorSpace, type WebGPURenderer } from 'three/webgpu';
 import { Stage, createRenderer } from '@futuremagic/stage';
-import { Rng, deriveSeed, v3add, v3dot, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
+import { Rng, deriveSeed, v3add, v3dot, v3len, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
 import type { Habitat } from '../blueprint';
-import { DAY, REFERENCE_SPACE, calendarOf, decodeStars, julianDay, makeSpace, mul, rotZ, skyFrom, type Mat3, type Space, type SkyView } from '../space';
-import { HULL, SKY, STARS, outsideKinds, standInAttribute } from './materials';
+import { DAY, EARTH, MOON, REFERENCE_SPACE, SpaceFlyer, calendarOf, decodeStars, julianDay, makeSpace, skyFrom, type Mat3, type Space, type SkyView } from '../space';
+import { SKY, STARS, outsideKinds, standInAttribute } from './materials';
 import { outside, skyMaps } from './skyShaders';
 import { DARKEST, PERIPHERY, adapt, exposureFor, type Meterable } from './exposure';
-import { hullGeometry } from './hull';
+import { NecklaceView, setPose } from './necklace';
 import { meshGeometry } from './geometry';
-import { dragToLook, draw, fitCanvas, runFrames } from './surface';
+import { FrameLoop, dragToLook, draw, fitCanvas, moveKeys } from './surface';
 
 /** Clock seconds per real second by default: Earth turns visibly, a day in 24 minutes. */
 const SPACE_SPEED = 60;
@@ -27,7 +29,7 @@ const SPACE_SPEED = 60;
 const DOME = 5e7;
 const base = import.meta.env.BASE_URL;
 
-type Look = 'habitat' | 'earth' | 'moon';
+type Look = 'habitat' | 'earth' | 'moon' | 'neighbour';
 
 export class OutsideView {
   readonly canvas = document.createElement('canvas');
@@ -39,9 +41,10 @@ export class OutsideView {
   private space: Space;
   private dome: Mesh | null = null;
   private stars: Mesh | null = null;
-  private body: Mesh | null = null;
-  private spindle: Mesh | null = null;
-  private running = false;
+  private necklace: NecklaceView | null = null;
+  /** The free camera while flying (F), null while orbiting the habitat. */
+  private flyer: SpaceFlyer | null = null;
+  private readonly loop = new FrameLoop((dt) => this.frame(dt), (e) => this.key(e));
   private sky: SkyView | null = null;
   /** Clock seconds since the space's epoch, and how many pass per real second. */
   time: number;
@@ -84,7 +87,7 @@ export class OutsideView {
     v.dome.name = 'sky';
     v.dome.renderOrder = -1;
     v.dome.frustumCulled = false;
-    await Promise.all([v.stage.add(v.dome), v.buildHull(), v.loadMaps('full'), v.loadStars()]);
+    await Promise.all([v.stage.add(v.dome), v.buildNecklace(), v.loadMaps('full'), v.loadStars()]);
     v.bindControls();
     return v;
   }
@@ -145,16 +148,12 @@ export class OutsideView {
     await this.stage.add(this.stars);
   }
 
-  private async buildHull(): Promise<void> {
-    for (const m of [this.body, this.spindle]) if (m) { this.stage.remove(m); m.geometry.dispose(); }
-    const g = hullGeometry(this.habitat);
-    this.body = new Mesh(g.body, HULL.material);
-    this.spindle = new Mesh(g.spindle, HULL.material);
-    for (const m of [this.body, this.spindle]) { m.matrixAutoUpdate = false; m.frustumCulled = false; }
-    this.body.name = 'hull';
-    this.spindle.name = 'spindle';
+  /** The ring's habitats for the current space: the home one's meshes and every neighbour's glint. */
+  private async buildNecklace(): Promise<void> {
+    this.necklace?.dispose();
+    this.necklace = new NecklaceView(this.stage, this.space, DOME * 0.9);
     this.place();
-    await Promise.all([this.stage.add(this.body), this.stage.add(this.spindle)]);
+    await this.necklace.start();
   }
 
   /** Show another habitat (the Lab changed it): same sky, new body. */
@@ -162,8 +161,9 @@ export class OutsideView {
     if (h === this.habitat) return;
     this.habitat = h;
     this.space = makeSpace({ ...REFERENCE_SPACE, home: h.params });
+    this.flyer = null;
     this.frameHabitat();
-    await this.buildHull();
+    await this.buildNecklace();
   }
 
   /** Back to the start view: the habitat in front of Earth, a little from the side. */
@@ -184,7 +184,8 @@ export class OutsideView {
     return [
       this.stage.hudLine(),
       `${dateOf(jd)} UT · clock ×${this.timeScale} · exposure ${this.exposure.toExponential(1)}${this.nightEyes ? ' (night eyes)' : ''}`,
-      s ? `sunlight ${(s.sunlight * 100).toFixed(0)}% · Earth ${(2 * Math.asin(s.earth.radius / Math.hypot(...s.earth.center)) * 180 / Math.PI).toFixed(1)}° across · looking at ${this.look}` : '',
+      s ? `sunlight ${(s.sunlight * 100).toFixed(0)}% · Earth ${(2 * Math.asin(s.earth.radius / Math.hypot(...s.earth.center)) * 180 / Math.PI).toFixed(1)}° across · ${this.flyer ? 'flying' : `looking at ${this.look}`}` : '',
+      `${distanceOf(this.clearance([0, 0, 0]))} from the nearest surface · nearest neighbour ${distanceOf(v3len(this.necklace?.nearestNeighbour() ?? [0, 0, 0]))} away`,
     ].join('\n');
   }
 
@@ -205,11 +206,34 @@ export class OutsideView {
 
   /** Where the eye is in the orbit frame, and what it looks at. */
   private eyeAndTarget(): { eye: Vec3; target: Vec3 } {
+    if (this.flyer) return { eye: this.flyer.eye, target: v3add(this.flyer.eye, this.flyer.look()) };
     const cp = Math.cos(this.pitch);
     const eye: Vec3 = v3scale([cp * Math.cos(this.yaw), cp * Math.sin(this.yaw), Math.sin(this.pitch)], this.distance);
-    if (this.look === 'habitat' || !this.sky) return { eye, target: [0, 0, 0] };
-    const c = this.look === 'earth' ? this.sky.earth.center : this.sky.moon.center;
-    return { eye, target: v3add(eye, c) };
+    const c = this.lookOffset(this.look);
+    return { eye, target: c ? v3add(eye, c) : [0, 0, 0] };
+  }
+
+  /** Where a thing to look at is, relative to the eye; null for the home habitat while orbiting it. */
+  private lookOffset(look: Look): Vec3 | null {
+    if (!this.sky) return null;
+    if (look === 'earth') return this.sky.earth.center;
+    if (look === 'moon') return this.sky.moon.center;
+    if (look === 'neighbour') return this.necklace?.nearestNeighbour() ?? null;
+    return this.flyer ? this.necklace?.home.center ?? null : null;
+  }
+
+  /** Distance from a point relative to the eye to the nearest surface: a habitat, Earth or the Moon (m). */
+  private clearance(p: Vec3): number {
+    const s = this.sky, ring = this.necklace?.distanceToHabitats(p) ?? Infinity;
+    if (!s) return ring;
+    return Math.min(ring, v3len(v3sub(p, s.earth.center)) - EARTH.radius, v3len(v3sub(p, s.moon.center)) - MOON.radius);
+  }
+
+  /** Start flying from where the orbit camera is, looking the same way; or go back to orbiting the habitat. */
+  toggleFlying(): void {
+    if (this.flyer) { this.flyer = null; this.look = 'habitat'; return; }
+    const { eye, target } = this.eyeAndTarget();
+    this.flyer = new SpaceFlyer(eye, v3sub(target, eye));
   }
 
   /** Everything relative to the eye at the clock's time: uniforms, the hull's pose, the stars' turn. */
@@ -232,15 +256,16 @@ export class OutsideView {
     const omega = 2 * Math.PI * (1 - Math.sqrt(1 - (sky.earth.radius / eD) ** 2));
     const phase = (1 - v3dot(sky.sunDir, v3scale(sky.earth.center, 1 / eD))) / 2;
     outside.earthshine.value = 0.3 * (omega / Math.PI) * phase;
-    const pose = sp.frames.relative(sp.home.bodyFrame, f, t);
-    if (this.body) setPose(this.body, pose.axes, v3sub(pose.origin, eye));
-    if (this.spindle) setPose(this.spindle, mul(pose.axes, rotZ(-sp.home.spinAt(t))), v3sub(pose.origin, eye));
+    const ratio = this.renderer?.getPixelRatio() ?? 1, px = (this.canvas.clientHeight || 720) * ratio;
+    this.necklace?.follow(eye, t, sky, px / ((this.camera.fov * Math.PI) / 180));
     if (this.stars) setPose(this.stars, sp.frames.relative('sun', f, t).axes, [0, 0, 0]);
     this.camera.position.set(0, 0, 0);
     this.camera.up.set(0, 0, 1);
     const look = v3sub(target, eye);
     this.camera.lookAt(look[0], look[1], look[2]);
-    this.camera.fov = this.look === 'habitat' ? 45 : this.zoom;
+    this.camera.fov = this.look === 'habitat' || this.flyer ? 45 : this.zoom;
+    // Close to a surface the near plane comes in with it; reversed depth keeps the far side precise.
+    this.camera.near = Math.max(0.05, Math.min(10, this.clearance([0, 0, 0]) * 0.25));
     this.camera.updateProjectionMatrix();
     this.camera.updateMatrixWorld();
   }
@@ -248,35 +273,45 @@ export class OutsideView {
   private bindControls(): void {
     // The pointer stays free (Arnd, 2026-10-21): the right button held swings the camera around the habitat.
     dragToLook(this.canvas, (dx, dy) => {
+      if (this.flyer) { this.flyer.turn(-dx * 0.004, -dy * 0.004); return; }
       this.yaw -= dx * 0.005;
       this.pitch = Math.max(-1.5, Math.min(1.5, this.pitch + dy * 0.005));
     });
     this.canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
       const k = Math.exp(e.deltaY * 0.001);
+      if (this.flyer) return;
       if (this.look === 'habitat') this.distance = Math.max(this.habitat.exterior.radius * 1.5, Math.min(2e7, this.distance * k));
       else this.zoom = Math.max(0.2, Math.min(60, this.zoom * k));
     }, { passive: false });
-    window.addEventListener('keydown', (e) => {
-      if (!this.running) return;
-      const keys: Record<string, Look> = { Digit1: 'habitat', Digit2: 'earth', Digit3: 'moon' };
-      const next = keys[e.code];
-      if (!next) return;
-      this.look = next;
-      if (next === 'earth') this.zoom = 30;
-      if (next === 'moon') this.zoom = 2;
-    });
+  }
+
+  /** F flies or lands; 1 to 4 pick what to look at (flying, they turn the camera toward it). */
+  private key(e: KeyboardEvent): void {
+    if (e.code === 'KeyF' && !e.repeat) this.toggleFlying();
+    if (e.code === 'Space') e.preventDefault();
+    const keys: Record<string, Look> = { Digit1: 'habitat', Digit2: 'earth', Digit3: 'moon', Digit4: 'neighbour' };
+    const next = keys[e.code];
+    if (!next) return;
+    if (this.flyer) {
+      const c = this.lookOffset(next);
+      if (c) this.flyer.lookAlong(c);
+      return;
+    }
+    this.look = next;
+    if (next === 'earth') this.zoom = 30;
+    if (next === 'moon') this.zoom = 2;
+    if (next === 'neighbour') this.zoom = 5;
   }
 
   /** Start or stop drawing (the page shows one view at a time). */
   setRunning(on: boolean): void {
-    this.running = on;
-    if (!on) return;
-    runFrames(() => this.running, (dt) => this.frame(dt));
+    this.loop.set(on);
   }
 
   private frame(dt: number): void {
     fitCanvas(this.canvas, this.renderer, this.camera);
+    if (this.flyer) this.flyer.step(moveKeys(this.loop.keys), dt, (p) => this.clearance(v3sub(p, this.flyer!.eye)));
     this.time += dt * this.timeScale;
     outside.clouds.value.z = outside.clouds.value.z - (dt * this.timeScale / DAY) * 0.05;
     this.place();
@@ -298,23 +333,18 @@ export class OutsideView {
       const x = ((i + 0.5) / 16 * 2 - 1) * th * aspect, y = ((j + 0.5) / 9 * 2 - 1) * th;
       rays.push(v3norm(v3add(fwd, v3add(v3scale(right, x), v3scale(up, y)))));
     }
-    const { eye } = this.eyeAndTarget();
-    const sp = this.space, pose = sp.frames.relative(sp.home.bodyFrame, sp.home.orbitFrame, this.time);
-    const axis: Vec3 = [pose.axes[2], pose.axes[5], pose.axes[8]];
-    const metered: Meterable = {
-      sky: this.sky,
-      hull: { center: v3sub(v3add(pose.origin, v3scale(axis, this.habitat.length / 2)), eye), axis, radius: this.habitat.exterior.radius, halfLength: this.habitat.length / 2 },
-      earthshine: outside.earthshine.value,
-    };
+    const metered: Meterable = { sky: this.sky, hulls: this.necklace?.hulls() ?? [], earthshine: outside.earthshine.value };
     this.exposure = adapt(this.exposure, exposureFor(metered, rays, this.nightEyes ? DARKEST.nightEyes : DARKEST.plain), dt);
     outside.exposure.value = this.exposure;
   }
 }
 
-/** A mesh's matrix from axes (columns: its own axes in the scene) and an origin relative to the eye. */
-function setPose(mesh: Mesh, a: Mat3, o: Vec3): void {
-  mesh.matrix.copy(new Matrix4().set(a[0], a[1], a[2], o[0], a[3], a[4], a[5], o[1], a[6], a[7], a[8], o[2], 0, 0, 0, 1));
-  mesh.matrixWorldNeedsUpdate = true;
+/** A distance for people: metres, kilometres or thousands of kilometres. */
+function distanceOf(m: number): string {
+  if (!Number.isFinite(m)) return '—';
+  if (m < 1000) return `${m.toFixed(m < 10 ? 1 : 0)} m`;
+  if (m < 1e6) return `${(m / 1000).toFixed(m < 1e4 ? 1 : 0)} km`;
+  return `${Math.round(m / 1000).toLocaleString('en')} km`;
 }
 
 /** Scene → body: the transpose of the body's axes (its columns), as a three.js Matrix3. */

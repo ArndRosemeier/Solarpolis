@@ -1,6 +1,7 @@
 /**
  * The shader pieces of the view outside (design "Solarpolis: the outside", O3): the sky dome with the Sun, Earth and
- * the Moon drawn analytically per pixel, the star points, and the habitat's hull lit by the Sun and by earthshine.
+ * the Moon drawn analytically per pixel, and the star points (habitats far away glint through the same points). The
+ * habitats themselves are in hullShaders.ts.
  * The kinds that use them live in the material registry (materials.ts); these are only node builders and uniforms.
  *
  * Units: radiance where a white Lambertian surface in full sunlight is 1, so the Sun's disc is about 46,000 and a
@@ -12,8 +13,8 @@
  */
 import { DataTexture, LinearFilter, Matrix3, RGBAFormat, SRGBColorSpace, Vector2, Vector3, type Texture } from 'three/webgpu';
 import {
-  abs, asin, atan, attribute, floor, fwidth, mx_noise_float, cameraProjectionMatrix, clamp, cross, dFdx, dFdy, dot, exp, float, fract, length, max, mix,
-  modelViewMatrix, modelWorldMatrix, mx_fractal_noise_float, normalWorld, normalize, positionLocal, positionWorld, pow,
+  abs, asin, atan, min, attribute, cameraProjectionMatrix, clamp, cross, dFdx, dFdy, dot, exp, float, fract, max, mix,
+  modelViewMatrix, modelWorldMatrix, mx_fractal_noise_float, normalize, positionLocal, positionWorld, pow,
   select, smoothstep, sqrt, texture, uniform, varying, vec2, vec3, vec4, vertexColor,
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
@@ -150,9 +151,15 @@ export function skyRadiance(d: Node<'vec3'>): Node<'vec3'> {
   return select(e.hit, earthColor(d, e), behind).add(vec3(1, 0.95, 0.88).mul(glare));
 }
 
+/**
+ * Exposed light is capped here before it reaches the half-float frame: the Sun's disc, exposed for a dark view, would
+ * overflow it to infinity, which the tone mapping turns into a black hole. Anything this bright is white on screen anyway.
+ */
+export const DISPLAY_CAP = 1e4;
+
 /** The sky dome's colour: everything beyond the habitat, exposed. */
 export function skyDome(): Node<'vec3'> {
-  return skyRadiance(normalize(positionWorld)).mul(outside.exposure);
+  return min(skyRadiance(normalize(positionWorld)).mul(outside.exposure), DISPLAY_CAP);
 }
 
 /** Star quads: σ of the Gaussian spot (px) and the half size of the quad (px). */
@@ -181,36 +188,4 @@ export function starColor(): Node<'vec3'> {
   const r2 = dot(corner, corner).mul(STAR_HALF * STAR_HALF);
   const spot = exp(r2.div(-2 * STAR_SIGMA * STAR_SIGMA)).div(2 * Math.PI * STAR_SIGMA * STAR_SIGMA);
   return vertexColor().rgb.mul(seen).mul(spot).mul(Math.PI).div(outside.pixelSolidAngle).mul(outside.exposure);
-}
-
-/**
- * The hull: albedo from the vertex colour (solar skin, endcap faces, brims, spindle), a patchwork of panels two
- * centuries of repair have left, lit by the Sun and by earthshine, with the glint of sunlight on the glass skin.
- */
-export function hullColor(): Node<'vec3'> {
-  const n = normalWorld;
-  const d = normalize(positionWorld);
-  const sun = max(dot(n, outside.sunDir), 0).mul(outside.sunlight);
-  const earth = max(dot(n, outside.earthDir), 0).mul(outside.earthshine);
-  const p = positionLocal;
-  // Panels 60 m on a side: along the axis, around it, and in rings on the endcap faces. Each panel has its own shade
-  // (two centuries of replacements), over slower patches of weathering.
-  const PANEL = 60;
-  const arc = atan(p.y, p.x).mul(length(p.xy));
-  const cell = floor(vec3(p.z.div(PANEL), arc.div(PANEL), length(p.xy).div(PANEL)));
-  const panel = mx_noise_float(cell.mul(0.731).add(0.5)).mul(0.18).add(1);
-  const patch = mx_fractal_noise_float(p.mul(1 / 900), 3, 2, 0.5).mul(0.2).add(1);
-  // Seams, faded out where they get thinner than a pixel so they never shimmer.
-  const seam = (x: Node<'float'>): Node<'float'> => {
-    const f = fract(x), w = fwidth(x);
-    const line = smoothstep(0, 0.02, f).mul(smoothstep(0, 0.02, f.oneMinus()));
-    return mix(float(1), line, clamp(float(1).sub(w.div(0.05)), 0, 1));
-  };
-  const seams = seam(p.z.div(PANEL)).mul(seam(arc.div(PANEL))).mul(seam(length(p.xy).div(PANEL)));
-  const base = vertexColor().rgb;
-  const albedo = base.mul(panel).mul(patch).mul(mix(float(0.55), float(1), seams));
-  // Dark glass glints most.
-  const gloss = float(1).sub(dot(base, vec3(0.2126, 0.7152, 0.0722)).mul(2)).max(0);
-  const glint = pow(max(dot(n, normalize(outside.sunDir.sub(d))), 0), 120).mul(sun).mul(gloss).mul(3);
-  return albedo.mul(sun.add(earth)).add(glint).mul(outside.exposure);
 }

@@ -62,5 +62,41 @@
   {
     "key": "idiom: [.s .theta] in solarpolis/render/view.ts + solarpolis/world/flyer.ts + solarpolis/world/walker.ts",
     "reason": "(θ, s) is the interior's surface coordinate (blueprint frame.ts); reading both fields of a point is how every user of it starts, not a copied procedure. It crossed the idiom threshold only because more files made the names rarer."
+  },
+  {
+    "key": "same name: core/rng.ts#hash32 + solarpolis/render/hullShaders.ts#hash32",
+    "reason": "The skin shader mirrors core's hash32 in TSL on purpose, so the GPU picks the very panels gen/skin.ts does (checked bit for bit with a compute pass)."
+  },
+  {
+    "key": "same name: solarpolis/physics/character.ts#step + solarpolis/space/flyer.ts#step",
+    "reason": "Each mover advances itself by one time step: the player's body, the flyer inside, the flyer outside. Different physics, the usual name."
+  },
+  {
+    "key": "same name: solarpolis/space/flyer.ts#step + solarpolis/world/flyer.ts#step",
+    "reason": "The flyer inside (up toward the axis, above the ground) and the one outside (clearance to every body, float64 over 50,000 km) share a name, not their rules."
+  },
+  {
+    "key": "same name: solarpolis/space/flyer.ts#speed + solarpolis/world/flyer.ts#speed",
+    "reason": "Speed of the flyer inside grows with height above the ground; outside, with the clearance to the nearest body. Same idea, different geometry."
+  },
+  {
+    "key": "same name: solarpolis/space/flyer.ts#turn + solarpolis/world/walker.ts#turn",
+    "reason": "Each camera turns by pointer movement in its own frame (walker: heading on the curved floor; flyer outside: yaw around the ecliptic pole)."
+  },
+  {
+    "key": "same name: solarpolis/physics/world.ts#dispose + solarpolis/render/necklace.ts#dispose",
+    "reason": "dispose() is the usual name for giving resources back."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/figure.ts#dispose + solarpolis/render/necklace.ts#dispose",
+    "reason": "dispose() is the usual name for giving resources back."
+  },
+  {
+    "key": "same name: solarpolis/render/outside.ts#info + solarpolis/render/view.ts#info",
+    "reason": "Both 3D views implement the page's view interface (PageView in main.ts: create, setHabitat, setRunning, bytes, shed, info, skip); their shared machinery is in render/surface.ts."
+  },
+  {
+    "key": "same name: solarpolis/render/necklace.ts#follow + solarpolis/render/terrain.ts#follow",
+    "reason": "Both are a view's per-frame follow(eye, ...): the terrain tiles and the ring's habitats each update what they draw around the eye. Same role, different content."
   }
 ]
