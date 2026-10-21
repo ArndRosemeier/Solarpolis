@@ -36,8 +36,8 @@ const PATCH_CELL = 1;
 const PATCH_EDGE = 0.4;
 /** One sphere shared by every test ball (the kind's attributes: position and normal). */
 const BALL_GEOMETRY = new SphereGeometry(0.25, 20, 14).deleteAttribute('uv');
-/** Clock seconds per real second by default: a day in about 24 minutes, so the sun is seen to travel. */
-const DAY_SPEED = 60;
+/** Clock seconds per real second by default: real time (Arnd: a sped-up clock should not be the norm). Faster in the debug menu. */
+const DAY_SPEED = 1;
 /**
  * The camera on foot, set with the mouse wheel: from the player's eyes (0) out to `CHASE_FAR` metres behind the head,
  * rising to `CHASE_UP` above it by `CHASE_RISE` metres back. The nearest view from behind is `CHASE_NEAR`; one notch
@@ -390,7 +390,7 @@ export class InteriorView {
     const v = c.velocity, flat = v3madd(v, up, -v3dot(v, up)), speed = Math.hypot(...flat);
     const look = this.walker.view().look, ahead = v3madd(look, up, -v3dot(look, up));
     const front = v3norm(speed > 0.5 ? flat : ahead);
-    const move: MoveState = c.swimming ? 'swim' : !c.grounded ? 'jump' : speed < 0.3 ? 'idle' : speed < 2.5 ? 'walk' : speed < 5.5 ? 'run' : 'sprint';
+    const move: MoveState = c.swimming ? 'swim' : !c.grounded ? (v3dot(v, up) > 0.5 ? 'jump' : 'fall') : speed < 0.3 ? 'idle' : speed < 2.5 ? 'walk' : speed < 5.5 ? 'run' : 'sprint';
     f.update({ feet: toView(eye, feet), up, front, speed, anim: { move } }, this.frameDt, this.time);
   }
 

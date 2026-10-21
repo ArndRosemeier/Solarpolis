@@ -22,7 +22,7 @@ Where the work stands, for the next thread. Update it in the PR that changes it.
 
 ## Next
 
-1. Milestone 4, "The landscape": player jumps with the pack's take-off and landing clips, then rivers, the cloud layer, landmarks, night lights. Later: grass blades on the GPU, a shadow cascade for trees.
+1. Milestone 4, "The landscape": rivers, the cloud layer, landmarks, night lights. Later: grass blades on the GPU, a shadow cascade for trees.
 2. Dunfinity can switch to `@futuremagic/stage` and drop its own copy (its own PR, in its own thread).
 
 ## The outside (plan "Solarpolis: the outside": https://claude.ai/artifact/5aV6F3oGzxDapsjV59haXi)

@@ -163,7 +163,7 @@ debug.add({ label: 'Travel 10× faster (toggle)', group: 'Go', run: () => { cons
 debug.addInfo(() => view()?.clockLine() ?? '');
 /** The next of a cycle of clock speeds. */
 const nextSpeed = (speeds: number[], now: number): number => speeds[(speeds.indexOf(now) + 1) % speeds.length];
-debug.add({ label: 'Clock speed: ×60 → ×600 → paused → real time', group: 'Time', run: () => { const v = view(); if (v) v.timeScale = nextSpeed([60, 600, 0, 1], v.timeScale); } });
+debug.add({ label: 'Clock speed: real time → ×60 → ×600 → paused', group: 'Time', run: () => { const v = view(); if (v) v.timeScale = nextSpeed([1, 60, 600, 0], v.timeScale); } });
 debug.add({ label: 'Two hours later', group: 'Time', run: () => view()?.skip(7200) });
 debug.addInfo(() => outsideView()?.info() ?? 'outside: not started');
 debug.add({ label: 'Clock speed outside: real time → ×60 → ×3600 → paused', group: 'Outside', run: () => { const v = outsideView(); if (v) v.timeScale = nextSpeed([1, 60, 3600, 0], v.timeScale); } });
