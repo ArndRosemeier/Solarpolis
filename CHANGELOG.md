@@ -2,6 +2,13 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.028 — Details all the way down on the hull
+
+- Fly close to the habitat's skin and it keeps getting more detailed: the panels become bays between beams, then solar modules in their frames, then bolts, clamps, cable trays and sensor posts, then washers, cables and the beams' chamfered edges.
+- Closer still you see the cells themselves, their silver fingers and busbars, the odd dead cell, the light collectors' Fresnel lenses, and two centuries of wear: dust, scratches and tiny meteoroid pits.
+- Near the hull the camera now holds station with the turning skin, so it stays under you instead of racing past at 200 m/s.
+- The drones ride on real rails.
+
 ## v0.027 — Up close on the hull
 
 - Fly to the hull (Outside, F) and you'll find maintenance drones running along tracks between the solar panels, each one carrying a spare panel. Seen from far away they turn into faint specks of light rather than disappearing.
