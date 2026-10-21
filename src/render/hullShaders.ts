@@ -18,6 +18,7 @@ import type { Node } from 'three/webgpu';
 import { GLINT_GAIN, GLINT_POWER, LOOK, SALT, type Columns, type Skin } from '../gen/skin';
 import { DISPLAY_CAP, outside } from './skyShaders';
 import { MASK_WORDS, ROOT_SPAN, type CoverMask } from '../gen/detailTree';
+import { band } from './shaderMath';
 
 /** A habitat's skin as the four vectors its mesh hands the shader (`mesh.userData.skin`). */
 export interface SkinUniforms {
@@ -346,7 +347,7 @@ export function skinDetailColor(): Node<'vec3'> {
     const off = fract(g).sub(at), dd = length(off).div(radius);
     const here = toFloat(h).lessThan(o.chance).and(dd.lessThan(1.2));
     const r = shows(g.mul(1 / PIT.radius[0]));
-    const rim = smoothstep(0.55, 0.85, dd).mul(float(1).sub(smoothstep(0.95, 1.2, dd)));
+    const rim = band(dd, 0.55, 0.85, 0.95, 1.2);
     const factor = select(here, mix(float(0.5), float(PIT.rimContrast), rim), float(1));
     albedo = albedo.mul(mix(float(1), factor, r).div(r.mul(PIT.share * o.chance * (PIT.rimContrast - 1)).add(1)));
     gloss = gloss.mul(select(here, mix(float(1), float(0.2), r), float(1)));

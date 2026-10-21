@@ -286,9 +286,5 @@
   {
     "key": "same name: solarpolis/render/terrain.ts#follow + solarpolis/render/traffic.ts#follow",
     "reason": "The ship traffic view (render/traffic.ts) has the views' own interface (follow each frame, dispose), like the streamed and necklace views, with a body of its own."
-  },
-  {
-    "key": "idiom: [.add .mul] in solarpolis/render/groundShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
-    "reason": "TSL has no operators: every shader file does its arithmetic with .add and .mul. Shared shader steps already live in one place each (sunlit, throughAir, floorSurface, woodsFromAfar, the hull and sky pieces); this pair is the language, not a copied procedure."
   }
 ]

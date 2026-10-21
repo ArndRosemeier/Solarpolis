@@ -8,7 +8,7 @@ import { CLIMATES, climateOf } from './climates';
 export type Severity = 'invalid' | 'unusual';
 
 export interface Finding {
-  id: 'spin' | 'hull' | 'hull-thick' | 'axis-air' | 'haze' | 'heat' | 'light' | 'layers' | 'population' | 'sunline' | 'relief' | 'day' | 'brims' | 'collectors' | 'climate';
+  id: 'spin' | 'hull' | 'hull-thick' | 'axis-air' | 'haze' | 'heat' | 'light' | 'layers' | 'population' | 'sunline' | 'relief' | 'day' | 'brims' | 'collectors' | 'climate' | 'clouds';
   severity: Severity;
   message: string;
 }
@@ -59,6 +59,9 @@ export function validate(h: Habitat): Finding[] {
   const rv = rl.rivers;
   if (rv && !(Number.isInteger(rv.count) && rv.count >= 0 && rv.width > 0 && rv.depth > 0 && rv.width < (rl.ringLake?.width ?? Infinity)))
     out.push({ id: 'relief', severity: 'invalid', message: 'rivers need a whole count ≥ 0, a width and depth > 0, and to be narrower than the lake they run into' });
+  const c = p.clouds;
+  if (c && !(c.base > 0 && c.thickness > 0 && c.base + c.thickness < h.radius - p.hubRadius && c.cover >= 0 && c.cover <= 1 && c.size > 0 && Number.isFinite(c.wind.along) && Number.isFinite(c.wind.around)))
+    out.push({ id: 'clouds', severity: 'invalid', message: 'clouds need a base and thickness > 0 that stay clear of the axis, a cover from 0 to 1 and a size > 0' });
   if (!climateOf(p.climate)) out.push({ id: 'climate', severity: 'invalid', message: `no climate "${p.climate}" in the catalogue (${Object.keys(CLIMATES).join(', ')})` });
   if (!(p.population >= 0)) out.push({ id: 'population', severity: 'invalid', message: 'the population must not be negative' });
   return out;
