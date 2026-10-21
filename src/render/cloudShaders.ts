@@ -32,6 +32,9 @@ const cloud = {
   /** How far the wind has carried them: along the axis (m), and around it (cos, sin of the turn). */
   along: uniform(0),
   turn: uniform(new Vector2(1, 0)),
+  /** The same for their finer shapes, which drift through the big ones (`CloudState.fine`). */
+  fineAlong: uniform(0),
+  fineTurn: uniform(new Vector2(1, 0)),
 };
 
 /** How widely the field's values spread (their standard deviation): four octaves of MaterialX noise. */
@@ -79,18 +82,29 @@ export function setCloudState(state: CloudState | null): void {
   cloud.threshold.value = coverThreshold(state.cover) * FIELD_SPREAD;
   cloud.along.value = state.along;
   cloud.turn.value.set(Math.cos(state.turn), Math.sin(state.turn));
+  cloud.fineAlong.value = state.fine.along;
+  cloud.fineTurn.value.set(Math.cos(state.fine.turn), Math.sin(state.fine.turn));
 }
 
-/** Where a world point lies in the wind-carried field: its direction from the axis at `radius`, and z (in cloud sizes). */
-function inField(p: V3, radius: F): V3 {
+/**
+ * Where a world point lies in a field carried `along` the axis and turned by `turn` around it: its direction from the
+ * axis at `radius`, and z (in cloud sizes). The big shapes ride the wind (`inField`), the finer ones their own drift.
+ */
+function carried(p: V3, radius: F, along: F, turn: Node<'vec2'>): V3 {
   const len = max(p.xy.length(), 1e-3);
-  const x = p.x.div(len), y = p.y.div(len), c = cloud.turn.x, s = cloud.turn.y;
-  return vec3(x.mul(c).add(y.mul(s)).mul(radius), y.mul(c).sub(x.mul(s)).mul(radius), p.z.sub(cloud.along)).div(cloud.size);
+  const x = p.x.div(len), y = p.y.div(len), c = turn.x, s = turn.y;
+  return vec3(x.mul(c).add(y.mul(s)).mul(radius), y.mul(c).sub(x.mul(s)).mul(radius), p.z.sub(along)).div(cloud.size);
 }
+const inField = (p: V3, radius: F): V3 => carried(p, radius, cloud.along, cloud.turn);
+const inFine = (p: V3, radius: F): V3 => carried(p, radius, cloud.fineAlong, cloud.fineTurn);
 
-/** The column's height over the point's place in the field (0 none … 1 the layer's thickness), thinning by the endcaps. */
+/**
+ * The column's height over the point's place in the field (0 none … 1 the layer's thickness), thinning by the endcaps.
+ * The field is one fractal noise of `octaves` (3 or more), its first two carried by the wind and the rest by the finer
+ * shapes' drift: the same sum, so the same spread, but the heaps slide through the big shapes and the clouds evolve.
+ */
 function column(p: V3, octaves: number): F {
-  const f = mx_fractal_noise_float(inField(p, cloud.middle), octaves, 2, 0.5);
+  const f = mx_fractal_noise_float(inField(p, cloud.middle), 2, 2, 0.5).add(mx_fractal_noise_float(inFine(p, cloud.middle).mul(4), octaves - 2, 2, 0.5).mul(0.25));
   const ends = band(p.z, cloud.z0, cloud.z0.add(cloud.fade), cloud.z1.sub(cloud.fade), cloud.z1);
   return clamp(f.sub(cloud.threshold).div(COLUMN), 0, 1).mul(ends);
 }
@@ -156,7 +170,7 @@ export function cloudMarch(eye: V3, d: V3, D: F, far: boolean, jitter: F): Node<
       // Height in the layer: 0 at the flat base, 1 at the top.
       const b = cloud.base.sub(r).div(thick);
       const c = column(p, 4);
-      const wear = mx_fractal_noise_float(inField(p, r).mul(3.3), 2, 2, 0.5);
+      const wear = mx_fractal_noise_float(inFine(p, r).mul(3.3), 2, 2, 0.5);
       // Domed: the column's height rounds off toward its edges, and finer noise wears the dome into heaps. The base is
       // flat under the cloud's middle and lifts toward its rim and with the wear, and each patch of clouds has its own
       // base height (`BASE_SPREAD`), so no two clouds' bases line up.

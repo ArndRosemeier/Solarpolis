@@ -30,7 +30,7 @@ export const REFERENCE: HabitatParams = {
   endcaps: { wild: { reach: 0.6, rise: 1.6 }, port: { reach: 0.5, rise: 1.8 } },
   relief: { hills: 60, ringLake: { width: 500, depth: 15 }, terraceStep: 150, massif: 300, rivers: { count: 6, width: 14, depth: 1.6 } },
   // Fair-weather cumulus: bases at 1.2 km, a third of the sky, a light breeze down the axis.
-  clouds: { base: 1200, thickness: 450, cover: 0.3, size: 700, wind: { along: 3, around: 1 } },
+  clouds: { base: 1200, thickness: 450, cover: 0.3, size: 700, wind: { along: 7, around: 3 } },
   // The largest landmark about as wide as a cathedral is long.
   landmarks: { size: 120, handrail: 1.1 },
   // An Earth day, two thirds lit; the bright stretch a seventh of the length; a dim blue-hour glow at night.
@@ -58,6 +58,6 @@ const peopleFor = (radius: number, length: number): number => Math.round(DENSITY
 export const MATRIX: { name: string; params: HabitatParams }[] = [
   { name: 'reference', params: REFERENCE },
   { name: 'small', params: withParams({ radius: 200, length: 1500, hubRadius: 10, sunlineRadius: 3, relief: { hills: 8, ringLake: { width: 40, depth: 4 }, terraceStep: 20, massif: 25, rivers: { count: 2, width: 3, depth: 0.5 } }, clouds: null, landmarks: { size: 18, handrail: 1.1 }, plan: { valleys: 2, reserve: 0.25, districtPeople: 10000, entranceSpacing: 400, spiral: 0.6 }, population: peopleFor(200, 1500), seed: 2 }) },
-  { name: 'large', params: withParams({ radius: 12000, length: 60000, hubRadius: 150, sunlineRadius: 40, relief: { hills: 150, ringLake: { width: 1500, depth: 25 }, terraceStep: 300, massif: 800, rivers: { count: 10, width: 30, depth: 3 } }, clouds: { base: 2500, thickness: 900, cover: 0.45, size: 1800, wind: { along: 5, around: -2 } }, landmarks: { size: 220, handrail: 1.1 }, plan: { valleys: 4, reserve: 0.2, districtPeople: 12000, entranceSpacing: 1500, spiral: 0.6 }, population: peopleFor(12000, 60000), seed: 3 }) },
-  { name: 'long', params: withParams({ radius: 2000, length: 40000, hubRadius: 40, sunlineRadius: 10, relief: { hills: 30, ringLake: null, terraceStep: 100, massif: 150, rivers: null }, clouds: { base: 600, thickness: 250, cover: 0.25, size: 450, wind: { along: -2, around: 1 } }, landmarks: { size: 90, handrail: 1.1 }, population: peopleFor(2000, 40000), seed: 4 }) },
+  { name: 'large', params: withParams({ radius: 12000, length: 60000, hubRadius: 150, sunlineRadius: 40, relief: { hills: 150, ringLake: { width: 1500, depth: 25 }, terraceStep: 300, massif: 800, rivers: { count: 10, width: 30, depth: 3 } }, clouds: { base: 2500, thickness: 900, cover: 0.45, size: 1800, wind: { along: 9, around: -4 } }, landmarks: { size: 220, handrail: 1.1 }, plan: { valleys: 4, reserve: 0.2, districtPeople: 12000, entranceSpacing: 1500, spiral: 0.6 }, population: peopleFor(12000, 60000), seed: 3 }) },
+  { name: 'long', params: withParams({ radius: 2000, length: 40000, hubRadius: 40, sunlineRadius: 10, relief: { hills: 30, ringLake: null, terraceStep: 100, massif: 150, rivers: null }, clouds: { base: 600, thickness: 250, cover: 0.25, size: 450, wind: { along: -6, around: 2 } }, landmarks: { size: 90, handrail: 1.1 }, population: peopleFor(2000, 40000), seed: 4 }) },
 ];

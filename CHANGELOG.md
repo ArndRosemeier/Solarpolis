@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.060 — Clouds on the move
+
+- The clouds drift with a breeze you can see in real time, and change shape slowly as they go: their heaps and edges slide through the big shapes. Their shadows on the land drift with them.
+
 ## v0.059 — The endcaps become land: the Mountain and the Gate
 
 - The wild end is now a mountain: couloirs climb up each valley between rocky spurs, all turning a little with the spin as they rise, a horn stands at the head of the main valley, and a cirque is dug into the far side under its headwall.
