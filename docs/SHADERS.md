@@ -28,3 +28,4 @@ The renderer foundation (the Stage, the compile cap, the renderer hooks and the 
 - **Put things into the scene with `stage.add`** (or `stage.prepare` for your own groups), never plain `scene.add` for anything with a new material or geometry layout.
 - **Never** construct a material outside the registry, use `onBeforeCompile`, or call `renderer.compile*` outside the Stage. `npm test` fails on all three (`tools/guards/rules.json`).
 - **WebGPU only**: no `forceWebGL`, no WebGL context, no fallback path.
+- **Textures sampled with `.grad()`, `.level()` or plain sampling must be filterable**, placeholders included: three r186's WGSL builder declares no sampler for a texture with nearest min and mag filters, but `.grad()` still samples through one, so the pipeline fails to compile in WebGPU only (WebGL hides it). Give stand-ins `LinearFilter`, as `blank()` in `src/render/skyShaders.ts` does.

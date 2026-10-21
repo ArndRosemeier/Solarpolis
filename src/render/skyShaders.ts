@@ -10,7 +10,7 @@
  * The scene's axes are the home habitat's orbit frame (src/space: ecliptic of date), and the camera sits at the origin:
  * everything is placed relative to the eye, so `positionWorld` is the offset from the eye.
  */
-import { DataTexture, Matrix3, RGBAFormat, SRGBColorSpace, Vector2, Vector3, type Texture } from 'three/webgpu';
+import { DataTexture, LinearFilter, Matrix3, RGBAFormat, SRGBColorSpace, Vector2, Vector3, type Texture } from 'three/webgpu';
 import {
   abs, asin, atan, attribute, floor, fwidth, mx_noise_float, cameraProjectionMatrix, clamp, cross, dFdx, dFdy, dot, exp, float, fract, length, max, mix,
   modelViewMatrix, modelWorldMatrix, mx_fractal_noise_float, normalWorld, normalize, positionLocal, positionWorld, pow,
@@ -45,10 +45,15 @@ export const outside = {
   viewport: uniform(new Vector2(1280, 720)),
 };
 
-/** Placeholder until the maps load (render/outside.ts swaps them in). */
+/**
+ * Placeholder until the maps load (render/outside.ts swaps them in). It must be filterable: three's WGSL builder emits no
+ * sampler for a texture with nearest filters, yet `.grad()` still samples through one, so the sky would not compile.
+ */
 const blank = (): Texture => {
   const t = new DataTexture(new Uint8Array([20, 20, 30, 255]), 1, 1, RGBAFormat);
   t.colorSpace = SRGBColorSpace;
+  t.magFilter = LinearFilter;
+  t.minFilter = LinearFilter;
   t.needsUpdate = true;
   return t;
 };

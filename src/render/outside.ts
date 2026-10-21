@@ -9,7 +9,7 @@
  * Exposure follows what is in sight (render/exposure.ts), so the stars show only when nothing bright is in view, as
  * for eyes; the "night eyes" augmentation (debug menu) lets the eyes open much further.
  */
-import { Matrix4, Mesh, PerspectiveCamera, Scene, SphereGeometry, Texture, LinearFilter, LinearMipmapLinearFilter, SRGBColorSpace, type WebGPURenderer } from 'three/webgpu';
+import { Color, Matrix4, Mesh, PerspectiveCamera, Scene, SphereGeometry, Texture, LinearFilter, LinearMipmapLinearFilter, SRGBColorSpace, type WebGPURenderer } from 'three/webgpu';
 import { Stage, createRenderer } from '@futuremagic/stage';
 import { Rng, deriveSeed, v3add, v3dot, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
 import type { Habitat } from '../blueprint';
@@ -33,7 +33,8 @@ export class OutsideView {
   readonly canvas = document.createElement('canvas');
   private renderer!: WebGPURenderer;
   private stage!: Stage;
-  private readonly scene = new Scene();
+  /** Black behind the dome, so a sky that fails to draw shows as space, never as the page behind the canvas. */
+  private readonly scene = Object.assign(new Scene(), { background: new Color(0x000000) });
   private readonly camera = new PerspectiveCamera(45, 1, 10, DOME * 2);
   private space: Space;
   private dome: Mesh | null = null;
