@@ -12,7 +12,7 @@
  * parkland does. Pure and continuous like the terrain: any point, in any order, gives the same answer.
  */
 import { Noise, deriveSeed, smoothstep } from '@futuremagic/core';
-import { FLOOR_LAYERS, climateOf, toWorld, type BiomeSpec, type Climate, type FloorLayer } from '../blueprint';
+import { FLOOR_LAYERS, climateOf, toWorld, type BiomeSpec, type Climate, type FaceKind, type FloorLayer } from '../blueprint';
 import type { Terrain } from './terrain';
 import { riverAt } from './rivers';
 import { canopyColor } from './trees';
@@ -145,6 +145,16 @@ export function makeEcology(terrain: Terrain): Ecology {
     return grass(b) > grass(biomes[best]) ? k : best;
   }, 0);
 
+  /**
+   * Which Gate face a point of the port endcap is on and how much of it is the face (1 inside it, 0 on the buttresses
+   * between faces and on the floor), as the terrain shapes it (`gateAt` in terrain.ts).
+   */
+  const gateFace = (theta: number, s: number): { kind: FaceKind; share: number } | null => {
+    const { valley, across } = terrain.form.acrossAt(theta, s);
+    const share = (1 - smoothstep(0.6, 0.8, Math.abs(across))) * smoothstep(profile.floorEnd, profile.floorEnd + (profile.length - profile.floorEnd) * 0.1, s);
+    return share > 0 ? { kind: terrain.form.faces[valley].kind, share } : null;
+  };
+
   const shares = new Float32Array(count);
   const woods = biomes.map(canopyOf);
   // Each biome's floor as shares of the layers (summing to 1).
@@ -184,7 +194,23 @@ export function makeEcology(terrain: Terrain): Ecology {
       c0 += (sh[0] - c0) * sand; c1 += (sh[1] - c1) * sand; c2 += (sh[2] - c2) * sand;
       c0 += (bd[0] - c0) * bed; c1 += (bd[1] - c1) * bed; c2 += (bd[2] - c2) * bed;
     }
-    const rock = smoothstep(0.45, 0.75, slope + 0.15 * tint.fbm3(x / patch, y / patch, z / patch, 2)), r = climate.rock;
+    let rock = smoothstep(0.45, 0.75, slope + 0.15 * tint.fbm3(x / patch, y / patch, z / patch, 2)), r = climate.rock;
+    // The Gate's faces read by what they are made of (gen/plan.ts, `faceAt`): the Stair face dressed stone, paler than
+    // the rock it was cut from; the Vine face green over its walls; the Water face dark wet rock with pools on its treads.
+    const gate = s > profile.floorEnd ? gateFace(theta, s) : null;
+    if (gate) {
+      const k = gate.share;
+      if (gate.kind === 'stair') r = [r[0] * (1 + 0.6 * k), r[1] * (1 + 0.6 * k), r[2] * (1 + 0.6 * k)];
+      else if (gate.kind === 'water') {
+        r = [r[0] * (1 - 0.45 * k), r[1] * (1 - 0.45 * k), r[2] * (1 - 0.4 * k)];
+        const b = climate.bed, pool = 0.6 * k * (1 - rock);
+        c0 += (b[0] - c0) * pool; c1 += (b[1] - c1) * pool; c2 += (b[2] - c2) * pool;
+      } else if (gate.kind === 'vine') {
+        const g = biomes[open].color, vines = 0.7 * k * rock;
+        c0 += (g[0] * 0.8 - c0) * vines; c1 += (g[1] * 0.8 - c1) * vines; c2 += (g[2] * 0.8 - c2) * vines;
+        rock *= 1 - 0.7 * k;
+      }
+    }
     c0 += (r[0] - c0) * rock; c1 += (r[1] - c1) * rock; c2 += (r[2] - c2) * rock;
     out[i] = Math.min(1, Math.max(0, c0));
     out[i + 1] = Math.min(1, Math.max(0, c1));

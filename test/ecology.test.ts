@@ -94,3 +94,31 @@ for (const { name, params } of MATRIX) {
     assert.ok(insideExposure(shade) > 1.5 && insideExposure(shade) < 1 / shade, `${insideExposure(shade)} under crowns letting ${shade} through`);
   });
 }
+
+for (const { name, params } of MATRIX) {
+  test(`ecology (${name}): the Gate's faces read from afar by what they are made of`, () => {
+    const h = derive(params), t = makeTerrain(h), eco = makeEcology(t), { profile } = h, form = t.form;
+    const s = profile.floorEnd + (profile.length - profile.floorEnd) * 0.5;
+    const out = new Float32Array(3), lum = () => 0.2126 * out[0] + 0.7152 * out[1] + 0.0722 * out[2];
+    const sums: Record<string, { rock: number; green: number; n: number }> = {};
+    for (let i = 0; i < 720; i++) {
+      const theta = (i / 720) * 2 * Math.PI, { valley, across } = form.acrossAt(theta, s);
+      if (Math.abs(across) > 0.5) continue;
+      const kind = form.faces[valley].kind, g = (sums[kind] ??= { rock: 0, green: 0, n: 0 });
+      eco.colorAt(theta, s, t.heightAt(theta, s), 1, out, 0); // a wall: all rock, but for vines
+      g.rock += lum(); g.green += out[1] - (out[0] + out[2]) / 2; g.n++;
+    }
+    const mean = (k: string, f: 'rock' | 'green') => sums[k] ? sums[k][f] / sums[k].n : NaN;
+    const rock = climateRock(params);
+    if (sums.stair) assert.ok(mean('stair', 'rock') > rock * 1.2, `the Stair face is paler dressed stone (${mean('stair', 'rock').toFixed(3)} against rock ${rock.toFixed(3)})`);
+    if (sums.water) assert.ok(mean('water', 'rock') < rock * 0.8, `the Water face is dark wet rock (${mean('water', 'rock').toFixed(3)})`);
+    if (sums.vine) assert.ok(mean('vine', 'green') > 0.02, `the Vine face is green over its walls (${mean('vine', 'green').toFixed(3)})`);
+    assert.ok(Object.keys(sums).length >= 2, `faces of at least two kinds round the Gate (${Object.keys(sums)})`);
+  });
+}
+
+/** The luminance of a habitat's climate's rock. */
+function climateRock(params: HabitatParams): number {
+  const r = CLIMATES[params.climate].rock;
+  return 0.2126 * r[0] + 0.7152 * r[1] + 0.0722 * r[2];
+}

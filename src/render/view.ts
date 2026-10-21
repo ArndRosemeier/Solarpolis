@@ -18,7 +18,7 @@ import { HUMAN, type Character } from '../physics/character';
 import { Figure, type MoveState } from './actors/figure';
 import { playerLook } from './actors/looks';
 import { addLights, key, shineOn, sky } from './lights';
-import { adapt, insideExposure, insideGlare, meterRays, underCrowns } from './exposure';
+import { adapt, glareOf, insideExposure, insideRayLuminance, meterRays, underCrowns, type InsideMeterable } from './exposure';
 import { sharedPool } from '../workers/pool';
 import { BALL, CLOUDS_FAR, CLOUDS_NEAR, SUNLINE, air, allKinds, setAir, setEmission, setSunline, standInAttribute, view } from './materials';
 import { dayPhase, emissionMean, nearestLit, sunlineEmission, sunlineNorm, EMISSION_SAMPLES } from '../world/sunline';
@@ -26,7 +26,7 @@ import { densityFalloff, seenMid } from '../world/air';
 import { TerrainView, describeLayout } from './terrain';
 import { PlantView } from './plants';
 import { slopeAt } from '../gen/scatter';
-import { setFloorEye } from './groundShaders';
+import { setFloorEye, setRockBeds } from './groundShaders';
 import { UNDER_CROWNS, crownsClosed, makeEcology, type Ecology } from '../gen/ecology';
 import { FrameLoop, dragToLook, draw, fitCanvas, moveKeys } from './surface';
 import { freeMesh } from './geometry';
@@ -59,6 +59,8 @@ const CHASE_UP = 0.4;
 const CHASE_RISE = 3.5;
 const CHASE_STEP = 0.003;
 const CHASE_GLIDE = 10;
+/** The eyes' meter inside: a grid of rays over the frame, a few of them metered each frame (`glare`). */
+const GLARE_COLUMNS = 5, GLARE_ROWS = 4, GLARE_PER_FRAME = 4;
 /** The layer the player's body is drawn on: the shadow map always sees it, the camera only from behind. */
 const BODY_LAYER = 1;
 
@@ -358,6 +360,7 @@ export class InteriorView {
     setSunline(h.length, this.norm, nearestLit(h));
     this.shine();
     setAir(densityFalloff(h), h.radius, seenMid(h), h.params.air.hazeDistance);
+    setRockBeds(h.params.relief.terraceStep, h.radius);
     // The sunline: from the wild wall to the port wall along the axis.
     const tube = new CylinderGeometry(h.params.sunlineRadius, h.params.sunlineRadius, h.length, 24, 1, true);
     tube.deleteAttribute('uv'); // the kind's attributes are position and normal (docs/SHADERS.md)
@@ -483,25 +486,27 @@ export class InteriorView {
     sky.intensity *= this.exposure;
   }
 
-  /** How far the eyes stop down in the air's glow (`insideGlare`), and the frame time since it was last metered. */
-  private glared = 1;
-  private sinceGlare = Infinity;
+  /** The meter's rays' luminances (`insideRayLuminance`), a few refreshed each frame, and the next ray to refresh. */
+  private readonly seen = new Float32Array(GLARE_COLUMNS * GLARE_ROWS);
+  private nextSeen = 0;
 
   /**
-   * The eyes' stop-down in the air's glow near the axis (`insideGlare`), metered over the frame on a coarse grid ten
-   * times a second (a third of a millisecond each; the eyes take most of a second to follow anyway).
+   * The eyes' stop-down in the air's glow and the light near the axis (`glareOf`), metered over the frame on a coarse
+   * grid against the land itself: a few rays each frame (each walks the terrain, some tens of microseconds), the whole
+   * grid several times a second, which the eyes, taking most of a second to follow, do not outpace.
    */
   private glare(eye: Vec3): number {
-    this.sinceGlare += this.frameDt;
-    if (this.sinceGlare < 0.1) return this.glared;
-    this.sinceGlare = 0;
     this.camera.updateMatrixWorld();
     const m = this.camera.matrixWorld.elements, c = air.haze.value as Color;
-    const rays = meterRays([-m[8], -m[9], -m[10]], [m[0], m[1], m[2]], [m[4], m[5], m[6]], Math.tan((this.camera.fov * Math.PI) / 360), this.camera.aspect, 7, 5);
-    return this.glared = insideGlare({
+    const rays = meterRays([-m[8], -m[9], -m[10]], [m[0], m[1], m[2]], [m[4], m[5], m[6]], Math.tan((this.camera.fov * Math.PI) / 360), this.camera.aspect, GLARE_COLUMNS, GLARE_ROWS);
+    const meter: InsideMeterable = {
       habitat: this.habitat, emission: this.emission, norm: this.norm, extinction: air.extinction.value as number, sky: air.skyLight.value as number,
-      hazeLuminance: 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b,
-    }, eye, rays);
+      hazeLuminance: 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b, heightAt: this.terrain.heightAt,
+    };
+    for (let k = 0; k < GLARE_PER_FRAME; k++, this.nextSeen = (this.nextSeen + 1) % rays.length) {
+      this.seen[this.nextSeen] = insideRayLuminance(meter, eye, rays[this.nextSeen]);
+    }
+    return glareOf(this.seen);
   }
 
   /** Light the player's body where it stands and pose it for the frame (relative to the camera's eye). */
