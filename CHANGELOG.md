@@ -2,6 +2,11 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.016 — The sky outside draws in WebGPU
+
+- The Outside tab shows black space, white stars, Earth and the Moon again. In WebGPU the sky shader failed to compile (its stand-in maps had no sampler), so the page's grey showed through, the stars looked black, and keys 2 and 3 pointed at nothing.
+- Behind the sky is now black space, so a sky that fails to draw never shows the page.
+
 ## v0.015 — The view from outside
 
 - A new Outside tab: your habitat hanging in the geostationary ring, with Earth below, the Moon, the Sun and 41,000 real stars exactly where they are at this hour in 3026.
