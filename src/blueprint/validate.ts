@@ -1,0 +1,52 @@
+/**
+ * Validity checks of a habitat (design doc, "Validity checks"). The generator refuses an `invalid` habitat and
+ * passes an `unusual` one through with its findings shown, so small and odd cylinders stay possible.
+ */
+import type { Habitat } from './derive';
+
+export type Severity = 'invalid' | 'unusual';
+
+export interface Finding {
+  id: 'spin' | 'hull' | 'hull-thick' | 'axis-air' | 'haze' | 'heat' | 'light' | 'layers' | 'population';
+  severity: Severity;
+  message: string;
+}
+
+/** Above this people feel the spin when they turn their heads. */
+export const COMFORT_RPM = 2;
+/** Below this share of the floor pressure the axis no longer works as a flyable sky. */
+export const FLYABLE_AXIS_PRESSURE = 0.5;
+/** Beyond this diameter the far side fades into the haze and the overhead view changes character (m). */
+export const HAZE_DIAMETER = 20000;
+/** Radiator fins larger than this multiple of the two endcap discs are a defining feature of the habitat. */
+export const BIG_FINS = 10;
+/** A hull thicker than this share of the radius is a structure of its own. */
+export const THICK_HULL = 0.002;
+
+const pct = (x: number): string => `${(x * 100).toFixed(0)}%`;
+const km = (m: number): string => `${(m / 1000).toFixed(1)} km`;
+
+export function validate(h: Habitat): Finding[] {
+  const out: Finding[] = [];
+  const p = h.params;
+  if (h.rpm > COMFORT_RPM) out.push({ id: 'spin', severity: 'unusual', message: `spins at ${h.rpm.toFixed(2)} rpm: people feel the rotation when they turn their heads (comfort limit ${COMFORT_RPM} rpm)` });
+  if (!Number.isFinite(h.hullThickness)) {
+    out.push({ id: 'hull', severity: 'invalid', message: `no hull of this material holds at radius ${km(h.radius)}: the largest is ${km(h.maxRadius)}` });
+  } else if (h.hullThickness > THICK_HULL * h.radius) {
+    out.push({ id: 'hull-thick', severity: 'unusual', message: `the hull must be ${h.hullThickness.toFixed(0)} m thick: close to the material's limit (largest radius ${km(h.maxRadius)})` });
+  }
+  const axisAir = h.pressureAt(0) / p.air.floorPressure;
+  if (axisAir < FLYABLE_AXIS_PRESSURE) out.push({ id: 'axis-air', severity: 'unusual', message: `the axis has ${pct(axisAir)} of the floor's air pressure: too thin for the flyable sky ocean` });
+  if (2 * h.radius > HAZE_DIAMETER) out.push({ id: 'haze', severity: 'unusual', message: `at ${km(2 * h.radius)} across, the far side fades into the haze` });
+  if (h.radiatorToEndcaps > BIG_FINS) out.push({ id: 'heat', severity: 'unusual', message: `radiators need ${h.radiatorToEndcaps.toFixed(1)}× the endcap area: large fins shape the habitat's look` });
+  if (h.sunlight < h.lightPower) out.push({ id: 'light', severity: 'invalid', message: `collects ${(h.sunlight / 1e9).toFixed(1)} GW of sunlight but its floor needs ${(h.lightPower / 1e9).toFixed(1)} GW of light: add collectors` });
+  const stack = h.layers.hull - h.layers.surface;
+  if (stack >= h.radius * 0.5) out.push({ id: 'layers', severity: 'invalid', message: `the layers under the floor (${stack.toFixed(0)} m) take up half the radius or more` });
+  if (!(p.population >= 0)) out.push({ id: 'population', severity: 'invalid', message: 'the population must not be negative' });
+  return out;
+}
+
+/** Whether a habitat may be generated (it may still be unusual). */
+export function isValid(findings: Finding[]): boolean {
+  return !findings.some((f) => f.severity === 'invalid');
+}

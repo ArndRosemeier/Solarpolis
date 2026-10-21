@@ -1,0 +1,60 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# One lean job, hard-capped at 2 minutes (Arnd, 2026-10-21; docs/CI.md): typecheck, the guards and the fast tests
+# under their budget, the build. If it ever needs longer, the suite has outgrown its budget: make tests faster or move
+# them to test/slow/, never raise the cap without Arnd.
+# A new push to a PR cancels that PR's older run; runs on main are never cancelled.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 2
+      # Every merge is a version (changes/README.md), so every PR brings its change note.
+      - name: The PR adds a change note
+        if: github.event_name == 'pull_request'
+        run: |
+          git diff --name-only --diff-filter=A HEAD^1 HEAD -- changes/ | grep -v '/README.md$' | grep -q '\.md$' \
+            || { echo "::error::Add a change note: changes/<slug>.md (see changes/README.md). Each merge becomes the next version."; exit 1; }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm test
+        env:
+          CI_TIMES_OUT: suite-times.json
+      # What the tests cost: main keeps its timings, each PR is compared with main's last green run (report only).
+      - name: Keep main's suite timings
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: suite-times
+          path: suite-times.json
+          retention-days: 30
+      - name: What this PR's tests cost
+        if: github.event_name == 'pull_request' && !cancelled()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          id=$(gh run list --repo "$GITHUB_REPOSITORY" --branch main --workflow CI --status success -L 1 --json databaseId -q '.[0].databaseId')
+          [ -n "$id" ] && gh run download "$id" --repo "$GITHUB_REPOSITORY" -n suite-times -D base || echo "no timings from main yet"
+          node tools/ci/suite-diff.mjs base/suite-times.json suite-times.json | tee -a "$GITHUB_STEP_SUMMARY"
+      - run: npx vite build
