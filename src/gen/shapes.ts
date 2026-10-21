@@ -7,6 +7,9 @@
  */
 import type { Vec3 } from '@futuremagic/core';
 
+/** Bytes some typed arrays hold (a built tile's, for the memory watchdog). */
+export const bytesOf = (arrays: readonly ArrayBufferView[]): number => arrays.reduce((n, a) => n + a.byteLength, 0);
+
 /** Linear RGB, 0–1. */
 export type RGB = [number, number, number];
 

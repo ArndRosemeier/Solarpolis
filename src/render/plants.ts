@@ -87,7 +87,7 @@ export class PlantView {
       });
     }
     this.cache = new StreamCache<Entry>(pool, {
-      kind: 'plants', limit: CACHE, inFlight: IN_FLIGHT,
+      limit: CACHE, inFlight: IN_FLIGHT,
       id: (r) => (r.kind === 'plants' ? cellId(r.key) : ''),
       make: (answer, id) => this.make(answer, id),
       free: (e) => { for (const m of e.meshes) { this.group.remove(m); freeInstances(m); } },

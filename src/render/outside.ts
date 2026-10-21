@@ -311,12 +311,15 @@ export class OutsideView {
       const g = shipGeometry(this.shipShape);
       const flame: FlameUniforms = { flame: new Vector4(this.shipShape.plumeLength, 1, this.shipShape.nozzle, 0) };
       const body = new Mesh(g.body, HARDWARE.material), plume = new Mesh(g.plume, FLAME.material);
-      for (const m of [body, plume]) { m.matrixAutoUpdate = false; m.frustumCulled = false; m.visible = false; }
+      for (const m of [body, plume]) { m.matrixAutoUpdate = false; m.frustumCulled = false; }
       body.name = 'torch ship';
       plume.name = 'torch plume';
       plume.userData.flame = flame;
-      this.ship = { body, plume, flame };
+      // Added while visible, so the Stage compiles them under its cap (three's compile skips hidden objects, which
+      // then built both shaders in the first frame they showed); hidden until the loop poses them.
       await Promise.all([this.stage.add(body), this.stage.add(plume)]);
+      for (const m of [body, plume]) m.visible = false;
+      this.ship = { body, plume, flame };
     }
     this.flyer = null;
     const start = chooseStart(this.space, 0);

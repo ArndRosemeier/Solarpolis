@@ -15,8 +15,6 @@ export interface Streamed {
 }
 
 export interface StreamOptions<T extends Streamed> {
-  /** The kind of job (`GenRequest.kind`) this cache asks for: only those are dropped when no longer wanted. */
-  kind: GenRequest['kind'];
   /** The id of one of its jobs. */
   id: (r: GenRequest) => string;
   /** Entries kept, drawn or not, and jobs in flight at once. */
@@ -33,6 +31,8 @@ export interface StreamOptions<T extends Streamed> {
 export class StreamCache<T extends Streamed> {
   readonly built = new Map<string, T>();
   private readonly asked = new Set<string>();
+  /** The jobs this cache handed the pool: only those are dropped when no longer wanted (other caches share the pool). */
+  private readonly sent = new WeakSet<GenRequest>();
   private frameNo = 0;
   private held = 0;
 
@@ -53,8 +53,7 @@ export class StreamCache<T extends Streamed> {
   /** The ids wanted now, most needed first, each with its job: ask for the missing ones, drop the rest, evict. */
   want(wanted: readonly { id: string; request: GenRequest }[]): void {
     const ids = new Set(wanted.map((w) => w.id));
-    const kind = this.opts.kind;
-    this.pool.drop((r) => r.kind !== kind || ids.has(this.opts.id(r)));
+    this.pool.drop((r) => !this.sent.has(r) || ids.has(this.opts.id(r)));
     for (const id of [...this.asked]) if (!ids.has(id)) this.asked.delete(id);
     for (const w of wanted) {
       if (this.asked.size >= this.opts.inFlight) break;
@@ -66,6 +65,7 @@ export class StreamCache<T extends Streamed> {
   /** Ask for one entry now, whatever else is wanted; resolves when it is built (or not wanted any more). */
   async ask(id: string, request: GenRequest): Promise<void> {
     this.asked.add(id);
+    this.sent.add(request);
     const answer = await this.pool.job(request);
     if (this.built.has(id)) return;
     const e = await this.opts.make(answer, id);

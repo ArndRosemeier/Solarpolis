@@ -21,16 +21,13 @@
  * double parts. Positions are relative to the tile's origin (on the drum at its middle), so float32 keeps them to the
  * millimetre; normals in the blueprint frame. Pure: no three.js.
  */
-import type { Vec3 } from '@futuremagic/core';
+import { v3cross, type Vec3 } from '@futuremagic/core';
 import { LOOK, isTrack, type Skin } from './skin';
-import { Shape, type RGB } from './shapes';
+import { Shape, bytesOf, type RGB } from './shapes';
+import { cellsOf, wantedCells, type Grid, type GridEye, type TileKey, type WantedTile } from './detailTree';
 
-/** A tile: 2^level bays a side; the bay column and row of its first corner (multiples of the size, may be fractions). */
-export interface HullTileKey {
-  level: number;
-  i: number;
-  j: number;
-}
+/** A tile of the skin: 2^level bays a side (gen/detailTree.ts). */
+export type HullTileKey = TileKey;
 
 /** The largest tiles: 2^ROOT_LEVEL bays a side. */
 export const ROOT_LEVEL = 3;
@@ -151,162 +148,154 @@ const offset = (p: Vec3, d: Vec3, k: number): Vec3 => [p[0] + d[0] * k, p[1] + d
 
 /** One tile: the parts it owns of the bays it covers. */
 export function buildHullTile(s: Skin, key: HullTileKey): HullTile {
-  const size = Math.pow(2, key.level), origin = tileOrigin(s, key), detail = detailOf(s, key.level);
+  const origin = tileOrigin(s, key), detail = detailOf(s, key.level);
   const glass = new Shape(4, false), parts = new Shape(4, true), moduleAt: number[] = [];
   const P = bayEdge(s), M = moduleEdge(s), n = s.modules;
   const beamW = P * PART.beam, wTray = M * PART.tray, wGlass = wTray + M * PART.glass, wFrame = wGlass + M * PART.frameHeight;
   const wBeam = wGlass + M * PART.beamHeight;
-  const tileI1 = Math.min(key.i + size, s.nTheta), tileJ1 = Math.min(key.j + size, s.nZ);
 
-  for (let i = Math.floor(key.i); i < Math.ceil(tileI1); i++) {
-    for (let j = Math.floor(key.j); j < Math.ceil(tileJ1); j++) {
-      const f = bayFrame(s, i, j), W = f.width, L = f.length, back = neg(f.around);
-      // The tile's rectangle in this bay's units (0–1 across and along); `end` when it reaches the drum's far end.
-      const x0 = Math.max(0, key.i - i), x1 = Math.min(1, tileI1 - i), y0 = Math.max(0, key.j - j), y1 = Math.min(1, tileJ1 - j);
-      if (x0 >= x1 || y0 >= y1) continue;
-      const end = j === s.nZ - 1 && y1 === 1;
-      const ownsX = (x: number): boolean => x >= x0 && x < x1;
-      const ownsY = (y: number): boolean => (y >= y0 && y < y1) || (end && y === 1);
-      // A point of the bay (x, y in bay units, w out from the drum in m), relative to the tile's origin.
-      const at = (x: number, y: number, w: number): Vec3 => {
-        const u = (x - 0.5) * W, v = (y - 0.5) * L;
-        return [0, 1, 2].map((a) => f.mid[a] + f.around[a] * u + Z[a] * v + f.out[a] * w - origin[a]) as Vec3;
-      };
-      const ux = (m: number): number => m / W, vy = (m: number): number => m / L;
-      const clip = (a: number, b: number, lo: number, hi: number): [number, number] | null => (Math.max(a, lo) < Math.min(b, hi) ? [Math.max(a, lo), Math.min(b, hi)] : null);
-      // Module coordinates across the bay's module grid, for the glass's `grid` attribute.
-      const px = (1 - 2 * ux(beamW / 2)) / n, py = (1 - 2 * vy(beamW / 2)) / n;
-      const moduleX = (x: number): number => (x - ux(beamW / 2)) / px, moduleY = (y: number): number => (y - vy(beamW / 2)) / py;
-      /** An area of the bay at height w, cut to the tile: the tray, or glass. */
-      const area = (glassy: boolean, xa: number, xb: number, ya: number, yb: number, w: number): void => {
-        const cx = clip(xa, xb, x0, x1), cy = clip(ya, yb, y0, y1);
-        if (!cx || !cy) return;
-        const [a, b] = cx, [c, d] = cy;
-        if (!glassy) { parts.quad(at(a, c, w), at(b, c, w), at(b, d, w), at(a, d, w), f.out, COLOR.tray); return; }
-        glass.quad(at(a, c, w), at(b, c, w), at(b, d, w), at(a, d, w), f.out);
-        for (const [x, y] of [[a, c], [b, c], [b, d], [a, d]]) moduleAt.push(i, j, moduleX(x), moduleY(y));
-      };
-      /**
-       * A straight part along the bay's x (`dir` 'x', at y = `fixed`) or its y (at x = `fixed`), from a to b in bay
-       * units, owned where its middle line runs inside the tile and cut to it; `build` gets the two cut ends.
-       */
-      const bar = (dir: 'x' | 'y', fixed: number, a: number, b: number, build: (p: [number, number], q: [number, number]) => void): void => {
-        if (dir === 'x' ? !ownsY(fixed) : !ownsX(fixed)) return;
-        const c = dir === 'x' ? clip(a, b, x0, x1) : clip(a, b, y0, y1);
-        if (!c) return;
-        build(dir === 'x' ? [c[0], fixed] : [fixed, c[0]], dir === 'x' ? [c[1], fixed] : [fixed, c[1]]);
-      };
-      const length = (p: [number, number], q: [number, number]): number => Math.hypot((q[0] - p[0]) * W, (q[1] - p[1]) * L);
-      const middle = (p: [number, number], q: [number, number], w: number): Vec3 => at((p[0] + q[0]) / 2, (p[1] + q[1]) / 2, w);
+  for (const { i, j, cut } of cellsOf(skinGrid(s), key)) {
+    const f = bayFrame(s, i, j), W = f.width, L = f.length, back = neg(f.around);
+    // What the tile owns of this bay (gen/detailTree.ts); `end` when it reaches the drum's far end.
+    const { ownsX, ownsY, clipX, clipY } = cut, end = cut.endV;
+    // A point of the bay (x, y in bay units, w out from the drum in m), relative to the tile's origin.
+    const at = (x: number, y: number, w: number): Vec3 => {
+      const u = (x - 0.5) * W, v = (y - 0.5) * L;
+      return [0, 1, 2].map((a) => f.mid[a] + f.around[a] * u + Z[a] * v + f.out[a] * w - origin[a]) as Vec3;
+    };
+    const ux = (m: number): number => m / W, vy = (m: number): number => m / L;
+    // Module coordinates across the bay's module grid, for the glass's `grid` attribute.
+    const px = (1 - 2 * ux(beamW / 2)) / n, py = (1 - 2 * vy(beamW / 2)) / n;
+    const moduleX = (x: number): number => (x - ux(beamW / 2)) / px, moduleY = (y: number): number => (y - vy(beamW / 2)) / py;
+    /** An area of the bay at height w, cut to the tile: the tray, or glass. */
+    const area = (glassy: boolean, xa: number, xb: number, ya: number, yb: number, w: number): void => {
+      const cx = clipX(xa, xb), cy = clipY(ya, yb);
+      if (!cx || !cy) return;
+      const [a, b] = cx, [c, d] = cy;
+      if (!glassy) { parts.quad(at(a, c, w), at(b, c, w), at(b, d, w), at(a, d, w), f.out, COLOR.tray); return; }
+      glass.quad(at(a, c, w), at(b, c, w), at(b, d, w), at(a, d, w), f.out);
+      for (const [x, y] of [[a, c], [b, c], [b, d], [a, d]]) moduleAt.push(i, j, moduleX(x), moduleY(y));
+    };
+    /**
+     * A straight part along the bay's x (`dir` 'x', at y = `fixed`) or its y (at x = `fixed`), from a to b in bay
+     * units, owned where its middle line runs inside the tile and cut to it; `build` gets the two cut ends.
+     */
+    const bar = (dir: 'x' | 'y', fixed: number, a: number, b: number, build: (p: [number, number], q: [number, number]) => void): void => {
+      if (dir === 'x' ? !ownsY(fixed) : !ownsX(fixed)) return;
+      const c = dir === 'x' ? clipX(a, b) : clipY(a, b);
+      if (!c) return;
+      build(dir === 'x' ? [c[0], fixed] : [fixed, c[0]], dir === 'x' ? [c[1], fixed] : [fixed, c[1]]);
+    };
+    const length = (p: [number, number], q: [number, number]): number => Math.hypot((q[0] - p[0]) * W, (q[1] - p[1]) * L);
+    const middle = (p: [number, number], q: [number, number], w: number): Vec3 => at((p[0] + q[0]) / 2, (p[1] + q[1]) / 2, w);
 
-      // Where modules and beams go: clear of a drone track's lane in the seam on either side.
-      const lane = s.trackWidth / 2 + M * PART.gap;
-      const trackLo = isTrack(s, i), trackHi = isTrack(s, (i + 1) % s.nTheta);
-      const xa = trackLo ? ux(lane) : ux(beamW / 2), xb = 1 - (trackHi ? ux(lane) : ux(beamW / 2));
-      const ya = vy(beamW / 2), yb = 1 - vy(beamW / 2);
+    // Where modules and beams go: clear of a drone track's lane in the seam on either side.
+    const lane = s.trackWidth / 2 + M * PART.gap;
+    const trackLo = isTrack(s, i), trackHi = isTrack(s, (i + 1) % s.nTheta);
+    const xa = trackLo ? ux(lane) : ux(beamW / 2), xb = 1 - (trackHi ? ux(lane) : ux(beamW / 2));
+    const ya = vy(beamW / 2), yb = 1 - vy(beamW / 2);
 
-      // The tray under everything.
-      area(false, 0, 1, 0, 1, wTray);
+    // The tray under everything.
+    area(false, 0, 1, 0, 1, wTray);
 
-      if (detail === 0) {
-        area(true, xa, xb, ya, yb, wGlass);
+    if (detail === 0) {
+      area(true, xa, xb, ya, yb, wGlass);
+    } else {
+      const gap = M * PART.gap, fw = M * PART.frame, hw = fw / 2, hh = (wFrame - wTray) / 2;
+      const frameBar = (p: [number, number], q: [number, number], along: Vec3, across: Vec3): void =>
+        parts.block(middle(p, q, wTray + hh), along, across, f.out, [length(p, q) / 2, hw, hh], COLOR.frame, true);
+      for (let a = 0; a < n; a++) {
+        const mx0 = ux(beamW / 2) + a * px + ux(gap / 2), mx1 = mx0 + px - ux(gap);
+        if (mx0 < xa || mx1 > xb) continue;
+        for (let b = 0; b < n; b++) {
+          const my0 = vy(beamW / 2) + b * py + vy(gap / 2), my1 = my0 + py - vy(gap);
+          // The glass inside its frame, and the frame's four bars from the tray to just above the glass.
+          area(true, mx0 + ux(fw), mx1 - ux(fw), my0 + vy(fw), my1 - vy(fw), wGlass);
+          bar('y', mx0 + ux(hw), my0, my1, (p, q) => frameBar(p, q, Z, back));
+          bar('y', mx1 - ux(hw), my0, my1, (p, q) => frameBar(p, q, Z, back));
+          bar('x', my0 + vy(hw), mx0 + ux(fw), mx1 - ux(fw), (p, q) => frameBar(p, q, f.around, Z));
+          bar('x', my1 - vy(hw), mx0 + ux(fw), mx1 - ux(fw), (p, q) => frameBar(p, q, f.around, Z));
+          if (detail < 2) continue;
+          // Clamps over the gap on the module's +x side, near each end, holding it and its neighbour down.
+          const cx = mx1 + ux(gap / 2), cl = M * PART.clamp, ch = M * PART.clampHeight, cw = gap / 2 + M * PART.clampWidth;
+          if (cx + ux(gap) > xb) continue;
+          for (const yy of [my0 + vy(cl), my1 - vy(cl)]) {
+            if (!ownsX(cx) || !ownsY(yy)) continue;
+            parts.block(at(cx, yy, wFrame + ch / 2), Z, back, f.out, [cl / 2, cw, ch / 2], COLOR.clamp, true);
+            if (detail >= 3) parts.prism(at(cx, yy, wFrame + ch), f.around, Z, f.out, M * PART.bolt * 0.6, M * PART.boltHeight * 0.6, 6, COLOR.bolt);
+          }
+        }
+      }
+    }
+
+    // Bolts in two rows along a beam's top; on beams along the axis the cable tray down its middle instead of one row.
+    const beamFittings = (dir: 'x' | 'y', p: [number, number], q: [number, number], along: Vec3): void => {
+      const span = dir === 'y' ? L : W, count = Math.floor(span / (M * PART.boltEvery));
+      const side = v3cross(f.out, along), hb = beamW / 2;
+      const from = dir === 'y' ? p[1] : p[0], to = dir === 'y' ? q[1] : q[0];
+      for (let k = 0; k < count; k++) {
+        const t = (k + 0.5) / count;
+        if (t < from || t >= to) continue;
+        for (const r of [-1, 1]) {
+          const base = dir === 'y' ? at(p[0], t, wBeam) : at(t, p[1], wBeam), c = offset(base, side, r * PART.boltRow * hb);
+          if (detail >= 3) parts.prism(c, along, side, f.out, M * PART.washer, M * PART.washerHeight, 12, COLOR.washer);
+          parts.prism(offset(c, f.out, detail >= 3 ? M * PART.washerHeight : 0), along, side, f.out, M * PART.bolt, M * PART.boltHeight, 6, COLOR.bolt);
+        }
+      }
+      if (dir !== 'y') return;
+      // The cable tray: two low walls on the beam's top, and inside them three cables with their ties (detail 3).
+      const tw = PART.cableTray * hb, wall = M * PART.cableWall, a = at(p[0], p[1], wBeam), len = length(p, q);
+      for (const r of [-1, 1]) parts.block(offset(offset(middle(p, q, wBeam), side, r * tw), f.out, wall / 2), along, side, f.out, [len / 2, M * 0.003, wall / 2], COLOR.cableTray, true);
+      if (detail < 3) return;
+      const rc = M * PART.cable;
+      for (const r of [-1, 0, 1]) parts.prism(offset(offset(a, side, r * rc * 2.2), f.out, rc), side, f.out, along, rc, len, 8, COLOR.cable);
+      const ties = Math.floor(L / (M * PART.cableTieEvery));
+      for (let k = 0; k < ties; k++) {
+        const t = (k + 0.5) / ties;
+        if (t >= p[1] && t < q[1]) parts.block(at(p[0], t, wBeam + rc), along, side, f.out, [M * 0.002, rc * 3.6, rc * 1.15], COLOR.cableTie, true);
+      }
+    };
+    // The beams: along y in the seam at x = 0 (unless a track runs there), along x in the seam at y = 0, and at the
+    // drum's far end also at y = 1. Each from the tray to its top, centred on the seam, stopping at a track's lane.
+    const beam = (dir: 'x' | 'y', fixed: number, a: number, b: number): void => bar(dir, fixed, a, b, (p, q) => {
+      const along: Vec3 = dir === 'y' ? Z : f.around, across: Vec3 = dir === 'y' ? back : Z, hb = beamW / 2, ht = wBeam - wTray;
+      if (detail >= 3) {
+        const ch = Math.min(hb * 0.25, ht * 0.4);
+        const profile: [number, number][] = [[-hb, 0], [hb, 0], [hb, ht - ch], [hb - ch, ht], [-hb + ch, ht], [-hb, ht - ch]];
+        parts.sweep(profile, at(p[0], p[1], wTray), at(q[0], q[1], wTray), v3cross(f.out, along), f.out, COLOR.beam);
       } else {
-        const gap = M * PART.gap, fw = M * PART.frame, hw = fw / 2, hh = (wFrame - wTray) / 2;
-        const frameBar = (p: [number, number], q: [number, number], along: Vec3, across: Vec3): void =>
-          parts.block(middle(p, q, wTray + hh), along, across, f.out, [length(p, q) / 2, hw, hh], COLOR.frame, true);
-        for (let a = 0; a < n; a++) {
-          const mx0 = ux(beamW / 2) + a * px + ux(gap / 2), mx1 = mx0 + px - ux(gap);
-          if (mx0 < xa || mx1 > xb) continue;
-          for (let b = 0; b < n; b++) {
-            const my0 = vy(beamW / 2) + b * py + vy(gap / 2), my1 = my0 + py - vy(gap);
-            // The glass inside its frame, and the frame's four bars from the tray to just above the glass.
-            area(true, mx0 + ux(fw), mx1 - ux(fw), my0 + vy(fw), my1 - vy(fw), wGlass);
-            bar('y', mx0 + ux(hw), my0, my1, (p, q) => frameBar(p, q, Z, back));
-            bar('y', mx1 - ux(hw), my0, my1, (p, q) => frameBar(p, q, Z, back));
-            bar('x', my0 + vy(hw), mx0 + ux(fw), mx1 - ux(fw), (p, q) => frameBar(p, q, f.around, Z));
-            bar('x', my1 - vy(hw), mx0 + ux(fw), mx1 - ux(fw), (p, q) => frameBar(p, q, f.around, Z));
-            if (detail < 2) continue;
-            // Clamps over the gap on the module's +x side, near each end, holding it and its neighbour down.
-            const cx = mx1 + ux(gap / 2), cl = M * PART.clamp, ch = M * PART.clampHeight, cw = gap / 2 + M * PART.clampWidth;
-            if (cx + ux(gap) > xb) continue;
-            for (const yy of [my0 + vy(cl), my1 - vy(cl)]) {
-              if (!ownsX(cx) || !ownsY(yy)) continue;
-              parts.block(at(cx, yy, wFrame + ch / 2), Z, back, f.out, [cl / 2, cw, ch / 2], COLOR.clamp, true);
-              if (detail >= 3) parts.prism(at(cx, yy, wFrame + ch), f.around, Z, f.out, M * PART.bolt * 0.6, M * PART.boltHeight * 0.6, 6, COLOR.bolt);
-            }
-          }
-        }
+        parts.block(middle(p, q, wTray + ht / 2), along, across, f.out, [length(p, q) / 2, hb, ht / 2], COLOR.beam, true);
       }
+      if (detail >= 2) beamFittings(dir, p, q, along);
+    });
+    const bx0 = trackLo ? ux(lane) : 0, bx1 = trackHi ? 1 - ux(lane) : 1;
+    if (!trackLo) beam('y', 0, 0, 1);
+    beam('x', 0, bx0, bx1);
+    if (end) beam('x', 1, bx0, bx1);
 
-      // Bolts in two rows along a beam's top; on beams along the axis the cable tray down its middle instead of one row.
-      const beamFittings = (dir: 'x' | 'y', p: [number, number], q: [number, number], along: Vec3): void => {
-        const span = dir === 'y' ? L : W, count = Math.floor(span / (M * PART.boltEvery));
-        const side = cross(f.out, along), hb = beamW / 2;
-        const from = dir === 'y' ? p[1] : p[0], to = dir === 'y' ? q[1] : q[0];
-        for (let k = 0; k < count; k++) {
-          const t = (k + 0.5) / count;
-          if (t < from || t >= to) continue;
-          for (const r of [-1, 1]) {
-            const base = dir === 'y' ? at(p[0], t, wBeam) : at(t, p[1], wBeam), c = offset(base, side, r * PART.boltRow * hb);
-            if (detail >= 3) parts.prism(c, along, side, f.out, M * PART.washer, M * PART.washerHeight, 12, COLOR.washer);
-            parts.prism(offset(c, f.out, detail >= 3 ? M * PART.washerHeight : 0), along, side, f.out, M * PART.bolt, M * PART.boltHeight, 6, COLOR.bolt);
-          }
+    // Nodes where the beams cross, with a sensor post (detail 2).
+    const node = (y: number): void => {
+      if (trackLo || !ownsX(0) || !ownsY(y)) return;
+      const h = (beamW / 2) * PART.node, top = wBeam + M * PART.nodeHeight;
+      parts.block(at(0, y, (wTray + top) / 2), f.around, Z, f.out, [h, h, (top - wTray) / 2], COLOR.node, true);
+      if (detail >= 2) parts.prism(at(0, y, top), f.around, Z, f.out, M * PART.post, M * PART.postHeight, 8, COLOR.post);
+    };
+    node(0);
+    if (end) node(1);
+
+    // The drone track in the seam at x = 0: a channel, two rails (LOOK.track's), ties across every tieEvery m.
+    if (trackLo) {
+      const tw = s.trackWidth, wc = wTray + M * PART.channel, wr = tw * PART.railHeight, T = LOOK.track;
+      bar('y', 0, 0, 1, (p, q) => {
+        const len = length(p, q) / 2, mid = (p[1] + q[1]) / 2;
+        parts.block(at(0, mid, (wTray + wc) / 2), Z, back, f.out, [len, tw / 2, (wc - wTray) / 2], COLOR.channel, true);
+        for (const r of [-1, 1]) parts.block(at(ux(r * tw * T.railAt), mid, wc + wr / 2), Z, back, f.out, [len, (tw * T.railWidth) / 2, wr / 2], COLOR.rail, true);
+        if (detail < 2) return;
+        const z0 = s.z0 + (j + p[1]) * L, z1 = s.z0 + (j + q[1]) * L, h = tw * PART.tieHeight;
+        for (let z = Math.ceil(z0 / T.tieEvery) * T.tieEvery; z < z1; z += T.tieEvery) {
+          parts.block(at(0, (z - s.z0) / L - j, wc + h / 2), Z, back, f.out, [(tw * PART.tieWidth) / 2, tw * (T.railAt - T.railWidth / 2), h / 2], COLOR.tie, true);
         }
-        if (dir !== 'y') return;
-        // The cable tray: two low walls on the beam's top, and inside them three cables with their ties (detail 3).
-        const tw = PART.cableTray * hb, wall = M * PART.cableWall, a = at(p[0], p[1], wBeam), len = length(p, q);
-        for (const r of [-1, 1]) parts.block(offset(offset(middle(p, q, wBeam), side, r * tw), f.out, wall / 2), along, side, f.out, [len / 2, M * 0.003, wall / 2], COLOR.cableTray, true);
-        if (detail < 3) return;
-        const rc = M * PART.cable;
-        for (const r of [-1, 0, 1]) parts.prism(offset(offset(a, side, r * rc * 2.2), f.out, rc), side, f.out, along, rc, len, 8, COLOR.cable);
-        const ties = Math.floor(L / (M * PART.cableTieEvery));
-        for (let k = 0; k < ties; k++) {
-          const t = (k + 0.5) / ties;
-          if (t >= p[1] && t < q[1]) parts.block(at(p[0], t, wBeam + rc), along, side, f.out, [M * 0.002, rc * 3.6, rc * 1.15], COLOR.cableTie, true);
-        }
-      };
-      // The beams: along y in the seam at x = 0 (unless a track runs there), along x in the seam at y = 0, and at the
-      // drum's far end also at y = 1. Each from the tray to its top, centred on the seam, stopping at a track's lane.
-      const beam = (dir: 'x' | 'y', fixed: number, a: number, b: number): void => bar(dir, fixed, a, b, (p, q) => {
-        const along: Vec3 = dir === 'y' ? Z : f.around, across: Vec3 = dir === 'y' ? back : Z, hb = beamW / 2, ht = wBeam - wTray;
-        if (detail >= 3) {
-          const ch = Math.min(hb * 0.25, ht * 0.4);
-          const profile: [number, number][] = [[-hb, 0], [hb, 0], [hb, ht - ch], [hb - ch, ht], [-hb + ch, ht], [-hb, ht - ch]];
-          parts.sweep(profile, at(p[0], p[1], wTray), at(q[0], q[1], wTray), cross(f.out, along), f.out, COLOR.beam);
-        } else {
-          parts.block(middle(p, q, wTray + ht / 2), along, across, f.out, [length(p, q) / 2, hb, ht / 2], COLOR.beam, true);
-        }
-        if (detail >= 2) beamFittings(dir, p, q, along);
       });
-      const bx0 = trackLo ? ux(lane) : 0, bx1 = trackHi ? 1 - ux(lane) : 1;
-      if (!trackLo) beam('y', 0, 0, 1);
-      beam('x', 0, bx0, bx1);
-      if (end) beam('x', 1, bx0, bx1);
-
-      // Nodes where the beams cross, with a sensor post (detail 2).
-      const node = (y: number): void => {
-        if (trackLo || !ownsX(0) || !ownsY(y)) return;
-        const h = (beamW / 2) * PART.node, top = wBeam + M * PART.nodeHeight;
-        parts.block(at(0, y, (wTray + top) / 2), f.around, Z, f.out, [h, h, (top - wTray) / 2], COLOR.node, true);
-        if (detail >= 2) parts.prism(at(0, y, top), f.around, Z, f.out, M * PART.post, M * PART.postHeight, 8, COLOR.post);
-      };
-      node(0);
-      if (end) node(1);
-
-      // The drone track in the seam at x = 0: a channel, two rails (LOOK.track's), ties across every tieEvery m.
-      if (trackLo) {
-        const tw = s.trackWidth, wc = wTray + M * PART.channel, wr = tw * PART.railHeight, T = LOOK.track;
-        bar('y', 0, 0, 1, (p, q) => {
-          const len = length(p, q) / 2, mid = (p[1] + q[1]) / 2;
-          parts.block(at(0, mid, (wTray + wc) / 2), Z, back, f.out, [len, tw / 2, (wc - wTray) / 2], COLOR.channel, true);
-          for (const r of [-1, 1]) parts.block(at(ux(r * tw * T.railAt), mid, wc + wr / 2), Z, back, f.out, [len, (tw * T.railWidth) / 2, wr / 2], COLOR.rail, true);
-          if (detail < 2) return;
-          const z0 = s.z0 + (j + p[1]) * L, z1 = s.z0 + (j + q[1]) * L, h = tw * PART.tieHeight;
-          for (let z = Math.ceil(z0 / T.tieEvery) * T.tieEvery; z < z1; z += T.tieEvery) {
-            parts.block(at(0, (z - s.z0) / L - j, wc + h / 2), Z, back, f.out, [(tw * PART.tieWidth) / 2, tw * (T.railAt - T.railWidth / 2), h / 2], COLOR.tie, true);
-          }
-        });
-      }
     }
   }
   const g = glass.arrays(), q = parts.arrays();
@@ -317,70 +306,21 @@ export function buildHullTile(s: Skin, key: HullTileKey): HullTile {
   };
 }
 
-function cross(a: Vec3, b: Vec3): Vec3 {
-  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-}
-
 /** Bytes a built tile holds. */
 export function hullTileBytes(t: HullTile): number {
-  return [t.glass.positions, t.glass.normals, t.glass.grid, t.glass.index, t.parts.positions, t.parts.normals, t.parts.colors, t.parts.index].reduce((n, a) => n + a.byteLength, 0);
+  return bytesOf([t.glass.positions, t.glass.normals, t.glass.grid, t.glass.index, t.parts.positions, t.parts.normals, t.parts.colors, t.parts.index]);
 }
 
-/** A tile splits while the eye is nearer than SPLIT × its edge; root tiles are wanted within ROOT_REACH × theirs. */
-export const SPLIT = 1.4;
-export const ROOT_REACH = 2.5;
-
-export interface WantedTile {
-  key: HullTileKey;
-  /** From the eye to the tile's rectangle (m). */
-  distance: number;
-  /** Drawn itself (true), or split into its four children. */
-  leaf: boolean;
+/** The skin's bays as a detail grid: columns around (wrapping), rows along the drum. */
+export function skinGrid(s: Skin): Grid {
+  return { nU: s.nTheta, nV: s.nZ, wrap: true, edgeU: bayEdge(s), edgeV: (s.z1 - s.z0) / s.nZ, root: ROOT_LEVEL, finest: finestLevel(s) };
 }
 
-/**
- * The quadtree around an eye at body-frame point `eye` (m): every tile visited, split where it looks big. The leaves
- * cover the skin near the eye exactly once. Coarsest first, nearest first within a level.
- */
-export function wantedTiles(s: Skin, eye: Vec3): WantedTile[] {
-  const P = bayEdge(s), dz = (s.z1 - s.z0) / s.nZ, finest = finestLevel(s);
-  const h = Math.max(0, Math.hypot(eye[0], eye[1]) - s.radius);
+/** A body-frame eye (m) over the skin's grid. */
+export function skinEye(s: Skin, eye: Vec3): GridEye {
   const turn = Math.atan2(eye[1], eye[0]) / (2 * Math.PI);
-  const fi = (turn - Math.floor(turn)) * s.nTheta, fj = (eye[2] - s.z0) / dz;
-  const out: WantedTile[] = [];
-  const gap = (x: number): number => Math.min(Math.abs(x), s.nTheta - Math.abs(x));
-  const dist = (k: HullTileKey): number => {
-    const i1 = Math.min(k.i + Math.pow(2, k.level), s.nTheta), j1 = Math.min(k.j + Math.pow(2, k.level), s.nZ);
-    const du = fi >= k.i && fi <= i1 ? 0 : Math.min(gap(fi - k.i), gap(fi - i1)) * P;
-    const dv = fj < k.j ? (k.j - fj) * dz : fj > j1 ? (fj - j1) * dz : 0;
-    return Math.hypot(h, du, dv);
-  };
-  const visit = (k: HullTileKey): void => {
-    const d = dist(k), split = k.level > finest && d < SPLIT * Math.pow(2, k.level) * P;
-    out.push({ key: k, distance: d, leaf: !split });
-    if (!split) return;
-    const half = Math.pow(2, k.level - 1);
-    for (const [a, b] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
-      const c = { level: k.level - 1, i: k.i + a * half, j: k.j + b * half };
-      if (c.i < s.nTheta && c.j < s.nZ) visit(c);
-    }
-  };
-  const root = Math.pow(2, ROOT_LEVEL), reach = ROOT_REACH * root * P;
-  if (h > reach) return out;
-  const roots = Math.ceil(s.nTheta / root), span = Math.ceil(ROOT_REACH) + 1;
-  const ri = Math.floor(fi / root), rj = Math.floor(fj / root), seen = new Set<number>();
-  for (let a = -span; a <= span; a++) {
-    const I = (((ri + a) % roots) + roots) % roots;
-    if (seen.has(I)) continue;
-    seen.add(I);
-    for (let b = -span; b <= span; b++) {
-      const J = (rj + b) * root;
-      if (J < 0 || J >= s.nZ) continue;
-      const k = { level: ROOT_LEVEL, i: I * root, j: J };
-      if (dist(k) < reach) visit(k);
-    }
-  }
-  return out.sort((x, y) => y.key.level - x.key.level || x.distance - y.distance);
+  return { u: (turn - Math.floor(turn)) * s.nTheta, v: ((eye[2] - s.z0) / (s.z1 - s.z0)) * s.nZ, h: Math.max(0, Math.hypot(eye[0], eye[1]) - s.radius) };
 }
 
-export const tileId = (k: HullTileKey): string => `${k.level}:${k.i}:${k.j}`;
+/** The skin's tiles around an eye at body-frame point `eye` (m). */
+export const wantedTiles = (s: Skin, eye: Vec3): WantedTile[] => wantedCells(skinGrid(s), skinEye(s, eye));

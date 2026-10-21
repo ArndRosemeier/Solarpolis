@@ -16,6 +16,11 @@ export function meshGeometry(index: Uint32Array, attributes: Record<string, read
   return g;
 }
 
+/** A built shape's arrays (gen/shapes.ts `arrays()`, or a worker's tile) as a geometry: colours when it has them. */
+export function arraysGeometry(a: { positions: Float32Array; normals: Float32Array; colors?: Float32Array | null; index: Uint32Array }): BufferGeometry {
+  return meshGeometry(a.index, { position: [a.positions, 3], normal: [a.normals, 3], color: a.colors ? [a.colors, 3] : undefined });
+}
+
 export type { RGB } from '../gen/shapes';
 
 /**
@@ -24,8 +29,7 @@ export type { RGB } from '../gen/shapes';
  */
 export class ShapeBuilder extends Shape {
   build(): BufferGeometry {
-    const a = this.arrays();
-    return meshGeometry(a.index, { position: [a.positions, 3], normal: [a.normals, 3], color: a.colors ? [a.colors, 3] : undefined });
+    return arraysGeometry(this.arrays());
   }
 }
 

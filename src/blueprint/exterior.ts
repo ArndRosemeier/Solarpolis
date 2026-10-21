@@ -141,7 +141,7 @@ export function makeExterior(x: ExteriorInputs): Exterior {
 
 /**
  * How far a point (blueprint frame) is from the habitat's outside: the nearest of its pieces, negative inside one.
- * Berth arms and other hardware are left out; they are smaller than any approach a camera keeps.
+ * The berth arms and dishes are left out: their own distances are `partDistance` (gen/hullParts.ts).
  */
 export function exteriorDistance(e: Exterior, p: readonly [number, number, number]): number {
   const rho = Math.hypot(p[0], p[1]);
