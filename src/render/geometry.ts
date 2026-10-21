@@ -2,7 +2,7 @@
  * The one way to turn arrays into an indexed mesh geometry. Every kind's meshes are indexed (the index is part of the
  * shader's cache key, @futuremagic/stage), and each attribute is named as its kind lists it (materials.ts).
  */
-import { BufferAttribute, BufferGeometry, Matrix4, type Mesh } from 'three/webgpu';
+import { BufferAttribute, BufferGeometry, Matrix4, type Mesh, type WebGPURenderer } from 'three/webgpu';
 import type { Vec3 } from '@futuremagic/core';
 import type { Mat3 } from '../space';
 import { Shape } from '../gen/shapes';
@@ -90,6 +90,29 @@ export function freeMesh(mesh: Mesh, owned: Owned = 'all'): void {
   }
   if (owned !== 'none') g.dispose();
   mesh.dispose();
+}
+
+/**
+ * Let go of the arrays of a mesh's geometry the GPU already holds its own copy of (the renderer uploads an attribute the
+ * first time it draws or compiles the mesh, and never reads the array again unless the attribute changes). Only for
+ * geometry that never changes and is never read on the CPU: streamed tiles. The counts stay, so drawing is unchanged.
+ * An attribute not uploaded yet (one no shader of the mesh reads) is kept. Returns the bytes let go.
+ *
+ * Whether an attribute is uploaded is read from the renderer's own bookkeeping (`info.memoryMap`, three r186); if that
+ * is not there, nothing is let go.
+ */
+export function dropUploaded(mesh: Mesh, renderer: WebGPURenderer): number {
+  const uploaded = (renderer.info as unknown as { memoryMap?: WeakMap<object, unknown> }).memoryMap;
+  if (!uploaded) return 0;
+  const g = mesh.geometry;
+  let bytes = 0;
+  for (const a of [...Object.values(g.attributes), g.index]) {
+    if (!(a instanceof BufferAttribute) || !uploaded.has(a) || !a.array.length) continue;
+    bytes += a.array.byteLength;
+    const Typed = a.array.constructor as new (n: number) => BufferAttribute['array'];
+    a.array = new Typed(0);
+  }
+  return bytes;
 }
 
 /** The one way to pose a mesh: its matrix from axes (columns: its own axes in the scene) and an origin relative to the eye. */

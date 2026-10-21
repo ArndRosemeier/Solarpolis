@@ -12,7 +12,7 @@ import type { Stage } from '@futuremagic/stage';
 import { smoothstep, v3add, v3len, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
 import { exteriorDistance, type Habitat } from '../blueprint';
 import { columnsOf, makeSkin, skinFlux, type Columns, type Skin } from '../gen/skin';
-import { apply, mul, rotZ, sunlightFrom, transpose, type Mat3, type PlacedHabitat, type SkyView, type Space } from '../space';
+import { apply, mul, rotZ, sunlightFrom, transpose, type Mat3, type PlacedHabitat, type SkyView, type Space, type Visit } from '../space';
 import { HARDWARE, RADIATOR, SKIN, STARS } from './materials';
 import { hideUnder, skinUniforms, type SkinUniforms } from './hullShaders';
 import { hullGeometry } from './hull';
@@ -76,6 +76,8 @@ export interface Hull {
 }
 
 export class NecklaceView {
+  /** The passenger's ship coming in to the home habitat (the title's arrival), drawn with its traffic. */
+  guest: Visit | null = null;
   private drawn: Drawn[];
   private glints: Mesh;
   private glintPos: Float32Array;
@@ -216,7 +218,7 @@ export class NecklaceView {
       this.poseMeshes(d, d.meshes);
       this.followDetail(d);
       this.hideCovered(d, d.meshes);
-      d.traffic?.follow(t, d.spindleAxes, d.origin, this.sunDir, this.sunlight, pixelsPerRadian);
+      d.traffic?.follow(t, d.spindleAxes, d.origin, this.sunDir, this.sunlight, pixelsPerRadian, d === this.drawn[0] ? this.guest : null);
     }
   }
 

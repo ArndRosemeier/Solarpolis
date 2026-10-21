@@ -119,9 +119,9 @@ export const SHIP_DESIGN = {
 /** Standard gravity (m/s²): a torch thrusts at about 1 g. */
 const G0 = 9.80665;
 
-/** A ship that fits a berth arm `berth` m long, from a seed. */
-export function deriveShip(seed: number, berth: number): ShipParams {
-  const rng = new Rng(seed), torch = rng.chance(SHIP_DESIGN.torchShare);
+/** A ship that fits a berth arm `berth` m long, from a seed; of the given drive, or either by `torchShare`. */
+export function deriveShip(seed: number, berth: number, drive?: Drive): ShipParams {
+  const rng = new Rng(seed), share = rng.chance(SHIP_DESIGN.torchShare), torch = drive ? drive === 'torch' : share;
   const d = torch ? SHIP_DESIGN.torch : SHIP_DESIGN.sail;
   const length = berth * rng.range(d.length[0], d.length[1]), beam = length * rng.range(d.beam[0], d.beam[1]);
   const rcs = rng.range(d.rcs[0], d.rcs[1]);

@@ -1,5 +1,5 @@
 /**
- * Giving a mesh up for good (`freeMesh`, render/geometry.ts). three's WebGPU renderer keeps a render object for every
+ * Giving a mesh up for good (`freeMesh`, render/geometry.ts), and its CPU copies once the GPU has them (`dropUploaded`). three's WebGPU renderer keeps a render object for every
  * mesh it has drawn or compiled until the mesh itself is disposed; disposing only the geometry leaked every streamed
  * tile and cell (Arnd, 2026-10-21: 0.4 GB to 5 GB in two minutes near the endcap). The renderer's own RenderObjects is
  * used here with stub parts, so a three upgrade that changes this shows up.
@@ -9,7 +9,8 @@ import assert from 'node:assert/strict';
 import { BufferAttribute, BufferGeometry, Mesh, MeshBasicNodeMaterial, PerspectiveCamera, Scene } from 'three/webgpu';
 // @ts-expect-error: three's internal module has no types
 import RenderObjects from 'three/src/renderers/common/RenderObjects.js';
-import { freeMesh } from '../src/render/geometry';
+import { dropUploaded, freeMesh } from '../src/render/geometry';
+import type { WebGPURenderer } from 'three/webgpu';
 
 /** The renderer's book of render objects, with stubs for the parts a render object only touches when drawn. */
 function book(): { held: () => number; see: (m: Mesh) => void } {
@@ -68,4 +69,17 @@ test('freeMesh: out of its parent, and only its own geometry freed', () => {
   assert.deepEqual(Object.keys(part.attributes), ['plant']);
   assert.equal(part.index, null);
   assert.ok(position && index);
+});
+
+test('dropUploaded: only arrays the renderer has uploaded go, and the counts stay', () => {
+  const g = geometry(), m = new Mesh(g, new MeshBasicNodeMaterial());
+  const position = g.getAttribute('position') as BufferAttribute, plant = g.getAttribute('plant') as BufferAttribute;
+  const memoryMap = new WeakMap<object, unknown>([[position, {}], [g.index!, {}]]);
+  assert.equal(dropUploaded(m, { info: {} } as unknown as WebGPURenderer), 0, 'without the bookkeeping nothing goes');
+  assert.equal(dropUploaded(m, { info: { memoryMap } } as unknown as WebGPURenderer), 36 + 12);
+  assert.equal(position.array.length, 0);
+  assert.ok(position.array instanceof Float32Array && g.index!.array instanceof Uint32Array);
+  assert.equal(position.count, 3);
+  assert.equal(g.index!.count, 3);
+  assert.equal(plant.array.length, 4, 'not uploaded: kept');
 });
