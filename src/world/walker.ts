@@ -67,14 +67,30 @@ export class Walker {
     this.at.theta = wrapAngle(this.at.theta - dSide / r);
   }
 
-  view(): View {
+  /** Stand at (θ, s) facing the way `look` points along the ground (after flying: landing under the flyer). */
+  land(theta: number, s: number, look: Vec3): void {
+    this.at = { theta: wrapAngle(theta), s: Math.min(this.profile.length, Math.max(0, s)), h: EYE_HEIGHT };
+    const { along, side } = this.frame();
+    const a = look[0] * along[0] + look[1] * along[1] + look[2] * along[2];
+    const b = look[0] * side[0] + look[1] * side[1] + look[2] * side[2];
+    if (Math.hypot(a, b) > 1e-6) this.heading = Math.atan2(b, a);
+    this.pitch = 0;
+  }
+
+  /** The ground's directions here: along the profile (+s), to the right of it, and up (the normal). */
+  private frame(): { along: Vec3; side: Vec3; up: Vec3 } {
     const { theta, s } = this.at;
     const p = this.profile.at(s);
-    const up = groundNormal(this.profile, theta, s);
     // Along the profile (+s): the curve's tangent (dz, dr) = (-nr, nz), in world axes. On the floor that is +z.
     const along: Vec3 = [p.nz * Math.cos(theta), p.nz * Math.sin(theta), -p.nr];
     // To the right when facing along +s with the ground's normal up: along × up, which is -θ.
-    const side: Vec3 = [-Math.sin(theta), Math.cos(theta), 0].map((v) => -v) as Vec3;
+    const side: Vec3 = [Math.sin(theta), -Math.cos(theta), 0];
+    return { along, side, up: groundNormal(this.profile, theta, s) };
+  }
+
+  view(): View {
+    const { theta, s } = this.at;
+    const { along, side, up } = this.frame();
     const ch = Math.cos(this.heading), sh = Math.sin(this.heading), cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
     const look: Vec3 = [0, 1, 2].map((i) => cp * (ch * along[i] + sh * side[i]) + sp * up[i]) as Vec3;
     return { eye: toWorld(this.profile, { theta, s, h: this.ground(theta, s) + this.at.h }), look, up };

@@ -27,6 +27,7 @@ Each row is a question you will have while coding, and the one place that answer
 
 | Question | The one way |
 |---|---|
+| How does the camera fly? | `Flyer` (`flyer.ts`): world eye, look and up; up swings toward the axis (rolls over when crossing it), speed grows with height, never below the ground. `walker.land(θ, s, look)` sets down under it. |
 | How much light from the sunline reaches a point? | `irradiance(h, emission, p, n, towardPort, towardWild)` (`sunline.ts`), the reference of the shaders' sum; `sunlineEmission(h)` is the brightness along the axis (the day cycle will shape it), `sunlineNorm(h)` makes the mid floor 1. |
 | Where is the player, which way is up, where do they look? | `Walker` (`walker.ts`): position in (θ, s, h), heading and pitch → `view()` eye, look, up (up is the ground's normal). `startOf(profile)` is where a walk begins; the eye stands on a ground function (`terrain.standAt`). |
 
@@ -41,7 +42,7 @@ Each row is a question you will have while coding, and the one place that answer
 | How does distance look? | `air` uniforms in `materials.ts` (haze colour, extinction from `HAZE_DIAMETER`); every kind sees through the air. |
 | Where does the camera sit, given the huge distances? | At the origin: meshes are placed at `frame.toView(eye, origin)` (float64), and shaders get the world eye from `view.eye` (`materials.ts`). |
 | How does the terrain reach the screen? | `TerrainView` (`render/terrain.ts`): `follow(eye, pixelsPerRadian)` each frame selects tiles, asks the worker pool for missing ones, caches and evicts; sets each tile's `userData.morphFar` so GROUND geomorphs it into its parent's shape before they swap. |
-| What is drawn inside? | `InteriorView` (`view.ts`): terrain tiles, sunline, walker camera. |
+| What is drawn inside? | `InteriorView` (`view.ts`): terrain tiles, sunline, the walker's or the flyer's camera (`toggleFlying`, key F). |
 
 ## Workers (`src/workers`)
 
