@@ -175,10 +175,11 @@ function seats(sh: Shape, q: PavilionPlan, level: PavilionLevel, steps: (a0: num
       const from = gaps[g], to = gaps[(g + 1) % gaps.length];
       const a0 = from.a + from.w / 2 / rm, a1 = (to.a <= from.a ? to.a + 2 * Math.PI : to.a) - to.w / 2 / rm;
       const k = steps(a0, a1, rm);
+      // Timber tiers (the far level's cone is timber too), each row's riser down to the deck; stone where they end.
       sh.finish = FINISH.timber;
       sh.arc(z1, r1, z1, r0, 1, 0, a0, a1, k, SEAT);
+      sh.arc(z1, r0, q.deck, r0, 0, -1, a0, a1, k, TIMBER);
       sh.finish = FINISH.stone;
-      sh.arc(z1, r0, q.deck, r0, 0, -1, a0, a1, k, STONE);
       // The row's ends: walls down to the deck (the passage's sides, or the stair's).
       end(sh, a0, -1, [r0, q.deck], [r1, q.deck], [r1, z1], [r0, z1]);
       end(sh, a1, 1, [r0, q.deck], [r1, q.deck], [r1, z1], [r0, z1]);
