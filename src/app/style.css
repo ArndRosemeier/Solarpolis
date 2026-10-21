@@ -90,8 +90,8 @@ button { font: inherit; color: inherit; }
 /* ---- inside ---- */
 .inside { position: fixed; left: 0; right: 0; bottom: 0; top: var(--top, 53px); overflow: hidden; }
 .inside[hidden], .lab[hidden] { display: none; }
-.view-canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
-.view-canvas:active { cursor: grabbing; }
+.view-canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.view-canvas.looking { cursor: move; }
 .inside-note { position: absolute; left: 16px; right: 16px; top: 12px; margin: 0; }
 .inside-note:empty { display: none; }
 .inside-hint { position: absolute; left: 16px; bottom: 12px; margin: 0; color: #fffc; text-shadow: 0 1px 2px #000a; font-size: 12.5px; pointer-events: none; }

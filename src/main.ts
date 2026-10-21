@@ -46,7 +46,7 @@ app.append(lab.root);
 
 const inside = el('div', 'inside');
 const note = el('p', 'inside-note');
-const hint = el('p', 'inside-hint', 'Drag to look around · W A S D to walk · Shift to run');
+const hint = el('p', 'inside-hint', 'Hold the right mouse button to look around · W A S D to walk · Shift to run');
 inside.append(note, hint);
 inside.hidden = true;
 app.append(inside);

@@ -14,9 +14,10 @@ Solarpolis is a detailed 3D simulation set about 1000 years from now, starting i
 10. **CI has a hard 2-minute cap** ([docs/CI.md](docs/CI.md)). Each test, file and the whole suite has a budget in `tools/ci/budget.json`. A slow test is made faster or moved to `test/slow/` (`npm run test:slow`); the cap is never raised without Arnd.
 11. **Each PR adds a change note** `changes/<slug>.md` (see [changes/README.md](changes/README.md)). Never edit `CHANGELOG.md`; a workflow folds the notes after the merge into the next version (v0.001, +0.001 per merge), which the What's new button shows.
 12. **Memory is watched from the start.** Anything holding big buffers reports them with `memory.track(owner, bytes)` and gives memory back through `memory.onPressure(level, shed)` (`src/app/memory.ts`). iPads are a target, and Safari kills a tab long before the device runs out of RAM.
-13. **Developer tools go in the one debug menu** (Shift+Ctrl+F12, `debug.add` / `debug.addInfo`, made in `src/main.ts`). No thread adds its own debug key or overlay.
-14. **Merge your own PRs.** Arnd does not do Git: the thread that opens a PR squash-merges it as soon as CI is green and review findings are handled. When main has moved, bring it in first and let CI run again.
-15. **Porting from Dunfinity, SimWorld or Scale:** take the code with its tests, adapt the names, and note the source file in the header comment.
+13. **The mouse pointer is always visible and free** (Arnd, 2026-10-21): no pointer lock. The left button clicks things in the world; holding the right button looks around (one-finger drag on touch screens).
+14. **Developer tools go in the one debug menu** (Shift+Ctrl+F12, `debug.add` / `debug.addInfo`, made in `src/main.ts`). No thread adds its own debug key or overlay.
+15. **Merge your own PRs.** Arnd does not do Git: the thread that opens a PR squash-merges it as soon as CI is green and review findings are handled. When main has moved, bring it in first and let CI run again.
+16. **Porting from Dunfinity, SimWorld or Scale:** take the code with its tests, adapt the names, and note the source file in the header comment.
 
 Shared packages come from the AssetGenerator submodule (`vendor/assetgenerator/packages`: `@futuremagic/core`). Clone with `--recurse-submodules`, or run `git submodule update --init`. Humanoid robot bodies and people will come from Arnd's Actors package.
 
