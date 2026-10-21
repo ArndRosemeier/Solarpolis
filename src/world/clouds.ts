@@ -22,13 +22,21 @@ export interface CloudSpan {
   fade: number;
 }
 
-/** The layer at one hour. */
-export interface CloudState {
-  /** The share of the sky covered (0 … 1). */
-  cover: number;
-  /** How far the wind has carried the clouds along the axis (m) and around it (rad). */
+/** How far something drifting with the air has been carried: along the axis (m) and around it (rad, 0 … 2π). */
+export interface Drift {
   along: number;
   turn: number;
+}
+
+/** The layer at one hour. */
+export interface CloudState extends Drift {
+  /** The share of the sky covered (0 … 1). */
+  cover: number;
+  /**
+   * How far the clouds' finer shapes have drifted: a little faster than the clouds themselves and a little across, so
+   * their heaps and edges slide through the big shapes and every cloud changes as it goes.
+   */
+  fine: Drift;
 }
 
 /** How many days the weather takes to change, about. */
@@ -40,6 +48,12 @@ const AFTERNOON = 0.15;
 const AFTERNOON_PEAK = 0.65;
 /** How far the clouds keep from the endcap slopes, as a share of their height above the floor. */
 const CLEARANCE = 0.25;
+/**
+ * How the clouds' finer shapes move against the big ones: faster with the wind by this share (the wind picks up with
+ * height, and the tops are higher), and across it at this speed (m/s), so clouds change even in still air.
+ */
+const SHEAR = 0.4;
+const CHURN = 1.2;
 
 /** The layer's place in a habitat, or null if it has none. */
 export function cloudSpan(h: Habitat): CloudSpan | null {
@@ -70,9 +84,14 @@ export function cloudsAt(h: Habitat, t: number): CloudState | null {
   const phase = dayPhase(h, t), u = phase / day.daylight;
   const afternoon = u < 1 ? Math.exp(-(((u - AFTERNOON_PEAK) / 0.22) ** 2)) : 0;
   const cover = Math.min(1, Math.max(0, c.cover * (1 + WEATHER_SWING * weather) + AFTERNOON * afternoon * Math.min(1, c.cover * 4)));
-  const middle = h.radius - c.base - c.thickness / 2;
-  const turn = (c.wind.around * t) / middle;
-  return { cover, along: c.wind.along * t, turn: turn - 2 * Math.PI * Math.floor(turn / (2 * Math.PI)) };
+  const middle = h.radius - c.base - c.thickness / 2, { along, around } = c.wind;
+  // Across the wind: square to it, or around the axis in still air.
+  const speed = Math.hypot(along, around), across = speed > 1e-9 ? [-around / speed, along / speed] : [0, 1];
+  const carried = (a: number, b: number): Drift => {
+    const turn = (b * t) / middle;
+    return { along: a * t, turn: turn - 2 * Math.PI * Math.floor(turn / (2 * Math.PI)) };
+  };
+  return { cover, ...carried(along, around), fine: carried(along * (1 + SHEAR) + across[0] * CHURN, around * (1 + SHEAR) + across[1] * CHURN) };
 }
 
 /**
