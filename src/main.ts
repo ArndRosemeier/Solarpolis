@@ -15,6 +15,7 @@ import { BlueprintLab } from './lab/blueprintLab';
 import { GraphicsUnavailable } from '@futuremagic/stage';
 import { InteriorView } from './render/view';
 import { OutsideView } from './render/outside';
+import { hubView } from './space';
 import { fromWorld, toWorld, type DebrisSpec, type Habitat } from './blueprint';
 import { nearestOf, plantsOf } from './gen/scatter';
 
@@ -99,21 +100,42 @@ const insideSlot = new ViewSlot('Hold the right mouse button to look around · W
   return v;
 });
 const outsideSlot = new ViewSlot('Hold the right mouse button to swing around · wheel to come closer · 1 habitat, 2 Earth, 3 Moon, 4 nearest neighbour · F to fly (W A S D, E up, Q down, Shift faster)', 'Building the sky…', 'sky maps, stars and skin detail', (h) => OutsideView.create(h));
+/** A black curtain over the views for the short fade from the crossing into the Hub (Arnd, 2026-10-21). */
+const curtain = el('div', 'curtain');
+app.append(curtain);
 // The views fill the window below the header, whatever height the header wraps to.
-const fit = (): void => { for (const s of [insideSlot, outsideSlot]) s.box.style.setProperty('--top', `${header.getBoundingClientRect().bottom}px`); };
+const fit = (): void => { for (const box of [insideSlot.box, outsideSlot.box, curtain]) box.style.setProperty('--top', `${header.getBoundingClientRect().bottom}px`); };
 new ResizeObserver(fit).observe(header);
 let starting: Promise<void> | null = null;
 
 // The title: the Outside view flying its attract loop, with the card over it. It is where the page opens.
 const title = new TitleCard(() => void startArrival(), () => showTab('inside'));
-/** Start: the passenger's ship comes in to its berth, then in we go (the crossing into the Hub comes next, O6). */
+const FADE_MS = 500;
+function drawCurtain(closed: boolean): Promise<void> {
+  curtain.classList.toggle('closed', closed);
+  return new Promise((done) => setTimeout(done, FADE_MS));
+}
+/**
+ * Start: the passenger's ship comes in to its berth and they float through the bore (OutsideView.arrive), then a
+ * short fade and they float on at the Hub in the Inside view, looking down the sunline, in control. The interior
+ * builds behind it while the ship comes in.
+ */
 async function startArrival(): Promise<void> {
   const v = outsideSlot.view;
   if (!v?.attracting) { showTab('inside'); return; }
   title.arriving();
   v.onTitle = null;
+  starting = (starting ?? Promise.resolve()).then(() => insideSlot.show());
   await v.arrive();
-  if (tab === 'title') showTab('inside');
+  if (tab !== 'title') return;
+  await drawCurtain(true);
+  if (tab === 'title') {
+    showTab('inside');
+    await starting;
+    const h = lab.habitat, inside = insideSlot.view;
+    if (h && inside) { const hub = hubView(h); inside.floatAt(hub.eye, hub.look); }
+  }
+  await drawCurtain(false);
 }
 outsideSlot.box.append(title.root);
 
@@ -215,14 +237,43 @@ go('The foot of the port endcap', (h) => h.profile.floorEnd - 20);
 // Where the sunline meets the endcaps: the axis at the wild end, the dock hub at the port end.
 go('Near the wild endcap\'s tip', (h) => h.profile.floorStart * 0.05);
 go('Near the port endcap\'s hub', (h) => h.profile.length - (h.profile.length - h.profile.floorEnd) * 0.05);
+/**
+ * Viewpoints high over the land, for judging how the interior reads from afar (docs/far-view.md): the eye `up` shares of
+ * the radius over the floor's middle, looking at a ground point `around` radians further round and `along` radii further
+ * along the axis. Every distance is a share of the habitat's own size.
+ */
+const viewpoint = (label: string, up: number, around: number, along: number, s0 = 0.5): void => debug.add({
+  label, group: 'Go', run: () => {
+    const h = lab.habitat, v = view();
+    if (!v || !h) return;
+    const { profile } = h, theta = v.walker.at.theta;
+    const s = profile.floorStart + (profile.floorEnd - profile.floorStart) * s0;
+    const to = Math.min(profile.length, Math.max(0, s + along * h.radius));
+    const eye = toWorld(profile, { theta, s, h: up * h.radius }), at = toWorld(profile, { theta: theta + around, s: to, h: 0 });
+    const d = Math.hypot(at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]);
+    v.floatAt(eye, [(at[0] - eye[0]) / d, (at[1] - eye[1]) / d, (at[2] - eye[2]) / d]);
+  },
+});
+viewpoint('Fly: low over the floor, looking along it', 0.05, 0, 2.5);
+viewpoint('Fly: a quarter of the way up, looking across the curve', 0.25, Math.PI / 2, 0.4);
+viewpoint('Fly: halfway up, looking at the far side', 0.5, Math.PI, 0.6);
+viewpoint('Fly: high up, looking down', 0.6, 0.05, 0.25);
+viewpoint('Fly: near the axis at the wild end, looking along the tube', 0.9, 0.02, 3, 0);
 debug.add({ label: 'Travel 10× faster (toggle)', group: 'Go', run: () => { const v = view(); if (v) v.boost = v.boost === 1 ? 10 : 1; } });
 debug.addInfo(() => view()?.clockLine() ?? '');
 /** The next of a cycle of clock speeds. */
-const nextSpeed = (speeds: number[], now: number): number => speeds[(speeds.indexOf(now) + 1) % speeds.length];
-debug.add({ label: 'Clock speed: real time → ×60 → ×600 → paused', group: 'Time', run: () => { const v = view(); if (v) v.timeScale = nextSpeed([1, 60, 600, 0], v.timeScale); } });
+const nextOf = <T>(choices: T[], now: T): T => choices[(choices.indexOf(now) + 1) % choices.length];
+debug.add({ label: 'Clock speed: real time → ×60 → ×600 → paused', group: 'Time', run: () => { const v = view(); if (v) v.timeScale = nextOf([1, 60, 600, 0], v.timeScale); } });
 debug.add({ label: 'Two hours later', group: 'Time', run: () => view()?.skip(7200) });
+debug.add({ label: 'Clouds: schedule → few → half → overcast → none', group: 'Time', run: () => { const v = view(); if (v) v.cloudCover = nextOf<number | null>([null, 0.15, 0.5, 0.85, 0], v.cloudCover); } });
+const toClouds = (label: string, share: number): void => debug.add({
+  label, group: 'Go',
+  run: () => { const v = view(), c = lab.habitat?.params.clouds; if (v && c) v.flyUp(c.base + c.thickness * share); },
+});
+toClouds('Fly up under the clouds', -0.3);
+toClouds('Fly up into the clouds', 0.5);
 debug.addInfo(() => outsideView()?.info() ?? 'outside: not started');
-debug.add({ label: 'Clock speed outside: real time → ×60 → ×3600 → paused', group: 'Outside', run: () => { const v = outsideView(); if (v) v.timeScale = nextSpeed([1, 60, 3600, 0], v.timeScale); } });
+debug.add({ label: 'Clock speed outside: real time → ×60 → ×3600 → paused', group: 'Outside', run: () => { const v = outsideView(); if (v) v.timeScale = nextOf([1, 60, 3600, 0], v.timeScale); } });
 debug.add({ label: 'Six hours later', group: 'Outside', run: () => outsideView()?.skip(6 * 3600) });
 debug.add({ label: "Jump to Earth's next shadow on the habitat", group: 'Outside', run: () => { const v = outsideView(); if (v && !v.nextShadow()) console.log('no shadow within a year'); } });
 debug.add({ label: 'Heroic stars (toggle): off shows them as true eyes would', group: 'Outside', run: () => { const v = outsideView(); if (v) v.heroicStars = !v.heroicStars; } });

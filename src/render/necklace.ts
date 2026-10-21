@@ -16,7 +16,7 @@ import { apply, mul, rotZ, sunlightFrom, transpose, type Mat3, type PlacedHabita
 import { HARDWARE, RADIATOR, SKIN, STARS } from './materials';
 import { hideUnder, skinUniforms, type SkinUniforms } from './hullShaders';
 import { hullGeometry } from './hull';
-import { arraysGeometry, freeMesh, pointsChanged, pointsGeometry, setPoint, setPose } from './geometry';
+import { arraysGeometry, dropUploaded, freeMesh, pointsChanged, pointsGeometry, setPoint, setPose } from './geometry';
 import { HullDetailView, type Frames } from './hullDetail';
 import { sharedPool } from '../workers/pool';
 import { DISH, detailParts, partDistance, wholeTile, type DetailPart, type PartFrame } from '../gen/hullParts';
@@ -24,6 +24,7 @@ import { NO_MASK, coverMask, reachOf } from '../gen/detailTree';
 import { skinEye, skinGrid } from '../gen/hullDetail';
 import { DRONES_WITHIN, DroneMesh } from './drones';
 import { TrafficView } from './traffic';
+import { BoreMeshes } from './bore';
 
 /**
  * The free camera holds station with a drum within HOLD_NEAR outer radii of it, and lets go beyond HOLD_FAR; and lets
@@ -51,7 +52,7 @@ interface Drawn {
   uniforms: SkinUniforms;
   /** Size across, for the switch to meshes (m). */
   span: number;
-  meshes: { skin: Mesh; radiators: Mesh; mast: Mesh; spindle: Mesh; drones: DroneMesh; pieces: { id: string; frame: PartFrame; origin: Vec3; mesh: Mesh }[] } | null;
+  meshes: { skin: Mesh; radiators: Mesh; mast: Mesh; spindle: Mesh; drones: DroneMesh; pieces: { id: string; frame: PartFrame; origin: Vec3; mesh: Mesh }[]; bore: BoreMeshes | null } | null;
   building: boolean;
   /** The detailed parts (gen/hullParts.ts), and their tiles while the eye is near any of them. */
   parts: DetailPart[];
@@ -136,10 +137,14 @@ export class NecklaceView {
       const q = a.partTile.parts, p = whole[k];
       return [{ id: p.id, frame: p.frame, origin: a.partTile.origin, mesh: mesh(arraysGeometry(q), HARDWARE, p.id) }];
     });
-    const meshes = { skin: mesh(g.skin, SKIN, 'skin'), radiators: mesh(g.radiators, RADIATOR, 'radiators'), mast: mesh(g.mast, HARDWARE, 'mast'), spindle: mesh(g.spindle, HARDWARE, 'spindle'), drones, pieces };
+    // The bore people cross by, only in the home habitat (the passenger's).
+    const bore = d === this.drawn[0] ? new BoreMeshes(d.habitat, d.placed.id) : null;
+    const meshes = { skin: mesh(g.skin, SKIN, 'skin'), radiators: mesh(g.radiators, RADIATOR, 'radiators'), mast: mesh(g.mast, HARDWARE, 'mast'), spindle: mesh(g.spindle, HARDWARE, 'spindle'), drones, pieces, bore };
     this.poseMeshes(d, meshes);
     const traffic = new TrafficView(this.stage, this.space, d.placed, this.far);
-    await Promise.all([traffic.start(), ...[meshes.skin, meshes.radiators, meshes.mast, meshes.spindle, drones.mesh, drones.points, ...pieces.map((x) => x.mesh)].map((m) => this.stage.add(m))]);
+    await Promise.all([traffic.start(), ...[meshes.skin, meshes.radiators, meshes.mast, meshes.spindle, drones.mesh, drones.points, ...pieces.map((x) => x.mesh), ...(bore?.all ?? [])].map((m) => this.stage.add(m))]);
+    // The bore's arrays are on the GPU now; nothing reads them back (it is never culled), so the CPU's copies go.
+    for (const m of bore?.all ?? []) dropUploaded(m, this.stage.renderer);
     d.building = false;
     d.meshes = meshes;
     d.traffic = traffic;
@@ -152,7 +157,7 @@ export class NecklaceView {
     d.traffic = null;
     if (!d.meshes) return;
     const m = d.meshes;
-    for (const x of [m.skin, m.radiators, m.mast, m.spindle, m.drones.mesh, m.drones.points, ...m.pieces.map((p) => p.mesh)]) { this.stage.remove(x); freeMesh(x); }
+    for (const x of [m.skin, m.radiators, m.mast, m.spindle, m.drones.mesh, m.drones.points, ...m.pieces.map((p) => p.mesh), ...(m.bore?.all ?? [])]) { this.stage.remove(x); freeMesh(x); }
     d.meshes = null;
   }
 
@@ -160,6 +165,7 @@ export class NecklaceView {
     for (const k of ['skin', 'radiators', 'mast'] as const) setPose(m[k], d.axes, d.origin);
     d.spindleAxes = mul(d.axes, rotZ(-d.placed.spinAt(this.time)));
     setPose(m.spindle, d.spindleAxes, d.origin);
+    m.bore?.poseIn(d.axes, d.spindleAxes, d.origin);
     for (const p of m.pieces) {
       const axes = p.frame === 'body' ? d.axes : d.spindleAxes;
       setPose(p.mesh, axes, v3add(d.origin, apply(axes, p.origin)));
@@ -258,6 +264,13 @@ export class NecklaceView {
   /** Give memory back: detail tiles not drawn this frame go. */
   shed(): void {
     for (const d of this.drawn) d.detail?.shed();
+  }
+
+  /** Whether the eye is inside the home habitat's bore (the crossing into the Hub). */
+  insideBore(): boolean {
+    const d = this.drawn[0], b = d.habitat.exterior.spindle.bore;
+    const eye = apply(transpose(d.axes), v3scale(d.origin, -1));
+    return Math.hypot(eye[0], eye[1]) < b.radius && eye[2] > b.from && eye[2] < b.to;
   }
 
   /** The ships at the drawn habitats, for the debug menu. */

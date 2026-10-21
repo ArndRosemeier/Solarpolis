@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { MATRIX, derive, toWorld } from '../src/blueprint';
 import { makeTerrain } from '../src/gen/terrain';
 import { makeEcology } from '../src/gen/ecology';
-import { makeLayout, roots, bounds, buildTile, select, children, parent, keyId, cellSize, splitsAround, splitAround, TILE_CELLS, type TileKey, type TileFit, type TileLayout, type TileMesh } from '../src/gen/tiles';
+import { makeLayout, roots, bounds, buildTile, select, children, parent, keyId, cellSize, spheres, splitsAround, splitAround, packRelief, unpackRelief, CELL_PIXELS, RISE_RANGE, TILE_CELLS, type TileKey, type TileFit, type TileLayout, type TileMesh } from '../src/gen/tiles';
 
 const PX_PER_RAD = 1440 / (70 * Math.PI / 180);
 
@@ -17,7 +17,7 @@ function morphLands(layout: TileLayout, parentTile: TileMesh, kid: TileMesh): vo
       const u = around ? (k.i & 1) * TILE_CELLS + i : 2 * i, v = (k.j & 1) * TILE_CELLS + j;
       const pi = u >> 1, pj = v >> 1;
       for (let c = 0; c < 3; c++) {
-        const morphed = kid.origin[c] + kid.positions[(j * row + i) * 3 + c] + kid.morph[(j * row + i) * 3 + c];
+        const morphed = kid.origin[c] + kid.positions[(j * row + i) * 3 + c] + kid.morph[(j * row + i) * 4 + c];
         const want = u & 1 && v & 1 ? (at(pi + 1, pj, c) + at(pi, pj + 1, c)) / 2
           : u & 1 ? (at(pi, pj, c) + at(pi + 1, pj, c)) / 2
           : v & 1 ? (at(pi, pj, c) + at(pi, pj + 1, c)) / 2 : at(pi, pj, c);
@@ -176,4 +176,27 @@ test('tiles: nothing built yet means the roots are wanted first; a tile builds w
   for (let i = 0; i < 5; i++) buildTile(eco, layout, { band: 3, column: i, level: 2, i: 1, j: 1 });
   const ms = (performance.now() - t0) / 5;
   assert.ok(ms < 40, `${ms.toFixed(1)} ms per tile`);
+});
+
+test('tiles: from high up a flat floor still splits until its cells are a few pixels (the far view)', () => {
+  for (const { name, params } of MATRIX) {
+    const h = derive(params), t = makeTerrain(h), layout = makeLayout(t), sphereOf = spheres(t, layout);
+    const s = (h.profile.floorStart + h.profile.floorEnd) / 2;
+    const eye = toWorld(h.profile, { theta: 0, s, h: h.radius * 0.5 });
+    // Every tile built and perfectly flat: only the cells' size on screen can split them.
+    const sel = select(t, layout, eye, PX_PER_RAD, 2, () => ({ error: 0, relief: 0 }), sphereOf);
+    assert.ok(sel.draw.length > roots(layout).length, `${name}: ${sel.draw.length} tiles, only the roots`);
+    for (const k of sel.draw) {
+      const sp = sphereOf(k), d = Math.max(1, Math.hypot(eye[0] - sp.center[0], eye[1] - sp.center[1], eye[2] - sp.center[2]) - sp.radius);
+      assert.ok(k.level === layout.maxLevel || (cellSize(layout, k) / d) * PX_PER_RAD <= CELL_PIXELS + 1e-9, `${name}: tile ${k.level} has cells over ${CELL_PIXELS} px`);
+    }
+  }
+});
+
+test('tiles: a point\'s rise over the ground around it packs into one float and back', () => {
+  for (const [own, parent] of [[0, 0], [0.2, -0.1], [-0.5, 0.5], [3, -3]]) {
+    const [a, b] = unpackRelief(packRelief(own, parent));
+    assert.ok(Math.abs(a - Math.max(-RISE_RANGE, Math.min(RISE_RANGE, own))) < RISE_RANGE / 120, `${own} → ${a}`);
+    assert.ok(Math.abs(b - Math.max(-RISE_RANGE, Math.min(RISE_RANGE, parent))) < RISE_RANGE / 120, `${parent} → ${b}`);
+  }
 });

@@ -111,3 +111,7 @@ button { font: inherit; color: inherit; }
 .title-hint { margin: 0; color: #fff9; font-size: 12px; text-shadow: 0 1px 4px #000c; }
 .inside.titled .inside-hint { display: none; }
 .top h1 { cursor: pointer; }
+
+/* The fade from the crossing into the Hub (main.ts, drawCurtain). */
+.curtain { position: fixed; left: 0; right: 0; bottom: 0; top: var(--top, 53px); background: #000; opacity: 0; pointer-events: none; transition: opacity 0.5s; z-index: 20; }
+.curtain.closed { opacity: 1; }

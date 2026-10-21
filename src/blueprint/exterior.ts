@@ -37,15 +37,25 @@ export interface Exterior {
   brimStress: number;
   /**
    * The despun spindle: from the port face out along the axis. Its berth arms reach out from it at `arms.z`, each
-   * `arms.length` long and `arms.width` square, where ships tie up.
+   * `arms.length` long and `arms.width` square, where ships tie up. Its bore runs on the axis from the arms (`to`)
+   * to the bearing at the port face, where the spin begins, and on through the endcap's layers to the Hub (`from`,
+   * the interior's port end).
    */
-  spindle: { from: number; to: number; radius: number; berthArms: number; arms: { z: number; length: number; width: number } };
+  spindle: { from: number; to: number; radius: number; berthArms: number; arms: { z: number; length: number; width: number }; bore: Bore };
   /** The wild end's mast, a lattice seen from afar as a rod. */
   mast: { from: number; to: number; radius: number };
   /** The body as solid round pieces along the axis (drum, brims, spindle, mast), for distances and hit tests. */
   pieces: Piece[];
   /** The outline of the whole body as (z, r) points, wild tip to port tip: mast, wild face, drum, port face, spindle. */
   outline: [number, number][];
+}
+
+/** The bore on the axis (m): its radius, the Hub's end, the bearing between the spinning sleeve and the still part, the arms' end. */
+export interface Bore {
+  radius: number;
+  from: number;
+  bearing: number;
+  to: number;
 }
 
 /** A solid cylinder around the axis from z0 to z1 (m). */
@@ -111,7 +121,8 @@ export function makeExterior(x: ExteriorInputs): Exterior {
   const tipSpeed = x.spin * tip;
   const spindleTo = portFace + s.spindleLength * Ro;
   const arms = { z: portFace + (spindleTo - portFace) * 0.7, length: x.hubRadius * 2, width: x.hubRadius * 0.12 };
-  const spindle = { from: portFace, to: spindleTo, radius: x.hubRadius, berthArms: s.berthArms, arms };
+  const bore = { radius: x.hubRadius * s.bore, from: x.length, bearing: portFace, to: arms.z };
+  const spindle = { from: portFace, to: spindleTo, radius: x.hubRadius, berthArms: s.berthArms, arms, bore };
   const mast = { from: wildFace - s.mastLength * Ro, to: wildFace, radius: x.hubRadius * 0.1 };
   const pieces: Piece[] = [
     { z0: wildFace, z1: portFace, radius: Ro },

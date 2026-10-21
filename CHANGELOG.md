@@ -2,6 +2,30 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.049 — Softer cloud bases
+
+- Cloud bases are flat under each cloud's middle and lift toward its rim, so where they meet the horizon they no longer form one ruler-straight line.
+- Long views along the axis no longer show ring patterns in the clouds.
+
+## v0.048 — Clouds
+
+- A cloud layer a kilometre or so above the floor: grey-bottomed cumulus overhead, bright where the sunline shines through a thin edge, and their sunlit tops on the far side of the cylinder.
+- The wind carries them along and around the axis, and their shadows drift over the land.
+- The habitat's weather is a schedule: some days nearly clear, some grey, with cumulus building through the afternoon. Every habitat sets its own layer (height, thickness, cover, cloud size, wind); a small one has none.
+- Debug menu: fly up under or into the clouds (Go), and set the cover by hand (Time).
+
+## v0.047 — The interior from far away
+
+- Clearer air: the far side across the axis keeps its colours instead of fading into pale haze. How clear a habitat's air is is now one of its parameters.
+- Woods seen from far away show crowns, shaded gaps, clumps and glades instead of soft colour blobs, and the far land is drawn in finer pieces, so wood edges, rivers and banks stay sharp across the cylinder.
+- The debug menu's Go group has viewpoints high over the land ("Fly: …") for looking at the interior from above.
+
+## v0.046 — The crossing into the Hub
+
+- After your ship latches, the arrival goes on: you float down the spindle's bore, a pale tube lit by lamp strips, through the bearing's seal into the sleeve that turns with the habitat. The air there slowly carries you into the spin, and a small window shows the stars wheeling past. Light ahead.
+- A short fade, and you float in the Hub beside the sunline, looking down it toward the wild end, in control (fly as usual). The interior is built while your ship comes in, so it is ready when you arrive.
+- Any key still skips the whole arrival.
+
 ## v0.045 — Hung renders end sooner
 
 - Behind the scenes: when a view on the render PC never finishes building, the other views of the same page in that request are skipped instead of each waiting two minutes, and the report says what the page still showed.

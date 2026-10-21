@@ -9,8 +9,8 @@
  * Everything is drawn relative to the camera (`toView`), so `positionWorld` is the offset from the eye; the eye's own
  * world position is the `view.eye` uniform, for whatever needs the true place (the axis, ground patterns).
  */
-import { MeshBasicNodeMaterial, DoubleSide, BackSide, AdditiveBlending, type Material } from 'three/webgpu';
-import { abs, atan, attribute, cross, dFdx, dFdy, floor, fract, inverseSqrt, log2, mx_noise_float, uv, cameraPosition, hash, normalLocal, step, time, varying, clamp, color, cos, log, select, sign, sqrt, dot, exp, float, max, mix, mx_fractal_noise_float, normalize, min, modelWorldMatrix, normalWorld, positionLocal, positionWorld, pow, sin, smoothstep, texture, uniform, vec2, vec3, vec4, vertexColor } from 'three/tsl';
+import { MeshBasicNodeMaterial, DoubleSide, BackSide, FrontSide, AdditiveBlending, type Material } from 'three/webgpu';
+import { abs, atan, attribute, screenCoordinate, cross, dFdx, dFdy, floor, fract, inverseSqrt, log2, mx_noise_float, uv, cameraPosition, hash, normalLocal, step, time, varying, clamp, color, cos, log, select, sign, sqrt, dot, exp, float, max, mix, normalize, min, modelWorldMatrix, normalWorld, positionLocal, positionWorld, pow, sin, smoothstep, texture, uniform, vec2, vec3, vec4, vertexColor } from 'three/tsl';
 import { DataTexture, Uint8BufferAttribute, RGBAFormat, UnsignedByteType, Vector4, DataUtils, Float32BufferAttribute, HalfFloatType, InstancedInterleavedBuffer, InterleavedBufferAttribute, RedFormat, Vector2, Vector3, type BufferGeometry } from 'three/webgpu';
 import { PLANT_STRIDE } from '../gen/scatter';
 import { BARK_STRIPS } from '../gen/trees';
@@ -18,26 +18,28 @@ import { BARK_TEXELS } from '../gen/foliage';
 import { LEAF_ATLAS_SIZE } from '../workers/leaves';
 import type { Node } from 'three/webgpu';
 import type { StageKind } from '@futuremagic/stage';
-import { HAZE_DIAMETER } from '../blueprint';
+import { REFERENCE } from '../blueprint';
 import { SHADOW_HALF, sunShadow } from './lights';
 import { CLOSED_RAISE, UNDER_CROWNS } from '../gen/ecology';
 import { OPEN_SKY } from '../gen/horizon';
 import { EMISSION_SAMPLES, SUNLINE_STEPS } from '../world/sunline';
 import { HAZE_STEPS } from '../world/air';
 import { skyDome, starColor, starVertex } from './skyShaders';
-import { floorSurface } from './groundShaders';
+import { floorSurface, woodsFromAfar } from './groundShaders';
+import { RISE_RANGE } from '../gen/tiles';
 import { filtered } from './textures';
-import { flameColor, hardwareColor, radiatorColor, skinColor, skinDetailColor, skinShown } from './hullShaders';
+import { cloudMarch, cloudShade } from './cloudShaders';
+import { boreColor, flameColor, hardwareColor, lampColor, radiatorColor, skinColor, skinDetailColor, skinShown } from './hullShaders';
 
 /** The air's look, shared by every kind (uniforms: changing them never builds a shader). */
 export const air = {
   /** The haze colour: sunlit air seen through kilometres of it. */
   haze: uniform(color(0.55, 0.68, 0.86)),
   /**
-   * Extinction per metre: across HAZE_DIAMETER of air only a quarter of the ground's own colour is left, so a
-   * cylinder wider than that fades into the haze at its far side (blueprint/validate.ts).
+   * Extinction per metre at floor density: across the habitat's `air.hazeDistance` only a quarter of the ground's own
+   * colour is left (`setAir`), so a cylinder wider than that fades into the haze at its far side (blueprint/validate.ts).
    */
-  extinction: uniform(Math.log(4) / HAZE_DIAMETER),
+  extinction: uniform(Math.log(4) / REFERENCE.air.hazeDistance),
   /** Share of the sunline's light scattered back from the air onto everything (the sky light). */
   skyLight: uniform(0.35),
 };
@@ -81,8 +83,9 @@ export function setEmission(emission: Float32Array, mean: number): void {
   light.mean.value = mean;
 }
 
-/** Load a habitat's air into the shaders' uniforms (world/air.ts). */
-export function setAir(kappa: number, radius: number, seenMid: number): void {
+/** Load a habitat's air into the shaders' uniforms (world/air.ts): its density falloff, radius, view of the sunline and clearness. */
+export function setAir(kappa: number, radius: number, seenMid: number, hazeDistance: number): void {
+  air.extinction.value = Math.log(4) / hazeDistance;
   airShape.kappa.value = kappa;
   airShape.radius.value = radius;
   airShape.seenMid.value = seenMid;
@@ -97,15 +100,12 @@ export function setSunline(length: number, norm: number, nearest: number): void 
 
 /**
  * The light on a surface from the sunline, seen past the terrain's horizon angles (x toward the port end, y toward the
- * wild end) and the near shadow map, plus the sky light: the air's scattered glow, less where the horizons close in.
- * `wrap` lets light reach past the terminator (0 a plain surface; leaves and crowns, which light shines through and
- * around, more).
+ * wild end), the near shadow map (`sunShadow`, times `shade` where something else stands in for it) and the cloud
+ * overhead (`cloudShade`; not for the clouds themselves), plus the sky light: the air's scattered glow, less where the
+ * horizons close in. `wrap` lets light reach past the terminator (0 a plain surface; leaves and crowns, which light
+ * shines through and around, more).
  */
-/**
- * The sunline's light on a surface: direct (through `sunShadow`, times `shade` where something else stands in for the
- * shadow map) plus the air's glow.
- */
-function sunlit(horizon: Node<'vec2'> = vec2(OPEN_SKY, OPEN_SKY), normal: Node<'vec3'> = normalWorld, wrap = 0, shade: Node<'float'> = float(1)): Node<'float'> {
+function sunlit(horizon: Node<'vec2'> = vec2(OPEN_SKY, OPEN_SKY), normal: Node<'vec3'> = normalWorld, wrap = 0, shade: Node<'float'> = float(1), clouded = true): Node<'float'> {
   const w = worldPosition();
   const len = max(w.xy.length(), 1e-3);
   const r = max(len, light.nearest);
@@ -123,7 +123,7 @@ function sunlit(horizon: Node<'vec2'> = vec2(OPEN_SKY, OPEN_SKY), normal: Node<'
     sum = sum.add(texture(emissionTexture, vec2(at, 0.5)).r.mul(c).mul(facing));
   }
   // Near things (the body, balls) shade it too: the near shadow map, soft along the axis (render/lights.ts).
-  const direct = sum.mul(span).div(SUNLINE_STEPS).div(r).mul(light.norm).mul(sunShadow as unknown as Node<'float'>).mul(shade);
+  const direct = sum.mul(span).div(SUNLINE_STEPS).div(r).mul(light.norm).mul(sunShadow as unknown as Node<'float'>).mul(shade).mul(clouded ? cloudShade(w) : float(1));
   // The sky light comes from the whole air above: as much as the horizons leave open of the half circle.
   const open = clamp(horizon.x.add(horizon.y).div(Math.PI), 0, 1);
   return direct.mul(float(1).sub(air.skyLight)).add(air.skyLight.mul(light.mean).mul(open));
@@ -190,6 +190,11 @@ function kind(name: string, attributes: readonly string[], shadow: { cast: boole
  * last stretch before it, so a tile has the parent's shape by the time they swap.
  */
 const morphFar = uniform(0).onObjectUpdate(({ object }) => (object?.userData.morphFar as number | undefined) ?? 1e30);
+/**
+ * How much a point's rise over the ground around it (a slope, tiles.ts) changes its light: hollows hold less of the
+ * sky's light and ridges catch more, so valleys, banks and hilltops read from afar under the overhead sunline.
+ */
+const RELIEF_LIGHT = 1.2;
 /** Where the blend starts, as a share of `morphFar`. */
 const MORPH_START = 0.6;
 
@@ -202,23 +207,28 @@ export const GROUND = kind('ground', ['position', 'normal', 'color', 'morph', 'h
   const seen = modelWorldMatrix.mul(vec4(positionLocal, 1)).xyz.sub(cameraPosition).length();
   const blend = smoothstep(morphFar.mul(MORPH_START), morphFar, seen);
   // Past the trees' last level, the woods are the ground's own canopy layer: it rises to the crowns and takes their
-  // colour over the band where the crown hulls hand them over (`setCanopyBand`).
-  const canopy = attribute<'vec4'>('canopy', 'vec4');
+  // look over the band where the crown hulls hand them over (`setCanopyBand`).
+  // `horizon`: the horizons (x, y), then the crowns' cover and the trees' spacing (z, w: tiles.ts).
+  const canopy = attribute<'vec4'>('canopy', 'vec4'), horizon = attribute<'vec4'>('horizon', 'vec4');
   const woods = smoothstep(canopyBand.x, canopyBand.y, seen);
-  m.positionNode = positionLocal.add(attribute<'vec3'>('morph', 'vec3').mul(blend)).add(normalLocal.mul(canopy.w.mul(woods)));
+  const morph = attribute<'vec4'>('morph', 'vec4');
+  m.positionNode = positionLocal.add(morph.xyz.mul(blend)).add(normalLocal.mul(canopy.w.mul(woods)));
+  // Hollows and ridges (tiles.ts, `packRelief`): this tile's rise over the ground around, blended to its parent's.
+  const packed = morph.w, own = floor(packed.div(256)), parentRise = packed.sub(own.mul(256));
+  const rise = varying(mix(own, parentRise, blend).sub(127.5).div(127.5).mul(RISE_RANGE));
   const far = varying(woods);
   // Close up, the floor's own surface (groundShaders.ts): grass, litter, sand, rock, resolving as the eye comes near.
   const away = positionWorld.sub(cameraPosition).length();
   const floorUp = floorSurface(vertexColor().rgb, normalize(normalWorld));
-  // The canopy's crowns: lit tops and shaded gaps a crown across, fading where they would shimmer.
-  const crowns = mx_fractal_noise_float(worldPosition().mul(1 / 6), 2, 2.2, 0.5).mul(0.45).mul(far).mul(smoothstep(1, 5, canopy.w)).mul(float(1).sub(smoothstep(4000, 9000, away))).add(1);
-  const ground = mix(floorUp.color, canopy.rgb, far);
+  // From afar, crowns and the gaps between them, clumps and glades (groundShaders.ts, docs/far-view.md).
+  const fromAfar = woodsFromAfar(vertexColor().rgb, canopy.rgb, horizon.z, horizon.w, worldPosition());
+  const ground = mix(floorUp.color, fromAfar, far);
   // Under the woods past the shadow map's reach, the crowns' shade on average (`crownsClosed`): the floor stays in
   // the shade the near trees cast, and the canopy seen from afar keeps its sunlit tops.
   const beyond = smoothstep(SHADOW_HALF * 0.6, SHADOW_HALF * 0.9, away).mul(float(1).sub(far));
   const closed = smoothstep(0.25, 1, canopy.w.div(CLOSED_RAISE));
   const shade = mix(float(1), mix(float(1), float(UNDER_CROWNS), closed), beyond);
-  m.colorNode = throughAir(ground.mul(sunlit(attribute<'vec2'>('horizon', 'vec2'), floorUp.normal, 0, shade)).mul(crowns));
+  m.colorNode = throughAir(ground.mul(sunlit(horizon.xy, floorUp.normal, 0, shade)).mul(clamp(rise.mul(RELIEF_LIGHT).add(1), 0.55, 1.3)));
   return m;
 });
 
@@ -287,6 +297,26 @@ export const WATER = kind('water', ['position', 'normal', 'flow', 'dir'], { cast
 });
 
 /**
+ * The clouds (cloudShaders.ts): a closed can at the cloud layer's base radius, along the stretch of the axis the layer
+ * spans, carrying position only. Its outer faces march the clouds a line of sight meets before the hole around the
+ * axis, its inner faces those after it (and all of them from inside the can); the inner ones are drawn first. White, lit by the sunline over the layer, seen through the air; see-through where they are thin.
+ */
+function clouds(name: string, far: boolean): Kind {
+  return kind(name, ['position'], { cast: false, receive: false }, () => {
+    const m = new MeshBasicNodeMaterial({ side: far ? BackSide : FrontSide, transparent: true, depthWrite: false });
+    const ray = positionWorld.sub(cameraPosition), D = ray.length();
+    const march = cloudMarch(view.eye.add(cameraPosition), ray.div(D), D, far, hash(floor(screenCoordinate.x).add(floor(screenCoordinate.y).mul(8192))));
+    const w = worldPosition();
+    const lit = sunlit(vec2(OPEN_SKY, OPEN_SKY), normalize(vec3(w.x.negate(), w.y.negate(), 0)), 0, float(1), false);
+    m.colorNode = throughAir(vec3(0.93, 0.94, 0.96).mul(lit).mul(march.x.div(max(march.y, 1e-4))));
+    m.opacityNode = march.y;
+    return m;
+  });
+}
+export const CLOUDS_FAR = clouds('clouds far', true);
+export const CLOUDS_NEAR = clouds('clouds near', false);
+
+/**
  * The view outside (skyShaders.ts). The sky dome: a sphere around the eye, drawn first and behind everything, with the
  * Sun, Earth and the Moon computed per pixel. Its meshes carry position only.
  */
@@ -345,6 +375,20 @@ export const FLAME = kind('flame', ['position', 'normal'], { cast: false, receiv
   // Stage builds is the one drawn (two passes built two more on the render path).
   const m = new MeshBasicNodeMaterial({ side: DoubleSide, transparent: true, blending: AdditiveBlending, depthWrite: false, forceSinglePass: true });
   m.colorNode = flameColor();
+  return m;
+});
+
+/** Hardware inside the spindle's bore, lit by its own lamp strips (hullShaders.ts, `boreColor`). Position, normal, color. */
+export const BORE = kind('bore', ['position', 'normal', 'color'], { cast: false, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial();
+  m.colorNode = boreColor();
+  return m;
+});
+
+/** Lamps: their own light (hullShaders.ts, `lampColor`), the vertex colour as luminance. Position, color. */
+export const LAMP = kind('lamp', ['position', 'color'], { cast: false, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial();
+  m.colorNode = lampColor();
   return m;
 });
 
@@ -561,11 +605,11 @@ export const STONE = kind('stone', ['position', 'normal', 'color', 'plant'], { c
 
 /** The game's own attributes on the Stage's warm-up stand-ins (StageOptions.attribute): no morph, open horizons. */
 export function standInAttribute(g: BufferGeometry, name: string): boolean {
-  if (name === 'morph') g.setAttribute('morph', new Float32BufferAttribute(new Array(9).fill(0), 3));
+  if (name === 'morph') g.setAttribute('morph', new Float32BufferAttribute(new Array(12).fill(0), 4));
   else if (name === 'grid' || name === 'flow') g.setAttribute(name, new Float32BufferAttribute(new Array(12).fill(0), 4));
   else if (name === 'dir') g.setAttribute('dir', new Float32BufferAttribute([0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0], 4));
   else if (name === 'corner') g.setAttribute('corner', new Float32BufferAttribute([-1, -1, 1, -1, 1, 1], 2));
-  else if (name === 'horizon') g.setAttribute('horizon', new Float32BufferAttribute(new Array(6).fill(OPEN_SKY), 2));
+  else if (name === 'horizon') g.setAttribute('horizon', new Float32BufferAttribute([OPEN_SKY, OPEN_SKY, 0, 0, OPEN_SKY, OPEN_SKY, 0, 0, OPEN_SKY, OPEN_SKY, 0, 0], 4));
   else if (name === 'plant') plantInstances(g, new Float32Array([0, 0, 0, 1, 0, 0, 0]));
   else if (name === 'uv') g.setAttribute('uv', new Float32BufferAttribute(new Array(6).fill(0), 2));
   else if (name === 'floorA' || name === 'floorB') g.setAttribute(name, new Uint8BufferAttribute(new Array(12).fill(name === 'floorA' ? 255 : 0), 4, true));
@@ -593,7 +637,7 @@ export const isPlantInstance = (attribute: string): boolean => attribute === 'pl
 
 /** The kinds of the view outside, for its Stage's warm-up (windows will add them to the interior's). */
 export function outsideKinds(): readonly Kind[] {
-  return [SKY, STARS, SKIN, SKIN_DETAIL, RADIATOR, HARDWARE, FLAME];
+  return [SKY, STARS, SKIN, SKIN_DETAIL, RADIATOR, HARDWARE, FLAME, BORE, LAMP];
 }
 
 /** Things the physics moves (for now the debug menu's test balls): one colour, lit by the sunline, through the air. */
@@ -605,5 +649,5 @@ export const BALL = kind('ball', ['position', 'normal'], { cast: true, receive: 
 
 /** Every kind, for the Stage's warm-up. */
 export function allKinds(): readonly Kind[] {
-  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS, STONE];
+  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS, STONE, CLOUDS_FAR, CLOUDS_NEAR];
 }

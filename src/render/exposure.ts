@@ -31,6 +31,11 @@ export interface Meterable {
   hulls: Cylinder[];
   /** Irradiance from Earth on the hull, relative to full sunlight. */
   earthshine: number;
+  /**
+   * Inside an enclosure (the spindle's bore), where every ray lands on its walls: their luminance and the light on
+   * them, relative to full sunlight.
+   */
+  room?: { luminance: number; light: number } | null;
 }
 
 /** What a ray along unit d sees: its luminance, and the light falling where it lands (0 for open sky). */
@@ -47,6 +52,7 @@ function lit(sun: number, sunlight: number): number {
 }
 
 function rayMeter(m: Meterable, d: Vec3): { luminance: number; light: number } {
+  if (m.room) return m.room;
   const s = m.sky;
   const a = v3len(v3cross(d, s.sunDir));
   const glare = v3dot(d, s.sunDir) > 0 ? GLARE / (a * a + s.sunRadius ** 2) * Math.exp(-a / GLARE_REACH) * s.sunlight : 0;

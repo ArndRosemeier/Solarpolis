@@ -8,7 +8,7 @@ import { arraysGeometry, dropUploaded, freeMesh, meshGeometry } from './geometry
 import type { Stage } from '@futuremagic/stage';
 import { toView, type Vec3 } from '../blueprint';
 import type { Terrain } from '../gen/terrain';
-import { keyId, makeLayout, parent, roots, select, spheres, tileBytes, type TileFit, type TileKey, type TileLayout, type TileMesh } from '../gen/tiles';
+import { CELL_PIXELS, cellSize, keyId, makeLayout, parent, roots, select, spheres, tileBytes, type TileFit, type TileKey, type TileLayout, type TileMesh } from '../gen/tiles';
 import type { WorkerPool } from '../workers/pool';
 import type { GenAnswer, GenRequest } from '../workers/gen.worker';
 import { StreamCache, type Streamed } from './streamed';
@@ -83,7 +83,11 @@ export class TerrainView {
   follow(eye: Vec3, pixelsPerRadian: number): void {
     this.cache.frame();
     const fitOf = (k: TileKey): TileFit | undefined => this.cache.get(keyId(k))?.tile;
-    const parentError = (k: TileKey): number | undefined => (k.level === 0 ? undefined : fitOf(parent(this.layout, k))?.error);
+    // A parent's error as `select` judges it: its shape's error, or its cells.
+    const parentError = (k: TileKey): number | undefined => {
+      const e = k.level === 0 ? undefined : fitOf(parent(this.layout, k))?.error;
+      return e === undefined ? undefined : Math.max(e, (cellSize(this.layout, parent(this.layout, k)) * MAX_PIXELS) / CELL_PIXELS);
+    };
     const sel = select(this.terrain, this.layout, eye, pixelsPerRadian, MAX_PIXELS, fitOf, this.sphereOf);
     const before = new Set(this.drawn);
     for (const e of this.drawn) { e.mesh.visible = false; if (e.water) e.water.visible = false; }
@@ -143,7 +147,7 @@ export class TerrainView {
 function geometry(positions: Float32Array, normals: Float32Array, index: Uint32Array, colors?: Float32Array, morph?: Float32Array, horizon?: Float32Array, canopy?: Float32Array, floorA?: Uint8Array, floorB?: Uint8Array): BufferGeometry {
   return meshGeometry(index, {
     position: [positions, 3], normal: [normals, 3],
-    color: colors && [colors, 3], morph: morph && [morph, 3], horizon: horizon && [horizon, 2], canopy: canopy && [canopy, 4], floorA: floorA && [floorA, 4], floorB: floorB && [floorB, 4],
+    color: colors && [colors, 3], morph: morph && [morph, 4], horizon: horizon && [horizon, 4], canopy: canopy && [canopy, 4], floorA: floorA && [floorA, 4], floorB: floorB && [floorB, 4],
   });
 }
 

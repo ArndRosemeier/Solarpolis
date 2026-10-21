@@ -8,7 +8,7 @@ import { CLIMATES, climateOf } from './climates';
 export type Severity = 'invalid' | 'unusual';
 
 export interface Finding {
-  id: 'spin' | 'hull' | 'hull-thick' | 'axis-air' | 'haze' | 'heat' | 'light' | 'layers' | 'population' | 'sunline' | 'relief' | 'day' | 'brims' | 'collectors' | 'climate';
+  id: 'spin' | 'hull' | 'hull-thick' | 'axis-air' | 'haze' | 'heat' | 'light' | 'layers' | 'population' | 'sunline' | 'relief' | 'day' | 'brims' | 'collectors' | 'climate' | 'clouds';
   severity: Severity;
   message: string;
 }
@@ -17,8 +17,6 @@ export interface Finding {
 export const COMFORT_RPM = 2;
 /** Below this share of the floor pressure the axis no longer works as a flyable sky. */
 export const FLYABLE_AXIS_PRESSURE = 0.5;
-/** Beyond this diameter the far side fades into the haze and the overhead view changes character (m). */
-export const HAZE_DIAMETER = 20000;
 /** Radiator fins larger than this multiple of the two endcap discs are a defining feature of the habitat. */
 export const BIG_FINS = 10;
 /** A hull thicker than this share of the radius is a structure of its own. */
@@ -38,7 +36,7 @@ export function validate(h: Habitat): Finding[] {
   }
   const axisAir = h.pressureAt(0) / p.air.floorPressure;
   if (axisAir < FLYABLE_AXIS_PRESSURE) out.push({ id: 'axis-air', severity: 'unusual', message: `the axis has ${pct(axisAir)} of the floor's air pressure: too thin for the flyable sky ocean` });
-  if (2 * h.radius > HAZE_DIAMETER) out.push({ id: 'haze', severity: 'unusual', message: `at ${km(2 * h.radius)} across, the far side fades into the haze` });
+  if (2 * h.radius > p.air.hazeDistance) out.push({ id: 'haze', severity: 'unusual', message: `at ${km(2 * h.radius)} across, the far side fades into the haze` });
   const ex = h.exterior;
   if (!ex.fits) out.push({ id: 'brims', severity: 'invalid', message: `${p.exterior.maxBrims} brims per end out to ${p.exterior.brimReach}× the radius cannot shed ${(h.heat / 1e9).toFixed(1)} GW: allow more or wider brims, or run the radiators hotter` });
   else if (ex.brimsPerEnd > 1) out.push({ id: 'brims', severity: 'unusual', message: `needs ${ex.brimsPerEnd} stacked radiator brims per end: they shape the habitat's look` });
@@ -61,6 +59,9 @@ export function validate(h: Habitat): Finding[] {
   const rv = rl.rivers;
   if (rv && !(Number.isInteger(rv.count) && rv.count >= 0 && rv.width > 0 && rv.depth > 0 && rv.width < (rl.ringLake?.width ?? Infinity)))
     out.push({ id: 'relief', severity: 'invalid', message: 'rivers need a whole count ≥ 0, a width and depth > 0, and to be narrower than the lake they run into' });
+  const c = p.clouds;
+  if (c && !(c.base > 0 && c.thickness > 0 && c.base + c.thickness < h.radius - p.hubRadius && c.cover >= 0 && c.cover <= 1 && c.size > 0 && Number.isFinite(c.wind.along) && Number.isFinite(c.wind.around)))
+    out.push({ id: 'clouds', severity: 'invalid', message: 'clouds need a base and thickness > 0 that stay clear of the axis, a cover from 0 to 1 and a size > 0' });
   if (!climateOf(p.climate)) out.push({ id: 'climate', severity: 'invalid', message: `no climate "${p.climate}" in the catalogue (${Object.keys(CLIMATES).join(', ')})` });
   if (!(p.population >= 0)) out.push({ id: 'population', severity: 'invalid', message: 'the population must not be negative' });
   return out;
