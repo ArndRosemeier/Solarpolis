@@ -24,7 +24,7 @@ import { dayPhase, emissionMean, nearestLit, sunlineEmission, sunlineNorm, EMISS
 import { densityFalloff, seenMid } from '../world/air';
 import { TerrainView, describeLayout } from './terrain';
 import { PlantView } from './plants';
-import { makeEcology } from '../gen/ecology';
+import { makeEcology, type Ecology } from '../gen/ecology';
 import { FrameLoop, dragToLook, draw, fitCanvas, moveKeys } from './surface';
 
 /** Running is this many times the walking speed. */
@@ -63,6 +63,8 @@ export class InteriorView {
   private readonly camera = new PerspectiveCamera(70, 1, 0.3, 1e6);
   private readonly pool = sharedPool();
   private terrain: Terrain;
+  /** The land's biomes (built with the terrain). */
+  ecology: Ecology | null = null;
   private tiles: TerrainView | null = null;
   private plants: PlantView | null = null;
   private sunline: Mesh | null = null;
@@ -320,7 +322,8 @@ export class InteriorView {
     this.camera.updateProjectionMatrix();
     this.tiles = new TerrainView(this.terrain, this.stage, this.pool);
     this.scene.add(this.tiles.group);
-    this.plants = new PlantView(makeEcology(this.terrain), this.stage, this.pool);
+    this.ecology = makeEcology(this.terrain);
+    this.plants = new PlantView(this.ecology, this.stage, this.pool);
     this.scene.add(this.plants.group);
     this.place();
     // While loading, nothing draws, but the compile cap still counts frames (one new shader per frame): keep its

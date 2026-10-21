@@ -12,8 +12,31 @@
  * parkland does. Pure and continuous like the terrain: any point, in any order, gives the same answer.
  */
 import { Noise, deriveSeed, smoothstep } from '@futuremagic/core';
-import { climateOf, toWorld, type Climate } from '../blueprint';
+import { climateOf, toWorld, type BiomeSpec, type Climate } from '../blueprint';
 import type { Terrain } from './terrain';
+import { canopyColor } from './trees';
+
+/** Plants at least this tall (m, full grown) are trees: they make up the canopy of woods. */
+export const TREE_HEIGHT = 6;
+
+/**
+ * A biome's woods seen from afar: how much of the ground its trees' crowns cover where it is pure (a crown about half
+ * as wide as the tree is tall), how high they stand on average, and their colour (linear RGB).
+ */
+export function canopyOf(b: BiomeSpec): { cover: number; height: number; color: [number, number, number] } {
+  let cover = 0, height = 0;
+  const color: [number, number, number] = [0, 0, 0];
+  for (const p of b.plants) {
+    if (p.height[1] < TREE_HEIGHT) continue;
+    const tall = (p.height[0] + p.height[1]) / 2, crown = 0.55 * tall;
+    const c = Math.min(1, (Math.PI / 4) * (crown * crown) / (p.spacing * p.spacing));
+    const k = canopyColor(p.form);
+    cover += c; height += c * tall;
+    for (let n = 0; n < 3; n++) color[n] += c * k[n];
+  }
+  if (cover > 0) { height /= cover; for (let n = 0; n < 3; n++) color[n] /= cover; }
+  return { cover: Math.min(1, cover), height, color };
+}
 
 export interface Ecology {
   readonly terrain: Terrain;
@@ -22,8 +45,12 @@ export interface Ecology {
   biomesAt(theta: number, s: number, h: number, slope: number, out: Float32Array): Float32Array;
   /** How wet the ground is (0 … 1). */
   moistureAt(theta: number, s: number, h: number): number;
-  /** Linear RGB of the ground seen from a distance, with the slope (0 flat … 1 vertical), into `out` at `i`. */
-  colorAt(theta: number, s: number, h: number, slope: number, out: Float32Array, i: number): void;
+  /**
+   * Linear RGB of the ground seen from a distance, with the slope (0 flat … 1 vertical), into `out` at `i`. With
+   * `canopy`, also the woods' canopy over it there, at `i / 3 * 4`: the linear RGB seen from far above (the ground
+   * where the trees stand apart, their crowns where they close up) and the canopy's height (m).
+   */
+  colorAt(theta: number, s: number, h: number, slope: number, out: Float32Array, i: number, canopy?: Float32Array): void;
 }
 
 /** How soft the edges of a biome's moisture and height ranges are (in moisture units, and in shares of the radius). */
@@ -85,7 +112,8 @@ export function makeEcology(terrain: Terrain): Ecology {
   };
 
   const shares = new Float32Array(count);
-  const colorAt = (theta: number, s: number, height: number, slope: number, out: Float32Array, i: number): void => {
+  const woods = biomes.map(canopyOf);
+  const colorAt = (theta: number, s: number, height: number, slope: number, out: Float32Array, i: number, canopy?: Float32Array): void => {
     biomesAt(theta, s, height, slope, shares);
     const [x, y, z] = toWorld(profile, { theta, s, h: 0 });
     let c0 = 0, c1 = 0, c2 = 0;
@@ -109,7 +137,49 @@ export function makeEcology(terrain: Terrain): Ecology {
     out[i] = Math.min(1, Math.max(0, c0));
     out[i + 1] = Math.min(1, Math.max(0, c1));
     out[i + 2] = Math.min(1, Math.max(0, c2));
+    if (!canopy) return;
+    // The woods over it: crowns cover their biome's share of the point (rock and water hold none).
+    let cover = 0, tall = 0, k0 = 0, k1 = 0, k2 = 0;
+    for (let b = 0; b < count; b++) {
+      const w = shares[b] * woods[b].cover * (1 - rock);
+      if (w === 0) continue;
+      cover += w; tall += w * woods[b].height;
+      k0 += w * woods[b].color[0]; k1 += w * woods[b].color[1]; k2 += w * woods[b].color[2];
+    }
+    const at = (i / 3) * 4;
+    if (cover > 0) { tall /= cover; k0 /= cover; k1 /= cover; k2 /= cover; }
+    canopy[at] = out[i] + (k0 - out[i]) * cover;
+    canopy[at + 1] = out[i + 1] + (k1 - out[i + 1]) * cover;
+    canopy[at + 2] = out[i + 2] + (k2 - out[i + 2]) * cover;
+    // Sparse trees barely raise it; closed woods raise it to their crowns' middle.
+    canopy[at + 3] = tall * 0.75 * smoothstep(0.1, 0.7, cover);
   };
 
   return { terrain, climate, biomesAt, moistureAt, colorAt };
+}
+
+/**
+ * The nearest closed wood from a point (crowns covering at least `cover` of the ground), searched along rays out to
+ * `reach` metres: where it starts, and the way there (a unit step in metres along θ·r and s). For the debug menu's
+ * "Go" entries and for tests.
+ */
+export function nearestWood(ecology: Ecology, theta: number, s: number, reach = 3000, cover = 0.5): { theta: number; s: number; way: [number, number] } | null {
+  const { profile } = ecology.terrain.habitat;
+  const woods = ecology.climate.biomes.map(canopyOf), shares = new Float32Array(woods.length);
+  let best: { theta: number; s: number; way: [number, number]; d: number } | null = null;
+  for (let k = 0; k < 24; k++) {
+    const a = (2 * Math.PI * k) / 24, way: [number, number] = [Math.cos(a), Math.sin(a)];
+    for (let d = 10; d < (best?.d ?? reach); d += 10) {
+      const ps = s + way[1] * d;
+      if (ps < 0 || ps > profile.length) break;
+      const pt = theta + (way[0] * d) / Math.max(profile.at(ps).r, 1);
+      const h = ecology.terrain.heightAt(pt, ps);
+      if (ecology.terrain.standAt(pt, ps) > h + 0.05) continue;
+      ecology.biomesAt(pt, ps, h, 0, shares);
+      let c = 0;
+      for (let b = 0; b < woods.length; b++) c += shares[b] * woods[b].cover;
+      if (c >= cover) { best = { theta: pt, s: ps, way, d }; break; }
+    }
+  }
+  return best && { theta: best.theta, s: best.s, way: best.way };
 }

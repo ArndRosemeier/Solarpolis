@@ -12,10 +12,6 @@
     "reason": "2D and 3D variants of the same noise in the shared core package; merging them would cost the hot path a dimension branch."
   },
   {
-    "key": "idiom: [.bytes .cache] in solarpolis/render/hullDetail.ts + solarpolis/render/plants.ts + solarpolis/render/terrain.ts",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView) each drive their own StreamCache (render/streamed.ts) the one way it is driven: frame, want, mark, bytes, clear; their requests are told apart by kind and key."
-  },
-  {
     "key": "idiom: [.cache .clear] in solarpolis/render/hullDetail.ts + solarpolis/render/plants.ts + solarpolis/render/terrain.ts",
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView) each drive their own StreamCache (render/streamed.ts) the one way it is driven: frame, want, mark, bytes, clear; their requests are told apart by kind and key."
   },
@@ -26,10 +22,6 @@
   {
     "key": "idiom: [.key .kind] in solarpolis/render/hullDetail.ts + solarpolis/render/plants.ts + solarpolis/render/terrain.ts",
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView) each drive their own StreamCache (render/streamed.ts) the one way it is driven: frame, want, mark, bytes, clear; their requests are told apart by kind and key."
-  },
-  {
-    "key": "idiom: [.s .theta] in solarpolis/render/view.ts + solarpolis/world/flyer.ts + solarpolis/world/walker.ts",
-    "reason": "(\u03b8, s) is the interior's surface coordinate (blueprint frame.ts); reading both fields of a point is how every user of it starts, not a copied procedure. It crossed the idiom threshold only because more files made the names rarer."
   },
   {
     "key": "same name: solarpolis/app/memory.ts#stop + solarpolis/render/actors/animator.ts#stop",
@@ -216,10 +208,6 @@
     "reason": "Both 3D views implement the page's view interface (PageView in main.ts: create, setHabitat, setRunning, bytes, shed, info, skip); their shared machinery is in render/surface.ts."
   },
   {
-    "key": "same name: solarpolis/render/plants.ts#bytes + solarpolis/render/streamed.ts#bytes",
-    "reason": "The streamed views (TerrainView, PlantView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, shed, dispose), with bodies of their own."
-  },
-  {
     "key": "same name: solarpolis/render/plants.ts#bytes + solarpolis/render/terrain.ts#bytes",
     "reason": "The streamed views (TerrainView, PlantView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, shed, dispose), with bodies of their own."
   },
@@ -262,5 +250,29 @@
   {
     "key": "same name: solarpolis/space/flyer.ts#turn + solarpolis/world/walker.ts#turn",
     "reason": "Each camera turns by pointer movement in its own frame (walker: heading on the curved floor; flyer outside: yaw around the ecliptic pole)."
+  },
+  {
+    "key": "clone: solarpolis/workers/leaves.ts#leaf",
+    "reason": "The leaf atlas (ported from Scale's getLeafAtlas) draws each cell with its own little leaf recipe: the twig cells share drawTwigCell and differ only in their numbers (shape, size, colour). That data reads best one recipe per cell, as in Scale."
+  },
+  {
+    "key": "same name: solarpolis/app/debug.ts#add + solarpolis/gen/trees.ts#add",
+    "reason": "gen/trees.ts is ported from Scale's vegetation.ts, which used three's Vector3; its small mutable vector V (three cannot be imported in gen/) keeps Vector3's method names so the ported code reads line for line like the original."
+  },
+  {
+    "key": "same name: solarpolis/gen/trees.ts#rotate + solarpolis/world/flyer.ts#rotate",
+    "reason": "gen/trees.ts is ported from Scale's vegetation.ts, which used three's Vector3; its small mutable vector V (three cannot be imported in gen/) keeps Vector3's method names so the ported code reads line for line like the original."
+  },
+  {
+    "key": "same name: solarpolis/render/outside.ts#info + solarpolis/render/plants.ts#info",
+    "reason": "info() is each view's line in the debug menu (debug.addInfo): the plants' cells and draws, the outside's bodies. Same role, different content."
+  },
+  {
+    "key": "idiom: [.cache .shed] in solarpolis/render/hullDetail.ts + solarpolis/render/plants.ts + solarpolis/render/terrain.ts",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView) each drive their own StreamCache (render/streamed.ts) the one way it is driven: frame, want, mark, bytes, clear; their requests are told apart by kind and key."
+  },
+  {
+    "key": "idiom: [.mul .sub] in solarpolis/render/hullShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
+    "reason": "TSL has no operators: every shader file does its arithmetic with .mul and .sub. Shared shader steps already live in one place each (sunlit, throughAir, the hull and sky pieces); this pair is the language, not a copied procedure."
   }
 ]

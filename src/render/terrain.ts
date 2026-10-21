@@ -98,7 +98,7 @@ export class TerrainView {
   private async make(answer: GenAnswer, id: string): Promise<Entry | null> {
     if (!('tile' in answer)) return null;
     const tile = answer.tile;
-    const mesh = new Mesh(geometry(tile.positions, tile.normals, tile.index, tile.colors, tile.morph, tile.horizon), GROUND.material);
+    const mesh = new Mesh(geometry(tile.positions, tile.normals, tile.index, tile.colors, tile.morph, tile.horizon, tile.canopy), GROUND.material);
     mesh.name = `tile ${id}`;
     mesh.visible = false;
     const water = tile.water ? new Mesh(geometry(tile.water.positions, tile.water.normals, tile.water.index), WATER.material) : null;
@@ -116,10 +116,10 @@ export class TerrainView {
   }
 }
 
-function geometry(positions: Float32Array, normals: Float32Array, index: Uint32Array, colors?: Float32Array, morph?: Float32Array, horizon?: Float32Array): BufferGeometry {
+function geometry(positions: Float32Array, normals: Float32Array, index: Uint32Array, colors?: Float32Array, morph?: Float32Array, horizon?: Float32Array, canopy?: Float32Array): BufferGeometry {
   return meshGeometry(index, {
     position: [positions, 3], normal: [normals, 3],
-    color: colors && [colors, 3], morph: morph && [morph, 3], horizon: horizon && [horizon, 2],
+    color: colors && [colors, 3], morph: morph && [morph, 3], horizon: horizon && [horizon, 2], canopy: canopy && [canopy, 4],
   });
 }
 
