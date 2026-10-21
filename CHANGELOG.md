@@ -2,6 +2,12 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.029 — Real trees, and woods that never vanish
+
+- The trees are new, grown like the ones in Scale: branching wood with bark textures, leaf cards drawn from real twigs (oak, linden, maple, birch, chestnut, plane, ginkgo, pines, cypress) plus new willow, olive, heather and holm oak, all moving in the wind.
+- Trees no longer disappear as you walk away. Near you see the full tree, farther off a lighter one, then its crown; past that the woods become a raised, shaded canopy on the ground, so even across the cylinder and overhead the forests are there.
+- Debug menu, Go: "Before the nearest wood" and "Into the nearest wood".
+
 ## v0.028 — Details all the way down on the hull
 
 - Fly close to the habitat's skin and it keeps getting more detailed: the panels become bays between beams, then solar modules in their frames, then bolts, clamps, cable trays and sensor posts, then washers, cables and the beams' chamfered edges.
