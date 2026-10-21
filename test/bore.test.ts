@@ -2,7 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MATRIX, derive } from '../src/blueprint';
-import { boreShapes } from '../src/render/bore';
+import { BoreMeshes, boreShapes } from '../src/render/bore';
+import { BORE, LAMP } from '../src/render/materials';
 
 for (const { name, params } of MATRIX) {
   test(`bore (${name}): walls face the axis from inside the tube, the sleeve has its window, lamps along both parts`, () => {
@@ -27,3 +28,11 @@ for (const { name, params } of MATRIX) {
     assert.ok(panels(s.turning.walls) / rows(b.from, b.bearing) < panels(s.still.walls) / rows(b.bearing, b.to), `${name}: no window`);
   });
 }
+
+test('bore: each mesh carries exactly its kind\'s attributes (anything else is a shader the Stage never warmed)', () => {
+  const meshes = new BoreMeshes(derive(MATRIX[0].params), 'test').all;
+  for (const m of meshes) {
+    const kind = m.material === LAMP.material ? LAMP : BORE;
+    assert.deepEqual(Object.keys(m.geometry.attributes).sort(), [...kind.attributes].sort(), m.name);
+  }
+});

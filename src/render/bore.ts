@@ -106,7 +106,10 @@ export class BoreMeshes {
     const s = boreShapes(h);
     this.bearing = h.exterior.spindle.bore.bearing;
     const make = (shape: ShapeBuilder, kind: typeof BORE, what: string, turning: boolean): { mesh: Mesh; turning: boolean } => {
-      const mesh = new Mesh(shape.build(), kind.material);
+      const g = shape.build();
+      // Exactly the kind's attributes, or the mesh is not the shader the Stage warmed (a build when the view starts).
+      for (const name of Object.keys(g.attributes)) if (!kind.attributes.includes(name)) g.deleteAttribute(name);
+      const mesh = new Mesh(g, kind.material);
       mesh.name = `${name} ${what}`;
       mesh.matrixAutoUpdate = false;
       mesh.frustumCulled = false;

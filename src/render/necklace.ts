@@ -264,7 +264,6 @@ export class NecklaceView {
     for (const d of this.drawn) d.detail?.shed();
   }
 
-  /** The ships at the drawn habitats, for the debug menu. */
   /** Whether the eye is inside the home habitat's bore (the crossing into the Hub). */
   insideBore(): boolean {
     const d = this.drawn[0], b = d.habitat.exterior.spindle.bore;
@@ -272,6 +271,7 @@ export class NecklaceView {
     return Math.hypot(eye[0], eye[1]) < b.radius && eye[2] > b.from && eye[2] < b.to;
   }
 
+  /** The ships at the drawn habitats, for the debug menu. */
   trafficInfo(): string {
     return this.drawn.filter((d) => d.traffic).map((d) => d.traffic!.info()).join(' · ') || 'ships: none drawn';
   }
