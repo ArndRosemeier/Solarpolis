@@ -2,6 +2,12 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.021 — A title screen: arriving by torch ship
+
+- The game now opens on a title screen: a torch ship brakes outside the habitat ring with Earth behind it, its camera zooms in on home, then flies along the patchwork of solar panels. Press Start or any key to go inside.
+- Click the name Solarpolis in the header to come back to the title. The Blueprint Lab is still one click away.
+- Sunlit surfaces outside no longer glare white when the view is mostly dark.
+
 ## v0.020 — The habitats from outside
 
 - The home habitat's skin is a patchwork of two centuries of repairs: panels in black and weathered blue, glassy stripes of light collectors, and lit starfloor windows on the dark side. It turns visibly.
