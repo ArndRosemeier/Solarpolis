@@ -161,10 +161,13 @@ const GAP_SHADE = 0.25;
  * Closed woods stay closed and open land stays open: the stands and clumps only move the cover where it is between.
  */
 export function woodsFromAfar(ground: Node<'vec3'>, crown: Node<'vec3'>, cover: Node<'float'>, spacing: Node<'float'>, world: Node<'vec3'>): Node<'vec3'> {
-  // The pixel's footprint on the ground (m).
-  const foot = max(length(dFdx(positionWorld)), length(dFdy(positionWorld)));
+  // The pixel's footprint on the ground (m): long down the line of sight on ground seen at a slant, short across it.
+  // A pattern shows while the footprint's area is well under its size (`foot`, the geometric mean), and as long as
+  // the long side still samples it twice (`reach`), or it would alias into streaks along the view.
+  const fx = length(dFdx(positionWorld)), fy = length(dFdy(positionWorld));
+  const reach = max(fx, fy), foot = sqrt(fx.mul(fy));
   const cell = max(spacing, 2);
-  const shown = (size: Node<'float'>): Node<'float'> => float(1).sub(smoothstep(0.15, 0.45, foot.div(size)));
+  const shown = (size: Node<'float'>): Node<'float'> => float(1).sub(smoothstep(0.15, 0.45, foot.div(size))).mul(float(1).sub(smoothstep(0.5, 1, reach.div(size))));
   // Stands (two dozen trees across), groves (ten) and clumps (five): the cover wanders where the woods are open or
   // thinning, so their edges break into groves and clearings rather than fading over the tile's points.
   const between = sqrt(clamp(cover.mul(float(1).sub(cover)), 0, 0.25)).mul(2);
@@ -196,5 +199,5 @@ export function woodsFromAfar(ground: Node<'vec3'>, crown: Node<'vec3'>, cover: 
   const covered = float(1).sub(exp(chance.mul(-CLOSE)));
   const far = mix(gap, crown.mul(CROWN_MEAN), covered);
   // The land itself is never one flat colour: stands and clumps tint it a little, woods and open ground alike.
-  return mix(near, far, smoothstep(0.35, 1.2, foot.div(cell))).mul(stands.mul(0.1).add(groves.mul(0.06)).add(clumps.mul(0.05)).add(1));
+  return mix(near, far, float(1).sub(shown(cell.mul(2.6)))).mul(stands.mul(0.1).add(groves.mul(0.06)).add(clumps.mul(0.05)).add(1));
 }
