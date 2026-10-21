@@ -18,15 +18,18 @@ import type { Habitat } from '../blueprint';
 import { DAY, EARTH, MOON, REFERENCE_SPACE, SpaceFlyer, TORCH_SHIP, attractLoop, calendarOf, chooseStart, decodeStars, julianDay, makeSpace, skyFrom, torchShip, type Cinema, type CinemaFrame, type Mat3, type Space, type SkyView } from '../space';
 import { FLAME, HARDWARE, SKY, STARS, outsideKinds, standInAttribute } from './materials';
 import { outside, skyMaps } from './skyShaders';
-import { DARKEST, PERIPHERY, adapt, exposureFor, type Meterable } from './exposure';
+import { DARKEST, PERIPHERY, adapt, exposureFor, starExposure, sunInView, type Meterable } from './exposure';
 import { NecklaceView, setPose } from './necklace';
 import { meshGeometry } from './geometry';
 import { SHIP_ALBEDO, shipGeometry } from './ship';
 import type { FlameUniforms } from './hullShaders';
 import { FrameLoop, dragToLook, draw, fitCanvas, moveKeys } from './surface';
 
-/** Clock seconds per real second by default: Earth turns visibly, a day in 24 minutes. */
-const SPACE_SPEED = 60;
+/**
+ * Clock seconds per real second by default: real time (Arnd, 2026-10-21). A faster clock spins the habitat fast
+ * enough to make it look small; the debug menu speeds it up.
+ */
+const SPACE_SPEED = 1;
 /** The dome and the stars sit this far out; nothing in the scene is drawn beyond it. */
 const DOME = 5e7;
 const base = import.meta.env.BASE_URL;
@@ -58,6 +61,8 @@ export class OutsideView {
   time: number;
   timeScale = SPACE_SPEED;
   nightEyes = false;
+  /** Heroic stars (Arnd, 2026-10-21): without the Sun in view, the eyes open for the stars (`starExposure`). */
+  heroicStars = true;
   exposure = 1;
   private look: Look = 'habitat';
   /** Orbit around the habitat: yaw and pitch in the orbit frame, distance from the centre (m). */
@@ -389,8 +394,17 @@ export class OutsideView {
     this.meterAndAdapt(cut ? Infinity : dt);
     const ratio = this.renderer.getPixelRatio(), px = (this.canvas.clientHeight || 720) * ratio;
     outside.pixelSolidAngle.value = ((this.camera.fov * Math.PI) / 180 / px) ** 2;
+    outside.starExposure.value = starExposure(this.exposure, outside.pixelSolidAngle.value, this.sunSeen(), this.heroicStars);
     outside.viewport.value.set((this.canvas.clientWidth || 1280) * ratio, px);
     draw(this.stage);
+  }
+
+  /** How much of the Sun is in view (0–1): the stars fade only then. */
+  private sunSeen(): number {
+    if (!this.sky) return 0;
+    const m = this.camera.matrixWorld.elements, fwd: Vec3 = [-m[8], -m[9], -m[10]];
+    const th = Math.tan((this.camera.fov * Math.PI) / 360), half = Math.atan(th * Math.hypot(1, this.camera.aspect));
+    return sunInView(Math.acos(Math.min(1, Math.max(-1, v3dot(fwd, this.sky.sunDir)))), half, this.sky.sunlight);
   }
 
   /** Meter the view (and a margin around it) on a grid of rays and let the exposure follow. */

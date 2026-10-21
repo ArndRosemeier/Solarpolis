@@ -6,7 +6,7 @@
  * Units as in skyShaders.ts: white paper in full sunlight is 1.
  */
 import { v3add, v3cross, v3dot, v3len, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
-import type { SkyView } from '../space';
+import { fluxOfMagnitude, type SkyView } from '../space';
 
 /** The eye's glare around the Sun: strength (radiance × rad²) and how far it reaches (rad). The sky shader draws the same. */
 export const GLARE = 6e-4;
@@ -132,4 +132,35 @@ function hitCylinder(c: Cylinder, d: Vec3): { t: number; n: Vec3 } | null {
     }
   }
   return n ? { t: best, n } : null;
+}
+
+/**
+ * Heroic stars (Arnd, 2026-10-21): like a camera or an eye, the stars fade only while the Sun is in view. Without it,
+ * the eyes open for the stars however bright Earth or a hull in sunlight is (the sky itself is black: no air), until a
+ * magnitude-0 star's brightest pixel shows at HEROIC_PEAK. Magnitude 6 then still shows at a 250th of it.
+ */
+export const HEROIC_PEAK = 10;
+/** Star quads: σ of the Gaussian spot (px). The shader draws with it (skyShaders.ts); the heroic exposure counts on it. */
+export const STAR_SIGMA = 0.75;
+
+/**
+ * The exposure the stars are drawn with. `sunSeen` (0–1) is how much of the Sun is in view: at 1 the stars get the
+ * eyes' own exposure, at 0 the heroic one (if that is higher), and in between the two blend in log.
+ */
+export function starExposure(exposure: number, pixelSolidAngle: number, sunSeen: number, heroic = true): number {
+  if (!heroic) return exposure;
+  // A star's peak pixel: flux × π / Ω, times the Gaussian spot's centre value (STAR_SIGMA px).
+  const peakPerExposure = (fluxOfMagnitude(0) * Math.PI / pixelSolidAngle) / (2 * Math.PI * STAR_SIGMA * STAR_SIGMA);
+  const open = Math.max(exposure, HEROIC_PEAK / peakPerExposure);
+  const s = Math.min(1, Math.max(0, sunSeen));
+  return exposure * Math.pow(open / exposure, 1 - s);
+}
+
+/**
+ * How much the Sun is in view (0–1), from the angle between the view's centre and the Sun and the view's half
+ * diagonal (rad): 1 inside the frame, fading to 0 by the meter's periphery, times the share of its disc not eclipsed.
+ */
+export function sunInView(angle: number, halfDiagonal: number, sunlight: number): number {
+  const t = Math.min(1, Math.max(0, (angle - halfDiagonal) / ((PERIPHERY - 1) * halfDiagonal)));
+  return (1 - t * t * (3 - 2 * t)) * sunlight;
 }

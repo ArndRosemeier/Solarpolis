@@ -18,11 +18,13 @@ import {
   select, smoothstep, sqrt, texture, uniform, varying, vec2, vec3, vec4, vertexColor,
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
-import { GLARE, GLARE_REACH } from './exposure';
+import { GLARE, GLARE_REACH, STAR_SIGMA } from './exposure';
 
 /** Everything the outside's shaders read; set each frame by the view (render/outside.ts). */
 export const outside = {
   exposure: uniform(1),
+  /** The stars' own exposure (`starExposure` in exposure.ts): at least the eyes', heroic by default. */
+  starExposure: uniform(1),
   /** Unit direction to the Sun, its angular radius (rad), and the share of its disc not hidden (eclipses). */
   sunDir: uniform(new Vector3(1, 0, 0)),
   sunRadius: uniform(0.00465),
@@ -162,8 +164,7 @@ export function skyDome(): Node<'vec3'> {
   return min(skyRadiance(normalize(positionWorld)).mul(outside.exposure), DISPLAY_CAP);
 }
 
-/** Star quads: σ of the Gaussian spot (px) and the half size of the quad (px). */
-export const STAR_SIGMA = 0.75;
+/** Star quads: the half size of the quad (px), three σ of the spot. */
 export const STAR_HALF = 3 * STAR_SIGMA;
 
 /**
@@ -187,5 +188,5 @@ export function starColor(): Node<'vec3'> {
   const seen = varying(covered(outside.earthDir, outside.earthSin).mul(covered(outside.moonDir, outside.moonSin)));
   const r2 = dot(corner, corner).mul(STAR_HALF * STAR_HALF);
   const spot = exp(r2.div(-2 * STAR_SIGMA * STAR_SIGMA)).div(2 * Math.PI * STAR_SIGMA * STAR_SIGMA);
-  return vertexColor().rgb.mul(seen).mul(spot).mul(Math.PI).div(outside.pixelSolidAngle).mul(outside.exposure);
+  return min(vertexColor().rgb.mul(seen).mul(spot).mul(Math.PI).div(outside.pixelSolidAngle).mul(outside.starExposure), DISPLAY_CAP);
 }
