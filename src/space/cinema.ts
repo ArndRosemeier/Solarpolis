@@ -231,10 +231,11 @@ export function arrival(space: Space, after: number): Arrival {
 }
 
 /**
- * Where the passenger floats out of the bore into the Hub, in the habitat's frame (m): just inside the port end, a
- * third of the bore's radius off the axis, looking down the sunline to the wild end. The Inside view takes over here.
+ * Where the passenger floats out of the bore into the Hub, in the habitat's frame (m): just inside the port end,
+ * halfway between the sunline and the Hub's rim (the bore lies on the axis, inside the sunline's radius, so the way out
+ * of it comes out beside the light), looking down the sunline to the wild end. The Inside view takes over here.
  */
 export function hubView(h: Habitat): { eye: Vec3; look: Vec3 } {
-  const b = h.exterior.spindle.bore;
-  return { eye: [b.radius / 3, 0, b.from - 2 * b.radius], look: [0, 0, -1] };
+  const { hubRadius, sunlineRadius } = h.params, r = (hubRadius + sunlineRadius) / 2;
+  return { eye: [r, 0, h.exterior.spindle.bore.from - (hubRadius - sunlineRadius) / 2], look: [0, 0, -1] };
 }

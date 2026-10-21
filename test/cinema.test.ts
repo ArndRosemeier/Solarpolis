@@ -142,10 +142,12 @@ for (const { name, params } of MATRIX) {
 }
 
 for (const { name, params } of MATRIX) {
-  test(`hub (${name}): the passenger floats out into the open air of the Hub, off the axis, looking down the sunline`, () => {
+  test(`hub (${name}): the passenger floats out into the open air of the Hub, beside the sunline, looking down it`, () => {
     const h = makeSpace({ ...REFERENCE_SPACE, home: params }).home.habitat, { eye, look } = hubView(h);
     const at = fromWorld(h.profile, ...eye);
     assert.ok(at.h > 0, `${name}: ${at.h} m from the endcap's surface`);
-    assert.ok(Math.hypot(eye[0], eye[1]) > 0 && look[2] === -1 && eye[2] < h.length);
+    const r = Math.hypot(eye[0], eye[1]);
+    assert.ok(r > h.params.sunlineRadius && r < h.params.hubRadius, `${name}: ${r} m off the axis is in the sunline or beyond the Hub`);
+    assert.ok(look[2] === -1 && eye[2] < h.length);
   });
 }
