@@ -11,6 +11,8 @@ import { makeExterior, type Exterior } from './exterior';
 
 /** Solar constant at 1 AU (W/m²). */
 export const SOLAR_CONSTANT = 1361;
+/** Share of sunlight's power in the visible band (400–700 nm), the part the sunline delivers. */
+export const SUNLIGHT_VISIBLE = 0.43;
 /** Stefan–Boltzmann constant (W/(m² K⁴)). */
 export const STEFAN_BOLTZMANN = 5.670374419e-8;
 
@@ -60,6 +62,11 @@ export interface Habitat {
   /** Sunlight falling on the habitat and its collectors (W), and the electricity made from it (W). */
   readonly sunlight: number;
   readonly solarPower: number;
+  /**
+   * Share of the collecting skin given to light collectors (strips that pipe sunlight into the sunline) rather than
+   * solar cells: as much as the piped light needs. Above 1 the skin cannot collect it all.
+   */
+  readonly collectorShare: number;
   /** Visible light the sunline must deliver to the floor (W). */
   readonly lightPower: number;
   /**
@@ -124,8 +131,9 @@ export function derive(p: HabitatParams): Habitat {
   const flux = SOLAR_CONSTANT / (p.sunDistanceAu * p.sunDistanceAu);
   const crossSection = p.axisOrientation === 'side-on' ? 2 * outer * L : endcapArea;
   const sunlight = flux * crossSection * p.collectorRatio;
-  const solarPower = sunlight * p.solarEfficiency;
   const lightPower = p.lightTarget * floorArea;
+  const collectorShare = (p.pipedLight * lightPower) / (sunlight * SUNLIGHT_VISIBLE * p.collectorEfficiency);
+  const solarPower = sunlight * Math.max(0, 1 - collectorShare) * p.solarEfficiency;
   const heat = solarPower + p.pipedLight * lightPower;
   const T = p.radiator.temperature;
   const radiatorArea = heat / (p.radiator.emissivity * STEFAN_BOLTZMANN * T * T * T * T);
@@ -154,6 +162,7 @@ export function derive(p: HabitatParams): Habitat {
     paddingMass,
     sunlight,
     solarPower,
+    collectorShare,
     lightPower,
     heat,
     radiatorArea,
