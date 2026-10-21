@@ -17,15 +17,16 @@
  * `detailTree` grid; `courtTilesFor`, `buildCourtTile`): far, mid and near detail by a tile's size; `courtSolids`
  * gives the physics the courts near a point, and `courtTopAt` what people stand on. Pure.
  */
-import { fromWorld, toWorld, wrapAngle, type DistrictStyle, type Habitat, type Vec3 } from '../blueprint';
-import { Rng, deriveSeed, v3dot } from '@futuremagic/core';
+import type { DistrictStyle, Habitat, Vec3 } from '../blueprint';
+import { Rng, deriveSeed } from '@futuremagic/core';
 import type { PlacedCourt, Terrain } from './terrain';
 import { planOf } from './plan';
 import { kept } from './kept';
 import { FLIGHT, REST, TREAD, riserAt } from './liftStair';
 import { FINISH, polar, railing, topRail } from './pavilion';
-import { Shape, intoPlace, placeAt, type MappedArrays, type Place, type RGB } from './shapes';
-import { wantedCells, type Grid, type GridEye, type TileKey, type WantedTile } from './detailTree';
+import { Shape, bendInto, floorPoint, placeAt, shade, solidOnFloor, topOnFloor, type FloorFrame, type MappedArrays, type Place, type RGB } from './shapes';
+import type { TileKey, WantedTile } from './detailTree';
+import { siteDetailOf, siteGrid, siteTileMiddle, siteTilesFor, sitesIn, sitesNear, type Site, type SiteDetail, type SiteGrid } from './siteTiles';
 
 /** A court's parts, in handrails. */
 const PART = {
@@ -132,13 +133,11 @@ export function courtLayoutOf(t: Terrain, index: number): CourtLayout | null {
   return cache.get(index)!;
 }
 
-/** The court near (θ, s), its layout and the point in its frame (x, y), or null. */
-function courtNear(t: Terrain, theta: number, s: number): { l: CourtLayout; x: number; y: number } | null {
+/** The court near (θ, s) and its frame, or null. */
+function courtNear(t: Terrain, theta: number, s: number): { thing: CourtLayout; frame: FloorFrame } | null {
   const near = t.courtAt(theta, s), i = near ? indexOf(t).get(near.court) : undefined;
   const l = i === undefined ? null : courtLayoutOf(t, i);
-  if (!l) return null;
-  const d = theta - l.court.theta;
-  return { l, x: s - l.court.s, y: Math.atan2(Math.sin(d), Math.cos(d)) * t.habitat.profile.at(l.court.s).r };
+  return l && { thing: l, frame: frameOf(l.court) };
 }
 
 function layCourt(t: Terrain, index: number): CourtLayout | null {
@@ -206,7 +205,7 @@ function layCourt(t: Terrain, index: number): CourtLayout | null {
 }
 
 /** Detail a court is built at; `solid` is what the physics touches. */
-export type CourtDetail = 'far' | 'mid' | 'near' | 'solid';
+export type CourtDetail = SiteDetail;
 
 /** Segments round a full circle at each detail. */
 const ROUND: Record<CourtDetail, number> = { far: 24, mid: 64, near: 128, solid: 64 };
@@ -297,7 +296,6 @@ export function buildCourt(l: CourtLayout, detail: CourtDetail): Shape {
 }
 
 /** A colour darkened (or lightened) by a factor. */
-const shade = (c: RGB, k: number): RGB => [c[0] * k, c[1] * k, c[2] * k];
 
 /** Whether angle a lies within `margin` (rad) of any of the angles given. */
 const nearAny = (a: number, at: readonly number[], margin: number): boolean => at.some((b) => within(a, b - margin, b + margin));
@@ -418,74 +416,43 @@ export function courtTop(l: CourtLayout, x: number, y: number): number | null {
   return l.pave;
 }
 
-/** A point of a court's frame in the world: x along the axis, y around (at the floor's radius), z up from its floor. */
-export function courtWorld(h: Habitat, c: PlacedCourt, p: Vec3): Vec3 {
-  return toWorld(h.profile, { theta: c.theta + p[1] / h.profile.at(c.s).r, s: c.s + p[0], h: c.floor + p[2] });
-}
+/** A court's floor frame: x along the axis, y around (at the floor's radius), z up from its dug floor. */
+const frameOf = (c: PlacedCourt): FloorFrame => ({ theta: c.theta, s: c.s, height: c.floor, heading: 0 });
 
-/** A shape built in a court's frame, bent onto the floor and put into a place's frame (normals turned with it). */
-function into(target: Shape, h: Habitat, c: PlacedCourt, sh: Shape, place: Place): void {
-  const base = target.vertices, R = h.profile.at(c.s).r;
-  for (let v = 0; v < sh.vertices; v++) {
-    const p: Vec3 = [sh.pos[v * 3], sh.pos[v * 3 + 1], sh.pos[v * 3 + 2]], q = intoPlace(place, courtWorld(h, c, p));
-    const th = c.theta + p[1] / R, n = [sh.nrm[v * 3], sh.nrm[v * 3 + 1], sh.nrm[v * 3 + 2]];
-    // The frame's axes in the world there: along (+z), around, and up (toward the axis).
-    const w: Vec3 = [-Math.sin(th) * n[1] - Math.cos(th) * n[2], Math.cos(th) * n[1] - Math.sin(th) * n[2], n[0]];
-    target.pos.push(q[0], q[1], q[2]);
-    target.nrm.push(v3dot(w, place.ex), v3dot(w, place.ey), v3dot(w, place.ez));
-    if (target.colored) target.col.push(sh.col[v * 3], sh.col[v * 3 + 1], sh.col[v * 3 + 2]);
-    if (target.mapped) { target.uv.push(sh.uv[v * 2], sh.uv[v * 2 + 1]); target.fin.push(sh.fin[v]); }
-  }
-  for (const i of sh.idx) target.idx.push(base + i);
+/** A point of a court's frame in the world. */
+export function courtWorld(h: Habitat, c: PlacedCourt, p: Vec3): Vec3 {
+  return floorPoint(h, frameOf(c), p);
 }
 
 /** The courts' tiles: a grid over the floor (around × along), each cell `CELL` handrails; roots 2^ROOT cells a side. */
 const CELL = 23;
 const ROOT = 7;
 const FINEST = 2;
-/** A tile's detail by its edge (handrails): near up to the first, mid up to the second, far beyond. */
-const NEAR_EDGE = 190;
-const MID_EDGE = 750;
 
-export interface CourtGrid extends Grid {
-  /** Where the grid's first row starts along the profile (m). */
-  sBase: number;
-}
+/** Each court as a site on the floor (its walk reaches a little past its radius). */
+const sitesOf = kept((t: Terrain): Site[] => t.courts.map((c) => ({ theta: c.theta, s: c.s, reach: c.radius * 1.2 })));
 
 /** A terrain's court grid (null without courts), made once. */
-export const courtGridOf: (t: Terrain) => CourtGrid | null = kept((t: Terrain) => {
-  const h = t.habitat, hr = h.params.landmarks?.handrail;
-  if (!hr || !t.courts.length) return null;
-  const big = Math.max(...t.courts.map((c) => c.radius)), sBase = Math.min(...t.courts.map((c) => c.s)) - big;
-  const span = Math.max(...t.courts.map((c) => c.s)) + big - sBase, edge = CELL * hr, nU = Math.max(1, Math.round((TAU * h.radius) / edge));
-  return { nU, nV: Math.max(1, Math.ceil(span / edge)), wrap: true, edgeU: (TAU * h.radius) / nU, edgeV: edge, root: ROOT, finest: FINEST, sBase };
+export const courtGridOf: (t: Terrain) => SiteGrid | null = kept((t: Terrain) => {
+  const hr = t.habitat.params.landmarks?.handrail;
+  return hr ? siteGrid(t.habitat, sitesOf(t), CELL * hr, ROOT, FINEST) : null;
 });
 
 /** The detail a tile of a level is built at. */
-export function courtDetailOf(g: CourtGrid, level: number, handrail: number): Exclude<CourtDetail, 'solid'> {
-  const edge = (Math.pow(2, level) * g.edgeV) / handrail;
-  return edge <= NEAR_EDGE ? 'near' : edge <= MID_EDGE ? 'mid' : 'far';
+export function courtDetailOf(g: SiteGrid, level: number, handrail: number): Exclude<CourtDetail, 'solid'> {
+  return siteDetailOf(g, level, handrail);
 }
 
 /** The courts a tile owns: those whose middle lies in it. */
 export function courtsIn(t: Terrain, key: TileKey): number[] {
   const g = courtGridOf(t);
-  if (!g) return [];
-  const size = Math.pow(2, key.level), out: number[] = [];
-  t.courts.forEach((c, i) => {
-    const u = (wrapAngle(c.theta) / TAU) * g.nU, v = (c.s - g.sBase) / g.edgeV;
-    if (u >= key.i && u < key.i + size && v >= key.j && v < key.j + size) out.push(i);
-  });
-  return out;
+  return g ? sitesIn(g, sitesOf(t), key) : [];
 }
 
 /** The tiles wanted around an eye (world, m): the quadtree over the floor, coarsest first, nearest first. */
 export function courtTilesFor(t: Terrain, eye: Vec3): WantedTile[] {
   const g = courtGridOf(t);
-  if (!g) return [];
-  const at = fromWorld(t.habitat.profile, eye[0], eye[1], eye[2]);
-  const e: GridEye = { u: (wrapAngle(at.theta) / TAU) * g.nU, v: (at.s - g.sBase) / g.edgeV, h: Math.max(0, at.h) };
-  return wantedCells(g, e);
+  return g ? siteTilesFor(t.habitat, g, eye) : [];
 }
 
 export interface CourtTile {
@@ -500,14 +467,13 @@ export interface CourtTile {
 export function buildCourtTile(t: Terrain, key: TileKey): CourtTile {
   const g = courtGridOf(t), h = t.habitat;
   if (!g) throw new Error('buildCourtTile: this terrain has no courts');
-  const size = Math.pow(2, key.level), u = key.i + size / 2, v = Math.min(g.nV, key.j + size / 2);
-  const origin = placeAt(h, (u / g.nU) * TAU, g.sBase + v * g.edgeV, 0), out = new Shape(8, true, true);
+  const m = siteTileMiddle(g, key), origin = placeAt(h, m.theta, m.s, 0), out = new Shape(8, true, true);
   const detail = courtDetailOf(g, key.level, h.params.landmarks!.handrail);
   let courts = 0;
   for (const i of courtsIn(t, key)) {
     const l = courtLayoutOf(t, i);
     if (!l) continue;
-    into(out, h, l.court, buildCourt(l, detail), origin);
+    bendInto(out, h, frameOf(l.court), buildCourt(l, detail), origin);
     courts++;
   }
   return { key, origin, mesh: out.mappedArrays(), courts };
@@ -515,22 +481,12 @@ export function buildCourtTile(t: Terrain, key: TileKey): CourtTile {
 
 /** A court's solid parts in the world (m), built once. */
 const solidOf = kept((l: CourtLayout) => {
-  const out = new Shape(8, false);
-  into(out, l.habitat, l.court, buildCourt(l, 'solid'), { at: [0, 0, 0], ex: [1, 0, 0], ey: [0, 1, 0], ez: [0, 0, 1] });
-  const a = out.arrays();
-  return { positions: a.positions, index: a.index };
+  return solidOnFloor(l.habitat, frameOf(l.court), buildCourt(l, 'solid'));
 });
 
 /** The solid parts (world, m) of every court within `reach` of a point: walks, walls, stairs, railings, portals. */
 export function courtSolids(t: Terrain, at: Vec3, reach: number): { positions: Float32Array; index: Uint32Array }[] {
-  const h = t.habitat, p = fromWorld(h.profile, at[0], at[1], at[2]), out: { positions: Float32Array; index: Uint32Array }[] = [];
-  t.courts.forEach((c, i) => {
-    const d = p.theta - c.theta, around = Math.atan2(Math.sin(d), Math.cos(d)) * h.profile.at(c.s).r;
-    if (Math.hypot(around, p.s - c.s) > reach + c.radius * 1.2) return;
-    const l = courtLayoutOf(t, i);
-    if (l) out.push(solidOf(l));
-  });
-  return out;
+  return sitesNear(t.habitat, sitesOf(t), at, reach).map((i) => courtLayoutOf(t, i)).filter((l): l is CourtLayout => !!l).map(solidOf);
 }
 
 /**
@@ -538,8 +494,5 @@ export function courtSolids(t: Terrain, at: Vec3, reach: number): { positions: F
  * there is the terrain's). On the floor true up is the profile's normal, so this is a drop onto it.
  */
 export function courtTopAt(t: Terrain, theta: number, s: number): number | null {
-  const at = courtNear(t, theta, s);
-  if (!at) return null;
-  const top = courtTop(at.l, at.x, at.y);
-  return top === null ? null : at.l.court.floor + top;
+  return topOnFloor(t.habitat, theta, s, courtNear(t, theta, s), courtTop);
 }
