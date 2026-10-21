@@ -12,10 +12,6 @@
     "reason": "Both 3D views implement the page's view interface (PageView in main.ts: create, setHabitat, setRunning, bytes, shed, info, skip); their shared machinery is in render/surface.ts."
   },
   {
-    "key": "same name: solarpolis/render/outside.ts#info + solarpolis/render/view.ts#info",
-    "reason": "Both 3D views implement the page's view interface (PageView in main.ts: create, setHabitat, setRunning, bytes, shed, info, skip); their shared machinery is in render/surface.ts."
-  },
-  {
     "key": "same name: solarpolis/render/outside.ts#setHabitat + solarpolis/render/view.ts#setHabitat",
     "reason": "Both 3D views implement the page's view interface (PageView in main.ts: create, setHabitat, setRunning, bytes, shed, info, skip); their shared machinery is in render/surface.ts."
   },
@@ -36,7 +32,35 @@
     "reason": "Everything holding big buffers reports them to the memory watchdog through a bytes() method (CLAUDE.md rule 12)."
   },
   {
-    "key": "same name: solarpolis/render/outside.ts#frame + solarpolis/render/view.ts#frame",
-    "reason": "Both 3D views implement the page's view interface (PageView in main.ts: create, setHabitat, setRunning, bytes, shed, info, skip); their shared machinery is in render/surface.ts."
+    "key": "same name: solarpolis/app/memory.ts#stop + solarpolis/render/actors/animator.ts#stop",
+    "reason": "The Actors figure and animator are ported from Dunfinity with their method names, which follow Actors' own Character API (load, update, stop, dispose); the plan moves the animator into Actors, and keeping the names keeps that swap a drop-in."
+  },
+  {
+    "key": "same name: solarpolis/lab/blueprintLab.ts#update + solarpolis/render/actors/animator.ts#update",
+    "reason": "The Actors figure and animator are ported from Dunfinity with their method names, which follow Actors' own Character API (load, update, stop, dispose); the plan moves the animator into Actors, and keeping the names keeps that swap a drop-in."
+  },
+  {
+    "key": "same name: solarpolis/lab/blueprintLab.ts#update + solarpolis/render/actors/figure.ts#update",
+    "reason": "The Actors figure and animator are ported from Dunfinity with their method names, which follow Actors' own Character API (load, update, stop, dispose); the plan moves the animator into Actors, and keeping the names keeps that swap a drop-in."
+  },
+  {
+    "key": "same name: solarpolis/physics/world.ts#dispose + solarpolis/render/actors/figure.ts#dispose",
+    "reason": "The Actors figure and animator are ported from Dunfinity with their method names, which follow Actors' own Character API (load, update, stop, dispose); the plan moves the animator into Actors, and keeping the names keeps that swap a drop-in."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/animator.ts#load + solarpolis/render/actors/figure.ts#load",
+    "reason": "The Actors figure and animator are ported from Dunfinity with their method names, which follow Actors' own Character API (load, update, stop, dispose); the plan moves the animator into Actors, and keeping the names keeps that swap a drop-in."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/animator.ts#load + solarpolis/render/terrain.ts#load",
+    "reason": "The Actors figure and animator are ported from Dunfinity with their method names, which follow Actors' own Character API (load, update, stop, dispose); the plan moves the animator into Actors, and keeping the names keeps that swap a drop-in."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/animator.ts#update + solarpolis/render/actors/figure.ts#update",
+    "reason": "The Actors figure and animator are ported from Dunfinity with their method names, which follow Actors' own Character API (load, update, stop, dispose); the plan moves the animator into Actors, and keeping the names keeps that swap a drop-in."
+  },
+  {
+    "key": "idiom: [.s .theta] in solarpolis/render/view.ts + solarpolis/world/flyer.ts + solarpolis/world/walker.ts",
+    "reason": "(θ, s) is the interior's surface coordinate (blueprint frame.ts); reading both fields of a point is how every user of it starts, not a copied procedure. It crossed the idiom threshold only because more files made the names rarer."
   }
 ]

@@ -257,7 +257,14 @@ export function outsideKinds(): readonly Kind[] {
   return [SKY, STARS, HULL];
 }
 
+/** Things the physics moves (for now the debug menu's test balls): one colour, lit by the sunline, through the air. */
+export const BALL = kind('ball', ['position', 'normal'], { cast: false, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial();
+  m.colorNode = throughAir(vec3(0.75, 0.32, 0.08).mul(sunlit()));
+  return m;
+});
+
 /** Every kind, for the Stage's warm-up. */
 export function allKinds(): readonly Kind[] {
-  return [GROUND, WATER, SUNLINE];
+  return [GROUND, WATER, SUNLINE, BALL];
 }

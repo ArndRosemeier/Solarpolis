@@ -5,9 +5,10 @@
   "type": "module",
   "description": "A procedural O'Neill cylinder in the browser.",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "build:publish": "tsc --noEmit && vite build --mode publish",
+    "dev": "node tools/actors/pack.mjs && vite",
+    "build": "node tools/actors/pack.mjs && tsc --noEmit && vite build",
+    "build:publish": "node tools/actors/pack.mjs && tsc --noEmit && vite build --mode publish",
+    "actors:pack": "node tools/actors/pack.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node tools/guards/guards.mjs && node --import tsx --test --experimental-test-isolation=none --test-concurrency=1 --test-reporter=./tools/ci/budget-reporter.mjs --test-reporter-destination=stdout \"test/*.test.ts\" \"tools/**/*.test.mjs\"",
     "test:slow": "node --import tsx --test \"test/slow/**/*.slow.test.ts\"",
@@ -15,6 +16,11 @@
     "repeated": "node tools/repeated-code/find-repeated-code.mjs"
   },
   "dependencies": {
+    "@actors/core": "https://github.com/ArndRosemeier/Actors/releases/download/v0.5.0/actors-core-0.5.0.tgz",
+    "@actors/generator": "https://github.com/ArndRosemeier/Actors/releases/download/v0.5.0/actors-generator-0.5.0.tgz",
+    "@actors/human": "https://github.com/ArndRosemeier/Actors/releases/download/v0.5.0/actors-human-0.5.0.tgz",
+    "@actors/three": "https://github.com/ArndRosemeier/Actors/releases/download/v0.5.0/actors-three-0.5.0.tgz",
+    "@dimforge/rapier3d-compat": "0.19.3",
     "@futuremagic/core": "file:vendor/assetgenerator/packages/core",
     "@futuremagic/stage": "file:vendor/assetgenerator/packages/stage",
     "three": "^0.186.1"

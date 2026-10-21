@@ -2,6 +2,24 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.014 — You have a body
+
+- You are now a person: press V to see yourself from behind, and V again to look through your own eyes.
+- Your body walks, runs, jumps and swims along with you, and stays upright toward the axis wherever you stand.
+- It is lit by the sunline like everything around it, and its light changes with the hour.
+
+## v0.013 — Walking with real weight
+
+- On foot you now have a body: you walk over the hills, Space jumps, and you fall off ledges.
+- Up always points to the axis. On the endcap slopes you stay upright while the ground tilts away, and gravity gets weaker the higher you climb, so jumps there carry further.
+- Walk into the lake and you float with your head out and swim slowly.
+- The debug menu shows whether you are standing, in the air or swimming, and how strong gravity is where you are.
+
+## v0.012 — Things fall the way they do in a spinning habitat
+
+- Physics arrives: in the debug menu (Physics), drop a ball from 20 m or 100 m. It falls, bounces and rolls on the hills.
+- It does not land straight below where it was let go: the habitat turns under it, so it lands a little behind, by exactly as much as the blueprint predicts (Coriolis).
+
 ## v0.011 — The travelling sun
 
 - The sunline now has a day. In the morning its brightest stretch rises out of the wild end, crosses the cylinder over the day and sinks into the port end in the evening. Then the tube dims to a faint night glow.

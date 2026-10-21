@@ -2,16 +2,24 @@
  * The view from inside: the one renderer (WebGPU only), the Stage, the terrain tiles and the sunline, seen by a walker
  * on the ground or a flyer in the air. Everything is drawn relative to the eye (`toView`): the camera sits at the origin
  * and the world moves. Hold the right mouse button to look around (the pointer stays free for clicking things);
- * W A S D or the arrow keys to move, Shift to run; F takes off or lands, and in the air E or Space climbs, Q or C sinks.
+ * W A S D or the arrow keys to move, Shift to run, Space to jump; F takes off or lands, and in the air E or Space climbs,
+ * Q or C sinks. On foot the physics carries the player (`physics/character.ts`): up is toward the axis, and gravity
+ * is the spin's. The player is an Actors human (`render/actors`); V looks at them from behind, V again from their eyes.
  */
-import { Color, CylinderGeometry, Mesh, PerspectiveCamera, Scene, type WebGPURenderer } from 'three/webgpu';
+import { Color, CylinderGeometry, Mesh, PerspectiveCamera, Scene, SphereGeometry, type WebGPURenderer } from 'three/webgpu';
 import { Stage, createRenderer } from '@futuremagic/stage';
-import { fromWorld, toView, type Habitat } from '../blueprint';
+import { deriveSeed, v3dot, v3madd, v3norm } from '@futuremagic/core';
+import { fromWorld, toView, toWorld, type Habitat, type Vec3 } from '../blueprint';
 import { makeTerrain, type Terrain } from '../gen/terrain';
 import { Walker, type View } from '../world/walker';
 import { Flyer } from '../world/flyer';
+import { PhysicsWorld } from '../physics/world';
+import { HUMAN, type Character } from '../physics/character';
+import { Figure, type MoveState } from './actors/figure';
+import { playerLook } from './actors/looks';
+import { Lights } from './lights';
 import { WorkerPool } from '../workers/pool';
-import { SUNLINE, air, allKinds, setAir, setEmission, setSunline, standInAttribute, view } from './materials';
+import { BALL, SUNLINE, air, allKinds, setAir, setEmission, setSunline, standInAttribute, view } from './materials';
 import { dayPhase, emissionMean, nearestLit, sunlineEmission, sunlineNorm, EMISSION_SAMPLES } from '../world/sunline';
 import { densityFalloff, seenMid } from '../world/air';
 import { TerrainView, describeLayout } from './terrain';
@@ -19,8 +27,18 @@ import { dragToLook, draw, fitCanvas, runFrames } from './surface';
 
 /** Running is this many times the walking speed. */
 const RUN = 8;
+/** The physics' ground patch: side (m) and cell (m). */
+const PATCH_SIZE = 192;
+const PATCH_CELL = 1;
+/** The player stops walking this share of the patch's size from its centre until the next patch arrives. */
+const PATCH_EDGE = 0.4;
+/** One sphere shared by every test ball (the kind's attributes: position and normal). */
+const BALL_GEOMETRY = new SphereGeometry(0.25, 20, 14).deleteAttribute('uv');
 /** Clock seconds per real second by default: a day in about 24 minutes, so the sun is seen to travel. */
 const DAY_SPEED = 60;
+/** The third-person camera: how far behind the player's head, and how far above it (m). */
+const CHASE_BACK = 3.5;
+const CHASE_UP = 0.4;
 
 export class InteriorView {
   readonly canvas = document.createElement('canvas');
@@ -46,6 +64,21 @@ export class InteriorView {
   time = 0;
   timeScale = DAY_SPEED;
   private readonly emission = new Float32Array(EMISSION_SAMPLES);
+  /** The physics bubble around the player, made on first use (Rapier loads then), and its ground patch request. */
+  private physics: PhysicsWorld | null = null;
+  private physicsLoading: Promise<PhysicsWorld> | null = null;
+  private patchAsked = false;
+  /** The player's body on foot, once the physics has ground under it; null while flying. */
+  private character: Character | null = null;
+  private jump = false;
+  /** The player's body (an Actors human), once loaded, and whether the camera looks at it from behind. */
+  private figure: Figure | null = null;
+  thirdPerson = false;
+  private readonly lights: Lights;
+  private norm = 1;
+  private readonly balls = new Map<number, Mesh>();
+  /** The last dropped ball: where it was let go (θ) and from how high, and how far it landed behind, once it has. */
+  private drop: { id: number; theta: number; height: number; landed: number | null } | null = null;
 
   private constructor(private habitat: Habitat) {
     // Start in the morning: a quarter of the way through the daylight hours.
@@ -53,6 +86,8 @@ export class InteriorView {
     this.terrain = makeTerrain(habitat);
     this.walker = new Walker(habitat.profile, undefined, this.terrain.standAt);
     this.canvas.className = 'view-canvas';
+    // Before the warm-up: the lights are part of every lit shader's key.
+    this.lights = new Lights(this.scene);
   }
 
   /** Make the view: throws `GraphicsUnavailable` where the browser has no WebGPU (the caller shows why). */
@@ -66,7 +101,22 @@ export class InteriorView {
     await v.stage.warmUp();
     await v.build();
     v.listen();
+    void v.physicsReady();
+    void v.loadPlayer();
     return v;
+  }
+
+  /** Load the player's body (the same person for the same world seed) and put it in, hidden until seen. */
+  private async loadPlayer(): Promise<void> {
+    const figure = await Figure.load(await playerLook(deriveSeed(this.habitat.params.seed, 'player')));
+    figure.object.visible = false;
+    await this.stage.add(figure.object);
+    this.figure = figure;
+  }
+
+  /** Bytes the player's body holds (memory watchdog). */
+  bodyBytes(): number {
+    return this.figure?.bytes() ?? 0;
   }
 
   /** Bytes of geometry this view holds (memory watchdog). */
@@ -82,7 +132,9 @@ export class InteriorView {
   /** Lines for the debug menu. */
   info(): string {
     const a = this.flyer ? fromWorld(this.habitat.profile, ...this.flyer.eye) : this.walker.at;
-    const mode = this.flyer ? `flying ${this.flyer.clearance().toFixed(0)} m up` : 'on foot';
+    const c = this.character, g = this.habitat.gravityAt(Math.hypot(...this.current().eye.slice(0, 2) as [number, number]));
+    const mode = this.flyer ? `flying ${this.flyer.clearance().toFixed(0)} m up`
+      : !c ? 'on foot (waiting for the physics)' : `on foot, ${c.swimming ? 'swimming' : c.grounded ? 'standing' : 'in the air'}, gravity ${(g / 9.81).toFixed(2)} g`;
     return [
       this.stage.hudLine(),
       `${this.tiles?.info() ?? 'terrain: none'} · ${describeLayout(this.terrain)} · ${this.pool.workers} workers`,
@@ -109,12 +161,114 @@ export class InteriorView {
     this.time += seconds;
   }
 
+  /** Let a ball fall from `height` metres, a few steps ahead: it lands behind the spot below it (Coriolis). */
+  async dropBall(height: number): Promise<void> {
+    const physics = await this.physicsReady();
+    const v = this.current();
+    const ahead = fromWorld(this.habitat.profile, v.eye[0] + v.look[0] * 4, v.eye[1] + v.look[1] * 4, v.eye[2] + v.look[2] * 4);
+    const radius = 0.25;
+    const ground = this.terrain.standAt(ahead.theta, ahead.s);
+    const id = physics.addBall(toWorld(this.habitat.profile, { theta: ahead.theta, s: ahead.s, h: ground + height + radius }), [0, 0, 0], radius);
+    const mesh = new Mesh(BALL_GEOMETRY, BALL.material);
+    mesh.name = `ball ${id}`;
+    mesh.frustumCulled = false;
+    this.balls.set(id, mesh);
+    await this.stage.add(mesh);
+    this.drop = { id, theta: ahead.theta, height, landed: null };
+  }
+
+  /** Remove every ball. */
+  clearBalls(): void {
+    for (const [id, mesh] of this.balls) { this.physics?.remove(id); this.stage.remove(mesh); }
+    this.balls.clear();
+    this.drop = null;
+  }
+
+  /** The physics line for the debug menu. */
+  physicsLine(): string {
+    if (!this.physics) return 'physics: not started (drop a ball)';
+    const d = this.drop;
+    const last = !d ? '' : d.landed === null ? `, ball falling from ${d.height} m`
+      : `, last ball from ${d.height} m landed ${d.landed.toFixed(2)} m antispinward (blueprint: ${this.habitat.dropOffset(d.height).toFixed(2)} m)`;
+    return `physics: ${this.physics.count} bodies${last}`;
+  }
+
+  private physicsReady(): Promise<PhysicsWorld> {
+    this.physicsLoading ??= PhysicsWorld.create(this.habitat).then(async (p) => {
+      this.physics = p;
+      await this.groundFor(this.current().eye);
+      return p;
+    });
+    return this.physicsLoading;
+  }
+
+  /** Ask the workers for the ground patch under `eye` and stand the physics on it. */
+  private async groundFor(eye: Vec3): Promise<void> {
+    if (!this.physics || this.patchAsked) return;
+    this.patchAsked = true;
+    const at = fromWorld(this.habitat.profile, ...eye);
+    const answer = await this.pool.job({ kind: 'patch', params: this.habitat.params, theta: at.theta, s: at.s, size: PATCH_SIZE, cell: PATCH_CELL });
+    if ('patch' in answer && this.physics) this.physics.setGround(answer.patch);
+    this.patchAsked = false;
+    this.standUp();
+  }
+
+  /** Give the walker a body once the physics has ground under it (at the start, and after landing). */
+  private standUp(): void {
+    const p = this.physics;
+    if (!p || this.flyer || this.character) return;
+    const { theta, s } = this.walker.at;
+    const feet = toWorld(this.habitat.profile, { theta, s, h: this.terrain.standAt(theta, s) + 0.05 });
+    if (p.offPatch(feet, PATCH_EDGE)) return;
+    this.character = p.addCharacter(feet, this.terrain.waterDepth);
+  }
+
+  /** Step the physics and put the balls where it says. */
+  private simulate(dt: number, eye: Vec3): void {
+    const p = this.physics;
+    if (!p) return;
+    if (p.needsGround(eye)) void this.groundFor(eye);
+    const c = this.character;
+    const o = p.groundPatch?.origin;
+    if (c && o && p.offPatch(c.feet(), PATCH_EDGE)) {
+      // At the patch's edge, walk only back toward its middle until the next patch arrives: no ground beyond it yet.
+      const f = c.feet(), w = c.stride.walk;
+      if (w[0] * (f[0] - o[0]) + w[1] * (f[1] - o[1]) + w[2] * (f[2] - o[2]) > 0) c.stride.walk = [0, 0, 0];
+    }
+    p.advance(dt);
+    if (c) this.walker.follow(c.feet(p.blend));
+    const alive = new Set<number>();
+    for (const b of p.states()) {
+      alive.add(b.id);
+      const mesh = this.balls.get(b.id);
+      if (!mesh) continue;
+      mesh.position.set(...toView(eye, b.position));
+      mesh.quaternion.set(...b.rotation);
+      const d = this.drop;
+      if (d && d.id === b.id && d.landed === null) {
+        const at = fromWorld(this.habitat.profile, ...b.position);
+        if (at.h - this.terrain.heightAt(at.theta, at.s) < b.radius + 0.05) {
+          // Behind = against the spin (−θ), along the ground.
+          let dTheta = at.theta - d.theta;
+          dTheta -= 2 * Math.PI * Math.round(dTheta / (2 * Math.PI));
+          d.landed = -dTheta * this.habitat.profile.at(at.s).r;
+        }
+      }
+    }
+    for (const [id, mesh] of this.balls) if (!alive.has(id)) { this.stage.remove(mesh); this.balls.delete(id); }
+  }
+
   /** Show another habitat (the Lab changed it). */
   async setHabitat(h: Habitat): Promise<void> {
     if (h === this.habitat) return;
     this.habitat = h;
     this.terrain = makeTerrain(h);
     this.flyer = null;
+    this.character = null;
+    this.clearBalls();
+    this.physics?.dispose();
+    this.physics = null;
+    this.physicsLoading = null;
     this.walker.setProfile(h.profile, this.terrain.standAt);
     await this.build();
   }
@@ -123,7 +277,8 @@ export class InteriorView {
     if (this.tiles) { this.scene.remove(this.tiles.group); this.tiles.dispose(); }
     if (this.sunline) { this.stage.remove(this.sunline); this.sunline.geometry.dispose(); }
     const h = this.habitat;
-    setSunline(h.length, sunlineNorm(h), nearestLit(h));
+    this.norm = sunlineNorm(h);
+    setSunline(h.length, this.norm, nearestLit(h));
     this.shine();
     setAir(densityFalloff(h), h.radius, seenMid(h));
     // The sunline: from the wild wall to the port wall along the axis.
@@ -150,12 +305,40 @@ export class InteriorView {
     this.camera.up.set(...v.up);
     this.camera.lookAt(v.look[0], v.look[1], v.look[2]);
     if (this.sunline) this.sunline.position.set(...toView(v.eye, [0, 0, 0]));
+    this.pose(v.eye);
     const pixelsPerRadian = (this.canvas.clientHeight || 720) / (this.camera.fov * Math.PI / 180);
     this.tiles?.follow(v.eye, pixelsPerRadian);
   }
 
   private current(): View {
-    return this.flyer ? this.flyer.view() : this.walker.view();
+    if (this.flyer) return this.flyer.view();
+    const v = this.walker.view();
+    if (!this.thirdPerson) return v;
+    // From behind and a little above the head, looking the same way; never under the ground.
+    let eye = v3madd(v3madd(v.eye, v.look, -CHASE_BACK), v.up, CHASE_UP);
+    const at = fromWorld(this.habitat.profile, ...eye), floor = this.terrain.standAt(at.theta, at.s) + 0.3;
+    if (at.h < floor) eye = toWorld(this.habitat.profile, { ...at, h: floor });
+    return { eye, look: v.look, up: v.up };
+  }
+
+  /** Switch between the player's eyes and a camera behind them. */
+  toggleThirdPerson(): void {
+    this.thirdPerson = !this.thirdPerson;
+  }
+
+  /** Light the player's body where it stands and pose it for the frame (relative to the camera's eye). */
+  private pose(eye: Vec3): void {
+    const f = this.figure, c = this.character;
+    if (!f) return;
+    f.object.visible = !!c && !this.flyer && this.thirdPerson;
+    if (!c || !f.object.visible) return;
+    const feet = this.walker.feetAt(), up = c.up;
+    this.lights.shineOn(this.habitat, this.terrain, this.emission, emissionMean(this.emission), air.skyLight.value, this.norm, v3madd(feet, up, HUMAN.height / 2));
+    const v = c.velocity, flat = v3madd(v, up, -v3dot(v, up)), speed = Math.hypot(...flat);
+    const look = this.walker.view().look, ahead = v3madd(look, up, -v3dot(look, up));
+    const front = v3norm(speed > 0.5 ? flat : ahead);
+    const move: MoveState = c.swimming ? 'swim' : !c.grounded ? 'jump' : speed < 0.3 ? 'idle' : speed < 2.5 ? 'walk' : speed < 5.5 ? 'run' : 'sprint';
+    f.update({ feet: toView(eye, feet), up, front, speed, anim: { move } }, this.frameDt, this.time);
   }
 
   /** Take off from where the walker stands, or land under the flyer. */
@@ -164,7 +347,10 @@ export class InteriorView {
       const at = fromWorld(this.habitat.profile, ...this.flyer.eye);
       this.walker.land(at.theta, at.s, this.flyer.look);
       this.flyer = null;
+      this.standUp();
     } else {
+      this.physics?.removeCharacter();
+      this.character = null;
       this.flyer = new Flyer(this.habitat.profile, this.walker.view(), this.terrain.standAt);
     }
   }
@@ -179,7 +365,8 @@ export class InteriorView {
     window.addEventListener('keydown', (e) => {
       if (!this.running) return;
       if (e.code === 'KeyF' && !e.repeat) this.toggleFlying();
-      if (e.code === 'Space') e.preventDefault();
+      if (e.code === 'KeyV' && !e.repeat) this.toggleThirdPerson();
+      if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) this.jump = true; }
       this.keys.add(e.code);
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
@@ -193,7 +380,11 @@ export class InteriorView {
     runFrames(() => this.running, (dt) => this.frame(dt));
   }
 
+  /** The last frame's time step (s), for posing the body. */
+  private frameDt = 0;
+
   private frame(dt: number): void {
+    this.frameDt = dt;
     const k = this.keys;
     const forward = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
     const right = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0);
@@ -205,12 +396,19 @@ export class InteriorView {
     } else {
       const base = this.walker.speed;
       this.walker.speed = base * run;
-      this.walker.step({ forward, right }, dt);
+      if (this.character) {
+        this.character.stride.walk = this.walker.stride({ forward, right });
+        if (this.jump) this.character.stride.jump = true;
+      } else {
+        this.walker.step({ forward, right }, dt);
+      }
       this.walker.speed = base;
     }
+    this.jump = false;
     fitCanvas(this.canvas, this.renderer, this.camera);
     this.time += dt * this.timeScale;
     this.shine();
+    this.simulate(dt, this.current().eye);
     this.place();
     draw(this.stage);
   }

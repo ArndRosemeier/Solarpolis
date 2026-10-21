@@ -88,7 +88,11 @@ class ViewSlot<V extends PageView> {
   }
 }
 
-const insideSlot = new ViewSlot('Hold the right mouse button to look around · W A S D to move · Shift to run · F to fly (E up, Q down)', 'Building the interior…', 'terrain tiles', (h) => InteriorView.create(h));
+const insideSlot = new ViewSlot('Hold the right mouse button to look around · W A S D to move · Shift to run · Space to jump · V to see yourself · F to fly (E up, Q down)', 'Building the interior…', 'terrain tiles', async (h) => {
+  const v = await InteriorView.create(h);
+  memory.track('player body', () => v.bodyBytes());
+  return v;
+});
 const outsideSlot = new ViewSlot('Hold the right mouse button to swing around · wheel to come closer · 1 habitat, 2 Earth, 3 Moon', 'Building the sky…', 'sky maps and stars', (h) => OutsideView.create(h));
 // The views fill the window below the header, whatever height the header wraps to.
 const fit = (): void => { for (const s of [insideSlot, outsideSlot]) s.box.style.setProperty('--top', `${header.getBoundingClientRect().bottom}px`); };
@@ -147,6 +151,10 @@ debug.add({ label: 'Clock speed outside: ×60 → ×3600 → paused → real tim
 debug.add({ label: 'Six hours later', group: 'Outside', run: () => outsideView()?.skip(6 * 3600) });
 debug.add({ label: "Jump to Earth's next shadow on the habitat", group: 'Outside', run: () => { const v = outsideView(); if (v && !v.nextShadow()) console.log('no shadow within a year'); } });
 debug.add({ label: 'Night eyes augmentation (toggle): the eyes open far enough for the stars', group: 'Outside', run: () => { const v = outsideView(); if (v) v.nightEyes = !v.nightEyes; } });
+debug.addInfo(() => view()?.physicsLine() ?? '');
+debug.add({ label: 'Drop a ball from 20 m', group: 'Physics', run: () => void view()?.dropBall(20) });
+debug.add({ label: 'Drop a ball from 100 m', group: 'Physics', run: () => void view()?.dropBall(100) });
+debug.add({ label: 'Remove the balls', group: 'Physics', run: () => view()?.clearBalls() });
 debug.add({ label: 'Log the shader report', group: 'Render', run: () => console.log((globalThis as { shaders?: { report(): string } }).shaders?.report() ?? 'no renderer yet') });
 debug.add({ label: 'Take a memory sample now', group: 'Memory', run: () => console.log(memory.sample()) });
 debug.add({ label: 'Log the memory history', group: 'Memory', run: () => console.table(memory.history.map((s) => ({ t: Math.round(s.t), totalMB: Math.round(s.total / 1048576), level: s.level }))) });

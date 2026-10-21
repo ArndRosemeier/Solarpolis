@@ -12,8 +12,8 @@
 import { button, checkbox, el } from './dom';
 
 /** The panel's sections, in the order they are listed. */
-export type DebugGroup = 'Habitat' | 'Go' | 'Time' | 'Outside' | 'Show' | 'Render' | 'Memory';
-const GROUPS: DebugGroup[] = ['Habitat', 'Go', 'Time', 'Outside', 'Show', 'Render', 'Memory'];
+export type DebugGroup = 'Habitat' | 'Go' | 'Time' | 'Physics' | 'Outside' | 'Show' | 'Render' | 'Memory';
+const GROUPS: DebugGroup[] = ['Habitat', 'Go', 'Time', 'Physics', 'Outside', 'Show', 'Render', 'Memory'];
 
 export interface DebugItem {
   label: string;

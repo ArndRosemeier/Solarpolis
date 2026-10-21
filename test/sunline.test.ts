@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { MATRIX, derive, type Vec3 } from '../src/blueprint';
 import { OPEN_SKY, horizonAt } from '../src/gen/horizon';
 import type { Terrain } from '../src/gen/terrain';
-import { dayLevel, dayPhase, emissionMean, irradiance, rawIrradiance, sunlineEmission, sunlineNorm, EMISSION_SAMPLES, SUNLINE_STEPS } from '../src/world/sunline';
+import { dayLevel, dayPhase, emissionMean, irradiance, lightVector, rawIrradiance, sunlineEmission, sunlineNorm, EMISSION_SAMPLES, SUNLINE_STEPS } from '../src/world/sunline';
 
 for (const { name, params } of MATRIX) {
   const h = derive(params);
@@ -52,5 +52,15 @@ for (const { name, params } of MATRIX) {
     assert.ok(under > aside * 1.5, `${under} vs ${aside}`);
     assert.ok(Math.abs(dayPhase(h, 3 * day + 10) - dayPhase(h, 10)) < 1e-9, 'the day repeats');
     assert.ok(dayLevel(h, 0) < 0.1 && dayLevel(h, daylight / 2) === 1);
+  });
+
+  test(`sunline (${name}): one light vector stands in for the line on the floor`, () => {
+    const h = derive(params);
+    const noon = sunlineEmission(h, params.day.length * params.day.daylight * 0.5);
+    const p: Vec3 = [h.radius, 0, h.length * 0.1];
+    const v = lightVector(h, noon, p);
+    // A floor facing the whole lit line: n · v is the light on it.
+    assert.ok(Math.abs(-v[0] - irradiance(h, noon, p, [-1, 0, 0])) < 0.02 * irradiance(h, noon, p, [-1, 0, 0]), `${-v[0]}`);
+    assert.ok(v[2] > 0, 'from the bright stretch, toward the middle');
   });
 }

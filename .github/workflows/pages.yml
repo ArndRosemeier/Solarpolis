@@ -38,6 +38,13 @@ jobs:
         with:
           enablement: true
       - run: npm ci --no-audit --no-fund
+      # The Actors asset pack (bodies, skins, clothes, hair, clips) for the installed version, cached between runs.
+      - uses: actions/cache@v4
+        with:
+          path: .actors-pack
+          key: actors-pack-${{ hashFiles('package-lock.json') }}
+          restore-keys: actors-pack-
+      - run: node tools/actors/pack.mjs
       - run: npx vite build --mode publish
         env:
           SOLARPOLIS_BASE: ${{ steps.pages.outputs.base_path }}/

@@ -9,3 +9,4 @@ looks-out/
 /.gate-logs/
 /.gate-lock/
 /worktrees/
+.actors-pack/

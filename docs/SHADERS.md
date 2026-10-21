@@ -23,7 +23,8 @@ The renderer foundation (the Stage, the compile cap, the renderer hooks and the 
 ## What you must do
 
 - **A new look is a new kind** in the material registry.
-- **No three.js lights so far.** The sunline lights everything from the axis inside the kinds' shaders. If lights come, they are a fixed pool made before the warm-up: the number and order of lights is part of every shader's cache key.
+- **Lights are a fixed pool** (`src/render/lights.ts`: one directional key light and one ambient sky light), made before the warm-up: the number and order of lights is part of every lit shader's cache key. The kinds do not use them (the sunline lights them inside their own shaders); they light what three.js's own materials draw, Actors' bodies.
+- **Humans are the one exception to the registry** (as in Dunfinity): Actors (`@actors/three/webgpu`'s `nodeMaterials`, for `Figure`s) makes their node materials (skin, eyes, hair, garments). A figure enters with `stage.add`, which compiles it under the cap first.
 - **Put things into the scene with `stage.add`** (or `stage.prepare` for your own groups), never plain `scene.add` for anything with a new material or geometry layout.
 - **Never** construct a material outside the registry, use `onBeforeCompile`, or call `renderer.compile*` outside the Stage. `npm test` fails on all three (`tools/guards/rules.json`).
 - **WebGPU only**: no `forceWebGL`, no WebGL context, no fallback path.
