@@ -16,6 +16,7 @@ import { FLOOR_LAYERS, climateOf, toWorld, type BiomeSpec, type Climate, type Fl
 import type { Terrain } from './terrain';
 import { riverAt } from './rivers';
 import { canopyColor } from './trees';
+import { plantedCanopy, plantedLawn } from './planted';
 
 /** Plants at least this tall (m, full grown) are trees: they make up the canopy of woods. */
 export const TREE_HEIGHT = 6;
@@ -119,18 +120,30 @@ export function makeEcology(terrain: Terrain): Ecology {
       sum += out[b];
     }
     if (sum > 0) for (let b = 0; b < count; b++) out[b] /= sum;
-    else {
-      // Nothing suits (very steep, or out of every range): the nearest fit, by moisture, takes it.
-      let best = 0, gap = Infinity;
-      for (let b = 0; b < count; b++) {
-        const [lo, hi] = biomes[b].moisture, d = m < lo ? lo - m : m > hi ? m - hi : 0;
-        if (d < gap) { gap = d; best = b; }
-      }
-      out.fill(0, 0, count);
-      out[best] = 1;
+    else nearestFit(m, out);
+    // A grove's lawn (gen/planted.ts) is the open, grassy biome's.
+    const lawn = plantedLawn(terrain, theta, s);
+    if (lawn > 0) {
+      for (let b = 0; b < count; b++) out[b] *= 1 - lawn;
+      out[open] += lawn;
     }
     return out;
   };
+  /** Nothing suits (very steep, or out of every range): the nearest fit, by moisture, takes it. */
+  const nearestFit = (m: number, out: Float32Array): void => {
+    let best = 0, gap = Infinity;
+    for (let b = 0; b < count; b++) {
+      const [lo, hi] = biomes[b].moisture, d = m < lo ? lo - m : m > hi ? m - hi : 0;
+      if (d < gap) { gap = d; best = b; }
+    }
+    out.fill(0, 0, count);
+    out[best] = 1;
+  };
+  /** The open, grassy biome: no trees, the most grass on its floor (a grove's lawn is it). */
+  const open = biomes.reduce((best, b, k) => {
+    const grass = (x: BiomeSpec) => (x.floor.grass ?? 0) + (x.floor['dry grass'] ?? 0) - (x.plants.some((p) => p.height[1] >= TREE_HEIGHT) ? 10 : 0);
+    return grass(b) > grass(biomes[best]) ? k : best;
+  }, 0);
 
   const shares = new Float32Array(count);
   const woods = biomes.map(canopyOf);
@@ -196,6 +209,15 @@ export function makeEcology(terrain: Terrain): Ecology {
       k0 += w * woods[b].color[0]; k1 += w * woods[b].color[1]; k2 += w * woods[b].color[2];
     }
     if (cover > 0) { tall /= cover; apart /= cover; k0 /= cover; k1 /= cover; k2 /= cover; } else { k0 = out[i]; k1 = out[i + 1]; k2 = out[i + 2]; }
+    // Planted crowns (gen/planted.ts: a grove's ring) over the scattered woods, or over open ground.
+    const planted = plantedCanopy(terrain, theta, s);
+    if (planted) {
+      const a = planted.cover, was = Math.min(1, cover);
+      k0 += (planted.color[0] - k0) * a; k1 += (planted.color[1] - k1) * a; k2 += (planted.color[2] - k2) * a;
+      tall = was > 0 ? tall + (planted.height - tall) * a : planted.height;
+      apart = was > 0 ? apart : planted.height * 0.55;
+      cover = was + (1 - was) * a;
+    }
     if (wood) { wood[(i / 3) * 2] = Math.min(1, cover); wood[(i / 3) * 2 + 1] = apart; }
     if (!canopy) return;
     const at = (i / 3) * 4;

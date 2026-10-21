@@ -19,7 +19,7 @@
  * relative to the tile's origin; built in a part's own frame and turned into the habitat's. Pure: no three.js.
  */
 import { Rng, deriveSeed, hash3f, v3add, v3cross, v3dot, v3len, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
-import type { Habitat } from '../blueprint';
+import { berthArmAt, type Habitat } from '../blueprint';
 import { Shape, bytesOf, intoPlace, outOfPlace, type Place, type RGB } from './shapes';
 
 export type { Place };
@@ -202,7 +202,7 @@ export function detailParts(h: Habitat, skin: Skin): DetailPart[] {
   };
   const arms = s.arms;
   for (let i = 0; i < s.berthArms; i++) {
-    const a = (i / s.berthArms) * 2 * Math.PI, ca = Math.cos(a), sa = Math.sin(a);
+    const [ca, sa] = berthArmAt(s, i);
     // Out from the spindle's skin, up to the docking collar (render/hull.ts) that sits over its last half width.
     parts.push(truss(`arm${i}`, 'spindle', 'square', arms.length - arms.width / 2, arms.width, true, { ex: [-sa, ca, 0], ey: Z, ez: [ca, sa, 0], at: [ca * s.radius, sa * s.radius, arms.z] }));
   }

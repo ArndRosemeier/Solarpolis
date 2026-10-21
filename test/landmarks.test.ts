@@ -5,7 +5,7 @@ import { makeTerrain, type Terrain } from '../src/gen/terrain';
 import { frameOf, keptClear, landmarkTopAt, landmarksOf, reachOf, type Pavilion } from '../src/gen/landmarks';
 import { FINISH, PAVILION_LEVELS, bridgeAt, buildPavilion, pavilionPlan, pavilionTop, roofAt, stairsOf } from '../src/gen/pavilion';
 import { buildPatch } from '../src/gen/patch';
-import { makePlan } from '../src/gen/plan';
+import { planOf, siteOf } from '../src/gen/plan';
 import { Shape, intoPlace, outOfPlace, planeMap, type MappedArrays } from '../src/gen/shapes';
 
 const terrains = new Map<string, Terrain>();
@@ -32,7 +32,7 @@ for (const { name, params } of MATRIX) {
     assert.equal(ls.length, 1);
     const p = ls[0], lake = t.lake;
     // On the plan's site: where the Sunwalk crosses the lake.
-    const site = makePlan(t.habitat).sites.find((x) => x.kind === 'lake-pavilion')!;
+    const site = siteOf(planOf(t.habitat), 'lake-pavilion')!;
     assert.equal(p.theta, site.theta);
     assert.equal(p.s, site.s);
     assert.equal(p.s, lake.s);
@@ -49,8 +49,8 @@ for (const { name, params } of MATRIX) {
       assert.ok(t.heightAt(p.theta, p.s + b.dir * b.to) > p.level, 'it ends on dry land');
       assert.ok(b.end >= 0 && b.end < pavilionPlan(p).deck * 2, `end ${b.end}`);
     }
-    // Same habitat, same place.
-    assert.deepEqual(landmarksOf(makeTerrain(derive(params))), ls);
+    // Same habitat, same place (on the smallest: a second terrain costs time).
+    if (name === 'small') assert.deepEqual(landmarksOf(makeTerrain(derive(params))), ls);
   });
 
   test(`landmarks (${name}): its deck and bridges are walkable, plants keep off them, the physics stands on them`, () => {

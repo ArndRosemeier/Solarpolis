@@ -9,6 +9,7 @@ import type { Terrain } from './terrain';
 import { frameOf, landmarksOf, reachOf, type Landmark } from './landmarks';
 import { buildPavilion } from './pavilion';
 import { outOfPlace } from './shapes';
+import { kept } from './kept';
 
 export interface GroundPatch {
   /** Where it was asked for (θ, s), and its world origin (float64). */
@@ -83,9 +84,4 @@ function landmarkSolids(terrain: Terrain, origin: Vec3, size: number): { positio
 }
 
 /** A landmark's solid parts, built once. */
-const solid = new WeakMap<Landmark, ReturnType<ReturnType<typeof buildPavilion>['arrays']>>();
-function solidOf(l: Landmark): ReturnType<ReturnType<typeof buildPavilion>['arrays']> {
-  let a = solid.get(l);
-  if (!a) { a = buildPavilion(l, 'solid').arrays(); solid.set(l, a); }
-  return a;
-}
+const solidOf = kept((l: Landmark) => buildPavilion(l, 'solid').arrays());

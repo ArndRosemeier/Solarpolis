@@ -154,6 +154,12 @@ export function makeExterior(x: ExteriorInputs): Exterior {
  * How far a point (blueprint frame) is from the habitat's outside: the nearest of its pieces, negative inside one.
  * The berth arms and dishes are left out: their own distances are `partDistance` (gen/hullParts.ts).
  */
+/** Which way berth arm `i` points out from the spindle's axis: [cos, sin] of its angle round the spindle frame's z. */
+export function berthArmAt(spindle: Exterior['spindle'], i: number): [number, number] {
+  const a = (i / spindle.berthArms) * 2 * Math.PI;
+  return [Math.cos(a), Math.sin(a)];
+}
+
 export function exteriorDistance(e: Exterior, p: readonly [number, number, number]): number {
   const rho = Math.hypot(p[0], p[1]);
   let best = Infinity;

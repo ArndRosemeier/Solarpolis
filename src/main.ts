@@ -18,7 +18,9 @@ import { OutsideView } from './render/outside';
 import { hubView } from './space';
 import { fromWorld, toWorld, type DebrisSpec, type Habitat } from './blueprint';
 import { nearestOf, plantsOf } from './gen/scatter';
-import { frameOf, landmarksOf, type Landmark } from './gen/landmarks';
+import { frameOf, landmarksOf, placeAt, type Landmark } from './gen/landmarks';
+import { plantingsOf, type Grove } from './gen/planted';
+import type { Terrain } from './gen/terrain';
 import { outOfPlace } from './gen/shapes';
 import { pavilionPlan } from './gen/pavilion';
 
@@ -263,10 +265,15 @@ viewpoint('Fly: halfway up, looking at the far side', 0.5, Math.PI, 0.6);
 viewpoint('Fly: high up, looking down', 0.6, 0.05, 0.25);
 viewpoint('Fly: near the axis at the wild end, looking along the tube', 0.9, 0.02, 3, 0);
 viewpoint('Fly: over the floor, looking up the wild endcap', 0.1, 0, -1.5, 0.08);
+/** The Inside view and something of its terrain (`pick`), when both are there. */
+function inView<T>(pick: (t: Terrain) => T | undefined): { v: InteriorView; x: T } | null {
+  const v = view(), t = v?.ecology?.terrain, x = t && pick(t);
+  return v && x ? { v, x } : null;
+}
 /** The landmarks (gen/landmarks.ts): the first one, and where its parts are. */
 const firstLandmark = (): { v: InteriorView; l: Landmark } | null => {
-  const v = view(), t = v?.ecology?.terrain, l = t && landmarksOf(t)[0];
-  return v && l ? { v, l } : null;
+  const f = inView((t) => landmarksOf(t)[0]);
+  return f && { v: f.v, l: f.x };
 };
 debug.add({
   label: 'To the pavilion: the shore end of its bridge', group: 'Go', run: () => {
@@ -295,6 +302,30 @@ const overPavilion = (label: string, out: number, up: number): void => debug.add
 });
 overPavilion('Fly: by the pavilion', 2.2, 1.4);
 overPavilion('Fly: the pavilion from afar', 14, 5);
+/** The founders' grove (gen/planted.ts). */
+const grove = (): { v: InteriorView; g: Grove } | null => {
+  const f = inView((t) => plantingsOf(t).groves[0]);
+  return f && { v: f.v, g: f.x };
+};
+debug.add({
+  label: 'To the founders\' grove: inside its ring', group: 'Go', run: () => {
+    const f = grove();
+    if (f) f.v.goTo(f.g.theta, f.g.s - Math.max(f.g.ring * 0.7, f.g.crown), 0);
+  },
+});
+/** Float `out` grove radii from its middle (toward the wild end) and `up` of them above the ground, looking at it. */
+const overGrove = (label: string, out: number, up: number): void => debug.add({
+  label, group: 'Go', run: () => {
+    const f = grove(), h = lab.habitat;
+    if (!f || !h) return;
+    const g = f.g, reach = Math.max(g.ring, g.crown) + g.crown, fr = placeAt(h, g.theta, g.s, f.v.ecology!.terrain.heightAt(g.theta, g.s));
+    const eye = outOfPlace(fr, [-reach * out, reach * out * 0.3, reach * up]), at = outOfPlace(fr, [0, 0, g.trees[0].height * 0.3]);
+    const d = Math.hypot(at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]);
+    f.v.floatAt(eye, [(at[0] - eye[0]) / d, (at[1] - eye[1]) / d, (at[2] - eye[2]) / d]);
+  },
+});
+overGrove('Fly: over the founders\' grove', 1.6, 0.9);
+overGrove('Fly: the founders\' grove from afar', 12, 3);
 debug.add({ label: 'Travel 10× faster (toggle)', group: 'Go', run: () => { const v = view(); if (v) v.boost = v.boost === 1 ? 10 : 1; } });
 debug.addInfo(() => view()?.clockLine() ?? '');
 /** The next of a cycle of clock speeds. */
