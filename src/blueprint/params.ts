@@ -73,6 +73,8 @@ export interface HabitatParams {
   radiator: { emissivity: number; temperature: number };
   /** Radius of the non-rotating dock hub at the port end's axis (m). The wild end climbs to the axis itself. */
   hubRadius: number;
+  /** Radius of the sunline, the light tube along the axis (m). It ends in the dock hub, so it is thinner than the hub. */
+  sunlineRadius: number;
   endcaps: { wild: EndcapShape; port: EndcapShape };
   /** The climate and biome profile, by name (catalogue comes with the ecology stage). */
   climate: string;

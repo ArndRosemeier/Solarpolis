@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@futuremagic/core": "file:vendor/assetgenerator/packages/core",
+    "@futuremagic/stage": "file:vendor/assetgenerator/packages/stage",
     "three": "^0.186.1"
   },
   "devDependencies": {

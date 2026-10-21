@@ -20,4 +20,4 @@ Solarpolis is a detailed 3D simulation set about 1000 years from now, starting i
 
 Shared packages come from the AssetGenerator submodule (`vendor/assetgenerator/packages`: `@futuremagic/core`). Clone with `--recurse-submodules`, or run `git submodule update --init`. Humanoid robot bodies and people will come from Arnd's Actors package.
 
-Checks that need a browser: `npm run build`, then `npx vite preview` and a headless Chromium (in the cloud container: `/opt/pw-browsers/chromium-1194/chrome-linux/chrome --headless=new --enable-unsafe-webgpu --screenshot=out.png <url>`).
+Checks that need a browser: `npm run build`, then `npx vite preview` and a headless Chromium (`/opt/pw-browsers/chromium-1194/chrome-linux/chrome` in the cloud container). Its software WebGPU (SwiftShader) loses the device after the first frames, so to look at a frame there, switch `view.ts` to `backends: 'webgpu-or-webgl2', forceWebGL: true` locally: the TSL shaders draw the same. Never commit that (the guards fail on it). Arnd's PC is the reference for how it really looks and runs.
