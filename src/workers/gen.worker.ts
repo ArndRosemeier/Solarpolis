@@ -25,7 +25,7 @@ self.onmessage = (e: MessageEvent<GenRequest>) => {
   try {
     const { terrain, layout } = terrainFor(e.data.params);
     const tile = buildTile(terrain, layout, e.data.key);
-    const transfer: Transferable[] = [tile.positions.buffer, tile.normals.buffer, tile.colors.buffer, tile.morph.buffer, tile.index.buffer];
+    const transfer: Transferable[] = [tile.positions.buffer, tile.normals.buffer, tile.colors.buffer, tile.morph.buffer, tile.horizon.buffer, tile.index.buffer];
     if (tile.water) transfer.push(tile.water.positions.buffer, tile.water.normals.buffer, tile.water.index.buffer);
     (self as unknown as DedicatedWorkerGlobalScope).postMessage({ kind: 'tile', tile } satisfies GenAnswer, transfer);
   } catch (err) {

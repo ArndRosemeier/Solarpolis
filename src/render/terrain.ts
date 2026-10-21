@@ -97,7 +97,7 @@ export class TerrainView {
     const answer = await this.pool.job({ kind: 'tile', params: this.terrain.habitat.params, key: k });
     if (!('tile' in answer) || this.built.has(id)) return;
     const tile = answer.tile;
-    const mesh = new Mesh(geometry(tile.positions, tile.normals, tile.index, tile.colors, tile.morph), GROUND.material);
+    const mesh = new Mesh(geometry(tile.positions, tile.normals, tile.index, tile.colors, tile.morph, tile.horizon), GROUND.material);
     mesh.name = `tile ${id}`;
     mesh.visible = false;
     const water = tile.water ? new Mesh(geometry(tile.water.positions, tile.water.normals, tile.water.index), WATER.material) : null;
@@ -135,12 +135,13 @@ export class TerrainView {
   }
 }
 
-function geometry(positions: Float32Array, normals: Float32Array, index: Uint32Array, colors?: Float32Array, morph?: Float32Array): BufferGeometry {
+function geometry(positions: Float32Array, normals: Float32Array, index: Uint32Array, colors?: Float32Array, morph?: Float32Array, horizon?: Float32Array): BufferGeometry {
   const g = new BufferGeometry();
   g.setAttribute('position', new BufferAttribute(positions, 3));
   g.setAttribute('normal', new BufferAttribute(normals, 3));
   if (colors) g.setAttribute('color', new BufferAttribute(colors, 3));
   if (morph) g.setAttribute('morph', new BufferAttribute(morph, 3));
+  if (horizon) g.setAttribute('horizon', new BufferAttribute(horizon, 2));
   g.setIndex(new BufferAttribute(index, 1));
   g.computeBoundingSphere();
   return g;

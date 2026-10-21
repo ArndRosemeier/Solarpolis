@@ -20,12 +20,14 @@ Each row is a question you will have while coding, and the one place that answer
 | Question | The one way |
 |---|---|
 | How high is the ground at (θ, s), and what is it (meadow, forest, rock, shore, lake bed)? | `makeTerrain(habitat)` (`terrain.ts`): `heightAt`, `standAt` (ground or water surface), `colorAt`, `lake`; sizes from `HabitatParams.relief`. Noise is sampled at world positions, so it wraps. |
+| What hides the sunline from a ground point? | `horizonAt(terrain, θ, s)` (`horizon.ts`): the horizon angles toward the port and the wild end, from the ground in the point's meridian; tiles bake them per point (`TileMesh.horizon`). |
 | How is the ground cut into pieces for drawing, and which pieces does a view need? | The tile tree (`tiles.ts`): `makeLayout` (bands along s, columns by circumference), `roots`, `children`, `parent`, `select(terrain, layout, eye, pixelsPerRadian, maxPixels, errorOf)` by measured error on screen, `buildTile` (mesh relative to its `origin`, skirts, water, `morph` towards the parent's surface). |
 
 ## Being in the habitat (`src/world`, pure)
 
 | Question | The one way |
 |---|---|
+| How much light from the sunline reaches a point? | `irradiance(h, emission, p, n, towardPort, towardWild)` (`sunline.ts`), the reference of the shaders' sum; `sunlineEmission(h)` is the brightness along the axis (the day cycle will shape it), `sunlineNorm(h)` makes the mid floor 1. |
 | Where is the player, which way is up, where do they look? | `Walker` (`walker.ts`): position in (θ, s, h), heading and pitch → `view()` eye, look, up (up is the ground's normal). `startOf(profile)` is where a walk begins; the eye stands on a ground function (`terrain.standAt`). |
 
 ## Drawing (`src/render`)
@@ -35,7 +37,7 @@ Each row is a question you will have while coding, and the one place that answer
 | How do I get a renderer? | `createRenderer(canvas, { backends: 'webgpu', depth: 'reversed' })` from `@futuremagic/stage`, called once in `view.ts`. |
 | How does a mesh get a material? | A kind from `materials.ts` (`GROUND`, `WATER`, `SUNLINE`, `allKinds`; own attributes on warm-up stand-ins via `standInAttribute`); the mesh carries exactly the kind's attributes. |
 | How does a thing enter the scene? | `stage.add(obj)` (the Stage from `@futuremagic/stage`, made in `view.ts`). |
-| How are things lit? | From the axis, in the kinds' shaders (no three.js lights): the sunline lights every point from the axis direction, plus `air.skyLight`. |
+| How are things lit? | By the sunline as a line light, in the kinds' shaders (no three.js lights): `sunlit(horizon)` in `materials.ts` integrates the emission texture along the axis past the two horizon angles, plus `air.skyLight` scaled by the open sky. `setSunline` loads a habitat's emission, scale and length. |
 | How does distance look? | `air` uniforms in `materials.ts` (haze colour, extinction from `HAZE_DIAMETER`); every kind sees through the air. |
 | Where does the camera sit, given the huge distances? | At the origin: meshes are placed at `frame.toView(eye, origin)` (float64), and shaders get the world eye from `view.eye` (`materials.ts`). |
 | How does the terrain reach the screen? | `TerrainView` (`render/terrain.ts`): `follow(eye, pixelsPerRadian)` each frame selects tiles, asks the worker pool for missing ones, caches and evicts; sets each tile's `userData.morphFar` so GROUND geomorphs it into its parent's shape before they swap. |
