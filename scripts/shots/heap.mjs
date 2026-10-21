@@ -221,6 +221,45 @@ export function report(snap, { minMB = 4, label = '', extra = {} } = {}) {
   };
   walk(0, 0);
 
+  // Typed arrays' data by the path that holds them: each buffer's shortest chain of retainers from the root (as
+  // DevTools shows it), its property names joined; indices and three's Map internals are folded so alike ones group.
+  const dist = new Int32Array(N).fill(-1), via = new Int32Array(N).fill(-1), queue = new Uint32Array(N);
+  let qh = 0, qt = 0;
+  dist[0] = 0; queue[qt++] = 0;
+  while (qh < qt) {
+    const n = queue[qh++];
+    for (let e = first[n]; e < first[n + 1]; e++) {
+      if (!strong(e)) continue;
+      const m = to(e);
+      if (dist[m] !== -1) continue;
+      dist[m] = dist[n] + 1; via[m] = e; queue[qt++] = m;
+    }
+  }
+  const from = new Int32Array(N).fill(-1); // the node each `via` edge leaves from
+  for (let n = 0; n < N; n++) for (let e = first[n]; e < first[n + 1]; e++) { const m = to(e); if (via[m] === e) from[m] = n; }
+  const FOLD = new Set(['table', 'backing_store', 'buffer', 'map', 'elements', 'properties']);
+  const pathOf = (n) => {
+    const hops = [];
+    for (let m = n, guard = 0; m > 0 && via[m] >= 0 && guard < 60; m = from[m], guard++) {
+      const name = edgeName(via[m]);
+      if (name.startsWith('[') || /^\d+$/.test(name) || FOLD.has(name)) continue;
+      hops.push(name);
+    }
+    return hops.reverse().slice(-9).join('.');
+  };
+  const BUFFER = strings.indexOf('system / JSArrayBufferData');
+  const buffers = new Map();
+  let bufferTotal = 0;
+  for (let n = 0; n < N; n++) {
+    if (nodes[n * nf + fName] !== BUFFER || !seen[n]) continue;
+    const s = self(n);
+    bufferTotal += s;
+    const key = pathOf(n) || '(root)';
+    const b = buffers.get(key) ?? { size: 0, count: 0 };
+    b.size += s; b.count++;
+    buffers.set(key, b);
+  }
+
   const fmt = (b) => `${(b / MB).toFixed(1)} MB`;
   return [
     `HEAP ${label}`,
@@ -228,6 +267,8 @@ export function report(snap, { minMB = 4, label = '', extra = {} } = {}) {
     `by node type: ${[...byType].sort((a, b) => b[1] - a[1]).map(([t, s]) => `${t} ${fmt(s)}`).join(', ')}`,
     'top classes (self size):',
     ...[...byClass].sort((a, b) => b[1].size - a[1].size).slice(0, 40).map(([k, c]) => `  ${fmt(c.size)}  ×${c.count}  ${k}`),
+    `typed array data ${fmt(bufferTotal)}, by the path that holds it (shortest retainers):`,
+    ...[...buffers].sort((a, b) => b[1].size - a[1].size).slice(0, 40).map(([k, b]) => `  ${fmt(b.size)}  ×${b.count}  ${k}`),
     `dominator tree (retained ≥ ${minMB} MB):`,
     ...lines,
   ].join('\n');
