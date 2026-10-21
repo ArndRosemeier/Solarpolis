@@ -172,10 +172,6 @@
     "reason": "Both 3D views implement the page's view interface (PageView in main.ts: create, setHabitat, setRunning, bytes, shed, info, skip); their shared machinery is in render/surface.ts."
   },
   {
-    "key": "same name: solarpolis/render/outside.ts#frame + solarpolis/render/view.ts#frame",
-    "reason": "Each view's per-frame step handed to the shared FrameLoop (render/surface.ts); the loop is the seam, the steps draw different worlds."
-  },
-  {
     "key": "same name: solarpolis/render/outside.ts#info + solarpolis/render/view.ts#info",
     "reason": "info() is a view's lines for the one debug menu (CLAUDE.md rule 14); each reports its own state."
   },

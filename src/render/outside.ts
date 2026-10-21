@@ -15,7 +15,7 @@ import { Color, Mesh, PerspectiveCamera, Scene, SphereGeometry, Texture, type We
 import { Stage, createRenderer } from '@futuremagic/stage';
 import { Rng, deriveSeed, v3add, v3dot, v3len, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
 import type { Habitat } from '../blueprint';
-import { DAY, EARTH, MOON, REFERENCE_SPACE, SpaceFlyer, TORCH_SHIP, attractLoop, calendarOf, chooseStart, decodeStars, julianDay, makeSpace, skyFrom, torchShip, type Cinema, type CinemaFrame, type Mat3, type Space, type SkyView } from '../space';
+import { DAY, EARTH, MOON, REFERENCE_SPACE, SpaceFlyer, arrival, attractLoop, calendarOf, chooseStart, decodeStars, guestShip, julianDay, makeSpace, shipShape, skyFrom, type Arrival, type ArrivalFrame, type Cinema, type CinemaFrame, type Mat3, type ShipShape, type Space, type SkyView } from '../space';
 import { SKY, STARS, outsideKinds, standInAttribute } from './materials';
 import { filtered } from './textures';
 import { outside, skyMaps } from './skyShaders';
@@ -53,7 +53,10 @@ export class OutsideView {
   private sky: SkyView | null = null;
   /** The title's attract loop while it plays (space/cinema.ts): the shots, seconds into them, this frame. */
   private attract: { cinema: Cinema; elapsed: number; frame: CinemaFrame } | null = null;
-  private readonly shipShape = torchShip(TORCH_SHIP);
+  /** After Start: the passenger's ship's arrival (shots 4 and 5), and what to call when it is over or stopped. */
+  private arriving: { arrival: Arrival; elapsed: number; frame: ArrivalFrame; done: () => void } | null = null;
+  /** The passenger's ship (space/traffic.ts, `guestShip`): the title's torch ship, the one that berths after Start. */
+  private shipShape: ShipShape;
   private ship: ShipMeshes | null = null;
   /** Called each frame of the attract loop with how far the title has faded in (0–1). */
   onTitle: ((fade: number) => void) | null = null;
@@ -79,6 +82,7 @@ export class OutsideView {
 
   private constructor(private habitat: Habitat) {
     this.space = makeSpace({ ...REFERENCE_SPACE, home: habitat.params });
+    this.shipShape = shipShape(guestShip(this.space, this.space.home));
     // An afternoon over Europe in March: Earth three-quarters lit behind the habitat.
     this.time = (julianDay(3026, 3, 1 + 14.5 / 24) - this.space.params.epochJd) * DAY;
     this.canvas.className = 'view-canvas';
@@ -175,6 +179,10 @@ export class OutsideView {
     if (h === this.habitat) return;
     this.habitat = h;
     this.space = makeSpace({ ...REFERENCE_SPACE, home: h.params });
+    this.shipShape = shipShape(guestShip(this.space, this.space.home));
+    // The title's ship was made for the last habitat's berths: made again when the title next plays.
+    this.ship?.removeFrom(this.stage);
+    this.ship = null;
     this.flyer = null;
     this.frameHabitat();
     await this.buildNecklace();
@@ -222,7 +230,8 @@ export class OutsideView {
 
   /** Where the eye is in the orbit frame, and what it looks at. */
   private eyeAndTarget(): { eye: Vec3; target: Vec3 } {
-    if (this.attract) return { eye: this.attract.frame.eye, target: this.attract.frame.target };
+    const shot = this.shot;
+    if (shot) return { eye: shot.eye, target: shot.target };
     if (this.flyer) return { eye: this.flyer.eye, target: v3add(this.flyer.eye, this.flyer.look()) };
     const cp = Math.cos(this.pitch);
     const eye: Vec3 = v3scale([cp * Math.cos(this.yaw), cp * Math.sin(this.yaw), Math.sin(this.pitch)], this.distance);
@@ -277,7 +286,7 @@ export class OutsideView {
     this.necklace?.follow(eye, t, sky, px / ((this.camera.fov * Math.PI) / 180));
     if (this.stars) setPose(this.stars, sp.frames.relative('sun', f, t).axes, [0, 0, 0]);
     this.camera.position.set(0, 0, 0);
-    const shot = this.attract?.frame;
+    const shot = this.shot;
     this.camera.up.set(...(shot?.up ?? [0, 0, 1]));
     const look = v3sub(target, eye);
     this.camera.lookAt(look[0], look[1], look[2]);
@@ -313,15 +322,44 @@ export class OutsideView {
     this.time = start;
   }
 
-  /** Back to the free view, from where the loop left the clock. */
+  /**
+   * Start: the passenger's ship carries on from the attract loop into its berth (shots 4 and 5, space/cinema.ts),
+   * drawn with the spindle's traffic. Resolves when it has latched (the last frame holds until `stopAttract`), or
+   * when the title is stopped.
+   */
+  arrive(): Promise<void> {
+    if (!this.attract || this.arriving) return Promise.resolve();
+    const a = arrival(this.space, this.time);
+    this.attract = null;
+    this.ship?.hide();
+    if (this.necklace) this.necklace.guest = a.guest;
+    return new Promise((done) => { this.arriving = { arrival: a, elapsed: 0, frame: a.at(0)!, done }; });
+  }
+
+  /** Back to the free view, from where the title left the clock. */
   stopAttract(): void {
     this.attract = null;
+    this.endArrival();
     this.ship?.hide();
     this.frameHabitat();
   }
 
+  private endArrival(): void {
+    const a = this.arriving;
+    if (!a) return;
+    this.arriving = null;
+    if (this.necklace) this.necklace.guest = null;
+    a.done();
+  }
+
+  /** The title is playing: the attract loop, or the arrival after Start. */
   get attracting(): boolean {
-    return this.attract !== null;
+    return this.attract !== null || this.arriving !== null;
+  }
+
+  /** This frame's shot while the title plays. */
+  private get shot(): CinemaFrame | null {
+    return this.arriving?.frame ?? this.attract?.frame ?? null;
   }
 
   private bindControls(): void {
@@ -366,8 +404,8 @@ export class OutsideView {
   private frame(dt: number): void {
     fitCanvas(this.canvas, this.renderer, this.camera);
     if (this.flyer) this.flyer.step(moveKeys(this.loop.keys), dt, (p) => this.clearance(v3sub(p, this.flyer!.eye)));
-    // The attract loop runs on the real clock: every shot plays at real speed.
-    const speed = this.attract ? 1 : this.timeScale;
+    // The title runs on the real clock: every shot plays at real speed.
+    const speed = this.attracting ? 1 : this.timeScale;
     let cut = false;
     if (this.attract) {
       const a = this.attract;
@@ -379,6 +417,21 @@ export class OutsideView {
     }
     const before = this.time;
     this.time += dt * speed;
+    if (this.arriving) {
+      // The arrival sets the clock itself: it jumps forward at each cut (and at Start).
+      const a = this.arriving, first = a.elapsed === 0;
+      a.elapsed += dt;
+      const next = a.arrival.at(a.elapsed);
+      if (next) {
+        cut = first || next.shot !== a.frame.shot;
+        a.frame = next;
+        this.time = next.clock;
+      } else {
+        // Latched: hold the last frame (and its clock) until the page moves on.
+        this.time = a.frame.clock;
+        a.done();
+      }
+    }
     if (this.flyer && this.necklace) {
       const held = this.necklace.holdStation(this.flyer.eye, this.flyer.look(), before, this.time);
       this.flyer.eye = held.eye;

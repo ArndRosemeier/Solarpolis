@@ -1,9 +1,9 @@
 // The title's attract loop and its torch ship: every distance follows the home habitat, over the whole MATRIX.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { v3dot, v3len, v3norm, v3sub } from '@futuremagic/core';
-import { MATRIX } from '../src/blueprint';
-import { LIT_FROM, LIT_TO, LOOP, REFERENCE_SPACE, SHOTS, TORCH_SHIP, attractLoop, chooseStart, makeSpace, skyFrom, torchShip } from '../src/space';
+import { v3add, v3dot, v3len, v3norm, v3scale, v3sub } from '@futuremagic/core';
+import { MATRIX, exteriorDistance } from '../src/blueprint';
+import { ARRIVAL_SHOTS, LIT_FROM, LIT_TO, LOOP, REFERENCE_SPACE, SHOTS, TORCH_SHIP, arrival, attractLoop, chooseStart, makeSpace, shipAt, skyFrom, torchShip } from '../src/space';
 
 const DEG = 180 / Math.PI;
 
@@ -84,3 +84,35 @@ test('torch ship: every part within its length and beam, wings edge-on to the ex
   }
   assert.deepEqual(torchShip(TORCH_SHIP), torchShip(TORCH_SHIP));
 });
+
+for (const { name, params } of MATRIX) {
+  test(`arrival (${name}): down the corridor past the ship's nose, then the berth as it latches, never inside anything`, () => {
+    const space = makeSpace({ ...REFERENCE_SPACE, home: params }), p = space.home, h = p.habitat, x = h.exterior;
+    const a = arrival(space, chooseStart(space, 0) + 40), g = a.guest, L = g.ship.length;
+    assert.equal(a.at(ARRIVAL_SHOTS[0] + ARRIVAL_SHOTS[1]), null);
+    let last = -Infinity, berthed = false;
+    for (let e = 0; e < ARRIVAL_SHOTS[0] + ARRIVAL_SHOTS[1]; e += 0.5) {
+      const f = a.at(e)!, s = shipAt(h, g, f.clock)!;
+      assert.equal(f.shot, e < ARRIVAL_SHOTS[0] ? 3 : 4);
+      assert.ok(f.clock > last, 'the clock runs on (and jumps forward at the cut)');
+      last = f.clock;
+      // The eye in the spindle's frame: outside the habitat and off the ship's hull.
+      const eye = space.frames.position(f.eye, p.orbitFrame, p.spindleFrame, f.clock);
+      assert.ok(exteriorDistance(x, eye) > 0, `${name} ${e} s: eye inside the habitat`);
+      const q = v3sub(eye, s.position), along = v3dot(q, s.forward), across = v3len(v3sub(q, v3scale(s.forward, along)));
+      assert.ok(along < 0 || along > L || across > g.ship.beam, `${name} ${e} s: eye inside the ship`);
+      const look = v3norm(v3sub(f.target, f.eye)), nose = space.frames.direction(s.forward, p.spindleFrame, p.orbitFrame, f.clock);
+      if (f.shot === 3) {
+        // Shot 4: the ship coasts in nose first, and the camera looks the way it flies.
+        assert.equal(s.phase, 'coast');
+        assert.ok(v3dot(look, nose) > 0.7, `${name}: looking ${v3dot(look, nose)} along the nose`);
+      } else {
+        // Shot 5: the ship berths in it, and its nose is in front of the camera.
+        berthed ||= s.phase === 'berthed';
+        const tip = space.frames.position(v3add(s.position, v3scale(s.forward, L)), p.spindleFrame, p.orbitFrame, f.clock);
+        assert.ok(v3dot(look, v3norm(v3sub(tip, f.eye))) > 0.9, `${name}: the nose out of frame`);
+      }
+    }
+    assert.ok(berthed, 'it latches in shot 5');
+  });
+}

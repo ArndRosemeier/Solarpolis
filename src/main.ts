@@ -105,11 +105,22 @@ new ResizeObserver(fit).observe(header);
 let starting: Promise<void> | null = null;
 
 // The title: the Outside view flying its attract loop, with the card over it. It is where the page opens.
-const title = new TitleCard(() => showTab('inside'));
+const title = new TitleCard(() => void startArrival(), () => showTab('inside'));
+/** Start: the passenger's ship comes in to its berth, then in we go (the crossing into the Hub comes next, O6). */
+async function startArrival(): Promise<void> {
+  const v = outsideSlot.view;
+  if (!v?.attracting) { showTab('inside'); return; }
+  title.arriving();
+  v.onTitle = null;
+  await v.arrive();
+  if (tab === 'title') showTab('inside');
+}
 outsideSlot.box.append(title.root);
 
 type Tab = 'title' | 'lab' | 'inside' | 'outside';
+let tab: Tab = 'title';
 function showTab(which: Tab): void {
+  tab = which;
   labTab.classList.toggle('on', which === 'lab');
   insideTab.classList.toggle('on', which === 'inside');
   outsideTab.classList.toggle('on', which === 'outside');
