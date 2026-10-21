@@ -7,8 +7,7 @@
  */
 import { toWorld, type Vec3 } from '../blueprint';
 import type { Terrain } from './terrain';
-import { frameOf, landmarksOf, reachOf, type Landmark } from './landmarks';
-import { buildPavilion } from './pavilion';
+import { buildLandmark, frameOf, landmarksOf, reachOf, type Landmark } from './landmarks';
 import { outOfPlace } from './shapes';
 import { kept } from './kept';
 import { buildStairSolid } from './liftStairMesh';
@@ -62,7 +61,7 @@ export function buildPatch(terrain: Terrain, theta: number, s: number, size: num
 }
 
 /**
- * The parts of the landmarks near a patch that one stands on or bumps into (`buildPavilion(…, 'solid')`), relative
+ * The parts of the landmarks near a patch that one stands on or bumps into (`buildLandmark(…, 'solid')`), relative
  * to the patch's origin: the triangles with a corner within the patch.
  */
 function landmarkSolids(terrain: Terrain, origin: Vec3, size: number): { positions: Float32Array; index: Uint32Array } {
@@ -90,4 +89,4 @@ function landmarkSolids(terrain: Terrain, origin: Vec3, size: number): { positio
 }
 
 /** A landmark's solid parts, built once. */
-const solidOf = kept((l: Landmark) => buildPavilion(l, 'solid').arrays());
+const solidOf = kept((l: Landmark) => buildLandmark(l, 'solid').arrays());
