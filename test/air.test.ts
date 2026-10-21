@@ -2,13 +2,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MATRIX, derive, type Vec3 } from '../src/blueprint';
 import { densityFalloff, hazeAlong, HAZE_STEPS } from '../src/world/air';
-import { sunlineEmission } from '../src/world/sunline';
+import { EMISSION_SAMPLES } from '../src/world/sunline';
 
 const EXT = Math.log(4) / 20000, SKY = 0.35;
 
 for (const { name, params } of MATRIX) {
   const h = derive(params);
-  const e = sunlineEmission(h);
+  const e = new Float32Array(EMISSION_SAMPLES).fill(1); // an even sunline: the floor-level fog is the plain haze
 
   test(`haze (${name}): plain fog along the floor, a halo across the axis, the shaders' pieces agree`, () => {
     // Along the floor in the middle: density 1, source 1, so the air adds exactly what it takes away.

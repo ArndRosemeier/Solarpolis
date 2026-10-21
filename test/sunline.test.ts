@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import { MATRIX, derive, type Vec3 } from '../src/blueprint';
 import { OPEN_SKY, horizonAt } from '../src/gen/horizon';
 import type { Terrain } from '../src/gen/terrain';
-import { irradiance, rawIrradiance, sunlineEmission, sunlineNorm, SUNLINE_STEPS } from '../src/world/sunline';
+import { dayLevel, dayPhase, emissionMean, irradiance, rawIrradiance, sunlineEmission, sunlineNorm, EMISSION_SAMPLES, SUNLINE_STEPS } from '../src/world/sunline';
 
 for (const { name, params } of MATRIX) {
   const h = derive(params);
-  const e = sunlineEmission(h);
+  const e = new Float32Array(EMISSION_SAMPLES).fill(1); // the even sunline the scale is defined by
   const floorAt = (z: number): { p: Vec3; n: Vec3 } => ({ p: [h.radius, 0, z], n: [-1, 0, 0] });
 
   test(`sunline (${name}): 1 at mid floor, even both ways, dimmer toward the walls, the shaders' sum agrees`, () => {
@@ -36,5 +36,21 @@ for (const { name, params } of MATRIX) {
     // The nearest sample past the plateau's edge decides: between `gap` and one geometric step further.
     assert.ok(port >= Math.atan(gap / height) - 1e-9 && port <= Math.atan((gap * 1.45 + 1) / height), `port ${port}`);
     assert.ok(wild > port && wild <= OPEN_SKY, `wild ${wild}`);
+  });
+
+  test(`travelling sun (${name}): rises at the wild end, crosses to the port end, dims at night`, () => {
+    const { length: day, daylight, night } = params.day;
+    const brightest = (t: number): number => { const em = sunlineEmission(h, t); return em.indexOf(Math.max(...em)) / EMISSION_SAMPLES; };
+    const at = (u: number): number => u * daylight * day;
+    assert.ok(brightest(at(0.2)) < 0.35 && brightest(at(0.5)) > 0.4 && brightest(at(0.5)) < 0.6 && brightest(at(0.8)) > 0.65, 'wild → port');
+    assert.ok(Math.abs(emissionMean(sunlineEmission(h, at(0.5))) - 1) < 0.02, 'full day: mean 1');
+    const dark = sunlineEmission(h, day * (daylight + 1) / 2);
+    assert.ok(Math.max(...dark) <= night + 1e-6 && Math.min(...dark) >= night - 1e-6, 'night: even and dim');
+    // The light on the floor under the stretch beats the light far from it, and the day repeats.
+    const noon = sunlineEmission(h, at(0.5));
+    const under = irradiance(h, noon, [h.radius, 0, h.length / 2], [-1, 0, 0]), aside = irradiance(h, noon, [h.radius, 0, h.length * 0.1], [-1, 0, 0]);
+    assert.ok(under > aside * 1.5, `${under} vs ${aside}`);
+    assert.ok(Math.abs(dayPhase(h, 3 * day + 10) - dayPhase(h, 10)) < 1e-9, 'the day repeats');
+    assert.ok(dayLevel(h, 0) < 0.1 && dayLevel(h, daylight / 2) === 1);
   });
 }

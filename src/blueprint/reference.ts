@@ -27,6 +27,8 @@ export const REFERENCE: HabitatParams = {
   sunlineRadius: 15,
   endcaps: { wild: { reach: 0.6, rise: 1.6 }, port: { reach: 0.5, rise: 1.8 } },
   relief: { hills: 60, ringLake: { width: 500, depth: 15 }, terraceStep: 150 },
+  // An Earth day, two thirds lit; the bright stretch a seventh of the length; a dim blue-hour glow at night.
+  day: { length: 86400, daylight: 0.65, peakWidth: 0.14, base: 0.3, night: 0.03 },
   climate: 'temperate-mild',
   population: 300000,
   age: 200,

@@ -4,16 +4,16 @@
  * close to it. Along a line of sight from the eye to a surface, the air takes away some of the surface's light
  * (transmittance) and adds its own glow (in-scatter): the far side fades into blue, and the sunline wears a halo.
  *
- *   σ(p) = extinction · density(r)        source(p) = sky + (1 − sky) · (R / r) · seen(z, r) · emission(z)
+ *   σ(p) = extinction · density(r)        source(p) = sky · mean + (1 − sky) · (R / r) · seen(z, r) · emission(z)
  *
- * `seen` is the share of the tube's length visible from there, relative to the mid floor's, so on the floor
+ * `mean` is the emission's mean over the length (the hour's sky light). `seen` is the share of the tube's length visible from there, relative to the mid floor's, so on the floor
  * everywhere along the middle the source is 1 and the haze tends to its plain colour. The line of sight is cut into
  * `HAZE_STEPS` pieces. In each, density, `seen` and emission are taken at the middle, and the R / r term is integrated
  * exactly, because close to the axis it changes faster than any step: that is the halo. The shaders run the same sums
  * (render/materials.ts, `throughAir`); this is their reference. Pure.
  */
 import type { Habitat, Vec3 } from '../blueprint';
-import { emissionAt, nearestLit } from './sunline';
+import { emissionAt, emissionMean, nearestLit } from './sunline';
 
 /** Pieces of a line of sight in the shaders. */
 export const HAZE_STEPS = 10;
@@ -63,6 +63,7 @@ export function hazeAlong(h: Habitat, emission: Float32Array, extinction: number
   const D = Math.hypot(p[0] - eye[0], p[1] - eye[1], p[2] - eye[2]);
   if (D < 1e-9) return { transmittance: 1, inscatter: 0 };
   const d: Vec3 = [(p[0] - eye[0]) / D, (p[1] - eye[1]) / D, (p[2] - eye[2]) / D];
+  const mean = emissionMean(emission);
   let T = 1, glow = 0;
   for (let k = 0; k < steps; k++) {
     const t0 = (D * k) / steps, t1 = (D * (k + 1)) / steps, dt = t1 - t0, tm = (t0 + t1) / 2;
@@ -70,7 +71,7 @@ export function hazeAlong(h: Habitat, emission: Float32Array, extinction: number
     const r = Math.max(Math.hypot(x, y), near);
     const sigma = extinction * Math.exp(-kappa * (R * R - r * r));
     const lit = seenShare(h, z, r) * emissionAt(emission, h.length, z);
-    const source = sky * dt + (1 - sky) * R * lit * inverseRadiusIntegral(eye, d, near, t0, t1);
+    const source = sky * mean * dt + (1 - sky) * R * lit * inverseRadiusIntegral(eye, d, near, t0, t1);
     const tau = sigma * dt;
     // Light made inside the piece is dimmed by the rest of the piece too: the mean of e^(−σ t) over it.
     const inside = tau > 1e-6 ? (1 - Math.exp(-tau)) / tau : 1;

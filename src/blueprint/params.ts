@@ -40,6 +40,23 @@ export interface EndcapShape {
  * The land's relief. Hills and lakes are built: the ceiling deck rises under a hill and dips under a lake, and the
  * living layer below follows it, so relief is not limited by the soil's depth (Arnd's decision card, 2026-10-21).
  */
+/**
+ * The day of the travelling sun: the sunline's brightest stretch moves from the wild end to the port end over the
+ * daylight hours, so shadows move and mornings have a direction; at night the whole tube dims.
+ */
+export interface DayCycle {
+  /** One day (s). */
+  length: number;
+  /** Share of the day the sunline is lit (0 … 1). */
+  daylight: number;
+  /** Width of the bright stretch, as a share of the habitat's length (one standard deviation). */
+  peakWidth: number;
+  /** Share of the daytime light the whole tube gives evenly, the rest is the bright stretch (0 … 1). */
+  base: number;
+  /** Night light, as a share of the daytime mean (0 … 1). */
+  night: number;
+}
+
 export interface Relief {
   /** The highest hills on the floor, above the mean surface (m). */
   hills: number;
@@ -90,6 +107,7 @@ export interface HabitatParams {
   sunlineRadius: number;
   endcaps: { wild: EndcapShape; port: EndcapShape };
   relief: Relief;
+  day: DayCycle;
   /** The climate and biome profile, by name (catalogue comes with the ecology stage). */
   climate: string;
   population: number;

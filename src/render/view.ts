@@ -11,13 +11,15 @@ import { makeTerrain, type Terrain } from '../gen/terrain';
 import { Walker, type View } from '../world/walker';
 import { Flyer } from '../world/flyer';
 import { WorkerPool } from '../workers/pool';
-import { SUNLINE, air, allKinds, setAir, setSunline, standInAttribute, view } from './materials';
-import { nearestLit, sunlineEmission, sunlineNorm } from '../world/sunline';
+import { SUNLINE, air, allKinds, setAir, setEmission, setSunline, standInAttribute, view } from './materials';
+import { dayPhase, emissionMean, nearestLit, sunlineEmission, sunlineNorm, EMISSION_SAMPLES } from '../world/sunline';
 import { densityFalloff, seenMid } from '../world/air';
 import { TerrainView, describeLayout } from './terrain';
 
 /** Running is this many times the walking speed. */
 const RUN = 8;
+/** Clock seconds per real second by default: a day in about 24 minutes, so the sun is seen to travel. */
+const DAY_SPEED = 60;
 
 export class InteriorView {
   readonly canvas = document.createElement('canvas');
@@ -37,8 +39,17 @@ export class InteriorView {
   private last = 0;
   /** Travel speed multiplier from the debug menu. */
   boost = 1;
+  /**
+   * The habitat's clock (s since its first dawn) and how many clock seconds pass per real second. The clock is the
+   * game's, advanced by frame time here; nothing reads the wall clock (CLAUDE.md, rule 5).
+   */
+  time = 0;
+  timeScale = DAY_SPEED;
+  private readonly emission = new Float32Array(EMISSION_SAMPLES);
 
   private constructor(private habitat: Habitat) {
+    // Start in the morning: a quarter of the way through the daylight hours.
+    this.time = habitat.params.day.length * habitat.params.day.daylight * 0.25;
     this.terrain = makeTerrain(habitat);
     this.walker = new Walker(habitat.profile, undefined, this.terrain.standAt);
     this.canvas.className = 'view-canvas';
@@ -79,6 +90,25 @@ export class InteriorView {
     ].join('\n');
   }
 
+  /** The sunline's light at the clock's hour. */
+  private shine(): void {
+    sunlineEmission(this.habitat, this.time, this.emission);
+    setEmission(this.emission, emissionMean(this.emission));
+  }
+
+  /** The hour, for the debug menu: day number, clock time on a 24-hour face, and how far the sun has travelled. */
+  clockLine(): string {
+    const d = this.habitat.params.day, phase = dayPhase(this.habitat, this.time);
+    const hours = (phase * 24 + 6) % 24, hh = Math.floor(hours), mm = Math.floor((hours - hh) * 60);
+    const sun = phase < d.daylight ? `sun ${(100 * phase / d.daylight).toFixed(0)}% of the way to the port end` : 'night';
+    return `day ${Math.floor(this.time / d.length) + 1}, ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')} (dawn at 06:00), ${sun}, clock ×${this.timeScale}`;
+  }
+
+  /** Move the clock on by `seconds` (debug menu). */
+  skip(seconds: number): void {
+    this.time += seconds;
+  }
+
   /** Show another habitat (the Lab changed it). */
   async setHabitat(h: Habitat): Promise<void> {
     if (h === this.habitat) return;
@@ -93,7 +123,8 @@ export class InteriorView {
     if (this.tiles) { this.scene.remove(this.tiles.group); this.tiles.dispose(); }
     if (this.sunline) { this.stage.remove(this.sunline); this.sunline.geometry.dispose(); }
     const h = this.habitat;
-    setSunline(sunlineEmission(h), h.length, sunlineNorm(h), nearestLit(h));
+    setSunline(h.length, sunlineNorm(h), nearestLit(h));
+    this.shine();
     setAir(densityFalloff(h), h.radius, seenMid(h));
     // The sunline: from the wild wall to the port wall along the axis.
     const tube = new CylinderGeometry(h.params.sunlineRadius, h.params.sunlineRadius, h.length, 24, 1, true);
@@ -209,6 +240,8 @@ export class InteriorView {
       this.camera.aspect = w / h;
       this.camera.updateProjectionMatrix();
     }
+    this.time += dt * this.timeScale;
+    this.shine();
     this.place();
     this.stage.frame();
     this.renderer.render(this.scene, this.camera);

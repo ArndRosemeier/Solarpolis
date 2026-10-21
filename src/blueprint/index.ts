@@ -1,5 +1,5 @@
 /** The habitat blueprint: parameters in, a derived habitat out. Pure; the root every other layer builds on. */
-export type { HabitatParams, LayerDepths, HullMaterial, EndcapShape, AxisOrientation, Relief } from './params';
+export type { HabitatParams, LayerDepths, HullMaterial, EndcapShape, AxisOrientation, Relief, DayCycle } from './params';
 export { derive, SOLAR_CONSTANT, STEFAN_BOLTZMANN, type Habitat, type LayerRadii } from './derive';
 export { makeProfile, type Profile, type ProfilePoint } from './profile';
 export { toWorld, fromWorld, toView, groundNormal, wrapAngle, type Interior, type Vec3 } from './frame';

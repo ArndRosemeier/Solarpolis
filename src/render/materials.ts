@@ -59,10 +59,19 @@ emissionTexture.minFilter = LinearFilter;
 emissionTexture.wrapS = ClampToEdgeWrapping;
 emissionTexture.wrapT = ClampToEdgeWrapping;
 export const light = {
+  /** The emission's mean over the length: how much light the air scatters back (the sky light) at this hour. */
+  mean: uniform(1),
   length: uniform(1),
   norm: uniform(1),
   nearest: uniform(1),
 };
+
+/** The sunline's emission profile at this hour (world/sunline.ts, `sunlineEmission`) and its mean. */
+export function setEmission(emission: Float32Array, mean: number): void {
+  for (let i = 0; i < EMISSION_SAMPLES; i++) emissionData[i] = DataUtils.toHalfFloat(emission[i]);
+  emissionTexture.needsUpdate = true;
+  light.mean.value = mean;
+}
 
 /** Load a habitat's air into the shaders' uniforms (world/air.ts). */
 export function setAir(kappa: number, radius: number, seenMid: number): void {
@@ -71,10 +80,8 @@ export function setAir(kappa: number, radius: number, seenMid: number): void {
   airShape.seenMid.value = seenMid;
 }
 
-/** Load a habitat's sunline into the shaders' uniforms and emission texture. */
-export function setSunline(emission: Float32Array, length: number, norm: number, nearest: number): void {
-  for (let i = 0; i < EMISSION_SAMPLES; i++) emissionData[i] = DataUtils.toHalfFloat(emission[i]);
-  emissionTexture.needsUpdate = true;
+/** Load a habitat's sunline into the shaders' uniforms; its emission comes with `setEmission`. */
+export function setSunline(length: number, norm: number, nearest: number): void {
   light.length.value = length;
   light.norm.value = norm;
   light.nearest.value = nearest;
@@ -103,7 +110,7 @@ function sunlit(horizon: Node<'vec2'> = vec2(OPEN_SKY, OPEN_SKY)): Node<'float'>
   const direct = sum.mul(span).div(SUNLINE_STEPS).div(r).mul(light.norm);
   // The sky light comes from the whole air above: as much as the horizons leave open of the half circle.
   const open = clamp(horizon.x.add(horizon.y).div(Math.PI), 0, 1);
-  return direct.mul(float(1).sub(air.skyLight)).add(air.skyLight.mul(open));
+  return direct.mul(float(1).sub(air.skyLight)).add(air.skyLight.mul(light.mean).mul(open));
 }
 
 /** The look of distant things: mix towards the haze by the length of air between the eye and the point. */
@@ -131,7 +138,7 @@ function throughAir(c: Node<'vec3'>): Node<'vec3'> {
     const seen = atan(light.length.sub(p.z).div(r)).add(atan(p.z.div(r))).div(airShape.seenMid);
     const lit = seen.mul(texture(emissionTexture, vec2(p.z.div(light.length), 0.5)).r);
     const inv = select(along, dt.div(sqrt(C)), primitive(t1).sub(primitive(t0)));
-    const source = air.skyLight.mul(dt).add(float(1).sub(air.skyLight).mul(R).mul(lit).mul(inv));
+    const source = air.skyLight.mul(light.mean).mul(dt).add(float(1).sub(air.skyLight).mul(R).mul(lit).mul(inv));
     const tau = sigma.mul(dt);
     const inside = float(1).sub(exp(tau.negate())).div(max(tau, 1e-6));
     glow = glow.add(T.mul(sigma).mul(source).mul(inside));
@@ -187,10 +194,12 @@ export const GROUND = kind('ground', ['position', 'normal', 'color', 'morph', 'h
   return m;
 });
 
-/** The sunline: the glowing tube along the axis. Brighter than white, so the tone mapping rolls it off. */
+/** The sunline: the glowing tube along the axis, brighter where the travelling sun is. Brighter than white, so the tone mapping rolls it off. */
 export const SUNLINE = kind('sunline', ['position', 'normal'], { cast: false, receive: false }, () => {
   const m = new MeshBasicNodeMaterial({ side: DoubleSide });
-  m.colorNode = throughAir(vec3(6, 5.4, 4.6));
+  // As bright along its length as the emission profile says: the travelling sun is a brighter stretch of the tube.
+  const glow = texture(emissionTexture, vec2(worldPosition().z.div(light.length), 0.5)).r;
+  m.colorNode = throughAir(vec3(6, 5.4, 4.6).mul(glow));
   return m;
 });
 
