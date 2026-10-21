@@ -20,13 +20,14 @@ import { OutsideView } from './render/outside';
 import { hubView } from './space';
 import { fromWorld, toWorld, type DebrisSpec, type Habitat } from './blueprint';
 import { nearestOf, plantsOf, type Level } from './gen/scatter';
-import { frameOf, landmarksOf, placeAt, type Hut, type Pavilion } from './gen/landmarks';
+import { frameOf, landmarksOf, type Hut, type Pavilion } from './gen/landmarks';
 import { plantingsOf, type Grove } from './gen/planted';
 import type { Terrain } from './gen/terrain';
-import { outOfPlace } from './gen/shapes';
+import { outOfPlace, placeAt } from './gen/shapes';
 import { landformOf } from './gen/plan';
 import { pavilionPlan } from './gen/pavilion';
 import { hutPlan } from './gen/summitHut';
+import { courtLayoutOf, courtWorld, type CourtLayout } from './gen/courts';
 import { legShapesOf, liftStairOf, onLeg, rampOf, stairTopAt, type LiftStair } from './gen/liftStair';
 
 const app = document.getElementById('app')!;
@@ -369,6 +370,41 @@ const byHut = (label: string, out: number, side: number, up: number): void => de
 byHut('Fly: by the summit hut', 1.5, -0.9, 0.25);
 byHut('Fly: under the summit hut, its struts and corbels', 1.1, 0.5, -0.6);
 byHut('Fly: the summit hut from afar', 14, -6, 3);
+/** An entrance court (gen/courts.ts): the one nearest the middle of the floor, or the first `style` one. */
+const court = (style?: string): { v: InteriorView; l: CourtLayout; h: Habitat } | null => {
+  const h = lab.habitat, mid = h ? (h.profile.floorStart + h.profile.floorEnd) / 2 : 0;
+  const f = inView((t) => {
+    const all = t.courts.map((_, i) => courtLayoutOf(t, i)).filter((l): l is CourtLayout => !!l && (!style || l.style === style));
+    return all.sort((a, b) => Math.abs(a.court.s - mid) - Math.abs(b.court.s - mid))[0];
+  });
+  return f && h ? { v: f.v, l: f.x, h } : null;
+};
+/** Stand in a court at `r` of its radius from the middle, `turn` from the portal's side, facing its middle (or the portal). */
+const inCourt = (label: string, r: number, turn: number, style?: string): void => debug.add({
+  label, group: 'Go', run: () => {
+    const f = court(style);
+    if (!f) return;
+    const c = f.l.court, a = f.l.portal.angle + turn, at = fromWorld(f.h.profile, ...courtWorld(f.h, c, [Math.cos(a) * c.radius * r, Math.sin(a) * c.radius * r, 0]));
+    // The walker's heading turns from along the axis toward −θ; the court's angles toward +θ.
+    f.v.goTo(at.theta, at.s, -(a + Math.PI));
+  },
+});
+inCourt('To an entrance court: on its floor, facing the portal', 0.45, Math.PI);
+inCourt('To an entrance court: on its rim walk, looking in', 0.98, Math.PI * 0.8);
+inCourt('To a court where the land was let go', 0.45, Math.PI, 'let-go');
+/** Float over a court: `out` radii from its middle (on the stairs' side), `up` radii above its floor, looking at it. */
+const overCourt = (label: string, out: number, up: number): void => debug.add({
+  label, group: 'Go', run: () => {
+    const f = court();
+    if (!f) return;
+    const c = f.l.court, a = f.l.portal.angle + Math.PI * 0.85;
+    const eye = courtWorld(f.h, c, [Math.cos(a) * c.radius * out, Math.sin(a) * c.radius * out, c.radius * up]), at = courtWorld(f.h, c, [0, 0, 0]);
+    const d = Math.hypot(at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]);
+    f.v.floatAt(eye, [(at[0] - eye[0]) / d, (at[1] - eye[1]) / d, (at[2] - eye[2]) / d]);
+  },
+});
+overCourt('Fly: over an entrance court', 1.5, 0.9);
+overCourt('Fly: entrance courts from afar', 12, 5);
 /** The founders' grove (gen/planted.ts). */
 const grove = (): { v: InteriorView; g: Grove } | null => {
   const f = inView((t) => plantingsOf(t).groves[0]);

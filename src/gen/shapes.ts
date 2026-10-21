@@ -6,9 +6,13 @@
  * Every face is flat-shaded and counter-clockwise seen from the side its normal points to.
  */
 import { v3cross, v3dot, v3norm, v3sub, type Vec3 } from '@futuremagic/core';
+import { toWorld, type Habitat } from '../blueprint';
 
 /** Bytes some typed arrays hold (a built tile's, for the memory watchdog). */
 export const bytesOf = (arrays: readonly ArrayBufferView[]): number => arrays.reduce((n, a) => n + a.byteLength, 0);
+
+/** The bytes a mapped mesh holds. */
+export const mappedBytes = (m: MappedArrays): number => bytesOf([m.positions, m.normals, m.uvs, m.finishes, m.index, ...(m.colors ? [m.colors] : [])]);
 
 /** Linear RGB, 0–1. */
 export type RGB = [number, number, number];
@@ -99,6 +103,12 @@ export class Shape {
   /** A flat quad from its four corners, counter-clockwise seen from its front: its normal from them (the diagonals' cross). */
   face(a: Vec3, b: Vec3, c: Vec3, d: Vec3, col?: RGB): void {
     this.quad(a, b, c, d, v3norm(v3cross(v3sub(c, a), v3sub(d, b))), col);
+  }
+
+  /** A flat quad turned to face `out`: its corners in either order around it. */
+  faceToward(a: Vec3, b: Vec3, c: Vec3, d: Vec3, out: Vec3, col?: RGB): void {
+    if (v3dot(v3cross(v3sub(c, a), v3sub(d, b)), out) >= 0) this.face(a, b, c, d, col);
+    else this.face(d, c, b, a, col);
   }
 
   /**
@@ -244,3 +254,10 @@ export const outOfPlace = (p: Place, q: Vec3): Vec3 => [0, 1, 2].map((a) => p.at
 
 /** A point of the frame a place sits in, in the place. */
 export const intoPlace = (p: Place, v: Vec3): Vec3 => { const d = v3sub(v, p.at); return [v3dot(d, p.ex), v3dot(d, p.ey), v3dot(d, p.ez)]; };
+
+/** A frame standing on the profile at (θ, s), `height` above it: x along the axis, y around, z toward the axis (up). */
+export function placeAt(h: Habitat, theta: number, s: number, height: number): Place {
+  const at = toWorld(h.profile, { theta, s, h: height });
+  const c = Math.cos(theta), sn = Math.sin(theta);
+  return { at, ex: [0, 0, 1], ey: [-sn, c, 0], ez: [-c, -sn, 0] };
+}

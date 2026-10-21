@@ -8,8 +8,56 @@
     "reason": "2D and 3D variants of the same noise in the shared core package; merging them would cost the hot path a dimension branch."
   },
   {
+    "key": "clone: solarpolis/workers/leaves.ts#leaf",
+    "reason": "The leaf atlas (ported from Scale's getLeafAtlas) draws each cell with its own little leaf recipe: the twig cells share drawTwigCell and differ only in their numbers (shape, size, colour). That data reads best one recipe per cell, as in Scale."
+  },
+  {
+    "key": "idiom: [.add .mul] in solarpolis/render/builtShaders.ts + solarpolis/render/groundShaders.ts + solarpolis/render/materials.ts",
+    "reason": "TSL has no operators: every shader file does its arithmetic with .add and .mul. Shared shader steps already live in one place each (sunlit, throughAir, the hull and sky pieces); this pair is the language, not a copied procedure. (It surfaced when render/liftStair.ts became render/tiled.ts, which moved the finder's corpus-wide counts.)"
+  },
+  {
+    "key": "idiom: [.add .mul] in solarpolis/render/groundShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
+    "reason": "TSL has no operators: every shader file does its arithmetic with .add and .mul. Shared shader steps already live in one place each (sunlit, throughAir, the hull and sky pieces); this pair is the language, not a copied procedure. (It surfaced when render/liftStair.ts became render/tiled.ts, which moved the finder's corpus-wide counts.)"
+  },
+  {
+    "key": "idiom: [.all Promise] in solarpolis/render/actors/animator.ts + solarpolis/render/necklace.ts + solarpolis/render/terrain.ts",
+    "reason": "Plain JavaScript: each waits for its own different loads at once (animation clips, stage meshes, streamed tiles). Nothing to fold; it surfaced when the plan's files raised the file count (the finder weighs names by how few files use them)."
+  },
+  {
+    "key": "idiom: [.cache .clear] in solarpolis/render/hullDetail.ts + solarpolis/render/plants.ts + solarpolis/render/terrain.ts + solarpolis/render/tiled.ts",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) each drive their own StreamCache (render/streamed.ts) the one way it is driven: frame, want, mark, bytes, shed, clear; their requests are told apart by kind and key."
+  },
+  {
+    "key": "idiom: [.cache .drawn .mark .push] in solarpolis/render/plants.ts + solarpolis/render/terrain.ts + solarpolis/render/tiled.ts",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) each drive their own StreamCache (render/streamed.ts) the one way it is driven: frame, want, mark, bytes, shed, clear; their requests are told apart by kind and key."
+  },
+  {
+    "key": "idiom: [.cache .shed] in solarpolis/render/hullDetail.ts + solarpolis/render/plants.ts + solarpolis/render/terrain.ts + solarpolis/render/tiled.ts",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) each drive their own StreamCache (render/streamed.ts) the one way it is driven: frame, want, mark, bytes, shed, clear; their requests are told apart by kind and key."
+  },
+  {
+    "key": "idiom: [.mul .sub] in solarpolis/render/cloudShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
+    "reason": "TSL has no operators: every shader file does its arithmetic with .mul and .sub. Shared shader steps already live in one place each (sunlit, throughAir, the hull and sky pieces); this pair is the language, not a copied procedure."
+  },
+  {
+    "key": "idiom: [.mul .sub] in solarpolis/render/hullShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
+    "reason": "TSL has no operators: every shader file does its arithmetic with .mul and .sub. Shared shader steps already live in one place each (sunlit, throughAir, the hull and sky pieces); this pair is the language, not a copied procedure."
+  },
+  {
+    "key": "same name: solarpolis/app/debug.ts#add + solarpolis/gen/trees.ts#add",
+    "reason": "gen/trees.ts is ported from Scale's vegetation.ts, which used three's Vector3; its small mutable vector V (three cannot be imported in gen/) keeps Vector3's method names so the ported code reads line for line like the original."
+  },
+  {
     "key": "same name: solarpolis/app/memory.ts#stop + solarpolis/render/actors/animator.ts#stop",
     "reason": "The Actors figure and animator are ported from Dunfinity with their method names, which follow Actors' own Character API (load, update, stop, dispose); the plan moves the animator into Actors, and keeping the names keeps that swap a drop-in."
+  },
+  {
+    "key": "same name: solarpolis/gen/shapes.ts#band + solarpolis/render/shaderMath.ts#band",
+    "reason": "Two meanings of band: Shape.band adds a ring of mesh between two radii; shaderMath's band is a smooth window function in a shader. Nothing in common but the word."
+  },
+  {
+    "key": "same name: solarpolis/gen/trees.ts#rotate + solarpolis/world/flyer.ts#rotate",
+    "reason": "gen/trees.ts is ported from Scale's vegetation.ts, which used three's Vector3; its small mutable vector V (three cannot be imported in gen/) keeps Vector3's method names so the ported code reads line for line like the original."
   },
   {
     "key": "same name: solarpolis/lab/blueprintLab.ts#update + solarpolis/render/actors/animator.ts#update",
@@ -33,7 +81,7 @@
   },
   {
     "key": "same name: solarpolis/physics/world.ts#dispose + solarpolis/render/hullDetail.ts#dispose",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
     "key": "same name: solarpolis/physics/world.ts#dispose + solarpolis/render/necklace.ts#dispose",
@@ -46,6 +94,10 @@
   {
     "key": "same name: solarpolis/physics/world.ts#dispose + solarpolis/render/terrain.ts#dispose",
     "reason": "dispose() frees what an object holds and load() fetches it: the common lifecycle names (three.js, Rapier, Actors), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/physics/world.ts#dispose + solarpolis/render/tiled.ts#dispose",
+    "reason": "dispose() is the usual name for giving resources back."
   },
   {
     "key": "same name: solarpolis/render/actors/animator.ts#load + solarpolis/render/actors/figure.ts#load",
@@ -61,7 +113,7 @@
   },
   {
     "key": "same name: solarpolis/render/actors/figure.ts#dispose + solarpolis/render/hullDetail.ts#dispose",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
     "key": "same name: solarpolis/render/actors/figure.ts#dispose + solarpolis/render/necklace.ts#dispose",
@@ -76,68 +128,156 @@
     "reason": "dispose() frees what an object holds and load() fetches it: the common lifecycle names (three.js, Rapier, Actors), with bodies of their own."
   },
   {
+    "key": "same name: solarpolis/render/actors/figure.ts#dispose + solarpolis/render/tiled.ts#dispose",
+    "reason": "dispose() is the usual name for giving resources back."
+  },
+  {
     "key": "same name: solarpolis/render/actors/figure.ts#load + solarpolis/render/terrain.ts#load",
     "reason": "dispose() frees what an object holds and load() fetches it: the common lifecycle names (three.js, Rapier, Actors), with bodies of their own."
   },
   {
     "key": "same name: solarpolis/render/hullDetail.ts#bytes + solarpolis/render/plants.ts#bytes",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
     "key": "same name: solarpolis/render/hullDetail.ts#bytes + solarpolis/render/streamed.ts#bytes",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
     "key": "same name: solarpolis/render/hullDetail.ts#bytes + solarpolis/render/terrain.ts#bytes",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/hullDetail.ts#bytes + solarpolis/render/tiled.ts#bytes",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/hullDetail.ts#dispose + solarpolis/render/landmarks.ts#dispose",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
+  },
+  {
+    "key": "same name: solarpolis/render/hullDetail.ts#dispose + solarpolis/render/necklace.ts#dispose",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
     "key": "same name: solarpolis/render/hullDetail.ts#dispose + solarpolis/render/plants.ts#dispose",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
     "key": "same name: solarpolis/render/hullDetail.ts#dispose + solarpolis/render/terrain.ts#dispose",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/hullDetail.ts#dispose + solarpolis/render/tiled.ts#dispose",
+    "reason": "dispose() is the usual name for giving resources back."
+  },
+  {
+    "key": "same name: solarpolis/render/hullDetail.ts#follow + solarpolis/render/landmarks.ts#follow",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
+  },
+  {
+    "key": "same name: solarpolis/render/hullDetail.ts#follow + solarpolis/render/necklace.ts#follow",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/hullDetail.ts#follow + solarpolis/render/plants.ts#follow",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
     "key": "same name: solarpolis/render/hullDetail.ts#follow + solarpolis/render/terrain.ts#follow",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/hullDetail.ts#follow + solarpolis/render/tiled.ts#follow",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/hullDetail.ts#follow + solarpolis/render/traffic.ts#follow",
+    "reason": "The ship traffic view (render/traffic.ts) has the views' own interface (follow each frame, dispose), like the streamed and necklace views, with a body of its own."
   },
   {
     "key": "same name: solarpolis/render/hullDetail.ts#free + solarpolis/render/plants.ts#free",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
     "key": "same name: solarpolis/render/hullDetail.ts#free + solarpolis/render/terrain.ts#free",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/hullDetail.ts#free + solarpolis/render/tiled.ts#free",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
     "key": "same name: solarpolis/render/hullDetail.ts#id + solarpolis/render/plants.ts#id",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
     "key": "same name: solarpolis/render/hullDetail.ts#id + solarpolis/render/terrain.ts#id",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
-    "key": "same name: solarpolis/render/terrain.ts#info + solarpolis/render/traffic.ts#info",
-    "reason": "Each view's own line for the debug menu's info block (debug.addInfo); the bodies say different things (tiles and memory budget vs ships by phase)."
+    "key": "same name: solarpolis/render/hullDetail.ts#id + solarpolis/render/tiled.ts#id",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
     "key": "same name: solarpolis/render/hullDetail.ts#make + solarpolis/render/plants.ts#make",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
     "key": "same name: solarpolis/render/hullDetail.ts#make + solarpolis/render/terrain.ts#make",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/hullDetail.ts#make + solarpolis/render/tiled.ts#make",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
     "key": "same name: solarpolis/render/hullDetail.ts#shed + solarpolis/render/plants.ts#shed",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
     "key": "same name: solarpolis/render/hullDetail.ts#shed + solarpolis/render/terrain.ts#shed",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/hullDetail.ts#shed + solarpolis/render/tiled.ts#shed",
+    "reason": "Everything that can give memory back does so through a shed() method the memory watchdog calls (CLAUDE.md rule 12); each sheds its own buffers."
+  },
+  {
+    "key": "same name: solarpolis/render/landmarks.ts#bytes + solarpolis/render/outside.ts#bytes",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
+  },
+  {
+    "key": "same name: solarpolis/render/landmarks.ts#follow + solarpolis/render/necklace.ts#follow",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
+  },
+  {
+    "key": "same name: solarpolis/render/landmarks.ts#follow + solarpolis/render/plants.ts#follow",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
+  },
+  {
+    "key": "same name: solarpolis/render/landmarks.ts#follow + solarpolis/render/terrain.ts#follow",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
+  },
+  {
+    "key": "same name: solarpolis/render/landmarks.ts#follow + solarpolis/render/tiled.ts#follow",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/landmarks.ts#follow + solarpolis/render/traffic.ts#follow",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
+  },
+  {
+    "key": "same name: solarpolis/render/landmarks.ts#shed + solarpolis/render/streamed.ts#shed",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
+  },
+  {
+    "key": "same name: solarpolis/render/necklace.ts#dispose + solarpolis/render/tiled.ts#dispose",
+    "reason": "dispose() is the usual name for giving resources back."
+  },
+  {
+    "key": "same name: solarpolis/render/necklace.ts#dispose + solarpolis/render/traffic.ts#dispose",
+    "reason": "The ship traffic view (render/traffic.ts) has the views' own interface (follow each frame, dispose), like the streamed and necklace views, with a body of its own."
   },
   {
     "key": "same name: solarpolis/render/necklace.ts#follow + solarpolis/render/plants.ts#follow",
@@ -148,20 +288,20 @@
     "reason": "Both are a view's per-frame follow(eye, ...): the terrain tiles and the ring's habitats each update what they draw around the eye. Same role, different content."
   },
   {
-    "key": "same name: solarpolis/render/necklace.ts#shed + solarpolis/render/outside.ts#shed",
-    "reason": "Everything that can give memory back does so through a shed() method the memory watchdog calls (CLAUDE.md rule 12); each sheds its own buffers."
+    "key": "same name: solarpolis/render/necklace.ts#follow + solarpolis/render/tiled.ts#follow",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
-    "key": "same name: solarpolis/render/necklace.ts#shed + solarpolis/render/view.ts#shed",
+    "key": "same name: solarpolis/render/necklace.ts#follow + solarpolis/render/traffic.ts#follow",
+    "reason": "The ship traffic view (render/traffic.ts) has the views' own interface (follow each frame, dispose), like the streamed and necklace views, with a body of its own."
+  },
+  {
+    "key": "same name: solarpolis/render/necklace.ts#shed + solarpolis/render/outside.ts#shed",
     "reason": "Everything that can give memory back does so through a shed() method the memory watchdog calls (CLAUDE.md rule 12); each sheds its own buffers."
   },
   {
     "key": "same name: solarpolis/render/outside.ts#create + solarpolis/render/view.ts#create",
     "reason": "Both 3D views implement the page's view interface (PageView in main.ts: create, setHabitat, setRunning, bytes, shed, info, skip); their shared machinery is in render/surface.ts."
-  },
-  {
-    "key": "same name: solarpolis/render/outside.ts#info + solarpolis/render/view.ts#info",
-    "reason": "info() is a view's lines for the one debug menu (CLAUDE.md rule 14); each reports its own state."
   },
   {
     "key": "same name: solarpolis/render/outside.ts#setHabitat + solarpolis/render/view.ts#setHabitat",
@@ -184,32 +324,124 @@
     "reason": "The streamed views (TerrainView, PlantView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, shed, dispose), with bodies of their own."
   },
   {
+    "key": "same name: solarpolis/render/plants.ts#bytes + solarpolis/render/tiled.ts#bytes",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
     "key": "same name: solarpolis/render/plants.ts#dispose + solarpolis/render/terrain.ts#dispose",
     "reason": "dispose() frees what an object holds and load() fetches it: the common lifecycle names (three.js, Rapier, Actors), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/plants.ts#dispose + solarpolis/render/tiled.ts#dispose",
+    "reason": "dispose() is the usual name for giving resources back."
   },
   {
     "key": "same name: solarpolis/render/plants.ts#follow + solarpolis/render/terrain.ts#follow",
     "reason": "The streamed views (TerrainView, PlantView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, shed, dispose), with bodies of their own."
   },
   {
+    "key": "same name: solarpolis/render/plants.ts#follow + solarpolis/render/tiled.ts#follow",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/plants.ts#follow + solarpolis/render/traffic.ts#follow",
+    "reason": "The ship traffic view (render/traffic.ts) has the views' own interface (follow each frame, dispose), like the streamed and necklace views, with a body of its own."
+  },
+  {
     "key": "same name: solarpolis/render/plants.ts#free + solarpolis/render/terrain.ts#free",
     "reason": "The streamed views (TerrainView, PlantView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/plants.ts#free + solarpolis/render/tiled.ts#free",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
     "key": "same name: solarpolis/render/plants.ts#id + solarpolis/render/terrain.ts#id",
     "reason": "The streamed views (TerrainView, PlantView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, shed, dispose), with bodies of their own."
   },
   {
+    "key": "same name: solarpolis/render/plants.ts#id + solarpolis/render/tiled.ts#id",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
     "key": "same name: solarpolis/render/plants.ts#make + solarpolis/render/terrain.ts#make",
     "reason": "The streamed views (TerrainView, PlantView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/plants.ts#make + solarpolis/render/tiled.ts#make",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
     "key": "same name: solarpolis/render/plants.ts#shed + solarpolis/render/terrain.ts#shed",
     "reason": "The streamed views (TerrainView, PlantView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, shed, dispose), with bodies of their own."
   },
   {
+    "key": "same name: solarpolis/render/plants.ts#shed + solarpolis/render/tiled.ts#shed",
+    "reason": "Everything that can give memory back does so through a shed() method the memory watchdog calls (CLAUDE.md rule 12); each sheds its own buffers."
+  },
+  {
     "key": "same name: solarpolis/render/streamed.ts#bytes + solarpolis/render/terrain.ts#bytes",
     "reason": "The streamed views (TerrainView, PlantView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/streamed.ts#bytes + solarpolis/render/tiled.ts#bytes",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/terrain.ts#bytes + solarpolis/render/tiled.ts#bytes",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/terrain.ts#dispose + solarpolis/render/tiled.ts#dispose",
+    "reason": "dispose() is the usual name for giving resources back."
+  },
+  {
+    "key": "same name: solarpolis/render/terrain.ts#follow + solarpolis/render/tiled.ts#follow",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/terrain.ts#follow + solarpolis/render/traffic.ts#follow",
+    "reason": "The ship traffic view (render/traffic.ts) has the views' own interface (follow each frame, dispose), like the streamed and necklace views, with a body of its own."
+  },
+  {
+    "key": "same name: solarpolis/render/terrain.ts#free + solarpolis/render/tiled.ts#free",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/terrain.ts#id + solarpolis/render/tiled.ts#id",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/terrain.ts#info + solarpolis/render/tiled.ts#info",
+    "reason": "info() is a view's lines for the one debug menu (CLAUDE.md rule 14); each reports its own state."
+  },
+  {
+    "key": "same name: solarpolis/render/terrain.ts#info + solarpolis/render/traffic.ts#info",
+    "reason": "Each view's own line for the debug menu's info block (debug.addInfo); the bodies say different things (tiles and memory budget vs ships by phase)."
+  },
+  {
+    "key": "same name: solarpolis/render/terrain.ts#job + solarpolis/render/tiled.ts#job",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/terrain.ts#make + solarpolis/render/tiled.ts#make",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/terrain.ts#pinned + solarpolis/render/tiled.ts#pinned",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/terrain.ts#shed + solarpolis/render/tiled.ts#shed",
+    "reason": "Everything that can give memory back does so through a shed() method the memory watchdog calls (CLAUDE.md rule 12); each sheds its own buffers."
+  },
+  {
+    "key": "same name: solarpolis/render/tiled.ts#follow + solarpolis/render/traffic.ts#follow",
+    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/tiled.ts#info + solarpolis/render/traffic.ts#info",
+    "reason": "info() is a view's lines for the one debug menu (CLAUDE.md rule 14); each reports its own state."
   },
   {
     "key": "same name: solarpolis/space/flyer.ts#speed + solarpolis/world/flyer.ts#speed",
@@ -222,229 +454,5 @@
   {
     "key": "same name: solarpolis/space/flyer.ts#turn + solarpolis/world/walker.ts#turn",
     "reason": "Each camera turns by pointer movement in its own frame (walker: heading on the curved floor; flyer outside: yaw around the ecliptic pole)."
-  },
-  {
-    "key": "clone: solarpolis/workers/leaves.ts#leaf",
-    "reason": "The leaf atlas (ported from Scale's getLeafAtlas) draws each cell with its own little leaf recipe: the twig cells share drawTwigCell and differ only in their numbers (shape, size, colour). That data reads best one recipe per cell, as in Scale."
-  },
-  {
-    "key": "same name: solarpolis/app/debug.ts#add + solarpolis/gen/trees.ts#add",
-    "reason": "gen/trees.ts is ported from Scale's vegetation.ts, which used three's Vector3; its small mutable vector V (three cannot be imported in gen/) keeps Vector3's method names so the ported code reads line for line like the original."
-  },
-  {
-    "key": "same name: solarpolis/gen/trees.ts#rotate + solarpolis/world/flyer.ts#rotate",
-    "reason": "gen/trees.ts is ported from Scale's vegetation.ts, which used three's Vector3; its small mutable vector V (three cannot be imported in gen/) keeps Vector3's method names so the ported code reads line for line like the original."
-  },
-  {
-    "key": "idiom: [.mul .sub] in solarpolis/render/hullShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
-    "reason": "TSL has no operators: every shader file does its arithmetic with .mul and .sub. Shared shader steps already live in one place each (sunlit, throughAir, the hull and sky pieces); this pair is the language, not a copied procedure."
-  },
-  {
-    "key": "same name: solarpolis/render/hullDetail.ts#dispose + solarpolis/render/necklace.ts#dispose",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/hullDetail.ts#follow + solarpolis/render/necklace.ts#follow",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/hullDetail.ts#follow + solarpolis/render/plants.ts#follow",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/hullDetail.ts#follow + solarpolis/render/traffic.ts#follow",
-    "reason": "The ship traffic view (render/traffic.ts) has the views' own interface (follow each frame, dispose), like the streamed and necklace views, with a body of its own."
-  },
-  {
-    "key": "same name: solarpolis/render/necklace.ts#dispose + solarpolis/render/traffic.ts#dispose",
-    "reason": "The ship traffic view (render/traffic.ts) has the views' own interface (follow each frame, dispose), like the streamed and necklace views, with a body of its own."
-  },
-  {
-    "key": "same name: solarpolis/render/necklace.ts#follow + solarpolis/render/traffic.ts#follow",
-    "reason": "The ship traffic view (render/traffic.ts) has the views' own interface (follow each frame, dispose), like the streamed and necklace views, with a body of its own."
-  },
-  {
-    "key": "same name: solarpolis/render/plants.ts#follow + solarpolis/render/traffic.ts#follow",
-    "reason": "The ship traffic view (render/traffic.ts) has the views' own interface (follow each frame, dispose), like the streamed and necklace views, with a body of its own."
-  },
-  {
-    "key": "same name: solarpolis/render/terrain.ts#follow + solarpolis/render/traffic.ts#follow",
-    "reason": "The ship traffic view (render/traffic.ts) has the views' own interface (follow each frame, dispose), like the streamed and necklace views, with a body of its own."
-  },
-  {
-    "key": "idiom: [.all Promise] in solarpolis/render/actors/animator.ts + solarpolis/render/necklace.ts + solarpolis/render/terrain.ts",
-    "reason": "Plain JavaScript: each waits for its own different loads at once (animation clips, stage meshes, streamed tiles). Nothing to fold; it surfaced when the plan's files raised the file count (the finder weighs names by how few files use them)."
-  },
-  {
-    "key": "same name: solarpolis/gen/shapes.ts#band + solarpolis/render/shaderMath.ts#band",
-    "reason": "Two meanings of band: Shape.band adds a ring of mesh between two radii; shaderMath's band is a smooth window function in a shader. Nothing in common but the word."
-  },
-  {
-    "key": "same name: solarpolis/render/hullDetail.ts#dispose + solarpolis/render/landmarks.ts#dispose",
-    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
-  },
-  {
-    "key": "same name: solarpolis/render/hullDetail.ts#follow + solarpolis/render/landmarks.ts#follow",
-    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
-  },
-  {
-    "key": "same name: solarpolis/render/landmarks.ts#bytes + solarpolis/render/outside.ts#bytes",
-    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
-  },
-  {
-    "key": "same name: solarpolis/render/landmarks.ts#follow + solarpolis/render/necklace.ts#follow",
-    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
-  },
-  {
-    "key": "same name: solarpolis/render/landmarks.ts#follow + solarpolis/render/plants.ts#follow",
-    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
-  },
-  {
-    "key": "same name: solarpolis/render/landmarks.ts#follow + solarpolis/render/terrain.ts#follow",
-    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
-  },
-  {
-    "key": "same name: solarpolis/render/landmarks.ts#follow + solarpolis/render/traffic.ts#follow",
-    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
-  },
-  {
-    "key": "same name: solarpolis/render/landmarks.ts#shed + solarpolis/render/streamed.ts#shed",
-    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
-  },
-  {
-    "key": "idiom: [.mul .sub] in solarpolis/render/cloudShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
-    "reason": "TSL has no operators: every shader file does its arithmetic with .mul and .sub. Shared shader steps already live in one place each (sunlit, throughAir, the hull and sky pieces); this pair is the language, not a copied procedure."
-  },
-  {
-    "key": "idiom: [.cache .clear] in solarpolis/render/hullDetail.ts + solarpolis/render/liftStair.ts + solarpolis/render/plants.ts + solarpolis/render/terrain.ts",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) each drive their own StreamCache (render/streamed.ts) the one way it is driven: frame, want, mark, bytes, shed, clear; their requests are told apart by kind and key."
-  },
-  {
-    "key": "idiom: [.cache .drawn .mark .push] in solarpolis/render/liftStair.ts + solarpolis/render/plants.ts + solarpolis/render/terrain.ts",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) each drive their own StreamCache (render/streamed.ts) the one way it is driven: frame, want, mark, bytes, shed, clear; their requests are told apart by kind and key."
-  },
-  {
-    "key": "idiom: [.cache .shed] in solarpolis/render/hullDetail.ts + solarpolis/render/liftStair.ts + solarpolis/render/plants.ts + solarpolis/render/terrain.ts",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) each drive their own StreamCache (render/streamed.ts) the one way it is driven: frame, want, mark, bytes, shed, clear; their requests are told apart by kind and key."
-  },
-  {
-    "key": "same name: solarpolis/physics/world.ts#dispose + solarpolis/render/liftStair.ts#dispose",
-    "reason": "dispose() is the usual name for giving resources back."
-  },
-  {
-    "key": "same name: solarpolis/render/actors/figure.ts#dispose + solarpolis/render/liftStair.ts#dispose",
-    "reason": "dispose() is the usual name for giving resources back."
-  },
-  {
-    "key": "same name: solarpolis/render/hullDetail.ts#bytes + solarpolis/render/liftStair.ts#bytes",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/hullDetail.ts#dispose + solarpolis/render/liftStair.ts#dispose",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/hullDetail.ts#follow + solarpolis/render/liftStair.ts#follow",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/hullDetail.ts#free + solarpolis/render/liftStair.ts#free",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/hullDetail.ts#id + solarpolis/render/liftStair.ts#id",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/hullDetail.ts#make + solarpolis/render/liftStair.ts#make",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/hullDetail.ts#shed + solarpolis/render/liftStair.ts#shed",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/landmarks.ts#follow + solarpolis/render/liftStair.ts#follow",
-    "reason": "follow(eye) is how every view keeps up with the eye each frame (landmarks, traffic, the necklace, the streamed views), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/liftStair.ts#bytes + solarpolis/render/plants.ts#bytes",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/liftStair.ts#bytes + solarpolis/render/streamed.ts#bytes",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/liftStair.ts#bytes + solarpolis/render/terrain.ts#bytes",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/liftStair.ts#dispose + solarpolis/render/necklace.ts#dispose",
-    "reason": "dispose() is the usual name for giving resources back."
-  },
-  {
-    "key": "same name: solarpolis/render/liftStair.ts#dispose + solarpolis/render/plants.ts#dispose",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/liftStair.ts#dispose + solarpolis/render/terrain.ts#dispose",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/liftStair.ts#follow + solarpolis/render/necklace.ts#follow",
-    "reason": "follow(eye) is how every view keeps up with the eye each frame (landmarks, traffic, the necklace, the streamed views), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/liftStair.ts#follow + solarpolis/render/plants.ts#follow",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/liftStair.ts#follow + solarpolis/render/terrain.ts#follow",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/liftStair.ts#follow + solarpolis/render/traffic.ts#follow",
-    "reason": "follow(eye) is how every view keeps up with the eye each frame (landmarks, traffic, the necklace, the streamed views), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/liftStair.ts#free + solarpolis/render/plants.ts#free",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/liftStair.ts#free + solarpolis/render/terrain.ts#free",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/liftStair.ts#id + solarpolis/render/plants.ts#id",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/liftStair.ts#id + solarpolis/render/terrain.ts#id",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/liftStair.ts#job + solarpolis/render/terrain.ts#job",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/liftStair.ts#make + solarpolis/render/plants.ts#make",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/liftStair.ts#make + solarpolis/render/terrain.ts#make",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/liftStair.ts#pinned + solarpolis/render/terrain.ts#pinned",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/liftStair.ts#shed + solarpolis/render/plants.ts#shed",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/liftStair.ts#shed + solarpolis/render/terrain.ts#shed",
-    "reason": "The streamed views (TerrainView, PlantView, HullDetailView, StairView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   }
 ]

@@ -19,10 +19,9 @@
  */
 import { v3cross, v3norm, v3sub, type Vec3 } from '@futuremagic/core';
 import { fromWorld, type Habitat } from '../blueprint';
-import { Shape, bytesOf, intoPlace, type MappedArrays, type Place, type RGB } from './shapes';
+import { Shape, intoPlace, placeAt, type MappedArrays, type Place, type RGB } from './shapes';
 import { wantedCells, type Grid, type GridEye, type TileKey, type WantedTile } from './detailTree';
 import { legShapesOf, lineAt, liftStairOf, onLeg, rampOf, type LegShape, type LiftStair, type PlanPoint, type Ramp, type StairPlatform } from './liftStair';
-import { placeAt } from './landmarks';
 import { FINISH } from './pavilion';
 import { kept } from './kept';
 
@@ -92,12 +91,6 @@ function boxOf(ramp: Ramp, g: StairGrid, k: TileKey): [number, number, number, n
 }
 
 /** The root tiles: the whole stair at its far detail. */
-export function stairRoots(g: StairGrid): TileKey[] {
-  const size = Math.pow(2, g.root), out: TileKey[] = [];
-  for (let j = 0; j < g.nV; j += size) for (let i = 0; i < g.nU; i += size) out.push({ level: g.root, i, j });
-  return out;
-}
-
 /**
  * The tiles wanted around an eye (world, m): the quadtree of `wantedCells` over the ramp, its distance measured over
  * the face (the profile's arc) and out from it. Coarsest first, nearest first.
@@ -126,8 +119,6 @@ export interface StairTile {
   mesh: MappedArrays;
   parts: StairParts;
 }
-
-export const stairTileBytes = (t: StairTile): number => bytesOf([t.mesh.positions, t.mesh.normals, t.mesh.uvs, t.mesh.finishes, t.mesh.index, ...(t.mesh.colors ? [t.mesh.colors] : [])]);
 
 /** The tile of a habitat's stair at a key. */
 export function buildStairTile(h: Habitat, key: TileKey): StairTile {
