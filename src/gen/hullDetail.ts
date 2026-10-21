@@ -6,13 +6,16 @@
  * A panel of gen/skin.ts is a bay: a flat tray (the drum is a polygon of flat bays, not a smooth tube) between beams
  * that run in the seams, carrying a grid of solar modules (`Skin.modules` a side), each a grid of cells. By tile size:
  *
- * - 0, tiles of more than eight modules: each bay's tray and glass, the beams, the nodes where beams cross, the drone
- *   tracks (channel and rails).
- * - 1, eight modules down to five: each module its own glass in its frame, the tray showing in the gaps.
- * - 2, a few modules: bolts along the beams, clamps holding the modules, the cable trays on the beams, sensor posts
- *   on the nodes, the tracks' ties.
- * - 3, a module and less: the beams' chamfered profile, washers under the bolts, the cables in their trays and their
- *   ties, the clamps' own bolts.
+ * - 0, tiles of more than sixteen modules: each bay's tray and glass, the beams, the nodes where beams cross, the
+ *   drone tracks (channel and rails).
+ * - 1, sixteen modules down to nine: each module its own glass in its frame, the tray showing in the gaps.
+ * - 2, eight modules down to three: bolts along the beams, clamps holding the modules, the cable trays on the beams,
+ *   sensor posts on the nodes, the tracks' ties.
+ * - 3, two modules and less: the beams' chamfered profile, washers under the bolts, the cables in their trays and
+ *   their ties, the clamps' own bolts.
+ *
+ * Each detail comes in on tiles twice as large as a part's size alone would ask for (Arnd, 2026-10-21: details need
+ * to pop up earlier), so it is there well before the eye could tell it is missing.
  *
  * Below the smallest tiles the shaders carry on (cells, their silver fingers, dust, scratches and pits; hullShaders.ts).
  *
@@ -38,9 +41,9 @@ export const finestLevel = (s: Skin): number => -Math.ceil(Math.log2(s.modules))
 /** How much a tile of this level holds (0–3, the list above). */
 export function detailOf(s: Skin, level: number): 0 | 1 | 2 | 3 {
   const modules = Math.pow(2, level) * s.modules;
-  if (modules > 8) return 0;
-  if (modules > 4) return 1;
-  if (modules > 1) return 2;
+  if (modules > 16) return 0;
+  if (modules > 8) return 1;
+  if (modules > 2) return 2;
   return 3;
 }
 

@@ -24,7 +24,7 @@ import { OPEN_SKY } from '../gen/horizon';
 import { EMISSION_SAMPLES, SUNLINE_STEPS } from '../world/sunline';
 import { HAZE_STEPS } from '../world/air';
 import { skyDome, starColor, starVertex } from './skyShaders';
-import { flameColor, hardwareColor, radiatorColor, skinColor, skinDetailColor } from './hullShaders';
+import { flameColor, hardwareColor, radiatorColor, skinColor, skinDetailColor, skinShown } from './hullShaders';
 
 /** The air's look, shared by every kind (uniforms: changing them never builds a shader). */
 export const air = {
@@ -263,11 +263,12 @@ export const STARS = kind('stars', ['position', 'color', 'corner'], { cast: fals
 
 /**
  * A habitat from outside (hullShaders.ts): the drum's solar skin, its panel patchwork drawn per pixel from the mesh's
- * `userData.skin`. Position, normal.
+ * `userData.skin`, hidden where the near tiles cover it (`skinShown`). Position, normal.
  */
 export const SKIN = kind('skin', ['position', 'normal'], { cast: false, receive: false }, () => {
   const m = new MeshBasicNodeMaterial();
   m.colorNode = skinColor();
+  m.maskNode = skinShown();
   return m;
 });
 

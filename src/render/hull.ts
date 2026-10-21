@@ -21,6 +21,7 @@ const COLLAR: RGB = [0.7, 0.68, 0.62];
 const CLAMP: RGB = [0.2, 0.2, 0.21];
 /** Segments around the drum: the facets stay within a few centimetres of the true circle even for the largest habitats. */
 const DRUM_SEGMENTS = 2048;
+const DRUM_ROWS_PER_TURN = 16;
 
 export interface HullGeometry {
   /** The drum's solar skin (SKIN). */
@@ -48,8 +49,9 @@ function berthEnd(length: number, width: number): Builder {
 
 export function hullGeometry(h: Habitat): HullGeometry {
   const x = h.exterior, Ro = x.radius;
-  const skin = new Builder(DRUM_SEGMENTS, false);
-  skin.band(x.wildFace, Ro, x.portFace, Ro, 0, 1);
+  // In rows about a sixteenth of the way around long: a triangle as long as the drum holds its depth too loosely.
+  const skin = new Builder(DRUM_SEGMENTS, false), rows = Math.ceil((x.portFace - x.wildFace) / ((2 * Math.PI * Ro) / DRUM_ROWS_PER_TURN));
+  for (let k = 0; k < rows; k++) skin.band(x.wildFace + ((x.portFace - x.wildFace) * k) / rows, Ro, x.wildFace + ((x.portFace - x.wildFace) * (k + 1)) / rows, Ro, 0, 1);
 
   const rad = new Builder(512, false);
   // The faces: the wild one closed to the axis (the mast leaves from its centre), the port one open for the spindle.

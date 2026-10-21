@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { MATRIX, derive } from '../src/blueprint';
 import { makeSkin } from '../src/gen/skin';
 import { buildPartTile, detailParts, partDetail, partEye, partTileBytes, partTiles, wholeTile, type DetailPart } from '../src/gen/hullParts';
-import { cellsOf, coverOf, tileId, wantedCells, type Grid } from '../src/gen/detailTree';
+import { NO_MASK, cellsOf, coverMask, coverOf, masked, tileId, wantedCells, type Grid } from '../src/gen/detailTree';
 import { v3add, v3scale, type Vec3 } from '@futuremagic/core';
 import { windingOk } from './meshChecks';
 
@@ -28,12 +28,33 @@ test('detail tree: the leaves of an open grid cover it once near the eye, and a 
   }
   // With nothing built the cover is empty and incomplete; with only the root it is the root; with all, the leaves.
   const wanted = wantedCells(g, { u: 0.5, v: 9.5, h: 1 }), root = tileId(wanted[0].key);
-  assert.deepEqual(coverOf(wanted, () => false), { drawn: [], complete: false });
+  assert.deepEqual(coverOf(wanted, () => false), { drawn: [], covered: [], complete: false });
   const some = coverOf(wanted, (id) => id === root);
   assert.equal(some.drawn.length, 1);
   assert.ok(some.complete);
   const all = coverOf(wanted, () => true);
   assert.equal(all.drawn.length, leaves.length);
+  // Leaves built but not every tile between them and the root: the root is not covered whole, so nothing is drawn
+  // over the far form there.
+  const partial = coverOf(wanted, (id) => leaves.slice(0, 3).some((w) => tileId(w.key) === id));
+  assert.deepEqual(partial, { drawn: [], covered: [], complete: false });
+});
+
+test('detail tree: a cover mask holds exactly the covered root tiles, also across the wrap', () => {
+  const g: Grid = { nU: 635, nV: 752, wrap: true, edgeU: 40, edgeV: 40, root: 3, finest: -5 };
+  for (const eye of [{ u: 3, v: 400, h: 20 }, { u: 634.5, v: 2, h: 5 }, { u: 317, v: 751, h: 300 }]) {
+    const roots = wantedCells(g, eye).filter((w) => w.key.level === g.root).map((w) => w.key);
+    assert.ok(roots.length > 4);
+    const covered = roots.filter((_, k) => k % 3 !== 1), mask = coverMask(g, eye, covered), size = Math.pow(2, g.root);
+    for (const k of roots) {
+      const inside = covered.includes(k);
+      for (const [a, b] of [[0.1, 0.1], [size - 0.1, size - 0.1], [size / 2, 0.3]]) {
+        const u = Math.min(k.i + a, g.nU - 0.05), v = Math.min(k.j + b, g.nV - 0.05);
+        assert.equal(masked(mask, u, v, g.wrap), inside, `root ${k.i},${k.j} at ${u},${v} from ${eye.u},${eye.v}`);
+      }
+    }
+    assert.equal(masked(NO_MASK, eye.u, eye.v, true), false);
+  }
 });
 
 for (const { name, params } of MATRIX) {

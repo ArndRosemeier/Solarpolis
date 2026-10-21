@@ -139,10 +139,11 @@ export function cellsOf(g: Grid, k: TileKey): { i: number; j: number; cut: CellC
 
 /**
  * What to draw of the wanted tiles, given which are built: each leaf, or where a tile's children are not all built
- * yet, the tile itself, so the cover never shows a hole while the eye moves in. `complete` when every root tile is
- * covered.
+ * yet, the tile itself, so the cover never shows a hole while the eye moves in. A root tile not yet covered whole is
+ * not drawn at all: there the part's far form stands alone, and never under a part of its own near tiles (Arnd,
+ * 2026-10-21: z-fighting close to the cylinder). `covered` lists the root tiles drawn, `complete` says all are.
  */
-export function coverOf(wanted: readonly WantedTile[], built: (id: string) => boolean): { drawn: WantedTile[]; complete: boolean } {
+export function coverOf(wanted: readonly WantedTile[], built: (id: string) => boolean): { drawn: WantedTile[]; covered: TileKey[]; complete: boolean } {
   const byId = new Map(wanted.map((w) => [tileId(w.key), w]));
   const kids = (k: TileKey): WantedTile[] => {
     const h = Math.pow(2, k.level - 1);
@@ -160,12 +161,60 @@ export function coverOf(wanted: readonly WantedTile[], built: (id: string) => bo
     return r;
   };
   const drawn: WantedTile[] = [];
+  // Only ever called on a ready tile: its children if all are ready, else itself (then it is built).
   const draw = (w: WantedTile): void => {
     if (!w.leaf && kids(w.key).every(isReady)) { for (const c of kids(w.key)) draw(c); return; }
-    if (built(tileId(w.key))) { drawn.push(w); return; }
-    if (!w.leaf) for (const c of kids(w.key)) draw(c);
+    drawn.push(w);
   };
-  const roots = wanted.filter((w) => w.key.level === wanted[0]?.key.level);
-  for (const w of roots) draw(w);
-  return { drawn, complete: roots.length > 0 && roots.every(isReady) };
+  const roots = wanted.filter((w) => w.key.level === wanted[0]?.key.level), covered = roots.filter(isReady);
+  for (const w of covered) draw(w);
+  return { drawn, covered: covered.map((w) => w.key), complete: roots.length > 0 && covered.length === roots.length };
 }
+
+/** Root tiles each way around the eye's own that `wantedCells` can visit, and so a cover mask holds. */
+export const ROOT_SPAN = Math.ceil(ROOT_REACH) + 1;
+/** A cover mask's bits: (2·ROOT_SPAN + 1)² of them, 24 to a number (a float32 holds 24 bits exactly), in four numbers. */
+export const MASK_WORDS = 4;
+const MASK_SIDE = 2 * ROOT_SPAN + 1;
+if (MASK_SIDE * MASK_SIDE > 24 * MASK_WORDS) throw new Error('detailTree: the cover mask is too small for ROOT_REACH');
+
+/**
+ * Which root tiles of a grid a cover holds, as bits a shader can read to hide a part's far form exactly there: the
+ * eye's own root column and row (`i`, `j`), how many root columns go around (for the wrap), and one bit per root
+ * tile within ROOT_SPAN of the eye's, column by column. `masked` reads it, and the shader mirrors `masked`.
+ */
+export interface CoverMask {
+  size: number;
+  i: number;
+  j: number;
+  around: number;
+  words: number[];
+}
+
+/** Root columns apart, the shorter way around a wrapping grid. */
+const apart = (d: number, around: number, wrap: boolean): number => (wrap ? d - around * Math.floor(d / around + 0.5) : d);
+
+export function coverMask(g: Grid, eye: GridEye, covered: readonly TileKey[]): CoverMask {
+  const size = Math.pow(2, g.root), around = Math.ceil(g.nU / size);
+  const u = g.wrap ? ((eye.u % g.nU) + g.nU) % g.nU : eye.u;
+  const i = Math.floor(u / size), j = Math.floor(eye.v / size), words = new Array<number>(MASK_WORDS).fill(0);
+  for (const k of covered) {
+    const di = apart(Math.floor(k.i / size) - i, around, g.wrap), dj = Math.floor(k.j / size) - j;
+    if (Math.abs(di) > ROOT_SPAN || Math.abs(dj) > ROOT_SPAN) continue;
+    const bit = (di + ROOT_SPAN) * MASK_SIDE + dj + ROOT_SPAN;
+    words[Math.floor(bit / 24)] += Math.pow(2, bit % 24);
+  }
+  return { size, i, j, around, words };
+}
+
+/** Whether the cell at column `u`, row `v` (cells, may be fractions) lies in a covered root tile. */
+export function masked(m: CoverMask, u: number, v: number, wrap: boolean): boolean {
+  if (m.size <= 0) return false;
+  const di = apart(Math.floor(u / m.size) - m.i, m.around, wrap), dj = Math.floor(v / m.size) - m.j;
+  if (Math.abs(di) > ROOT_SPAN || Math.abs(dj) > ROOT_SPAN) return false;
+  const bit = (di + ROOT_SPAN) * MASK_SIDE + dj + ROOT_SPAN, word = m.words[Math.floor(bit / 24)];
+  return Math.floor(word / Math.pow(2, bit % 24)) % 2 === 1;
+}
+
+/** A mask that hides nothing. */
+export const NO_MASK: CoverMask = { size: 0, i: 0, j: 0, around: 1, words: new Array<number>(MASK_WORDS).fill(0) };

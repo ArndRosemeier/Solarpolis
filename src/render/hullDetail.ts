@@ -4,7 +4,7 @@
  * `StreamCache`, each tile a HARDWARE mesh of its parts (and for the skin a SKIN_DETAIL mesh of its glass), posed in
  * its part's frame: the spinning body's or the despun spindle's. A tile is drawn once it is built; until all of a
  * tile's children are, the tile itself stands in for them (`coverOf`), so a part never shows a hole while the eye
- * moves in.
+ * moves in. A root tile is drawn only once it is covered whole; until then the part's far form shows there alone.
  */
 import { Mesh } from 'three/webgpu';
 import type { Stage } from '@futuremagic/stage';
@@ -40,6 +40,7 @@ export class HullDetailView {
   private readonly cache: StreamCache<Entry>;
   private drawn: Entry[] = [];
   private readonly complete = new Set<string>();
+  private readonly roots = new Map<string, TileKey[]>();
 
   constructor(private readonly stage: Stage, pool: WorkerPool, private readonly habitat: Habitat, private readonly skin: Skin, private readonly uniforms: SkinUniforms, private readonly name: string) {
     this.parts = detailParts(habitat, skin);
@@ -64,6 +65,9 @@ export class HullDetailView {
   /** Whether a part's near tiles stand in for all of it this frame (its far form can hide). */
   covers(part: string): boolean { return this.complete.has(part); }
 
+  /** The root tiles of a part its near tiles cover this frame (its far form hides under them). */
+  covered(part: string): readonly TileKey[] { return this.roots.get(part) ?? []; }
+
   /**
    * Each frame: the eye and axes of both frames, and their shared origin relative to the eye. Asks for the tiles
    * wanted, coarsest first, nearest first, and draws the finest built cover of each part.
@@ -77,9 +81,11 @@ export class HullDetailView {
     for (const e of this.drawn) for (const m of e.meshes) m.visible = false;
     this.drawn = [];
     this.complete.clear();
+    this.roots.clear();
     for (const { p, tiles } of wanted) {
       const cover = coverOf(tiles, (id) => !!this.cache.get(`${p.id}/${id}`));
       if (cover.complete) this.complete.add(p.id);
+      this.roots.set(p.id, cover.covered);
       const axes = frames[p.frame].axes;
       for (const w of cover.drawn) {
         const e = this.cache.get(idOf(p.id, w.key))!;
@@ -96,6 +102,7 @@ export class HullDetailView {
     this.cache.clear();
     this.drawn = [];
     this.complete.clear();
+    this.roots.clear();
   }
 
   private async make(answer: GenAnswer, id: string): Promise<Entry | null> {
