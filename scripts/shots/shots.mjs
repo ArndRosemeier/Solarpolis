@@ -197,7 +197,13 @@ async function ready(page, timeout = 120_000) {
     if (!box) return !!document.querySelector('.lab:not([hidden])');
     const note = box.querySelector('.inside-note')?.textContent ?? '';
     return !!box.querySelector('canvas') && note === '';
-  }, null, { timeout, polling: 250 });
+  }, null, { timeout, polling: 250 }).catch(async (e) => {
+    if (!String(e?.message).includes('Timeout')) throw e;
+    const shown = await page.evaluate(() => [...document.querySelectorAll('.inside')].find((b) => !b.hidden)?.querySelector('.inside-note')?.textContent ?? '').catch(() => '');
+    const err = new Error(`the view never finished building in ${timeout / 1000} s (the page still says "${shown}")`);
+    err.neverReady = true;
+    throw err;
+  });
   const note = await page.evaluate(() => [...document.querySelectorAll('.inside')].find((b) => !b.hidden)?.querySelector('.inside-note')?.textContent ?? '');
   if (note) throw new Error(note);
 }
@@ -259,6 +265,7 @@ async function capture(browser, url, name, view, out, opts) {
     await shoot('');
   } catch (e) {
     result.ok = false;
+    result.neverReady = !!e?.neverReady;
     result.failure = String(e?.message ?? e).split('\n').slice(0, 6).join('\n');
     await shoot('failed').catch(() => {});
   }
@@ -352,6 +359,13 @@ async function render(opts, request = null, refused = null) {
     try {
       for (const n of names) {
         log(`${n}…`);
+        // A view whose page never finished building hangs the same way for every view of that page: skip them.
+        const hung = results.find((x) => x.neverReady && x.query === views[n].query);
+        if (hung) {
+          results.push({ view: n, about: views[n].about ?? '', query: views[n].query, ok: false, skipped: true, failure: `skipped: ${hung.view} never finished building the same page`, shots: [], wgsl: { modules: 0, unique: 0, withMessages: [] }, gpuErrors: [], pipelineErrors: [], deviceLost: null, console: [] });
+          log(`${n}: skipped (${hung.view} never finished building the same page)`);
+          continue;
+        }
         const r = await capture(browser, server.url, n, views[n], out, opts);
         results.push(r);
         const policy = /(\d+) violations/.exec(r.shaderReport ?? '')?.[1];

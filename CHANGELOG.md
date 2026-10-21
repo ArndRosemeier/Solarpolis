@@ -2,6 +2,16 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.045 — Hung renders end sooner
+
+- Behind the scenes: when a view on the render PC never finishes building, the other views of the same page in that request are skipped instead of each waiting two minutes, and the report says what the page still showed.
+
+## v0.044 — Bushes: fewer, lower, and seen from afar
+
+- Bushes are lower (most below head height) and there are about half as many, in the woods and in the meadows.
+- Seen from afar a bush keeps its size: its distant version used to be much smaller than the bush, so bushes seemed to swell up as you came near. Trees' distant versions now match their crowns the same way.
+- Bushes stay in view until they are a pixel or two tall (a kilometre or so for a two-metre bush) instead of vanishing past a few hundred metres.
+
 ## v0.043 — Arrival after Start
 
 - Start on the title no longer cuts straight inside. Your ship carries on: first a view from above its back, looking down its corridor past the nose at the spindle growing in front of the turning endcap, then close on the berth as the nose meets the docking collar and latches with a soft jolt. Then you go inside. Any key skips it (and on the title card, any key still goes straight in).
