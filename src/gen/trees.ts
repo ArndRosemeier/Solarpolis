@@ -838,7 +838,31 @@ function hullTrunk(hb: HullBuilder, base: V, top: V, r: number, barkIdx: number,
   }
 }
 
-function buildHull(cfg: FormCfg, sk: TreeSkeleton, woodNoise: Noise): HullBuilder {
+/**
+ * How far the leaves reach from `c` along each of `dirs`: the outer edge (a high quantile, so a stray card does not
+ * count) of the leaf points within a cone around the direction, measured along it; NaN where too few leaves lie that way.
+ */
+function leafReach(leaves: readonly number[], c: V, dirs: readonly V[]): number[] {
+  const n = leaves.length / 3, d = v3();
+  const lengths: number[][] = dirs.map(() => []);
+  for (let i = 0; i < n; i++) {
+    d.set(leaves[i * 3] - c.x, leaves[i * 3 + 1] - c.y, leaves[i * 3 + 2] - c.z);
+    const len = d.length();
+    if (len < 1e-6) continue;
+    dirs.forEach((dir, k) => { const along = d.dot(dir); if (along > len * HULL_CONE) lengths[k].push(along); });
+  }
+  return lengths.map((l) => {
+    if (l.length < 6) return NaN;
+    l.sort((a, b) => a - b);
+    return l[Math.floor((l.length - 1) * HULL_REACH)];
+  });
+}
+
+/** The cone (cos of its half angle) and the quantile of the leaves the hull reaches out to in each direction. */
+const HULL_CONE = 0.6;
+const HULL_REACH = 0.9;
+
+function buildHull(cfg: FormCfg, sk: TreeSkeleton, woodNoise: Noise, leaves: readonly number[]): HullBuilder {
   const hb = new HullBuilder();
   const env = sk.env;
   const trunk = sk.branches[0];
@@ -847,20 +871,46 @@ function buildHull(cfg: FormCfg, sk: TreeSkeleton, woodNoise: Noise): HullBuilde
   hullTrunk(hb, v3(0, -0.1, 0), tTop, cfg.trunkR * 1.1, cfg.bark);
   const { verts: unitVerts, faces } = icosphere(1), verts = unitVerts.map(([x, y, z]) => v3(x, y, z));
   const c = v3(env.cx, env.cy, env.cz), p = v3(), n = v3();
+  // As far as the leaves reach, where they spill past the envelope (a shrub's clustered cards do), so the far level is
+  // as big as the near ones and a plant never swells as it comes close.
+  const reach = leafReach(leaves, c, verts);
   const first = hb.pos.length / 3;
-  for (const dv of verts) {
+  for (const [k, dv] of verts.entries()) {
     const d = dv.clone();
-    let e = env.extent(d) * 0.97;
+    let e = Math.max(env.extent(d) * 0.97, Number.isNaN(reach[k]) ? 0 : reach[k]);
     e *= 1 + 0.12 * woodNoise.n3(d.x * 1.7 + 3.1, d.y * 1.7, d.z * 1.7);
     p.copy(c).addScaledVector(d, Math.max(0.03, e));
+    p.y = Math.max(p.y, 0);
     env.normalAt(p, n);
     n.lerp(d, 0.4).normalize();
     const shade = 0.75 + 0.25 * clamp(d.y * 0.5 + 0.5, 0, 1);
     hb.vert(p, n, 1, [cfg.farColor[0] * shade, cfg.farColor[1] * shade, cfg.farColor[2] * shade], 0.75);
   }
   for (const [a, b, cc] of faces) hb.idx.push(first + a, first + b, first + cc);
+  fitToLeaves(hb.pos, first, leaves);
   return hb;
 }
+
+/**
+ * Stretch the crown's points (from point `first` on) to the leaves' own height and spread around the trunk: an envelope
+ * can stand taller or narrower than the leaves it holds (a holm oak's by a third), and the hull must not.
+ */
+function fitToLeaves(pos: number[], first: number, leaves: readonly number[]): void {
+  const spread = (p: readonly number[], from: number) => {
+    const wide: number[] = [];
+    let top = 0;
+    for (let i = from * 3; i < p.length; i += 3) { top = Math.max(top, p[i + 1]); wide.push(Math.hypot(p[i], p[i + 2])); }
+    wide.sort((a, b) => a - b);
+    return { top, wide: wide[Math.floor((wide.length - 1) * HULL_SPREAD)] ?? 0 };
+  };
+  const want = spread(leaves, 0), have = spread(pos, first);
+  if (!(have.top > 0 && have.wide > 0 && want.top > 0 && want.wide > 0)) return;
+  const up = want.top / have.top, out = want.wide / have.wide;
+  for (let i = first * 3; i < pos.length; i += 3) { pos[i] *= out; pos[i + 1] *= up; pos[i + 2] *= out; }
+}
+
+/** The share of points within the spread a hull is fitted to (its widest few may stray). */
+const HULL_SPREAD = 0.95;
 
 // ---------------------------------------------------------------------------------------------
 // The model
@@ -889,7 +939,7 @@ export function buildTree(form: PlantForm, seed: number, variant: number, detail
     tube(wood, b, Math.max(3, Math.round(radial * Math.min(1, detail * 1.5))), scaled.bark, sk.maxPath, b.level === 0 ? null : sk.env, b.level === 0 ? scaled : null, variant * 131 + 7 + i * 7, woodNoise);
   });
   const leaves = buildLeaves(scaled, sk, rng.fork('leaves'), 1 / Math.sqrt(Math.max(0.05, detail)));
-  const hull = buildHull(scaled, sk, woodNoise);
+  const hull = buildHull(scaled, sk, woodNoise, leaves.pos);
   // One unit high: the tallest of the wood and the leaves.
   let top = 0;
   for (const b of [wood, leaves]) for (let i = 1; i < b.pos.length; i += 3) top = Math.max(top, b.pos[i]);

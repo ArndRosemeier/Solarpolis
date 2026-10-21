@@ -63,6 +63,15 @@ const DEBRIS_ACROSS = 2;
 /** A plant's sight unit (m): its greatest height, but never less than a small tree's, so shrubs are seen too. */
 export const unit = (spec: PlantSpec): number => Math.max(spec.height[1], 6);
 
+/**
+ * How far a plant smaller than a tree is seen (m per m of its height): where it is a pixel or two tall, as debris is
+ * (`debrisUnit`). Trees last until the canopy layer takes over the woods; shrubs and heather last until they are too
+ * small to see, but no farther than the woods, and a dense plant (reeds) no farther than `DENSE` spacings, past which
+ * so many would be too many to draw and its biome's ground colour carries it.
+ */
+const SIGHT = 500;
+const DENSE = 250;
+
 /** How thick a piece of debris is for its size: a stone is as thick as it is high; trunks and branches are long and thin. */
 export const DEBRIS_GIRTH = { stone: 1, log: 0.1, branch: 0.04 } as const;
 /**
@@ -110,7 +119,14 @@ export function plantsOf(ecology: Ecology): Species[] {
     for (const spec of b.plants) {
       const u = unit(spec);
       const band = LEVELS.map((l) => l.fade.map((f) => f * u) as [number, number, number, number]);
-      if (spec.height[1] >= TREE_HEIGHT) [band[LEVELS.length - 1][2], band[LEVELS.length - 1][3]] = woods;
+      const far = band[LEVELS.length - 1];
+      if (spec.height[1] >= TREE_HEIGHT) [far[2], far[3]] = woods;
+      else {
+        // Fading out over the same share of the distance as before.
+        const [, , out0, out1] = LEVELS[LEVELS.length - 1].fade;
+        const end = Math.max(far[3], Math.min(SIGHT * spec.height[1], woods[1], DENSE * spec.spacing));
+        [far[2], far[3]] = [(end * out0) / out1, end];
+      }
       out.push({ id: out.length, biome, on: -1, what: 'plant', spec, cell: cellsFor(band), band, seen: band[LEVELS.length - 1][3] });
     }
   });

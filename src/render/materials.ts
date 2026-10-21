@@ -360,7 +360,9 @@ export const HARDWARE = kind('hardware', ['position', 'normal', 'color'], { cast
 
 /** A torch's exhaust plume (hullShaders.ts, `flameColor`): glowing plasma added on top. Position, normal. */
 export const FLAME = kind('flame', ['position', 'normal'], { cast: false, receive: false }, () => {
-  const m = new MeshBasicNodeMaterial({ side: DoubleSide, transparent: true, blending: AdditiveBlending, depthWrite: false });
+  // Additive and not writing depth, the plume needs no back-then-front passes: one pass, so the one pipeline the
+  // Stage builds is the one drawn (two passes built two more on the render path).
+  const m = new MeshBasicNodeMaterial({ side: DoubleSide, transparent: true, blending: AdditiveBlending, depthWrite: false, forceSinglePass: true });
   m.colorNode = flameColor();
   return m;
 });

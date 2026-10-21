@@ -94,7 +94,7 @@ test('river water: far away, a river lies over the coarse ground its tile draws 
   const r = t.rivers[0], i = Math.floor(r.count * 0.5), s = r.s0 + i * r.step, theta = r.theta[i];
   const holds = (k: TileKey) => { const b = bounds(layout, k); const u = ((theta - b.theta0) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI); return s >= b.s0 && s < b.s1 && u < b.theta1 - b.theta0; };
   let key = roots(layout).find(holds)!;
-  key = children(key).find(holds)!;
+  key = children(layout, key).find(holds)!;
   const tile = buildTile(eco, layout, key);
   assert.ok(tile.water, 'the river is drawn on a tile two kilometres wide');
   const w = tile.water!;
