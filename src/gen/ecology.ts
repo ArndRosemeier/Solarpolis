@@ -19,6 +19,19 @@ import { canopyColor } from './trees';
 /** Plants at least this tall (m, full grown) are trees: they make up the canopy of woods. */
 export const TREE_HEIGHT = 6;
 
+/** Under closed crowns, the share of the sunline's direct light that still reaches the ground, on average (sunflecks). */
+export const UNDER_CROWNS = 0.12;
+/** The canopy raise (`colorAt`'s canopy height, m) at which the crowns count as closed: three quarters of a tall tree. */
+export const CLOSED_RAISE = 0.75 * TREE_HEIGHT * 1.5;
+/**
+ * How closed the crowns are over a point (0 open … 1 closed), from its canopy raise: where no shadow map reaches, the
+ * ground's shade under the woods (GROUND), and the eyes' meter in a wood (view.ts). Sparse trees barely raise the
+ * canopy (`colorAt`), so the raise tells closed woods from scattered ones.
+ */
+export function crownsClosed(raise: number): number {
+  return smoothstep(0.25, 1, raise / CLOSED_RAISE);
+}
+
 /**
  * A biome's woods seen from afar: how much of the ground its trees' crowns cover where it is pure (a crown about half
  * as wide as the tree is tall), how high they stand on average, and their colour (linear RGB).

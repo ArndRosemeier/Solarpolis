@@ -28,7 +28,7 @@ import { lightShares, lightVector } from '../world/sunline';
 export const SHADOW_RAYS = 4;
 const SHADOW_STEPS = 5;
 /** The shadow map: half its side (m) around the player, its texels, and how far the light stands back (m). */
-const SHADOW_HALF = 40;
+export const SHADOW_HALF = 40;
 const SHADOW_TEXELS = 2048;
 const LIGHT_BACK = 200;
 /** How high above a point (m) things are looked for that shade it from the line. */

@@ -19,7 +19,8 @@ import { LEAF_ATLAS_SIZE } from '../workers/leaves';
 import type { Node } from 'three/webgpu';
 import type { StageKind } from '@futuremagic/stage';
 import { HAZE_DIAMETER } from '../blueprint';
-import { sunShadow } from './lights';
+import { SHADOW_HALF, sunShadow } from './lights';
+import { CLOSED_RAISE, UNDER_CROWNS } from '../gen/ecology';
 import { OPEN_SKY } from '../gen/horizon';
 import { EMISSION_SAMPLES, SUNLINE_STEPS } from '../world/sunline';
 import { HAZE_STEPS } from '../world/air';
@@ -51,6 +52,8 @@ export const airShape = {
 /** Where the eye is in the habitat (world axes, m); set each frame by the view. */
 export const view = {
   eye: uniform(new Vector3()),
+  /** How far the eyes have opened (`insideExposure`): scales every inside kind's light, and three's lights for Actors. */
+  exposure: uniform(1),
 };
 
 /** A fragment's true world position: the eye plus its camera-relative offset. */
@@ -98,7 +101,11 @@ export function setSunline(length: number, norm: number, nearest: number): void 
  * `wrap` lets light reach past the terminator (0 a plain surface; leaves and crowns, which light shines through and
  * around, more).
  */
-function sunlit(horizon: Node<'vec2'> = vec2(OPEN_SKY, OPEN_SKY), normal: Node<'vec3'> = normalWorld, wrap = 0): Node<'float'> {
+/**
+ * The sunline's light on a surface: direct (through `sunShadow`, times `shade` where something else stands in for the
+ * shadow map) plus the air's glow.
+ */
+function sunlit(horizon: Node<'vec2'> = vec2(OPEN_SKY, OPEN_SKY), normal: Node<'vec3'> = normalWorld, wrap = 0, shade: Node<'float'> = float(1)): Node<'float'> {
   const w = worldPosition();
   const len = max(w.xy.length(), 1e-3);
   const r = max(len, light.nearest);
@@ -116,7 +123,7 @@ function sunlit(horizon: Node<'vec2'> = vec2(OPEN_SKY, OPEN_SKY), normal: Node<'
     sum = sum.add(texture(emissionTexture, vec2(at, 0.5)).r.mul(c).mul(facing));
   }
   // Near things (the body, balls) shade it too: the near shadow map, soft along the axis (render/lights.ts).
-  const direct = sum.mul(span).div(SUNLINE_STEPS).div(r).mul(light.norm).mul(sunShadow as unknown as Node<'float'>);
+  const direct = sum.mul(span).div(SUNLINE_STEPS).div(r).mul(light.norm).mul(sunShadow as unknown as Node<'float'>).mul(shade);
   // The sky light comes from the whole air above: as much as the horizons leave open of the half circle.
   const open = clamp(horizon.x.add(horizon.y).div(Math.PI), 0, 1);
   return direct.mul(float(1).sub(air.skyLight)).add(air.skyLight.mul(light.mean).mul(open));
@@ -153,7 +160,7 @@ function throughAir(c: Node<'vec3'>): Node<'vec3'> {
     glow = glow.add(T.mul(sigma).mul(source).mul(inside));
     T = T.mul(exp(tau.negate()));
   }
-  return c.mul(T).add(air.haze.mul(glow));
+  return c.mul(T).add(air.haze.mul(glow)).mul(view.exposure);
 }
 
 /** asinh, without cancellation for large negative arguments. */
@@ -206,7 +213,12 @@ export const GROUND = kind('ground', ['position', 'normal', 'color', 'morph', 'h
   // The canopy's crowns: lit tops and shaded gaps a crown across, fading where they would shimmer.
   const crowns = mx_fractal_noise_float(worldPosition().mul(1 / 6), 2, 2.2, 0.5).mul(0.45).mul(far).mul(smoothstep(1, 5, canopy.w)).mul(float(1).sub(smoothstep(4000, 9000, away))).add(1);
   const ground = mix(floorUp.color, canopy.rgb, far);
-  m.colorNode = throughAir(ground.mul(sunlit(attribute<'vec2'>('horizon', 'vec2'), floorUp.normal)).mul(crowns));
+  // Under the woods past the shadow map's reach, the crowns' shade on average (`crownsClosed`): the floor stays in
+  // the shade the near trees cast, and the canopy seen from afar keeps its sunlit tops.
+  const beyond = smoothstep(SHADOW_HALF * 0.6, SHADOW_HALF * 0.9, away).mul(float(1).sub(far));
+  const closed = smoothstep(0.25, 1, canopy.w.div(CLOSED_RAISE));
+  const shade = mix(float(1), mix(float(1), float(UNDER_CROWNS), closed), beyond);
+  m.colorNode = throughAir(ground.mul(sunlit(attribute<'vec2'>('horizon', 'vec2'), floorUp.normal, 0, shade)).mul(crowns));
   return m;
 });
 
