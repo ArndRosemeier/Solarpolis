@@ -7,6 +7,7 @@
  */
 import type { HabitatParams } from './params';
 import { makeProfile, type Profile } from './profile';
+import { makeExterior, type Exterior } from './exterior';
 
 /** Solar constant at 1 AU (W/m²). */
 export const SOLAR_CONSTANT = 1361;
@@ -61,7 +62,10 @@ export interface Habitat {
   readonly solarPower: number;
   /** Visible light the sunline must deliver to the floor (W). */
   readonly lightPower: number;
-  /** Heat to radiate: all intercepted sunlight ends as heat (W). */
+  /**
+   * Heat the radiators must carry (W): what is released inside, the electricity used plus the sunlight piped into the
+   * sunline. The panels shed their own losses from the skin, so the rest of the intercepted sunlight never enters.
+   */
   readonly heat: number;
   /** Radiator area needed, both faces of the fins counted (m²), and as a multiple of the two endcap discs. */
   readonly radiatorArea: number;
@@ -71,6 +75,8 @@ export interface Habitat {
   readonly density: number;
   /** The meridian curve of the interior: wild axis, wild endcap, floor, port endcap, hub. */
   readonly profile: Profile;
+  /** The outside: drum, endcap faces, radiator brims, dock spindle, mast (exterior.ts). */
+  readonly exterior: Exterior;
   /** Apparent gravity at radius r (m/s²), pointing away from the axis. */
   gravityAt(r: number): number;
   /** Air pressure at radius r (Pa), in the rotating, isothermal atmosphere. */
@@ -120,12 +126,13 @@ export function derive(p: HabitatParams): Habitat {
   const sunlight = flux * crossSection * p.collectorRatio;
   const solarPower = sunlight * p.solarEfficiency;
   const lightPower = p.lightTarget * floorArea;
-  const heat = sunlight;
+  const heat = solarPower + p.pipedLight * lightPower;
   const T = p.radiator.temperature;
   const radiatorArea = heat / (p.radiator.emissivity * STEFAN_BOLTZMANN * T * T * T * T);
   const radiatorToEndcaps = radiatorArea / (2 * endcapArea);
 
   const profile = makeProfile(R, L, p.hubRadius, p.endcaps);
+  const exterior = makeExterior({ length: L, outer, stack: outer - surface, hubRadius: p.hubRadius, spin, radiatorArea, shape: p.exterior });
   const Rs = p.air.gasConstant, Tair = p.air.temperature, p0 = p.air.floorPressure;
 
   return {
@@ -154,6 +161,7 @@ export function derive(p: HabitatParams): Habitat {
     population: p.population,
     density: p.population / (floorArea / 1e6),
     profile,
+    exterior,
     gravityAt: (r) => spin * spin * r,
     // dp/dr = ρ ω² r with ρ = p / (Rs T): p(r) = p0 exp(−ω² (R² − r²) / (2 Rs T)).
     pressureAt: (r) => p0 * Math.exp((-spin * spin * (R * R - r * r)) / (2 * Rs * Tair)),

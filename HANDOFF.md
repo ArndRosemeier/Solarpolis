@@ -25,7 +25,8 @@ Where the work stands, for the next thread. Update it in the PR that changes it.
 Arnd approved the whole plan on 2026-10-21: the reference habitat sits in the geostationary ring ("the Necklace"), its axis on the ecliptic pole; radiators are flat brims at the endcaps; the port hub is a despun spindle; ships fly on laser-pushed solar sails or fusion torches (habitats stay solar-only); Earth in 3026 looks like today with smaller, darker cities; the title is a live docking flight that ends in the Hub.
 
 - **Done (O1)**: `src/space`: clock, ephemeris of Sun, Earth and Moon, the float64 frame tree, the Necklace (`makeSpace`), tested against 2026 equinox, solstice and eclipses and over the whole `MATRIX`.
-- **Next (O2, outside thread)**: `derive()` heat fix (radiators carry only the heat released inside) and a pure `exterior(habitat)` (brims, spindle, outer profile).
+- **Done (O2)**: `derive()` heat is what is released inside (electricity plus the piped share of the sunline light, `pipedLight`); `habitat.exterior` (`src/blueprint/exterior.ts`): endcap faces, radiator brims sized to the heat (stacked inward when one ring per end is not enough; view factor between stacked brims; tip stress checked against `brimMaterial`), despun spindle, mast. The Lab section draws them. Reference: 203 GW, one brim per end out to 5.9 km; long: 5 stacked brims per end.
+- **Next (O3)**: the sky (SKY and PLANET kinds: stars, Sun, Earth, Moon, exposure), then O4 the habitat from outside and the title attract loop.
 - **Later**: outside material kinds (SKY, PLANET, HULL, BRIM, HARDWARE, GLINT, WINDOW); the interior generator places starfloor rooms, the Hub lounge and endcap ports. `toView(eye, p)` stays the eye-relative step; positions from other frames go through `frames.position` first.
 
 ## News from Arnd
