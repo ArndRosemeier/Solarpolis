@@ -7,7 +7,7 @@ import { BufferAttribute, BufferGeometry, Group, Mesh } from 'three/webgpu';
 import type { Stage } from '@futuremagic/stage';
 import { toView, type Vec3 } from '../blueprint';
 import type { Terrain } from '../gen/terrain';
-import { keyId, makeLayout, roots, select, spheres, tileBytes, type TileKey, type TileLayout, type TileMesh } from '../gen/tiles';
+import { keyId, makeLayout, parent, roots, select, spheres, tileBytes, type TileKey, type TileLayout, type TileMesh } from '../gen/tiles';
 import type { WorkerPool } from '../workers/pool';
 import { GROUND, WATER } from './materials';
 
@@ -64,6 +64,7 @@ export class TerrainView {
   follow(eye: Vec3, pixelsPerRadian: number): void {
     this.frameNo++;
     const errorOf = (k: TileKey): number | undefined => this.built.get(keyId(k))?.tile.error;
+    const parentError = (k: TileKey): number | undefined => (k.level === 0 ? undefined : errorOf(parent(k)));
     const sel = select(this.terrain, this.layout, eye, pixelsPerRadian, MAX_PIXELS, errorOf, this.sphereOf);
     for (const e of this.drawn) { e.mesh.visible = false; if (e.water) e.water.visible = false; }
     this.drawn = [];
@@ -72,6 +73,9 @@ export class TerrainView {
       const [x, y, z] = toView(eye, e.tile.origin);
       e.mesh.position.set(x, y, z);
       e.mesh.visible = true;
+      // Where the parent would be chosen instead (select: its error over the distance reaches MAX_PIXELS).
+      const pe = parentError(k);
+      e.mesh.userData.morphFar = pe === undefined ? 1e30 : (pe * pixelsPerRadian) / MAX_PIXELS;
       if (e.water) { e.water.position.set(x, y, z); e.water.visible = true; }
       e.lastDrawn = this.frameNo;
       this.drawn.push(e);
@@ -93,7 +97,7 @@ export class TerrainView {
     const answer = await this.pool.job({ kind: 'tile', params: this.terrain.habitat.params, key: k });
     if (!('tile' in answer) || this.built.has(id)) return;
     const tile = answer.tile;
-    const mesh = new Mesh(geometry(tile.positions, tile.normals, tile.index, tile.colors), GROUND.material);
+    const mesh = new Mesh(geometry(tile.positions, tile.normals, tile.index, tile.colors, tile.morph), GROUND.material);
     mesh.name = `tile ${id}`;
     mesh.visible = false;
     const water = tile.water ? new Mesh(geometry(tile.water.positions, tile.water.normals, tile.water.index), WATER.material) : null;
@@ -131,11 +135,12 @@ export class TerrainView {
   }
 }
 
-function geometry(positions: Float32Array, normals: Float32Array, index: Uint32Array, colors?: Float32Array): BufferGeometry {
+function geometry(positions: Float32Array, normals: Float32Array, index: Uint32Array, colors?: Float32Array, morph?: Float32Array): BufferGeometry {
   const g = new BufferGeometry();
   g.setAttribute('position', new BufferAttribute(positions, 3));
   g.setAttribute('normal', new BufferAttribute(normals, 3));
   if (colors) g.setAttribute('color', new BufferAttribute(colors, 3));
+  if (morph) g.setAttribute('morph', new BufferAttribute(morph, 3));
   g.setIndex(new BufferAttribute(index, 1));
   g.computeBoundingSphere();
   return g;

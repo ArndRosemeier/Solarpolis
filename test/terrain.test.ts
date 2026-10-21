@@ -54,6 +54,21 @@ for (const { name, params } of MATRIX) {
       const r = Math.hypot(x, y);
       assert.ok((-x * ta.normals[v * 3] - y * ta.normals[v * 3 + 1]) / r > 0.5);
     }
+    // Geomorphing: a child's points plus their morph land on the parent's surface (its points and its cell diagonals).
+    const kid = children(a)[3], tk = buildTile(t, layout, kid), half = TILE_CELLS / 2;
+    const parentAt = (pi: number, pj: number, c: number): number => ta.origin[c] + ta.positions[(pj * row + pi) * 3 + c];
+    for (let j = 0; j <= TILE_CELLS; j += 7) {
+      for (let i = 0; i <= TILE_CELLS; i += 3) {
+        const pi = half + (i >> 1), pj = half + (j >> 1);
+        for (let c = 0; c < 3; c++) {
+          const morphed = tk.origin[c] + tk.positions[(j * row + i) * 3 + c] + tk.morph[(j * row + i) * 3 + c];
+          const want = i & 1 && j & 1 ? (parentAt(pi + 1, pj, c) + parentAt(pi, pj + 1, c)) / 2
+            : i & 1 ? (parentAt(pi, pj, c) + parentAt(pi + 1, pj, c)) / 2
+            : j & 1 ? (parentAt(pi, pj, c) + parentAt(pi, pj + 1, c)) / 2 : parentAt(pi, pj, c);
+          assert.ok(Math.abs(morphed - want) < 4e-3 + Math.abs(want) * 2e-7, `morph at ${i},${j} axis ${c}: ${morphed} vs ${want}`);
+        }
+      }
+    }
     // Children exactly tile their parent.
     const p = bounds(layout, a), kids = children(a).map((k) => bounds(layout, k));
     assert.equal(Math.min(...kids.map((k) => k.theta0)), p.theta0);

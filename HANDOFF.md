@@ -7,11 +7,12 @@ Where the work stands, for the next thread. Update it in the PR that changes it.
 - **v0.001, foundation**: house rules (guards, duplication ratchet, change notes and versioning, CI under 2 minutes, Pages deploy); `src/blueprint` (params → derive → validate, profile, (θ, s, h) frame) tested over the four-habitat `MATRIX`; memory watchdog, debug menu, What's new, Blueprint Lab.
 - **Shared render foundation**: `@futuremagic/stage` in AssetGenerator (renderer, Stage, cap, hooks, monitor; from Dunfinity). Solarpolis uses it WebGPU only, with reversed depth.
 - **First look inside**: the Inside tab draws the whole interior surface (`src/gen/surface.ts`, a coarse seeded backdrop), the sunline and the haze, from a walker on the floor (`src/world/walker.ts`).
-- **Terrain tiles (milestone 2, part 1)**: `relief` in the blueprint (hills, ring lake, terrace step); `src/gen/terrain.ts` height field; `src/gen/tiles.ts` wrapping tile tree with LOD by measured error (reference view ~600 tiles, large ~1100); built in a worker pool; drawn camera-relative; WATER kind for the lake; the walker stands on the ground or the water. Hill height is on the decision card "How tall may hills and how deep may lakes be" (recommended option assumed: built hills, the deck follows).
+- **Terrain tiles (milestone 2, part 1)**: `relief` in the blueprint (hills, ring lake, terrace step); `src/gen/terrain.ts` height field; `src/gen/tiles.ts` wrapping tile tree with LOD by measured error (reference view ~600 tiles, large ~1100); built in a worker pool; drawn camera-relative; WATER kind for the lake; the walker stands on the ground or the water. Arnd chose built hills and lakes, the deck below follows the ground.
+- **Geomorphing**: each tile carries a `morph` offset to its parent's surface; the GROUND kind blends it in over the last 40 % before the parent's distance, so level swaps don't pop (normals still switch; a lighting-only change).
 
 ## Next
 
-1. Milestone 2, remaining parts: geomorphing between tile levels, the sunline table and horizon angles, the haze froxel volume, a fly camera.
+1. Milestone 2, remaining parts: the sunline table and horizon angles, the haze froxel volume, a fly camera.
 2. The sunline's day: the travelling sun and the night dimming.
 3. Physics for the walker (Rapier, Coriolis), then Actors' humanoid bodies.
 4. Dunfinity can switch to `@futuremagic/stage` and drop its own copy (its own PR, in its own thread).

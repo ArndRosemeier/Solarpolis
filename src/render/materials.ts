@@ -10,8 +10,8 @@
  * world position is the `view.eye` uniform, for whatever needs the true place (the axis, ground patterns).
  */
 import { MeshBasicNodeMaterial, DoubleSide, type Material } from 'three/webgpu';
-import { abs, cameraPosition, color, dot, exp, float, max, mix, mx_fractal_noise_float, normalize, normalWorld, positionWorld, pow, smoothstep, uniform, vec3, vertexColor } from 'three/tsl';
-import { Vector3 } from 'three/webgpu';
+import { abs, attribute, cameraPosition, color, dot, exp, float, max, mix, mx_fractal_noise_float, normalize, modelWorldMatrix, normalWorld, positionLocal, positionWorld, pow, smoothstep, uniform, vec3, vec4, vertexColor } from 'three/tsl';
+import { Float32BufferAttribute, Vector3, type BufferGeometry } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 import type { StageKind } from '@futuremagic/stage';
 import { HAZE_DIAMETER } from '../blueprint';
@@ -67,11 +67,23 @@ function kind(name: string, attributes: readonly string[], shadow: { cast: boole
 }
 
 /**
- * The ground of the whole interior (floor and endcap slopes): vertex colour, lit from the axis, seen through the air.
- * Its meshes carry position, normal and color.
+ * Geomorphing: the distance from the eye (m) at which a tile's parent takes over; each tile mesh sets it in
+ * `userData.morphFar` (render/terrain.ts). Points blend towards the parent's surface (the `morph` attribute) over the
+ * last stretch before it, so a tile has the parent's shape by the time they swap.
  */
-export const GROUND = kind('ground', ['position', 'normal', 'color'], { cast: false, receive: false }, () => {
+const morphFar = uniform(0).onObjectUpdate(({ object }) => (object?.userData.morphFar as number | undefined) ?? 1e30);
+/** Where the blend starts, as a share of `morphFar`. */
+const MORPH_START = 0.6;
+
+/**
+ * The ground of the whole interior (floor and endcap slopes): vertex colour, lit from the axis, seen through the air.
+ * Its meshes carry position, normal, color and morph (tiles.ts).
+ */
+export const GROUND = kind('ground', ['position', 'normal', 'color', 'morph'], { cast: false, receive: false }, () => {
   const m = new MeshBasicNodeMaterial();
+  const seen = modelWorldMatrix.mul(vec4(positionLocal, 1)).xyz.sub(cameraPosition).length();
+  const blend = smoothstep(morphFar.mul(MORPH_START), morphFar, seen);
+  m.positionNode = positionLocal.add(attribute<'vec3'>('morph', 'vec3').mul(blend));
   // Close up, the ground gets a mottle of tufts and bare patches (metres across), finer than its grid; it fades out
   // with distance before it could shimmer. Plants will take over from it.
   const near = float(1).sub(smoothstep(150, 1200, positionWorld.sub(cameraPosition).length()));
@@ -100,6 +112,13 @@ export const WATER = kind('water', ['position', 'normal'], { cast: false, receiv
   m.colorNode = throughAir(mix(deep, air.haze, mirror));
   return m;
 });
+
+/** The game's own attributes on the Stage's warm-up stand-ins (StageOptions.attribute): zero morph. */
+export function standInAttribute(g: BufferGeometry, name: string): boolean {
+  if (name !== 'morph') return false;
+  g.setAttribute('morph', new Float32BufferAttribute(new Array(9).fill(0), 3));
+  return true;
+}
 
 /** Every kind, for the Stage's warm-up. */
 export function allKinds(): readonly Kind[] {

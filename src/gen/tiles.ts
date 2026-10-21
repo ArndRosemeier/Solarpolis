@@ -85,6 +85,11 @@ export function children(k: TileKey): TileKey[] {
   ];
 }
 
+/** The node one level up (a root's parent is itself). */
+export function parent(k: TileKey): TileKey {
+  return k.level === 0 ? k : { ...k, level: k.level - 1, i: k.i >> 1, j: k.j >> 1 };
+}
+
 /** A sphere around a node's ground (world axes), allowing for the relief. */
 export function sphere(terrain: Terrain, layout: TileLayout, k: TileKey): { center: Vec3; radius: number } {
   const b = bounds(layout, k);
@@ -161,6 +166,12 @@ export interface TileMesh {
   positions: Float32Array;
   normals: Float32Array;
   colors: Float32Array;
+  /**
+   * Geomorphing: per point, the offset from where it is to where the parent tile's coarser surface lies at the same
+   * (θ, s). A renderer blends towards it as the tile nears the distance where its parent takes over, so the swap shows
+   * no pop. Zero on points the parent shares.
+   */
+  morph: Float32Array;
   index: Uint32Array;
   /** How far the grid strays from the true ground between its points (m): its error on screen decides splitting. */
   error: number;
@@ -170,7 +181,7 @@ export interface TileMesh {
 
 /** Bytes a built tile holds, for the memory watchdog. */
 export function tileBytes(t: TileMesh): number {
-  let b = t.positions.byteLength + t.normals.byteLength + t.colors.byteLength + t.index.byteLength;
+  let b = t.positions.byteLength + t.normals.byteLength + t.colors.byteLength + t.morph.byteLength + t.index.byteLength;
   if (t.water) b += t.water.positions.byteLength + t.water.normals.byteLength + t.water.index.byteLength;
   return b;
 }
@@ -226,6 +237,20 @@ export function buildTile(terrain: Terrain, layout: TileLayout, k: TileKey): Til
     }
   }
 
+  // Morph targets: the parent's grid has every other point of this one, and its cells split along the same diagonal
+  // (from (i+1, j) to (i, j+1)), so the parent's surface at a point between its points is the mean of two of them.
+  const morph = new Float32Array(count * 3);
+  const at = (i: number, j: number): number => ((j + 1) * W + (i + 1)) * 3;
+  for (let j = 0; j <= N; j++) {
+    for (let i = 0; i <= N; i++) {
+      const oddI = i & 1, oddJ = j & 1;
+      if (!oddI && !oddJ) continue;
+      const [p, q] = oddI && oddJ ? [at(i + 1, j - 1), at(i - 1, j + 1)] : oddI ? [at(i - 1, j), at(i + 1, j)] : [at(i, j - 1), at(i, j + 1)];
+      const w = at(i, j), v = (j * row + i) * 3;
+      for (let c = 0; c < 3; c++) morph[v + c] = (world[p + c] + world[q + c]) / 2 - world[w + c];
+    }
+  }
+
   // Skirts: each edge point again, sunk below the ground by about a cell, so a coarser neighbour's gap is covered.
   const edge: number[] = [];
   for (let i = 0; i < N; i++) edge.push(i);                       // s0 edge
@@ -239,6 +264,7 @@ export function buildTile(terrain: Terrain, layout: TileLayout, k: TileKey): Til
       positions[v + c] = positions[src + c] - normals[src + c] * sink;
       normals[v + c] = normals[src + c];
       colors[v + c] = colors[src + c];
+      morph[v + c] = morph[src + c];
     }
   });
 
@@ -274,7 +300,7 @@ export function buildTile(terrain: Terrain, layout: TileLayout, k: TileKey): Til
   // A tile that has children never claims to be finer than its cells can show at all.
   error = Math.max(error, cellSize(layout, k) * 0.02);
 
-  return { key: k, origin, positions, normals, colors, index: Uint32Array.from(index), error, water: buildWater(terrain, b, origin) };
+  return { key: k, origin, positions, normals, colors, morph, index: Uint32Array.from(index), error, water: buildWater(terrain, b, origin) };
 }
 
 /** The lake's surface over a tile's rectangle: a grid at the water's level, fine enough to follow the curve. */
