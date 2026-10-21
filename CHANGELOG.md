@@ -2,6 +2,12 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.014 — You have a body
+
+- You are now a person: press V to see yourself from behind, and V again to look through your own eyes.
+- Your body walks, runs, jumps and swims along with you, and stays upright toward the axis wherever you stand.
+- It is lit by the sunline like everything around it, and its light changes with the hour.
+
 ## v0.013 — Walking with real weight
 
 - On foot you now have a body: you walk over the hills, Space jumps, and you fall off ledges.
