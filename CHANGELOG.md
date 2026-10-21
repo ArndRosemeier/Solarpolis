@@ -2,6 +2,13 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.048 — Clouds
+
+- A cloud layer a kilometre or so above the floor: grey-bottomed cumulus overhead, bright where the sunline shines through a thin edge, and their sunlit tops on the far side of the cylinder.
+- The wind carries them along and around the axis, and their shadows drift over the land.
+- The habitat's weather is a schedule: some days nearly clear, some grey, with cumulus building through the afternoon. Every habitat sets its own layer (height, thickness, cover, cloud size, wind); a small one has none.
+- Debug menu: fly up under or into the clouds (Go), and set the cover by hand (Time).
+
 ## v0.047 — The interior from far away
 
 - Clearer air: the far side across the axis keeps its colours instead of fading into pale haze. How clear a habitat's air is is now one of its parameters.
