@@ -10,8 +10,9 @@
  * world position is the `view.eye` uniform, for whatever needs the true place (the axis, ground patterns).
  */
 import { MeshBasicNodeMaterial, DoubleSide, BackSide, AdditiveBlending, type Material } from 'three/webgpu';
-import { abs, atan, attribute, cameraPosition, clamp, color, cos, log, select, sign, sqrt, dot, exp, float, max, mix, mx_fractal_noise_float, normalize, min, modelWorldMatrix, normalWorld, positionLocal, positionWorld, pow, sin, smoothstep, texture, uniform, vec2, vec3, vec4, vertexColor } from 'three/tsl';
-import { ClampToEdgeWrapping, DataTexture, DataUtils, Float32BufferAttribute, HalfFloatType, LinearFilter, RedFormat, Vector3, type BufferGeometry } from 'three/webgpu';
+import { abs, atan, attribute, cameraPosition, hash, normalLocal, step, time, varying, clamp, color, cos, log, select, sign, sqrt, dot, exp, float, max, mix, mx_fractal_noise_float, normalize, min, modelWorldMatrix, normalWorld, positionLocal, positionWorld, pow, sin, smoothstep, texture, uniform, vec2, vec3, vec4, vertexColor } from 'three/tsl';
+import { ClampToEdgeWrapping, DataTexture, DataUtils, Float32BufferAttribute, HalfFloatType, InstancedInterleavedBuffer, InterleavedBufferAttribute, LinearFilter, RedFormat, Vector2, Vector3, type BufferGeometry } from 'three/webgpu';
+import { PLANT_STRIDE } from '../gen/scatter';
 import type { Node } from 'three/webgpu';
 import type { StageKind } from '@futuremagic/stage';
 import { HAZE_DIAMETER } from '../blueprint';
@@ -94,7 +95,7 @@ export function setSunline(length: number, norm: number, nearest: number): void 
  * The light on a surface from the sunline, seen past the terrain's horizon angles (x toward the port end, y toward the
  * wild end) and the near shadow map, plus the sky light: the air's scattered glow, less where the horizons close in.
  */
-function sunlit(horizon: Node<'vec2'> = vec2(OPEN_SKY, OPEN_SKY)): Node<'float'> {
+function sunlit(horizon: Node<'vec2'> = vec2(OPEN_SKY, OPEN_SKY), normal: Node<'vec3'> = normalWorld): Node<'float'> {
   const w = worldPosition();
   const len = max(w.xy.length(), 1e-3);
   const r = max(len, light.nearest);
@@ -106,7 +107,7 @@ function sunlit(horizon: Node<'vec2'> = vec2(OPEN_SKY, OPEN_SKY)): Node<'float'>
   for (let k = 0; k < SUNLINE_STEPS; k++) {
     const a = lo.add(span.mul((k + 0.5) / SUNLINE_STEPS));
     const c = cos(a), sn = sin(a);
-    const facing = max(normalWorld.x.mul(inX).mul(c).add(normalWorld.y.mul(inY).mul(c)).add(normalWorld.z.mul(sn)), 0);
+    const facing = max(normal.x.mul(inX).mul(c).add(normal.y.mul(inY).mul(c)).add(normal.z.mul(sn)), 0);
     const at = w.z.add(r.mul(sn).div(c)).div(light.length);
     sum = sum.add(texture(emissionTexture, vec2(at, 0.5)).r.mul(c).mul(facing));
   }
@@ -270,13 +271,59 @@ export const FLAME = kind('flame', ['position', 'normal'], { cast: false, receiv
   return m;
 });
 
+/** A plant cell's own values, from its mesh (render/plants.ts): how far the plant is seen, and the horizons at the cell. */
+const plantSeen = uniform(1e30).onObjectUpdate(({ object }) => (object?.userData.seen as number | undefined) ?? 1e30);
+const plantHorizon = uniform(new Vector2(OPEN_SKY, OPEN_SKY)).onObjectUpdate(({ object }) => (object?.userData.horizon as Vector2 | undefined) ?? new Vector2(OPEN_SKY, OPEN_SKY));
+/** How far toward its sight distance a plant starts to thin out (each plant leaves at its own distance in the band). */
+const PLANT_FADE = 0.75;
+
+/**
+ * Plants (gen/plants.ts, gen/scatter.ts): one unit-high mesh per species and variant, instanced over a cell. Each
+ * instance (`plant`: foot relative to the cell, height; `turn`: radians about up) stands toward the axis wherever it
+ * is, turned and scaled; crowns sway a little in the air's movement. Far off, plants leave one by one before the
+ * distance where the ground's own colour stands in for them. Lit by the sunline like the ground, past the cell's
+ * horizons, and casting into the near shadow map.
+ */
+export const PLANT = kind('plant', ['position', 'normal', 'color', 'plant'], { cast: true, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial();
+  const inst = attribute<'vec4'>('plant', 'vec4'), turn = attribute<'float'>('turn', 'float');
+  const foot = modelWorldMatrix.mul(vec4(inst.xyz, 1)).xyz;
+  const world = foot.add(view.eye);
+  const up = normalize(vec3(world.x.negate(), world.y.negate(), 0));
+  const side = vec3(up.y, up.x.negate(), 0), axis = vec3(0, 0, 1);
+  const c = cos(turn), sn = sin(turn);
+  const ax = side.mul(c).add(axis.mul(sn)), az = side.mul(sn.negate()).add(axis.mul(c));
+  // Each plant thins out at its own distance in the last stretch of its sight: a plant that has left is folded away.
+  const away = foot.sub(cameraPosition).length();
+  const keep = step(hash(inst.x.mul(13.7).add(inst.z.mul(7.1)).add(inst.y.mul(3.3))), float(1).sub(smoothstep(plantSeen.mul(PLANT_FADE), plantSeen, away)).mul(1.0001));
+  const p = positionLocal.mul(inst.w).mul(keep);
+  // The air moves: a slow sway, more toward the top, out of step from plant to plant.
+  const sway = sin(time.mul(1.1).add(world.x.mul(0.13)).add(world.z.mul(0.07))).mul(0.012).mul(p.y.mul(p.y).div(max(inst.w, 0.1)));
+  m.positionNode = inst.xyz.add(ax.mul(p.x.add(sway))).add(up.mul(p.y)).add(az.mul(p.z));
+  const n = varying(normalize(ax.mul(normalLocal.x).add(up.mul(normalLocal.y)).add(az.mul(normalLocal.z))));
+  m.colorNode = throughAir(vertexColor().rgb.mul(sunlit(plantHorizon, normalize(n))));
+  return m;
+});
+
 /** The game's own attributes on the Stage's warm-up stand-ins (StageOptions.attribute): no morph, open horizons. */
 export function standInAttribute(g: BufferGeometry, name: string): boolean {
   if (name === 'morph') g.setAttribute('morph', new Float32BufferAttribute(new Array(9).fill(0), 3));
   else if (name === 'corner') g.setAttribute('corner', new Float32BufferAttribute([-1, -1, 1, -1, 1, 1], 2));
   else if (name === 'horizon') g.setAttribute('horizon', new Float32BufferAttribute(new Array(6).fill(OPEN_SKY), 2));
+  else if (name === 'plant') plantInstances(g, new Float32Array([0, 0, 0, 1, 0]));
   else return false;
   return true;
+}
+
+/**
+ * Put a cell's plants on a geometry as its instances: `PLANT_STRIDE` floats each (x, y, z, height, turn), one buffer
+ * read as the `plant` (vec4) and `turn` (float) attributes. The one way plants get onto a mesh (stand-ins too, so the
+ * warm-up builds the very layout the plants draw with).
+ */
+export function plantInstances(g: BufferGeometry, data: Float32Array): void {
+  const buffer = new InstancedInterleavedBuffer(data, PLANT_STRIDE);
+  g.setAttribute('plant', new InterleavedBufferAttribute(buffer, 4, 0));
+  g.setAttribute('turn', new InterleavedBufferAttribute(buffer, 1, 4));
 }
 
 /** The kinds of the view outside, for its Stage's warm-up (windows will add them to the interior's). */
@@ -293,5 +340,5 @@ export const BALL = kind('ball', ['position', 'normal'], { cast: true, receive: 
 
 /** Every kind, for the Stage's warm-up. */
 export function allKinds(): readonly Kind[] {
-  return [GROUND, WATER, SUNLINE, BALL];
+  return [GROUND, WATER, SUNLINE, BALL, PLANT];
 }
