@@ -2,6 +2,15 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.040 — Rivers
+
+- Rivers now run through the habitat: they rise from springs high on both endcaps, tumble down the terraces as white cascades and waterfalls, and wind across the floor into the ring lake.
+- Each river has carved its own channel and valley through the hills. You can wade in and swim, as in the lake.
+- The water flows: ripples move downstream, rapids and falls foam white, the shallows by the banks show the riverbed, and the sunline glints off the moving surface.
+- The banks are wetter, so reeds and willows grow along them, with gravel at the water's edge. The woods open over the water.
+- Rivers stay visible from far away, even across the cylinder.
+- Debug menu: Go to the nearest river, or to below the nearest falls.
+
 ## v0.039 — Render requests are not lost
 
 - Behind the scenes: the render PC's watcher renders a request at the commit it saw and keeps a request that was pushed again meanwhile; only one watcher can run at a time.
