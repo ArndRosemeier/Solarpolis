@@ -14,6 +14,7 @@
  */
 import { Noise, Rng, clamp, deriveSeed, smoothstep as smooth, srgbToLinear as lin } from '@futuremagic/core';
 import type { PlantForm } from '../blueprint';
+import { icosphere } from './shapes';
 
 // ---------------------------------------------------------------------------------------------
 // Small vector (mutable, like the three.js one the original used)
@@ -837,22 +838,6 @@ function hullTrunk(hb: HullBuilder, base: V, top: V, r: number, barkIdx: number,
   }
 }
 
-/** An icosphere of one subdivision (80 triangles): unit vertices and faces. */
-function icosphere(): { verts: V[]; faces: [number, number, number][] } {
-  const t = (1 + Math.sqrt(5)) / 2;
-  const verts = [[-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0], [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t], [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]].map(([x, y, z]) => v3(x, y, z).normalize());
-  let faces: [number, number, number][] = [[0, 11, 5], [0, 5, 1], [0, 1, 7], [0, 7, 10], [0, 10, 11], [1, 5, 9], [5, 11, 4], [11, 10, 2], [10, 7, 6], [7, 1, 8], [3, 9, 4], [3, 4, 2], [3, 2, 6], [3, 6, 8], [3, 8, 9], [4, 9, 5], [2, 4, 11], [6, 2, 10], [8, 6, 7], [9, 8, 1]];
-  const mid = new Map<string, number>();
-  const half = (a: number, b: number) => {
-    const k = a < b ? `${a},${b}` : `${b},${a}`;
-    let i = mid.get(k);
-    if (i === undefined) { i = verts.length; verts.push(verts[a].clone().add(verts[b]).normalize()); mid.set(k, i); }
-    return i;
-  };
-  faces = faces.flatMap(([a, b, c]) => { const ab = half(a, b), bc = half(b, c), ca = half(c, a); return [[a, ab, ca], [b, bc, ab], [c, ca, bc], [ab, bc, ca]] as [number, number, number][]; });
-  return { verts, faces };
-}
-
 function buildHull(cfg: FormCfg, sk: TreeSkeleton, woodNoise: Noise): HullBuilder {
   const hb = new HullBuilder();
   const env = sk.env;
@@ -860,7 +845,7 @@ function buildHull(cfg: FormCfg, sk: TreeSkeleton, woodNoise: Noise): HullBuilde
   const tTop = trunk.pts[trunk.pts.length - 1].clone();
   tTop.y = Math.min(tTop.y, env.base + (env.top - env.base) * 0.35);
   hullTrunk(hb, v3(0, -0.1, 0), tTop, cfg.trunkR * 1.1, cfg.bark);
-  const { verts, faces } = icosphere();
+  const { verts: unitVerts, faces } = icosphere(1), verts = unitVerts.map(([x, y, z]) => v3(x, y, z));
   const c = v3(env.cx, env.cy, env.cz), p = v3(), n = v3();
   const first = hb.pos.length / 3;
   for (const dv of verts) {
@@ -922,4 +907,110 @@ export function buildTree(form: PlantForm, seed: number, variant: number, detail
 export function canopyColor(form: PlantForm): [number, number, number] {
   const c = formCfg(form, 0).farColor;
   return [lin(c[0]), lin(c[1]), lin(c[2])];
+}
+
+// ---------------------------------------------------------------------------------------------
+// Fallen wood
+// ---------------------------------------------------------------------------------------------
+
+/** Fallen wood at its three levels (full, lite, hull), all drawn with the bark. */
+export interface FallenWood {
+  full: WoodMesh;
+  lite: WoodMesh;
+  hull: WoodMesh;
+}
+
+/** Per level: rings along the main limb, points around it, and whether the side limbs and stubs are kept. */
+const FALLEN_DETAIL = [{ segs: 12, radial: 10, sides: true }, { segs: 5, radial: 6, sides: true }, { segs: 2, radial: 4, sides: false }] as const;
+
+/**
+ * A fallen trunk (`log`) or branch of a form, lying along +x on the ground, one unit long: the form's bark and girth,
+ * gently bent, sunk a little into the ground. A trunk keeps the stubs of its broken limbs and shows its cut ends; a
+ * branch forks into a few side limbs that lie on the ground beside it. It does not sway (no wind weight), and its
+ * underside is dark where it meets the ground (occlusion).
+ */
+export function buildFallenWood(form: PlantForm, kind: 'log' | 'branch', seed: number, variant: number): FallenWood {
+  const cfg = formCfg(form, variant);
+  const rng = new Rng(deriveSeed(seed, 'fallen', form, kind, variant));
+  const woodNoise = new Noise(deriveSeed(seed, 'tree', 'wood'));
+  // Built in metres (the bark's texel size is in metres), then scaled to one unit long.
+  const L = kind === 'log' ? 8 : 2.5;
+  const r0 = kind === 'log' ? cfg.trunkR * rng.range(0.75, 0.95) : 0.05 * rng.range(0.8, 1.2), r1 = r0 * (kind === 'log' ? 0.6 : 0.2);
+  const bend = v3(0, 0, rng.range(-0.12, 0.12) * L), sink = 0.2;
+  const sides = Array.from({ length: kind === 'log' ? rng.int(2, 4) : rng.int(2, 3) }, () => ({
+    t: rng.range(kind === 'log' ? 0.35 : 0.2, 0.9),
+    // Around the limb: never into the ground; a branch's side limbs lie flat beside it.
+    around: kind === 'log' ? rng.range(-0.3, Math.PI + 0.3) : (rng.chance(0.5) ? 0.15 : Math.PI - 0.15),
+    lean: rng.range(0.5, 1.1),
+    len: kind === 'log' ? rng.range(0.3, 1) : L * rng.range(0.3, 0.55),
+    rr: kind === 'log' ? rng.range(0.22, 0.38) : rng.range(0.45, 0.65),
+  }));
+
+  const limb = (from: V, dir: V, len: number, ra: number, rb: number, segs: number, curve: V, d0: number): Branch => {
+    const pts: V[] = [], rad: number[] = [], arc: number[] = [];
+    for (let i = 0; i <= segs; i++) {
+      const t = i / segs;
+      pts.push(from.clone().addScaledVector(dir, len * t).addScaledVector(curve, 4 * t * (1 - t)));
+      rad.push(ra + (rb - ra) * t);
+      arc.push(i ? arc[i - 1] + pts[i].distanceTo(pts[i - 1]) : 0);
+    }
+    return { pts, rad, arc, level: 0, d0, children: [] };
+  };
+
+  const meshes = FALLEN_DETAIL.map((lv) => {
+    const bld = new VegBuilder();
+    // The main limb, its middle at the origin, resting on the ground: its axis a radius up, less what is sunk.
+    const main = limb(v3(-L / 2, r0 * (1 - sink), 0), v3(1, (r1 - r0) * (1 - sink) / L, 0).normalize(), L, r0, r1, lv.segs, bend, 0);
+    const first = bld.verts;
+    tube(bld, main, lv.radial, cfg.bark, L, null, null, variant * 131 + 7, woodNoise);
+    if (kind === 'log') { cap(bld, first, lv.radial, 0, -1, cfg.bark); cap(bld, first, lv.radial, lv.segs, 1, cfg.bark); }
+    if (lv.sides) for (const [i, sd] of sides.entries()) {
+      const at = v3(), tan = v3();
+      sampleBranch(main, sd.t, at, tan);
+      const r = r0 + (r1 - r0) * sd.t, [px, py] = perpBasis(tan);
+      // Out of the limb at its side, leaning forward along it.
+      const out = px.clone().multiplyScalar(Math.cos(sd.around)).addScaledVector(py, Math.sin(sd.around));
+      if (out.y < 0) out.y *= 0.2;
+      const dir = out.clone().addScaledVector(tan, sd.lean).normalize();
+      if (kind === 'branch') dir.y = Math.min(dir.y, 0.05);
+      const len = kind === 'log' ? sd.len : sd.len;
+      const base = at.clone().addScaledVector(out, r * 0.5);
+      tube(bld, limb(base, dir.normalize(), len, r * sd.rr, r * sd.rr * (kind === 'log' ? 0.8 : 0.25), kind === 'log' ? 1 : Math.max(1, lv.segs >> 1), v3(), 0), Math.max(3, Math.round(lv.radial / 2)), cfg.bark, L, null, null, variant * 131 + 17 + i * 7, woodNoise);
+    }
+    const { tint: _t, ...mesh } = bld.mesh(1 / L);
+    mesh.wind.fill(0);
+    // Dead wood greys where it faces the sky and darkens where it meets the ground: the bark's occlusion, below zero
+    // (lighter than the bark) on top.
+    for (let i = 0; i < mesh.occ.length; i++) {
+      const ny = mesh.normals[i * 3 + 1];
+      mesh.occ[i] = ny > 0 ? -0.45 * ny : Math.max(mesh.occ[i], 0.6 * -ny);
+    }
+    return mesh;
+  });
+  return { full: meshes[0], lite: meshes[1], hull: meshes[2] };
+}
+
+/**
+ * Close a tube's end: the ring of rings `ring` (0 the first, the last index the end) of the tube whose points start at
+ * `first`, as a fan facing `facing` (−1 back along the tube, +1 on along it), in the bark's colour.
+ */
+function cap(bld: VegBuilder, first: number, radial: number, ring: number, facing: -1 | 1, strip: number): void {
+  const rs = radial + 1, at = (j: number) => first + ring * rs + j;
+  const P = (i: number) => v3(bld.pos[i * 3], bld.pos[i * 3 + 1], bld.pos[i * 3 + 2]);
+  const centreOf = (k: number) => {
+    const m = v3();
+    for (let j = 0; j < radial; j++) m.add(P(first + k * rs + j));
+    return m.multiplyScalar(1 / radial);
+  };
+  // Facing on out of the tube: away from the neighbouring ring.
+  const c = centreOf(ring), n = c.clone().sub(centreOf(ring - facing)).normalize();
+  const occ = bld.occ[at(0)], centre = bld.vert(c, n, strip * 16 + 0.5, 0.5, 0, 0, occ);
+  const ring0 = bld.verts;
+  for (let j = 0; j <= radial; j++) bld.vert(P(at(j)), n, strip * 16 + 0.5 + 0.3 * Math.cos((j / radial) * 2 * Math.PI), 0.5, 0, 0, occ);
+  for (let j = 0; j < radial; j++) {
+    const a = ring0 + j, b = ring0 + j + 1;
+    // Counter-clockwise seen from where the cap faces.
+    const e1 = P(a).sub(c), e2 = P(b).sub(c), f = new V().crossVectors(e1, e2);
+    if (f.dot(n) >= 0) bld.tri(centre, a, b); else bld.tri(centre, b, a);
+  }
 }

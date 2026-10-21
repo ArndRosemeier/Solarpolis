@@ -25,6 +25,7 @@ import { dayPhase, emissionMean, nearestLit, sunlineEmission, sunlineNorm, EMISS
 import { densityFalloff, seenMid } from '../world/air';
 import { TerrainView, describeLayout } from './terrain';
 import { PlantView } from './plants';
+import { slopeAt } from '../gen/scatter';
 import { setFloorEye } from './groundShaders';
 import { UNDER_CROWNS, crownsClosed, makeEcology, type Ecology } from '../gen/ecology';
 import { FrameLoop, dragToLook, draw, fitCanvas, moveKeys } from './surface';
@@ -404,7 +405,8 @@ export class InteriorView {
     let closed = 0;
     if (this.ecology) {
       const at = fromWorld(this.habitat.profile, ...eye), ground = this.terrain.heightAt(at.theta, at.s);
-      this.ecology.colorAt(at.theta, at.s, ground, 0, this.meterColor, 0, this.meterCanopy);
+      // With the ground's own slope: on steep rock no wood closes over the eyes.
+      this.ecology.colorAt(at.theta, at.s, ground, slopeAt(this.ecology, at.theta, at.s, ground, 4), this.meterColor, 0, this.meterCanopy);
       const raise = this.meterCanopy[3];
       closed = crownsClosed(raise) * (1 - smoothstep(raise * 0.8, raise * 1.2, at.h - ground));
     }

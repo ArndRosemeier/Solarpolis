@@ -14,7 +14,8 @@ import { BlueprintLab } from './lab/blueprintLab';
 import { GraphicsUnavailable } from '@futuremagic/stage';
 import { InteriorView } from './render/view';
 import { OutsideView } from './render/outside';
-import type { Habitat } from './blueprint';
+import { fromWorld, toWorld, type DebrisSpec, type Habitat } from './blueprint';
+import { nearestOf, plantsOf } from './gen/scatter';
 
 const app = document.getElementById('app')!;
 const debug = new DebugMenu();
@@ -169,6 +170,19 @@ const toPlace = (label: string, back: number, find: (eco: Ecology, theta: number
 toPlace('Before the nearest wood', 40, (eco, t, s) => nearestWood(eco, t, s));
 toPlace('Into the nearest wood', -30, (eco, t, s) => nearestWood(eco, t, s));
 toPlace('Into the nearest meadow', -30, (eco, t, s) => nearestFloor(eco, t, s, eco.climate.cover[0]?.on ?? 'grass'));
+/** A few metres before the nearest of the climate's first debris that `pick` chooses, facing it. */
+const toDebris = (label: string, back: number, pick: (d: DebrisSpec) => boolean): void => toPlace(label, back, (eco, theta, s) => {
+  const { profile } = eco.terrain.habitat, plants = plantsOf(eco), sp = plants.find((p) => p.what === 'debris' && pick(p.spec as DebrisSpec));
+  const p = sp && nearestOf(eco, plants, sp, toWorld(profile, { theta, s, h: 0 }));
+  if (!p) return null;
+  const at = fromWorld(profile, ...p), r = Math.max(profile.at(at.s).r, 1);
+  let dt = at.theta - theta;
+  dt -= 2 * Math.PI * Math.round(dt / (2 * Math.PI));
+  const x = dt * r, y = at.s - s, l = Math.hypot(x, y) || 1;
+  return { theta: at.theta, s: at.s, way: [x / l, y / l] };
+});
+toDebris('To the nearest fallen trunk', 6, (d) => d.form === 'log');
+toDebris('To the nearest boulder', 8, (d) => d.form === 'stone' && d.height[1] >= 1);
 go('The middle of the floor', (h) => (h.profile.floorStart + h.profile.floorEnd) / 2);
 go('The foot of the wild endcap', (h) => h.profile.floorStart + 20);
 go('Halfway up the wild endcap', (h) => h.profile.floorStart / 2);

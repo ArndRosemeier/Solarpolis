@@ -1,7 +1,8 @@
 /**
  * The plants on screen. Each plant of the climate is drawn at three levels (`LEVELS` in gen/scatter.ts): the full tree
  * (BARK wood, LEAF cards), a lighter tree (fewer, larger cards; no finest twigs), and its crown hull (HULL); ground
- * cover at two (GRASS: full tufts, light tufts that sink into the floor at the end of their band). Each level
+ * cover at two (GRASS: full tufts, light tufts that sink into the floor at the end of their band); debris at three
+ * (STONE, or BARK for fallen wood: full, light, far), sheared along the slope it lies on. Each level
  * has its own cells around the eye (`cellsNear`), planted by the worker pool (`plantCell`) and drawn as instanced
  * meshes. A plant hands over from one level to the next in a dithered band (`userData.band`, read by the kinds), so it
  * is always drawn by exactly one level; past the hulls the ground's canopy layer stands in for woods. Cells stay cached,
@@ -12,18 +13,19 @@
  */
 import { BufferAttribute, Group, InstancedBufferGeometry, InstancedInterleavedBuffer, Mesh, Sphere, Vector2, Vector3, Vector4, type Material } from 'three/webgpu';
 import type { Stage } from '@futuremagic/stage';
-import { COVER_FORMS, toView, type CoverForm, type CoverSpec, type PlantForm, type Vec3 } from '../blueprint';
+import { toView, type CoverSpec, type DebrisSpec, type PlantSpec, type Vec3 } from '../blueprint';
 import type { Ecology } from '../gen/ecology';
-import type { TreeModel } from '../gen/trees';
+import type { FallenWood, TreeModel } from '../gen/trees';
+import type { StoneMesh, StoneModel } from '../gen/stones';
 import type { TuftModel } from '../gen/grass';
 import { canopyBand, cellBytes, cellId, cellsNear, LEVELS, plantsOf, PLANT_STRIDE, PLANT_VARIANTS, type CellKey, type Level, type PlantCell, type Species } from '../gen/scatter';
 import type { WorkerPool } from '../workers/pool';
 import type { GenAnswer, GenRequest } from '../workers/gen.worker';
 import { StreamCache, type Streamed } from './streamed';
-import { BARK, GRASS, HULL, LEAF, plantInstances, setCanopyBand, setFoliage } from './materials';
+import { BARK, GRASS, HULL, LEAF, STONE, plantInstances, setCanopyBand, setFoliage } from './materials';
 
 /** Cells kept, drawn or not. */
-const CACHE = 3000;
+const CACHE = 6000;
 /** Cell jobs in flight at once. */
 const IN_FLIGHT = 12;
 /** The eye moves this share of the smallest cell before the cells in view are chosen again. */
@@ -58,7 +60,8 @@ interface Entry extends Streamed {
 export class PlantView {
   readonly group = new Group();
   readonly species: Species[];
-  private readonly shapes = new Map<PlantForm | CoverForm, Shapes>();
+  /** Shapes by `shapeKey`. */
+  private readonly shapes = new Map<string, Shapes>();
   private readonly cache: StreamCache<Entry>;
   private drawn: Entry[] = [];
   private chosenAt: Vec3 | null = null;
@@ -80,24 +83,28 @@ export class PlantView {
       // With their mips, a third more.
       this.shared += ((a.bark.color.byteLength + a.bark.normal.byteLength + a.leaves.byteLength) * 4) / 3;
     });
-    const shaped = (form: PlantForm | CoverForm, shapes: Shapes) => {
-      this.shapes.set(form, shapes);
+    const shaped = (key: string, shapes: Shapes) => {
+      this.shapes.set(key, shapes);
       for (const level of shapes) for (const v of level) for (const part of v) this.shared += part.index.array.byteLength + part.attributes.reduce((n, [, a]) => n + a.array.byteLength, 0);
     };
-    const variants = <A>(ask: (variant: number) => Promise<A>) => Promise.all(Array.from({ length: PLANT_VARIANTS }, (_, variant) => ask(variant)));
-    for (const sp of new Map(this.species.map((s) => [s.spec.form, s])).values()) {
-      const form = sp.spec.form;
-      if (isCover(form)) {
-        const color = (sp.spec as CoverSpec).color;
-        void variants((variant) => pool.job({ kind: 'tuft', params, form, color, variant })).then((answers) => {
-          const tufts = answers.map((a) => ('tuft' in a ? a.tuft : null));
-          if (tufts.every((t) => t)) shaped(form, tuftShapes(tufts.map((t) => t!)));
-        });
+    /** Ask for every variant of a shape; keep them once all have come. */
+    const variants = <A>(key: string, ask: (variant: number) => Promise<GenAnswer>, take: (a: GenAnswer) => A | null, shapes: (all: A[]) => Shapes) =>
+      void Promise.all(Array.from({ length: PLANT_VARIANTS }, (_, variant) => ask(variant))).then((answers) => {
+        const all = answers.map(take);
+        if (all.every((a) => a !== null)) shaped(key, shapes(all as A[]));
+      });
+    const rock = ecology.climate.rock;
+    for (const sp of new Map(this.species.map((s) => [shapeKey(s), s])).values()) {
+      const key = shapeKey(sp), spec = sp.spec;
+      if (sp.what === 'cover') {
+        const { form, color } = spec as CoverSpec;
+        variants(key, (variant) => pool.job({ kind: 'tuft', params, form, color, variant }), (a) => ('tuft' in a ? a.tuft : null), tuftShapes);
+      } else if (sp.what === 'debris') {
+        const d = spec as DebrisSpec;
+        if (d.form === 'stone') variants(key, (variant) => pool.job({ kind: 'stone', params, color: rock, moss: d.moss ?? 0, variant }), (a) => ('stone' in a ? a.stone : null), stoneShapes);
+        else variants(key, (variant) => pool.job({ kind: 'fallen', params, form: d.wood ?? 'oak', piece: d.form as 'log' | 'branch', variant }), (a) => ('fallen' in a ? a.fallen : null), fallenShapes);
       } else {
-        void variants((variant) => pool.job({ kind: 'tree', params, form, variant })).then((answers) => {
-          const models = answers.map((a) => ('full' in a ? a : null));
-          if (models.every((m) => m)) shaped(form, shapesOf(models.map((m) => m!)));
-        });
+        variants(key, (variant) => pool.job({ kind: 'tree', params, form: (spec as PlantSpec).form, variant }), (a) => ('full' in a ? a : null), shapesOf);
       }
     }
     this.cache = new StreamCache<Entry>(pool, {
@@ -116,15 +123,16 @@ export class PlantView {
 
   info(): string {
     const plants = [0, 0, 0], cells = [0, 0, 0];
-    let tufts = 0;
-    let draws = 0;
+    let tufts = 0, debris = 0, draws = 0;
     for (const e of this.drawn) {
-      if (this.species[e.cell.key.species].on >= 0) tufts += e.cell.count;
+      const what = this.species[e.cell.key.species].what;
+      if (what === 'cover') tufts += e.cell.count;
+      else if (what === 'debris') debris += e.cell.count;
       else { plants[e.cell.key.level] += e.cell.count; cells[e.cell.key.level]++; }
       draws += e.meshes.length;
     }
     const levels = LEVELS.map((l, k) => `${l.name} ${plants[k]}/${cells[k]}`).join(', ');
-    return `plants (plants/cells) ${levels}; ${tufts} tufts; ${draws} draws, ${this.cache.built.size} cached (${(this.cache.bytes / 1048576).toFixed(1)} MB; shapes and atlases ${(this.shared / 1048576).toFixed(1)} MB), ${this.cache.building} planting, ${this.shapes.size} forms`;
+    return `plants (plants/cells) ${levels}; ${tufts} tufts; ${debris} stones and fallen wood; ${draws} draws, ${this.cache.built.size} cached (${(this.cache.bytes / 1048576).toFixed(1)} MB; shapes and atlases ${(this.shared / 1048576).toFixed(1)} MB), ${this.cache.building} planting, ${this.shapes.size} forms`;
   }
 
   /** Choose, request and place the plant cells for an eye. */
@@ -136,7 +144,7 @@ export class PlantView {
       this.chosenForms = this.shapes.size;
       this.generation++;
       // Every plant's cells at every level, nearest first: the near ones are where a gap would show.
-      this.chosen = this.species.flatMap((sp) => (this.shapes.has(sp.spec.form) ? sp.band.flatMap((_, level) => cellsNear(this.ecology, sp, level as Level, eye)) : []))
+      this.chosen = this.species.flatMap((sp) => (this.shapes.has(shapeKey(sp)) ? sp.band.flatMap((_, level) => cellsNear(this.ecology, sp, level as Level, eye)) : []))
         .sort((a, b) => a.near - b.near).map((c) => c.key);
     }
     for (const e of this.drawn) for (const m of e.meshes) m.visible = false;
@@ -180,7 +188,7 @@ export class PlantView {
 
   private async make(answer: GenAnswer, id: string): Promise<Entry | null> {
     if (!('cell' in answer)) return null;
-    const cell = answer.cell, sp = this.species[cell.key.species], shapes = this.shapes.get(sp.spec.form);
+    const cell = answer.cell, sp = this.species[cell.key.species], shapes = this.shapes.get(shapeKey(sp));
     if (!shapes) return null;
     const band = new Vector4(...sp.band[cell.key.level]);
     const horizon = new Vector2(cell.horizon[0], cell.horizon[1]);
@@ -204,7 +212,7 @@ export class PlantView {
         m.visible = false;
         m.userData.band = band;
         // The last level of what it draws, for cover: past its band the tufts sink into the floor.
-        m.userData.sink = sp.on >= 0 && cell.key.level === sp.band.length - 1 ? 1 : 0;
+        m.userData.sink = sp.what === 'cover' && cell.key.level === sp.band.length - 1 ? 1 : 0;
         m.userData.horizon = horizon;
         meshes.push(m);
         s.meshes.push(m);
@@ -251,7 +259,20 @@ function tuftShapes(tufts: TuftModel[]): Shapes {
   return [0, 1].map((level) => tufts.map((t) => [partOf(level ? t.lite : t.full, [['color', (level ? t.lite : t.full).colors, 3]], GRASS.material, false)]));
 }
 
-const isCover = (form: string): form is CoverForm => (COVER_FORMS as readonly string[]).includes(form);
+/** Stones of a debris spec: the full and the light stone of each variant, and one far stone. */
+function stoneShapes(stones: StoneModel[]): Shapes {
+  const stone = (m: StoneMesh): Part => ({ attributes: [['position', new BufferAttribute(m.positions, 3)], ['normal', new BufferAttribute(m.normals, 3)], ['color', new BufferAttribute(m.colors, 3)]], index: new BufferAttribute(m.index, 1), material: STONE.material, cast: true });
+  return [stones.map((s) => [stone(s.full)]), stones.map((s) => [stone(s.lite)]), [[stone(stones[0].hull)]]];
+}
+
+/** Fallen trunks or branches: the full and the light piece of each variant, and one far piece, all in bark. */
+function fallenShapes(pieces: FallenWood[]): Shapes {
+  const wood = (w: FallenWood['full']): Part[] => [partOf(w, [['uv', w.uvs, 2], ['occ', w.occ, 1]], BARK.material, true)];
+  return [pieces.map((p) => wood(p.full)), pieces.map((p) => wood(p.lite)), [wood(pieces[0].hull)]];
+}
+
+/** Which shapes a species draws: a plant's or a cover's form; a debris spec's own (its stones are its own colour). */
+const shapeKey = (sp: Species): string => (sp.what === 'debris' ? `debris:${sp.spec.name}` : sp.spec.form);
 
 /**
  * Free a cell mesh's own buffers (its instances) but not the shapes it shares: three frees every attribute of a
@@ -259,7 +280,7 @@ const isCover = (form: string): form is CoverForm => (COVER_FORMS as readonly st
  */
 function freeInstances(m: Mesh): void {
   const g = m.geometry;
-  for (const name of Object.keys(g.attributes)) if (name !== 'plant' && name !== 'turn') g.deleteAttribute(name);
+  for (const name of Object.keys(g.attributes)) if (name !== 'plant' && name !== 'turn' && name !== 'tilt') g.deleteAttribute(name);
   g.setIndex(null);
   g.dispose();
 }

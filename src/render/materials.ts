@@ -352,7 +352,7 @@ const plantSink = uniform(0).onObjectUpdate(({ object }) => (object?.userData.si
  * folded away, or sunk into the ground past the last level's.
  */
 function plantFrame() {
-  const inst = attribute<'vec4'>('plant', 'vec4'), turn = attribute<'float'>('turn', 'float');
+  const inst = attribute<'vec4'>('plant', 'vec4'), turn = attribute<'float'>('turn', 'float'), tilt = attribute<'vec2'>('tilt', 'vec2');
   const foot = modelWorldMatrix.mul(vec4(inst.xyz, 1)).xyz;
   const world = foot.add(view.eye);
   const up = normalize(vec3(world.x.negate(), world.y.negate(), 0));
@@ -368,9 +368,22 @@ function plantFrame() {
   const keep = step(pick, into.mul(1.0001)).mul(mix(step(out, pick), float(1).sub(out), plantSink));
   // Where the air's phase comes from: where the plant stands.
   const ph = world.x.mul(0.137).add(world.z.mul(0.213)).add(world.y.mul(0.11));
-  /** A local direction and a local normal into the frame. */
+  /** A local direction into the frame. */
   const turned = (v: Node<'vec3'>): Node<'vec3'> => ax.mul(v.x).add(up.mul(v.y)).add(az.mul(v.z));
-  return { inst, world, up, side, axis, keep, ph, turned };
+  // Debris lies along the ground: sheared by the slope under it (`tilt`: rise per metre around and along the axis; 0
+  // for plants, which grow upright on any slope).
+  const slope = side.mul(tilt.x).add(axis.mul(tilt.y));
+  /** Where a local offset (m, unturned) goes, relative to the mesh. */
+  const placed = (local: Node<'vec3'>): Node<'vec3'> => {
+    const d = turned(local);
+    return inst.xyz.add(d).add(up.mul(dot(d, slope)));
+  };
+  /** A local normal into the frame, sheared with the position. */
+  const normalOf = (n: Node<'vec3'>): Node<'vec3'> => {
+    const w = turned(n);
+    return normalize(w.sub(slope.mul(dot(w, up))));
+  };
+  return { inst, world, up, side, axis, keep, ph, turned, placed, normalOf };
 }
 
 /**
@@ -379,7 +392,7 @@ function plantFrame() {
  * fluttering along their normals). Returns the position node and the frame for normals.
  */
 function plantVertex(flutter: number, seed: Node<'float'> = float(0)) {
-  const { inst, keep, ph, turned } = plantFrame();
+  const { inst, keep, ph, placed, normalOf } = plantFrame();
   const h = inst.w.mul(keep);
   // The air: the shapes were made for trees of about 14 m.
   const t = time;
@@ -394,8 +407,8 @@ function plantVertex(flutter: number, seed: Node<'float'> = float(0)) {
   const swayAcross = sin(t.mul(1.8).add(bp.mul(0.8)).add(1.7)).mul(s).mul(w2).mul(w).mul(0.13 / 14);
   let local: Node<'vec3'> = p.add(vec3(swayAlong, swayAlong.mul(swayAlong).mul(-0.12 * 14), swayAcross));
   if (flutter) local = local.add(normalLocal.mul(sin(t.mul(9).add(seed.mul(40)).add(bp.mul(2))).mul(flutter * 0.05 / 14).mul(s).mul(w)));
-  const position = inst.xyz.add(turned(local.mul(h)));
-  const normal = varying(normalize(turned(normalLocal)));
+  const position = placed(local.mul(h));
+  const normal = varying(normalOf(normalLocal));
   return { position, normal };
 }
 
@@ -475,7 +488,7 @@ export const HULL = kind('hull', ['position', 'normal', 'color', 'kind', 'wind',
  */
 export const GRASS = kind('grass', ['position', 'normal', 'color', 'wind', 'plant'], { cast: false, receive: false }, () => {
   const m = new MeshBasicNodeMaterial({ side: DoubleSide });
-  const { inst, world, up, side, axis, keep, ph, turned } = plantFrame();
+  const { inst, world, up, side, axis, keep, ph, placed, normalOf } = plantFrame();
   const h = inst.w.mul(keep), t = time;
   const w = attribute<'float'>('wind', 'float'), w2 = w.mul(w), p = positionLocal;
   const wave = sin(t.mul(1.7).sub(world.z.mul(0.4)).add(sin(ph).mul(0.8))).mul(0.5).add(0.5);
@@ -486,9 +499,26 @@ export const GRASS = kind('grass', ['position', 'normal', 'color', 'wind', 'plan
   const push = axis.mul(0.85).add(side.mul(0.5)).mul(bend.mul(0.2)).add(side.mul(shiver.mul(0.03))).mul(w2).mul(h);
   // A bent blade dips: about the square of how far it leans over its height.
   const dip = push.dot(push).div(max(h, 0.05)).mul(0.5);
-  m.positionNode = inst.xyz.add(turned(p.mul(h))).add(push).sub(up.mul(dip));
-  const n = varying(normalize(turned(normalLocal)));
+  m.positionNode = placed(p.mul(h)).add(push).sub(up.mul(dip));
+  const n = varying(normalOf(normalLocal));
   m.colorNode = throughAir(vertexColor().rgb.mul(sunlit(plantHorizon, normalize(n), 0.5)));
+  return m;
+});
+
+/**
+ * Stones (gen/stones.ts; gen/scatter.ts lays them along the slope where gravel, bare earth or rock is): vertex colours
+ * (rock, darker at the ground, moss on top) with a fine grain in metres over them, lit by the sunline. They cast
+ * shadows. Fallen trunks and branches are drawn with the bark (BARK).
+ */
+export const STONE = kind('stone', ['position', 'normal', 'color', 'plant'], { cast: true, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial();
+  const { inst, keep, placed, normalOf } = plantFrame();
+  m.positionNode = placed(positionLocal.mul(inst.w.mul(keep)));
+  const n = varying(normalOf(normalLocal));
+  // The grain: a stone's own surface in metres (each stone its own, by where it lies), a hand and a finger across.
+  const at = varying(positionLocal.mul(inst.w).add(inst.xyz.mul(0.37)));
+  const grain = mx_noise_float(at.mul(9)).mul(0.12).add(mx_noise_float(at.mul(31)).mul(0.08)).add(1);
+  m.colorNode = throughAir(vertexColor().rgb.mul(grain).mul(sunlit(plantHorizon, normalize(n))));
   return m;
 });
 
@@ -498,7 +528,7 @@ export function standInAttribute(g: BufferGeometry, name: string): boolean {
   else if (name === 'grid') g.setAttribute('grid', new Float32BufferAttribute(new Array(12).fill(0), 4));
   else if (name === 'corner') g.setAttribute('corner', new Float32BufferAttribute([-1, -1, 1, -1, 1, 1], 2));
   else if (name === 'horizon') g.setAttribute('horizon', new Float32BufferAttribute(new Array(6).fill(OPEN_SKY), 2));
-  else if (name === 'plant') plantInstances(g, new Float32Array([0, 0, 0, 1, 0]));
+  else if (name === 'plant') plantInstances(g, new Float32Array([0, 0, 0, 1, 0, 0, 0]));
   else if (name === 'uv') g.setAttribute('uv', new Float32BufferAttribute(new Array(6).fill(0), 2));
   else if (name === 'floorA' || name === 'floorB') g.setAttribute(name, new Uint8BufferAttribute(new Array(12).fill(name === 'floorA' ? 255 : 0), 4, true));
   else if (name === 'canopy') g.setAttribute('canopy', new Float32BufferAttribute([0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0], 4));
@@ -508,8 +538,8 @@ export function standInAttribute(g: BufferGeometry, name: string): boolean {
 }
 
 /**
- * Put a cell's plants on a geometry as its instances: `PLANT_STRIDE` floats each (x, y, z, height, turn), one buffer
- * read as the `plant` (vec4) and `turn` (float) attributes. The one way plants get onto a mesh (stand-ins too, so the
+ * Put a cell's plants on a geometry as its instances: `PLANT_STRIDE` floats each (x, y, z, height, turn, slope around
+ * and along), one buffer read as the `plant` (vec4), `turn` (float) and `tilt` (vec2) attributes. The one way plants get onto a mesh (stand-ins too, so the
  * warm-up builds the very layout the plants draw with). Pass the buffer of another mesh to share it (a tree's wood and
  * leaves).
  */
@@ -517,6 +547,7 @@ export function plantInstances(g: BufferGeometry, data: Float32Array | Instanced
   const buffer = data instanceof InstancedInterleavedBuffer ? data : new InstancedInterleavedBuffer(data, PLANT_STRIDE);
   g.setAttribute('plant', new InterleavedBufferAttribute(buffer, 4, 0));
   g.setAttribute('turn', new InterleavedBufferAttribute(buffer, 1, 4));
+  g.setAttribute('tilt', new InterleavedBufferAttribute(buffer, 2, 5));
 }
 
 /** The kinds of the view outside, for its Stage's warm-up (windows will add them to the interior's). */
@@ -533,5 +564,5 @@ export const BALL = kind('ball', ['position', 'normal'], { cast: true, receive: 
 
 /** Every kind, for the Stage's warm-up. */
 export function allKinds(): readonly Kind[] {
-  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS];
+  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS, STONE];
 }
