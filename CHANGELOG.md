@@ -2,6 +2,11 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.006 — Light from the sunline
+
+- The light now comes from the whole glowing line along the axis: the middle of the floor is brightest, the ends near the walls get less, and the endcap slopes close to the axis glow.
+- Hills, banks and the endcaps hide part of the sunline, so valleys and the foot of the endcaps lie a little darker.
+
 ## v0.005 — Smooth detail changes
 
 - As you walk, the ground no longer jumps when a patch switches between finer and coarser detail: each patch eases into its coarser shape before the swap.
