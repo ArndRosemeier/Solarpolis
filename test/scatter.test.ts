@@ -91,6 +91,11 @@ test('scatter: each level takes a plant over exactly where the one before lets i
       for (let k = 1; k < sp.band.length; k++) assert.deepEqual(sp.band[k].slice(0, 2), sp.band[k - 1].slice(2), `${sp.spec.name} level ${k}`);
       for (const b of sp.band) assert.ok(b[0] < b[1] && b[1] <= b[2] && b[2] < b[3], `${sp.spec.name}: ${b}`);
       if (sp.what === 'plant' && sp.spec.height[1] >= TREE_HEIGHT) assert.deepEqual(sp.band[LEVELS.length - 1].slice(2), woods, `${sp.spec.name}: hulls last until the canopy`);
+      // Shrubs are seen until they are a pixel or two tall (but never past the woods), not just a few hundred metres.
+      else if (sp.what === 'plant' && sp.spec.spacing >= 5) {
+        const end = sp.band[LEVELS.length - 1][3];
+        assert.ok(end >= 400 * sp.spec.height[1] && end <= woods[1], `${sp.spec.name}: seen to ${end} m`);
+      }
     }
   }
 });
