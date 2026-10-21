@@ -56,7 +56,7 @@ for (const { name, params } of MATRIX) {
     } else assert.equal(t.lake, null);
   });
 
-  test(`terrain (${name}): the Mountain has spurs between its couloirs, a horn at the head of the main valley, a level cirque`, () => {
+  test(`terrain (${name}): the Mountain has spurs between its couloirs, a broad summit band, a horn at the head of the main valley, a level cirque`, () => {
     const P = h.profile, form = t.form, massif = params.relief.massif, R = h.radius;
     // Up the middle slopes the spurs stand well above the couloirs.
     let ridge = 0, couloir = 0, nr = 0, nc = 0;
@@ -67,6 +67,15 @@ for (const { name, params } of MATRIX) {
       if (a > 0.8) { ridge += g; nr++; } else if (a < 0.2) { couloir += g; nc++; }
     }
     if (form.valleys > 1) assert.ok(ridge / nr - couloir / nc > massif * 0.4, `spurs ${(ridge / nr).toFixed(1)} over couloirs ${(couloir / nc).toFixed(1)} m`);
+    // Near the axis the valleys crowd together, and the spurs give way to one broad summit band: no ring of thin fins.
+    const tip = form.endcapAt(true, 0.15), r = P.at(tip).r, N = 1000;
+    let steepest = 0, before = t.heightAt(0, tip);
+    for (let i = 1; i <= N; i++) {
+      const here = t.heightAt((i / N) * 2 * Math.PI, tip);
+      steepest = Math.max(steepest, Math.abs(here - before) / ((r * 2 * Math.PI) / N));
+      before = here;
+    }
+    assert.ok(steepest < 2.5, `around the summit band the rock climbs ${steepest.toFixed(1)} m per metre`);
     // The horn rises out of the slope at the head of the main valley.
     const hornS = form.endcapAt(true, HORN.gravity);
     assert.ok(t.heightAt(form.valleyAt(0, hornS), hornS) > massif * HORN.height * 0.6, 'the horn stands out');
