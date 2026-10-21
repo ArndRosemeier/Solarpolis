@@ -560,7 +560,8 @@ export const STONE = kind('stone', ['position', 'normal', 'color', 'plant'], { c
 /** The game's own attributes on the Stage's warm-up stand-ins (StageOptions.attribute): no morph, open horizons. */
 export function standInAttribute(g: BufferGeometry, name: string): boolean {
   if (name === 'morph') g.setAttribute('morph', new Float32BufferAttribute(new Array(9).fill(0), 3));
-  else if (name === 'grid') g.setAttribute('grid', new Float32BufferAttribute(new Array(12).fill(0), 4));
+  else if (name === 'grid' || name === 'flow') g.setAttribute(name, new Float32BufferAttribute(new Array(12).fill(0), 4));
+  else if (name === 'dir') g.setAttribute('dir', new Float32BufferAttribute([0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0], 4));
   else if (name === 'corner') g.setAttribute('corner', new Float32BufferAttribute([-1, -1, 1, -1, 1, 1], 2));
   else if (name === 'horizon') g.setAttribute('horizon', new Float32BufferAttribute(new Array(6).fill(OPEN_SKY), 2));
   else if (name === 'plant') plantInstances(g, new Float32Array([0, 0, 0, 1, 0, 0, 0]));
