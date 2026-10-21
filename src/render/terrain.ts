@@ -8,7 +8,7 @@ import { arraysGeometry, dropUploaded, freeMesh, meshGeometry } from './geometry
 import type { Stage } from '@futuremagic/stage';
 import { toView, type Vec3 } from '../blueprint';
 import type { Terrain } from '../gen/terrain';
-import { keyId, makeLayout, parent, roots, select, spheres, tileBytes, type TileKey, type TileLayout, type TileMesh } from '../gen/tiles';
+import { keyId, makeLayout, parent, roots, select, spheres, tileBytes, type TileFit, type TileKey, type TileLayout, type TileMesh } from '../gen/tiles';
 import type { WorkerPool } from '../workers/pool';
 import type { GenAnswer, GenRequest } from '../workers/gen.worker';
 import { StreamCache, type Streamed } from './streamed';
@@ -29,7 +29,7 @@ const IN_FLIGHT = 16;
 
 interface Entry extends Streamed {
   /** What the view reads of the tile; its arrays are on the GPU only (`dropUploaded`). */
-  tile: Pick<TileMesh, 'key' | 'origin' | 'error'>;
+  tile: Pick<TileMesh, 'key' | 'origin' | 'error' | 'relief'>;
   mesh: Mesh;
   water: Mesh | null;
 }
@@ -82,7 +82,7 @@ export class TerrainView {
   /** Choose, request and place the tiles for an eye; `pixelsPerRadian` is the screen height over the vertical FOV. */
   follow(eye: Vec3, pixelsPerRadian: number): void {
     this.cache.frame();
-    const fitOf = (k: TileKey): TileMesh | undefined => this.cache.get(keyId(k))?.tile;
+    const fitOf = (k: TileKey): TileFit | undefined => this.cache.get(keyId(k))?.tile;
     const parentError = (k: TileKey): number | undefined => (k.level === 0 ? undefined : fitOf(parent(this.layout, k))?.error);
     const sel = select(this.terrain, this.layout, eye, pixelsPerRadian, MAX_PIXELS, fitOf, this.sphereOf);
     const before = new Set(this.drawn);
@@ -131,7 +131,7 @@ export class TerrainView {
       this.group.add(m);
     }
     this.made++;
-    return { tile: { key: tile.key, origin: tile.origin, error: tile.error }, mesh, water, bytes: tileBytes(tile), lastDrawn: 0 };
+    return { tile: { key: tile.key, origin: tile.origin, error: tile.error, relief: tile.relief }, mesh, water, bytes: tileBytes(tile), lastDrawn: 0 };
   }
 
   dispose(): void {
