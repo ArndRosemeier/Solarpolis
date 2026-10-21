@@ -13,13 +13,13 @@
  */
 import { Color, Mesh, PerspectiveCamera, Scene, SphereGeometry, Texture, type WebGPURenderer } from 'three/webgpu';
 import { Stage, createRenderer } from '@futuremagic/stage';
-import { Rng, deriveSeed, v3add, v3dot, v3len, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
+import { Rng, deriveSeed, v3add, v3dot, v3len, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
 import type { Habitat } from '../blueprint';
 import { DAY, EARTH, MOON, REFERENCE_SPACE, SpaceFlyer, arrival, attractLoop, calendarOf, chooseStart, decodeStars, guestShip, julianDay, makeSpace, shipShape, skyFrom, type Arrival, type ArrivalFrame, type Cinema, type CinemaFrame, type Mat3, type ShipShape, type Space, type SkyView } from '../space';
 import { SKY, STARS, outsideKinds, standInAttribute } from './materials';
 import { filtered } from './textures';
 import { outside, skyMaps } from './skyShaders';
-import { DARKEST, PERIPHERY, adapt, exposureFor, starExposure, sunInView, type Meterable } from './exposure';
+import { DARKEST, PERIPHERY, adapt, exposureFor, meterRays, starExposure, sunInView, type Meterable } from './exposure';
 import { NecklaceView } from './necklace';
 import { meshGeometry, setPose } from './geometry';
 import { SHIP_ALBEDO, ShipMeshes, shipAxes } from './ship';
@@ -463,12 +463,7 @@ export class OutsideView {
     if (!this.sky) return;
     const m = this.camera.matrixWorld.elements;
     const right: Vec3 = [m[0], m[1], m[2]], up: Vec3 = [m[4], m[5], m[6]], fwd: Vec3 = [-m[8], -m[9], -m[10]];
-    const th = Math.tan((PERIPHERY * this.camera.fov * Math.PI) / 360), aspect = this.camera.aspect;
-    const rays: Vec3[] = [];
-    for (let j = 0; j < 9; j++) for (let i = 0; i < 16; i++) {
-      const x = ((i + 0.5) / 16 * 2 - 1) * th * aspect, y = ((j + 0.5) / 9 * 2 - 1) * th;
-      rays.push(v3norm(v3add(fwd, v3add(v3scale(right, x), v3scale(up, y)))));
-    }
+    const rays = meterRays(fwd, right, up, Math.tan((PERIPHERY * this.camera.fov * Math.PI) / 360), this.camera.aspect, 16, 9);
     const hulls = this.necklace?.hulls() ?? [];
     const ship = this.attract?.frame.ship, eye = this.attract?.frame.eye;
     if (ship && eye) {
