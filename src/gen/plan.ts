@@ -225,16 +225,20 @@ export function makeLandform(h: Habitat): Landform {
   const phase = rng.range(0, gap);
   const bend = Math.max(gap * R * 2, 1);
   const valleyAt = (k: number, s: number): number => phase + gap * k + (gap / 6) * wander.fbm2(s / bend, k * 7.31, 2) + twist(s);
+  // The valleys' lines at the last s asked: callers sweep θ at one s (a tile's row, a ring), so most asks reuse them.
+  const lines = new Float64Array(N);
+  let linesAt = NaN;
   const acrossAt = (theta: number, s: number): { valley: number; across: number } => {
+    if (s !== linesAt) { for (let k = 0; k < N; k++) lines[k] = valleyAt(k, s); linesAt = s; }
     let best = 0, d = Infinity;
     for (let k = 0; k < N; k++) {
-      const t = wrap(theta - valleyAt(k, s));
+      const a = theta - lines[k], t = a - TURN * Math.round(a / TURN);
       if (Math.abs(t) < Math.abs(d)) { d = t; best = k; }
     }
     if (N === 1) return { valley: 0, across: d / Math.PI };
     // The ridge lies halfway to the neighbouring valley on the point's side.
-    const next = (best + (d >= 0 ? 1 : N - 1)) % N;
-    const half = Math.abs(wrap(valleyAt(next, s) - valleyAt(best, s))) / 2;
+    const next = (best + (d >= 0 ? 1 : N - 1)) % N, apart = lines[next] - lines[best];
+    const half = Math.abs(apart - TURN * Math.round(apart / TURN)) / 2;
     return { valley: best, across: Math.max(-1, Math.min(1, d / half)) };
   };
 

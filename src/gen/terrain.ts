@@ -56,6 +56,13 @@ export const GATE_TERRACES: Readonly<Record<FaceKind, { step: number; wander: nu
   water: { step: 0.5, wander: 2.5, tread: -3 * DEG, riser: 88 * DEG },
 };
 /** The Mountain's horn and cirque: where they stand (gravity, as a share of the floor's), their sizes in massifs. */
+/**
+ * The floor's valleys (gen/plan.ts, `acrossAt`): the ground rises from each valley's middle to the ridges between
+ * valleys by this many hill heights, and the hills on a valley's floor are this share of those on its ridges, so each
+ * valley is a long room with a broad meadow floor, its river down the middle, and rolling woods up its sides.
+ */
+export const FLOOR_VALLEYS = { ridge: 1.2, floor: 0.45 };
+
 export const HORN = { gravity: 0.25, radius: 3, height: 2 };
 export const CIRQUE = { gravity: 0.6, halfWidth: 2.5, depth: 2.5 };
 
@@ -225,7 +232,10 @@ export function makeTerrain(h: Habitat): Terrain {
     const f = onFloor(s);
     if (f > 0 && hills > 0) {
       const n = noise.fbm3(x / hillWave, y / hillWave, z / hillWave, 5);
-      let hill = hills * Math.pow(smoothstep(-0.25, 0.85, n), 1.6);
+      // Up a valley's sides to the ridge: the land rises, and the hills roll more than on the valley's floor.
+      const side = form.valleys > 1 ? smoothstep(0.15, 0.95, Math.abs(form.acrossAt(theta, s).across)) : 0;
+      let hill = hills * Math.pow(smoothstep(-0.25, 0.85, n), 1.6) * (FLOOR_VALLEYS.floor + (1 - FLOOR_VALLEYS.floor) * side);
+      hill += hills * FLOOR_VALLEYS.ridge * side;
       const k = inLake(s);
       if (k !== null && lake) hill *= smoothstep(0, shore, -k * lake.halfWidth); // 0 at the water, full a shore away
       height += f * hill;
