@@ -10,11 +10,12 @@ Where the work stands, for the next thread. Update it in the PR that changes it.
 - **Terrain tiles (milestone 2, part 1)**: `relief` in the blueprint (hills, ring lake, terrace step); `src/gen/terrain.ts` height field; `src/gen/tiles.ts` wrapping tile tree with LOD by measured error (reference view ~600 tiles, large ~1100); built in a worker pool; drawn camera-relative; WATER kind for the lake; the walker stands on the ground or the water. Arnd chose built hills and lakes, the deck below follows the ground.
 - **Geomorphing**: each tile carries a `morph` offset to its parent's surface; the GROUND kind blends it in over the last 40 % before the parent's distance, so level swaps don't pop (normals still switch; a lighting-only change).
 - **Sunline light**: `src/world/sunline.ts` (line-light integral over an emission profile along the axis) and `src/gen/horizon.ts` (two horizon angles per point, baked per tile on a 9×9 grid). The shaders sum the integral in 8 steps per pixel instead of the plan's (r, z) table: horizons need a per-point integral anyway, and it needs no compute pass. The day cycle only rewrites the emission texture.
+- **Haze**: `src/world/air.ts` and `throughAir`: density from the blueprint's pressure profile, lit by the sunline (a halo near it), marched per pixel in 10 pieces with the halo term integrated exactly. The plan's froxel volume (compute) is not built: per pixel is exact and needs no compute pass. It becomes worth it when clouds and night lights join the air (milestone 4).
 - **Fly camera**: `src/world/flyer.ts`, F in the Inside view; E/Space climb, Q/C sink; speed grows with height.
 
 ## Next
 
-1. Milestone 2, remaining part: the haze froxel volume.
+1. Milestone 3, "Standing in it": rotating-frame physics (Rapier, Coriolis), the character controller with a moving up, the player as an Actors human, the travelling sun (it only rewrites `sunlineEmission`), the near shadow map.
 2. The sunline's day: the travelling sun and the night dimming.
 3. Physics for the walker (Rapier, Coriolis), then Actors' humanoid bodies.
 4. Dunfinity can switch to `@futuremagic/stage` and drop its own copy (its own PR, in its own thread).

@@ -11,8 +11,9 @@ import { makeTerrain, type Terrain } from '../gen/terrain';
 import { Walker, type View } from '../world/walker';
 import { Flyer } from '../world/flyer';
 import { WorkerPool } from '../workers/pool';
-import { SUNLINE, air, allKinds, setSunline, standInAttribute, view } from './materials';
+import { SUNLINE, air, allKinds, setAir, setSunline, standInAttribute, view } from './materials';
 import { nearestLit, sunlineEmission, sunlineNorm } from '../world/sunline';
+import { densityFalloff, seenMid } from '../world/air';
 import { TerrainView, describeLayout } from './terrain';
 
 /** Running is this many times the walking speed. */
@@ -93,6 +94,7 @@ export class InteriorView {
     if (this.sunline) { this.stage.remove(this.sunline); this.sunline.geometry.dispose(); }
     const h = this.habitat;
     setSunline(sunlineEmission(h), h.length, sunlineNorm(h), nearestLit(h));
+    setAir(densityFalloff(h), h.radius, seenMid(h));
     // The sunline: from the wild wall to the port wall along the axis.
     const tube = new CylinderGeometry(h.params.sunlineRadius, h.params.sunlineRadius, h.length, 24, 1, true);
     tube.deleteAttribute('uv'); // the kind's attributes are position and normal (docs/SHADERS.md)
