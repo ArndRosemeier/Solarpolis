@@ -18,7 +18,7 @@ import { HUMAN, type Character } from '../physics/character';
 import { Figure, type MoveState } from './actors/figure';
 import { playerLook } from './actors/looks';
 import { addLights, key, shineOn, sky } from './lights';
-import { adapt, insideExposure, underCrowns } from './exposure';
+import { adapt, insideExposure, insideGlare, meterRays, underCrowns } from './exposure';
 import { sharedPool } from '../workers/pool';
 import { BALL, CLOUDS_FAR, CLOUDS_NEAR, SUNLINE, air, allKinds, setAir, setEmission, setSunline, standInAttribute, view } from './materials';
 import { dayPhase, emissionMean, nearestLit, sunlineEmission, sunlineNorm, EMISSION_SAMPLES } from '../world/sunline';
@@ -476,11 +476,32 @@ export class InteriorView {
       const raise = this.meterCanopy[3];
       closed = crownsClosed(raise) * (1 - smoothstep(raise * 0.8, raise * 1.2, at.h - ground));
     }
-    const target = insideExposure(underCrowns(closed, air.skyLight.value, UNDER_CROWNS));
+    const target = insideExposure(underCrowns(closed, air.skyLight.value, UNDER_CROWNS)) * this.glare(eye);
     this.exposure = adapt(this.exposure, target, Math.min(this.frameDt, 0.25));
     view.exposure.value = this.exposure;
     key.intensity *= this.exposure;
     sky.intensity *= this.exposure;
+  }
+
+  /** How far the eyes stop down in the air's glow (`insideGlare`), and the frame time since it was last metered. */
+  private glared = 1;
+  private sinceGlare = Infinity;
+
+  /**
+   * The eyes' stop-down in the air's glow near the axis (`insideGlare`), metered over the frame on a coarse grid ten
+   * times a second (a third of a millisecond each; the eyes take most of a second to follow anyway).
+   */
+  private glare(eye: Vec3): number {
+    this.sinceGlare += this.frameDt;
+    if (this.sinceGlare < 0.1) return this.glared;
+    this.sinceGlare = 0;
+    this.camera.updateMatrixWorld();
+    const m = this.camera.matrixWorld.elements, c = air.haze.value as Color;
+    const rays = meterRays([-m[8], -m[9], -m[10]], [m[0], m[1], m[2]], [m[4], m[5], m[6]], Math.tan((this.camera.fov * Math.PI) / 360), this.camera.aspect, 7, 5);
+    return this.glared = insideGlare({
+      habitat: this.habitat, emission: this.emission, norm: this.norm, extinction: air.extinction.value as number, sky: air.skyLight.value as number,
+      hazeLuminance: 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b,
+    }, eye, rays);
   }
 
   /** Light the player's body where it stands and pose it for the frame (relative to the camera's eye). */
