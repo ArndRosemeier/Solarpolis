@@ -2,6 +2,13 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.031 — The spindle, berth arms, mast and dishes up close
+
+- The berth arms and the mast are real trusses now, from any distance: chords, battens and diagonals, and as you fly in, tubes, gusset plates, bolts, cable trays with their cables and ties, lights, and on the arms a walkway with handrails and, up close, a grating deck.
+- The despun spindle is plated: plates with seams, ring frames and stringers, hatches, lights on the nodes, conduits with their clamps, handrails for people working outside, and rivets along every plate.
+- The dishes are built of petals with ribs and ring stiffeners behind them, a rim, a feed held by three struts with its horn, actuators and rivets.
+- Near the spindle the camera no longer turns with the drum, so the arms stay still while you look at them.
+
 ## v0.030 — Real-GPU screenshots
 
 - Behind the scenes: `npm run shots` renders any branch on Arnd's PC in real WebGPU, checks every shader the game compiles, and publishes the pictures and a report to the `renders` branch, so every change can be looked at as it really draws.
