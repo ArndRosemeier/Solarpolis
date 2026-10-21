@@ -156,10 +156,13 @@ export function parent(layout: TileLayout, k: TileKey): TileKey {
   return k.level === 0 ? k : { ...k, level: k.level - 1, i: splitAround(layout, k) ? k.i >> 1 : k.i, j: k.j >> 1 };
 }
 
-/** A sphere around a node's ground (world axes), allowing for the relief. */
+/**
+ * A sphere around a node's ground at h = 0 (world axes). A built tile's own `relief` widens it in `select`: each tile
+ * measures its own, so a flat meadow underfoot is not taken to be as near as the tallest terrace anywhere could be.
+ */
 export function sphere(terrain: Terrain, layout: TileLayout, k: TileKey): { center: Vec3; radius: number } {
   const b = bounds(layout, k);
-  const { profile, params } = terrain.habitat;
+  const { profile } = terrain.habitat;
   const tc = (b.theta0 + b.theta1) / 2, sc = (b.s0 + b.s1) / 2;
   const center = toWorld(profile, { theta: tc, s: sc, h: 0 });
   let radius = 0;
@@ -169,8 +172,7 @@ export function sphere(terrain: Terrain, layout: TileLayout, k: TileKey): { cent
       radius = Math.max(radius, Math.hypot(p[0] - center[0], p[1] - center[1], p[2] - center[2]));
     }
   }
-  const relief = Math.max(params.relief.hills, params.relief.terraceStep, params.relief.ringLake?.depth ?? 0);
-  return { center, radius: radius + relief };
+  return { center, radius };
 }
 
 /** `sphere`, remembered per tile: the tree is walked every frame. */
@@ -189,6 +191,14 @@ export function cellSize(layout: TileLayout, k: TileKey): number {
   return layout.rootSize / (1 << k.level) / TILE_CELLS;
 }
 
+/** What the selection needs of a built tile. */
+export interface TileFit {
+  /** How far its grid strays from the true ground (m). */
+  error: number;
+  /** How far its ground lies off h = 0 at most (m). */
+  relief: number;
+}
+
 export interface Selection {
   /** The tiles to draw this frame: together they cover the whole interior once. */
   draw: TileKey[];
@@ -205,19 +215,20 @@ export interface Selection {
 /**
  * Choose the tiles for a view: split a tile while its error (how far its grid strays from the true ground, measured
  * when it was built) looks bigger than `maxPixels` from `eye` (with `pixelsPerRadian` = screen height / vertical
- * field of view), or its cells look bigger than `CELL_PIXELS`, provided all its children are built. `errorOf` gives a built tile's error, undefined if not built.
+ * field of view), or its cells look bigger than `CELL_PIXELS`, provided all its children are built. `fitOf` gives a
+ * built tile's error and relief (`TileMesh` has both), undefined if not built.
  */
-export function select(terrain: Terrain, layout: TileLayout, eye: Vec3, pixelsPerRadian: number, maxPixels: number, errorOf: (k: TileKey) => number | undefined, sphereOf = spheres(terrain, layout)): Selection {
-  const ready = (k: TileKey): boolean => errorOf(k) !== undefined;
+export function select(terrain: Terrain, layout: TileLayout, eye: Vec3, pixelsPerRadian: number, maxPixels: number, fitOf: (k: TileKey) => TileFit | undefined, sphereOf = spheres(terrain, layout)): Selection {
+  const ready = (k: TileKey): boolean => fitOf(k) !== undefined;
   const draw: TileKey[] = [], keep: TileKey[] = [];
   const want: { k: TileKey; need: number }[] = [];
   const visit = (k: TileKey): void => {
-    const error = errorOf(k);
-    if (error === undefined) { want.push({ k, need: Infinity }); return; }
+    const fit = fitOf(k);
+    if (!fit) { want.push({ k, need: Infinity }); return; }
     const sp = sphereOf(k);
-    const d = Math.max(1, Math.hypot(eye[0] - sp.center[0], eye[1] - sp.center[1], eye[2] - sp.center[2]) - sp.radius);
+    const d = Math.max(1, Math.hypot(eye[0] - sp.center[0], eye[1] - sp.center[1], eye[2] - sp.center[2]) - sp.radius - fit.relief);
     // How far over its limits the tile is: its error, or its cells.
-    const pixels = (Math.max(error, (cellSize(layout, k) * maxPixels) / CELL_PIXELS) / d) * pixelsPerRadian;
+    const pixels = (Math.max(fit.error, (cellSize(layout, k) * maxPixels) / CELL_PIXELS) / d) * pixelsPerRadian;
     if (pixels <= maxPixels || k.level >= layout.maxLevel) { draw.push(k); return; }
     const kids = children(layout, k);
     const missing = kids.filter((c) => !ready(c));
@@ -262,6 +273,8 @@ export interface TileMesh {
   index: Uint32Array;
   /** How far the grid strays from the true ground between its points (m): its error on screen decides splitting. */
   error: number;
+  /** How far its ground (and anything between its points) lies off h = 0 at most (m): how much nearer than its flat sphere it can be. */
+  relief: number;
   /** The water over this tile (the lake, the rivers: `gen/water.ts`), if any, relative to the same origin. */
   water: WaterMesh | null;
 }
@@ -446,6 +459,9 @@ export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): Til
   }
   // A tile that has children never claims to be finer than its cells can show at all.
   error = Math.max(error, cellSize(layout, k) * 0.02);
+  let relief = 0;
+  for (const g of heights) relief = Math.max(relief, Math.abs(g));
+  relief += error;
 
   // The floor shares as two four-channel attributes.
   const floorA = new Uint8Array(count * 4), floorB = new Uint8Array(count * 4);
@@ -469,5 +485,5 @@ export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): Til
   };
   const cell = Math.max(dS, dT * profile.at((b.s0 + b.s1) / 2).r);
   const water = buildWater(terrain, { ...b, cell, drawn }, origin);
-  return { key: k, origin, positions, normals, colors, morph, horizon, canopy, floorA, floorB, index: Uint32Array.from(index), error, water };
+  return { key: k, origin, positions, normals, colors, morph, horizon, canopy, floorA, floorB, index: Uint32Array.from(index), error, relief, water };
 }

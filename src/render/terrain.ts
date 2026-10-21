@@ -8,7 +8,7 @@ import { arraysGeometry, dropUploaded, freeMesh, meshGeometry } from './geometry
 import type { Stage } from '@futuremagic/stage';
 import { toView, type Vec3 } from '../blueprint';
 import type { Terrain } from '../gen/terrain';
-import { CELL_PIXELS, cellSize, keyId, makeLayout, parent, roots, select, spheres, tileBytes, type TileKey, type TileLayout, type TileMesh } from '../gen/tiles';
+import { CELL_PIXELS, cellSize, keyId, makeLayout, parent, roots, select, spheres, tileBytes, type TileFit, type TileKey, type TileLayout, type TileMesh } from '../gen/tiles';
 import type { WorkerPool } from '../workers/pool';
 import type { GenAnswer, GenRequest } from '../workers/gen.worker';
 import { StreamCache, type Streamed } from './streamed';
@@ -29,7 +29,7 @@ const IN_FLIGHT = 16;
 
 interface Entry extends Streamed {
   /** What the view reads of the tile; its arrays are on the GPU only (`dropUploaded`). */
-  tile: Pick<TileMesh, 'key' | 'origin' | 'error'>;
+  tile: Pick<TileMesh, 'key' | 'origin' | 'error' | 'relief'>;
   mesh: Mesh;
   water: Mesh | null;
 }
@@ -82,13 +82,13 @@ export class TerrainView {
   /** Choose, request and place the tiles for an eye; `pixelsPerRadian` is the screen height over the vertical FOV. */
   follow(eye: Vec3, pixelsPerRadian: number): void {
     this.cache.frame();
-    const errorOf = (k: TileKey): number | undefined => this.cache.get(keyId(k))?.tile.error;
+    const fitOf = (k: TileKey): TileFit | undefined => this.cache.get(keyId(k))?.tile;
     // A parent's error as `select` judges it: its shape's error, or its cells.
     const parentError = (k: TileKey): number | undefined => {
-      const e = k.level === 0 ? undefined : errorOf(parent(this.layout, k));
+      const e = k.level === 0 ? undefined : fitOf(parent(this.layout, k))?.error;
       return e === undefined ? undefined : Math.max(e, (cellSize(this.layout, parent(this.layout, k)) * MAX_PIXELS) / CELL_PIXELS);
     };
-    const sel = select(this.terrain, this.layout, eye, pixelsPerRadian, MAX_PIXELS, errorOf, this.sphereOf);
+    const sel = select(this.terrain, this.layout, eye, pixelsPerRadian, MAX_PIXELS, fitOf, this.sphereOf);
     const before = new Set(this.drawn);
     for (const e of this.drawn) { e.mesh.visible = false; if (e.water) e.water.visible = false; }
     this.drawn = [];
@@ -135,7 +135,7 @@ export class TerrainView {
       this.group.add(m);
     }
     this.made++;
-    return { tile: { key: tile.key, origin: tile.origin, error: tile.error }, mesh, water, bytes: tileBytes(tile), lastDrawn: 0 };
+    return { tile: { key: tile.key, origin: tile.origin, error: tile.error, relief: tile.relief }, mesh, water, bytes: tileBytes(tile), lastDrawn: 0 };
   }
 
   dispose(): void {
