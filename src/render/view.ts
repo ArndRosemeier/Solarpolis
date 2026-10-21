@@ -17,7 +17,7 @@ import { PhysicsWorld } from '../physics/world';
 import { HUMAN, type Character } from '../physics/character';
 import { Figure, type MoveState } from './actors/figure';
 import { playerLook } from './actors/looks';
-import { Lights } from './lights';
+import { addLights, key, shineOn } from './lights';
 import { WorkerPool } from '../workers/pool';
 import { BALL, SUNLINE, air, allKinds, setAir, setEmission, setSunline, standInAttribute, view } from './materials';
 import { dayPhase, emissionMean, nearestLit, sunlineEmission, sunlineNorm, EMISSION_SAMPLES } from '../world/sunline';
@@ -39,6 +39,8 @@ const DAY_SPEED = 60;
 /** The third-person camera: how far behind the player's head, and how far above it (m). */
 const CHASE_BACK = 3.5;
 const CHASE_UP = 0.4;
+/** The layer the player's body is drawn on: the shadow map always sees it, the camera only from behind. */
+const BODY_LAYER = 1;
 
 export class InteriorView {
   readonly canvas = document.createElement('canvas');
@@ -74,7 +76,6 @@ export class InteriorView {
   /** The player's body (an Actors human), once loaded, and whether the camera looks at it from behind. */
   private figure: Figure | null = null;
   thirdPerson = false;
-  private readonly lights: Lights;
   private norm = 1;
   private readonly balls = new Map<number, Mesh>();
   /** The last dropped ball: where it was let go (θ) and from how high, and how far it landed behind, once it has. */
@@ -87,7 +88,7 @@ export class InteriorView {
     this.walker = new Walker(habitat.profile, undefined, this.terrain.standAt);
     this.canvas.className = 'view-canvas';
     // Before the warm-up: the lights are part of every lit shader's key.
-    this.lights = new Lights(this.scene);
+    addLights(this.scene);
   }
 
   /** Make the view: throws `GraphicsUnavailable` where the browser has no WebGPU (the caller shows why). */
@@ -95,8 +96,11 @@ export class InteriorView {
     const v = new InteriorView(habitat);
     // Reversed depth: from a blade of grass at the feet to the far endcap tens of kilometres away, in one view.
     v.renderer = (await createRenderer(v.canvas, { backends: 'webgpu', depth: 'reversed' })).renderer;
+    // The near shadow map (render/lights.ts): the key light's, cast by the body and balls.
+    v.renderer.shadowMap.enabled = true;
     v.scene.background = new Color(...(air.haze.value as Color).toArray());
     v.stage = new Stage(v.renderer, v.scene, v.camera, { kinds: allKinds, attribute: standInAttribute });
+    v.stage.shadowCamera = key.shadow.camera;
     v.place();
     await v.stage.warmUp();
     await v.build();
@@ -110,6 +114,8 @@ export class InteriorView {
   private async loadPlayer(): Promise<void> {
     const figure = await Figure.load(await playerLook(deriveSeed(this.habitat.params.seed, 'player')));
     figure.object.visible = false;
+    figure.object.traverse((o) => { o.layers.set(BODY_LAYER); o.castShadow = true; o.receiveShadow = true; });
+    key.shadow.camera.layers.enable(BODY_LAYER);
     await this.stage.add(figure.object);
     this.figure = figure;
   }
@@ -172,6 +178,7 @@ export class InteriorView {
     const mesh = new Mesh(BALL_GEOMETRY, BALL.material);
     mesh.name = `ball ${id}`;
     mesh.frustumCulled = false;
+    mesh.castShadow = true;
     this.balls.set(id, mesh);
     await this.stage.add(mesh);
     this.drop = { id, theta: ahead.theta, height, landed: null };
@@ -294,7 +301,16 @@ export class InteriorView {
     this.tiles = new TerrainView(this.terrain, this.stage, this.pool);
     this.scene.add(this.tiles.group);
     this.place();
-    await Promise.all([this.stage.add(this.sunline), this.tiles.load()]);
+    // While loading, nothing draws, but the compile cap still counts frames (one new shader per frame): keep its
+    // frames ticking, or a second build here (a shadow pass's own shader) would wait for a frame that never comes.
+    let loading = true;
+    const tick = (): void => { if (!loading) return; this.stage.frame(); requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+    try {
+      await Promise.all([this.stage.add(this.sunline), this.tiles.load()]);
+    } finally {
+      loading = false;
+    }
   }
 
   /** Put the camera at the origin looking the walker's way, and the world around it relative to the eye. */
@@ -329,11 +345,15 @@ export class InteriorView {
   /** Light the player's body where it stands and pose it for the frame (relative to the camera's eye). */
   private pose(eye: Vec3): void {
     const f = this.figure, c = this.character;
+    // Light and shade around the player (or under the flyer).
+    const centre = this.flyer || !c ? eye : v3madd(this.walker.feetAt(), c.up, HUMAN.height / 2);
+    shineOn(this.habitat, this.terrain, this.emission, emissionMean(this.emission), air.skyLight.value, this.norm, centre, eye);
     if (!f) return;
-    f.object.visible = !!c && !this.flyer && this.thirdPerson;
+    // On foot the body is always there and casts its shadow; the camera sees it only from behind (BODY_LAYER).
+    f.object.visible = !!c && !this.flyer;
+    if (this.thirdPerson) this.camera.layers.enable(BODY_LAYER); else this.camera.layers.disable(BODY_LAYER);
     if (!c || !f.object.visible) return;
     const feet = this.walker.feetAt(), up = c.up;
-    this.lights.shineOn(this.habitat, this.terrain, this.emission, emissionMean(this.emission), air.skyLight.value, this.norm, v3madd(feet, up, HUMAN.height / 2));
     const v = c.velocity, flat = v3madd(v, up, -v3dot(v, up)), speed = Math.hypot(...flat);
     const look = this.walker.view().look, ahead = v3madd(look, up, -v3dot(look, up));
     const front = v3norm(speed > 0.5 ? flat : ahead);

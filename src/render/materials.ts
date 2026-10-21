@@ -15,6 +15,7 @@ import { ClampToEdgeWrapping, DataTexture, DataUtils, Float32BufferAttribute, Ha
 import type { Node } from 'three/webgpu';
 import type { StageKind } from '@futuremagic/stage';
 import { HAZE_DIAMETER } from '../blueprint';
+import { sunShadow } from './lights';
 import { OPEN_SKY } from '../gen/horizon';
 import { EMISSION_SAMPLES, SUNLINE_STEPS } from '../world/sunline';
 import { HAZE_STEPS } from '../world/air';
@@ -90,7 +91,7 @@ export function setSunline(length: number, norm: number, nearest: number): void 
 
 /**
  * The light on a surface from the sunline, seen past the terrain's horizon angles (x toward the port end, y toward the
- * wild end), plus the sky light: the air's scattered glow, less where the horizons close in.
+ * wild end) and the near shadow map, plus the sky light: the air's scattered glow, less where the horizons close in.
  */
 function sunlit(horizon: Node<'vec2'> = vec2(OPEN_SKY, OPEN_SKY)): Node<'float'> {
   const w = worldPosition();
@@ -108,7 +109,8 @@ function sunlit(horizon: Node<'vec2'> = vec2(OPEN_SKY, OPEN_SKY)): Node<'float'>
     const at = w.z.add(r.mul(sn).div(c)).div(light.length);
     sum = sum.add(texture(emissionTexture, vec2(at, 0.5)).r.mul(c).mul(facing));
   }
-  const direct = sum.mul(span).div(SUNLINE_STEPS).div(r).mul(light.norm);
+  // Near things (the body, balls) shade it too: the near shadow map, soft along the axis (render/lights.ts).
+  const direct = sum.mul(span).div(SUNLINE_STEPS).div(r).mul(light.norm).mul(sunShadow as unknown as Node<'float'>);
   // The sky light comes from the whole air above: as much as the horizons leave open of the half circle.
   const open = clamp(horizon.x.add(horizon.y).div(Math.PI), 0, 1);
   return direct.mul(float(1).sub(air.skyLight)).add(air.skyLight.mul(light.mean).mul(open));
@@ -258,7 +260,7 @@ export function outsideKinds(): readonly Kind[] {
 }
 
 /** Things the physics moves (for now the debug menu's test balls): one colour, lit by the sunline, through the air. */
-export const BALL = kind('ball', ['position', 'normal'], { cast: false, receive: false }, () => {
+export const BALL = kind('ball', ['position', 'normal'], { cast: true, receive: false }, () => {
   const m = new MeshBasicNodeMaterial();
   m.colorNode = throughAir(vec3(0.75, 0.32, 0.08).mul(sunlit()));
   return m;

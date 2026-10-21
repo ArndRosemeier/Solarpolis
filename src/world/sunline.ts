@@ -125,6 +125,37 @@ export function lightVector(h: Habitat, emission: Float32Array, p: Vec3, towardP
   return v;
 }
 
+/**
+ * Where along the sunline the light on a surface comes from: `count` angles (from the inward radial toward +z, as in
+ * `alongSunline`) that split the light on normal n into equal shares, each the middle of its share. The shadow of a
+ * line light is the mean of the shadows toward these angles: soft along the axis, sharp across it.
+ */
+export function lightShares(h: Habitat, emission: Float32Array, p: Vec3, n: Vec3, count: number, towardPort = OPEN_SKY, towardWild = OPEN_SKY): number[] {
+  const steps = 128, angles: number[] = [], light: number[] = [];
+  let total = 0;
+  alongSunline(h, emission, p, towardPort, towardWild, steps, (w, d) => {
+    const e = w * Math.max(0, n[0] * d[0] + n[1] * d[1] + n[2] * d[2]);
+    angles.push(Math.atan2(d[2], Math.hypot(d[0], d[1])));
+    light.push(e);
+    total += e;
+  });
+  const out: number[] = [];
+  if (total <= 0) return out;
+  let seen = 0, k = 0;
+  for (let i = 0; i < angles.length && k < count; i++) {
+    const next = seen + light[i];
+    // The share's middle lies in this piece: interpolate within it.
+    while (k < count && (k + 0.5) / count * total <= next) {
+      const f = light[i] > 0 ? ((k + 0.5) / count * total - seen) / light[i] : 0.5;
+      const half = i + 1 < angles.length ? (angles[i + 1] - angles[i]) / 2 : i > 0 ? (angles[i] - angles[i - 1]) / 2 : 0;
+      out.push(angles[i] + (f - 0.5) * 2 * half);
+      k++;
+    }
+    seen = next;
+  }
+  return out;
+}
+
 /** The scale that makes the light 1 on the floor at mid-length under an even emission (the shaders' `light.norm`). */
 export function sunlineNorm(h: Habitat): number {
   const even = new Float32Array(EMISSION_SAMPLES).fill(1);

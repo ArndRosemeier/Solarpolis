@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { MATRIX, derive, type Vec3 } from '../src/blueprint';
 import { OPEN_SKY, horizonAt } from '../src/gen/horizon';
 import type { Terrain } from '../src/gen/terrain';
-import { dayLevel, dayPhase, emissionMean, irradiance, lightVector, rawIrradiance, sunlineEmission, sunlineNorm, EMISSION_SAMPLES, SUNLINE_STEPS } from '../src/world/sunline';
+import { dayLevel, dayPhase, emissionMean, irradiance, lightShares, lightVector, rawIrradiance, sunlineEmission, sunlineNorm, EMISSION_SAMPLES, SUNLINE_STEPS } from '../src/world/sunline';
 
 for (const { name, params } of MATRIX) {
   const h = derive(params);
@@ -62,5 +62,18 @@ for (const { name, params } of MATRIX) {
     // A floor facing the whole lit line: n · v is the light on it.
     assert.ok(Math.abs(-v[0] - irradiance(h, noon, p, [-1, 0, 0])) < 0.02 * irradiance(h, noon, p, [-1, 0, 0]), `${-v[0]}`);
     assert.ok(v[2] > 0, 'from the bright stretch, toward the middle');
+  });
+
+  test(`sunline (${name}): the light's equal shares lie along the axis, around where it comes from`, () => {
+    const h = derive(params);
+    const even = new Float32Array(EMISSION_SAMPLES).fill(1);
+    const mid = lightShares(h, even, [h.radius, 0, h.length / 2], [-1, 0, 0], 6);
+    assert.equal(mid.length, 6);
+    assert.ok(Math.abs(mid.reduce((a, b) => a + b, 0)) < 0.02, 'symmetric in the middle');
+    for (let k = 1; k < 6; k++) assert.ok(mid[k] > mid[k - 1], 'in order');
+    assert.ok(mid[0] > -Math.PI / 2 && mid[5] < Math.PI / 2);
+    const noon = sunlineEmission(h, params.day.length * params.day.daylight * 0.5);
+    const near = lightShares(h, noon, [h.radius, 0, h.length * 0.1], [-1, 0, 0], 6);
+    assert.ok(near[2] + near[3] > 0, 'near the wild end the light comes mostly from toward the port (the bright middle)');
   });
 }
