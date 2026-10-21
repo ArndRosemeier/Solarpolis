@@ -238,7 +238,7 @@ const LICHEN_MEAN = 0.2;
 const LICHEN = vec3(0.95, 1.05, 0.62);
 
 /** Streaks down steep rock where water runs (darker), as a share of the rock's light, and how much of it they cover. */
-const STREAK_DARK = 0.7, STREAK_MEAN = 0.3;
+const STREAK_DARK = 0.78, STREAK_MEAN = 0.25;
 
 /**
  * Rock from afar (GROUND, where the floor is rock: the `rock` share, docs/far-view.md): the climate's one rock colour
@@ -251,7 +251,7 @@ export function rockFromAfar(color: Node<'vec3'>, rock: Node<'float'>, world: No
   // Footprints first: derivatives are only defined outside the branch.
   const { shown } = footprint();
   const bed = rockBed;
-  const showBeds = shown(bed.mul(1.5)), showStreaks = shown(bed.mul(0.8)), showBroad = shown(bed.mul(30)), showLichen = shown(bed.mul(2.5));
+  const showBeds = shown(bed.mul(1.5)), showStreaks = shown(bed.mul(1.6)), showBroad = shown(bed.mul(30)), showLichen = shown(bed.mul(2.5));
   return Fn(() => {
     const out = vec3(color).toVar();
     If(rock.greaterThan(0.004), () => {
@@ -272,9 +272,10 @@ export function rockFromAfar(color: Node<'vec3'>, rock: Node<'float'>, world: No
       const layered = mix(vec3(1), beds, showBeds.mul(steep));
       // Streaks down the fall line, which on the endcaps runs from the axis outward: narrow around the axis, long along
       // it. The noise's frame is the habitat's (around, and along z), never the surface's, which turns with every facet.
-      const around = vec3(world.x, world.y, 0).normalize().mul(rockRadius.div(bed.mul(0.8)));
-      const streak = mix(float(STREAK_MEAN), smoothstep(0.1, 0.4, mx_noise_float(around.add(vec3(0, 0, world.z.div(bed.mul(10)))))), showStreaks);
-      const wet = float(1).sub(streak.mul(steep).mul(1 - STREAK_DARK));
+      const around = vec3(world.x, world.y, 0).normalize().mul(rockRadius.div(bed.mul(1.6)));
+      const streak = mix(float(STREAK_MEAN), smoothstep(0.15, 0.55, mx_noise_float(around.add(vec3(0, 0, world.z.div(bed.mul(4)))))), showStreaks);
+      // Only the steepest faces hold them: water runs off a ledge, it streaks a wall.
+      const wet = float(1).sub(streak.mul(smoothstep(0.45, 0.85, float(1).sub(dot(normal, up)))).mul(1 - STREAK_DARK));
       // Broad tones over thirty beds, iron-stained: warmer where darker.
       const broad = mx_noise_float(world.div(bed.mul(30)).add(vec3(5.3, 1.7, 8.1))).mul(showBroad);
       const tones = vec3(broad.mul(0.4).add(1), broad.mul(0.32).add(1), broad.mul(0.2).add(1));
