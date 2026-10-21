@@ -187,6 +187,9 @@ go('The middle of the floor', (h) => (h.profile.floorStart + h.profile.floorEnd)
 go('The foot of the wild endcap', (h) => h.profile.floorStart + 20);
 go('Halfway up the wild endcap', (h) => h.profile.floorStart / 2);
 go('The foot of the port endcap', (h) => h.profile.floorEnd - 20);
+// Where the sunline meets the endcaps: the axis at the wild end, the dock hub at the port end.
+go('Near the wild endcap\'s tip', (h) => h.profile.floorStart * 0.05);
+go('Near the port endcap\'s hub', (h) => h.profile.length - (h.profile.length - h.profile.floorEnd) * 0.05);
 debug.add({ label: 'Travel 10× faster (toggle)', group: 'Go', run: () => { const v = view(); if (v) v.boost = v.boost === 1 ? 10 : 1; } });
 debug.addInfo(() => view()?.clockLine() ?? '');
 /** The next of a cycle of clock speeds. */
