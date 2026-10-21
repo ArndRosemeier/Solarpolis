@@ -22,10 +22,12 @@ import { canopyBand, cellBytes, cellId, cellsNear, LEVELS, plantsOf, PLANT_STRID
 import type { WorkerPool } from '../workers/pool';
 import type { GenAnswer, GenRequest } from '../workers/gen.worker';
 import { StreamCache, type Streamed } from './streamed';
-import { BARK, GRASS, HULL, LEAF, STONE, plantInstances, setCanopyBand, setFoliage } from './materials';
+import { freeMesh } from './geometry';
+import { BARK, GRASS, HULL, LEAF, STONE, isPlantInstance, plantInstances, setCanopyBand, setFoliage } from './materials';
 
-/** Cells kept, drawn or not. */
+/** Cells kept, drawn or not, and the bytes they may hold (the GPU holds a second copy). */
 const CACHE = 6000;
+const CACHE_BYTES = 192 * 1024 * 1024;
 /** Cell jobs in flight at once. */
 const IN_FLIGHT = 12;
 /** The eye moves this share of the smallest cell before the cells in view are chosen again. */
@@ -108,10 +110,10 @@ export class PlantView {
       }
     }
     this.cache = new StreamCache<Entry>(pool, {
-      limit: CACHE, inFlight: IN_FLIGHT,
+      limit: CACHE, maxBytes: CACHE_BYTES, inFlight: IN_FLIGHT,
       id: (r) => (r.kind === 'plants' ? cellId(r.key) : ''),
       make: (answer, id) => this.make(answer, id),
-      free: (e) => { for (const m of e.meshes) { this.group.remove(m); freeInstances(m); } },
+      free: (e) => { for (const m of e.meshes) freeMesh(m, isPlantInstance); },
     });
   }
 
@@ -273,14 +275,3 @@ function fallenShapes(pieces: FallenWood[]): Shapes {
 
 /** Which shapes a species draws: a plant's or a cover's form; a debris spec's own (its stones are its own colour). */
 const shapeKey = (sp: Species): string => (sp.what === 'debris' ? `debris:${sp.spec.name}` : sp.spec.form);
-
-/**
- * Free a cell mesh's own buffers (its instances) but not the shapes it shares: three frees every attribute of a
- * disposed geometry, so the shared ones are taken off first.
- */
-function freeInstances(m: Mesh): void {
-  const g = m.geometry;
-  for (const name of Object.keys(g.attributes)) if (name !== 'plant' && name !== 'turn' && name !== 'tilt') g.deleteAttribute(name);
-  g.setIndex(null);
-  g.dispose();
-}
