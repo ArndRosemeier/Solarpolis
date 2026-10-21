@@ -83,6 +83,14 @@ Measured in the reference habitat (brightest quarter → eyes):
 
 A wider habitat has more air to glow, so its eyes stop down sooner (the large one at ×0.5 from the axis); the small one has too little air to glare at all.
 
+## Rock and the endcaps from afar (2026-10-21)
+
+The endcaps became landforms (the Mountain and the Gate, PR #58). From afar the Mountain read as pale, even grey rock. The climate has one rock colour (0.28, 0.26, 0.22), and the air near the endcap veils it. GROUND now gives rock its own look (`rockFromAfar`): packages of darker, warmer and paler beds folded across the slope (showing on steep rock only; a ledge's top weathers to one surface), dark streaks down walls, broad iron-stained tones over thirty beds, and lichen. Each pattern fades to its mean by the pixel's footprint. Because it changes the vertex colour before the near floor textures take it, rock looks the same colour near and far (Arnd's LOD rule, 2026-10-21). Two traps: a streak frame built from each facet's normal sampled noise at world coordinates tens of kilometres out, so every facet jumped and drew contour-like lines; the streaks now use the habitat's frame (around the axis, along z). A footprint (`dFdx`) is only defined outside a branch, so `rockFromAfar` computes its fades before the `If` that skips ground without rock.
+
+The Gate's faces read by kind in `colorAt`: the Stair face is dressed stone (rock ×1.6), the Vine face green over its walls, and the Water face dark wet rock (×0.55) with pools on its treads (the bed colour).
+
+Near the axis the land gets many times the floor's light (7× at 90 m from the axis in the reference). So the eyes' meter now walks the real terrain (`landHit`, with `heightAt`) for rays from or onto the endcaps; standing on the Mountain near its tip the eyes stop down to about ×0.6. That rock still reads very bright there: the meter takes the land at albedo 0.15, and pale rock near the axis is more.
+
 ## Still open
 
 - The endcaps: waterfalls where the rivers drop over the walls (the rivers already fall in cascades); landmarks.
