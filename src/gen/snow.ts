@@ -26,8 +26,11 @@ export const SNOW_BAND = 0.25;
 export const TAN_FRICTION = 0.6, COHESION = 0.3;
 /** Steeper than this it holds nowhere, however weak gravity is: tan 80°. */
 export const TAN_MAX = 5.7;
-/** The snow's albedo (linear RGB): old, settled snow, a little blue. */
-export const SNOW_ALBEDO: readonly [number, number, number] = [0.78, 0.8, 0.84];
+/**
+ * The snow's albedo (linear RGB): old, settled snow (fresh is 0.85, old 0.4 … 0.7), a little blue. Near the axis it is
+ * lit ten and twenty times as strongly as the floor, so whiter snow would only burn out (docs/far-view.md).
+ */
+export const SNOW_ALBEDO: readonly [number, number, number] = [0.64, 0.66, 0.7];
 
 export interface SnowField {
   /** The snow line's distance from the axis (m): gravity there is `snowLine` of the floor's. */

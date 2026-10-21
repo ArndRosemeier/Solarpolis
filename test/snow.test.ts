@@ -47,7 +47,7 @@ for (const { name, params } of MATRIX) {
   });
 
   test(`snow (${name}): above the line the ground is bare rock, and nothing grows on it`, () => {
-    const h = derive(params), eco = makeEcology(makeTerrain(h)), f = snowFieldOf(h);
+    const h = derive(params), eco = makeEcology(makeTerrain(h));
     const rgb = new Float32Array(3), canopy = new Float32Array(4), floor = new Uint8Array(FLOOR_LAYERS.length), wood = new Float32Array(2);
     const grass = FLOOR_LAYERS.indexOf('grass'), dry = FLOOR_LAYERS.indexOf('dry grass'), rock = FLOOR_LAYERS.indexOf('rock');
     for (const q of ring(eco, landformOf(h).mountain.snowLine * 0.6, 24)) {
@@ -56,7 +56,7 @@ for (const { name, params } of MATRIX) {
       assert.equal(wood[0], 0, 'no crowns');
       assert.ok(floor[grass] + floor[dry] <= 1 && floor[rock] >= 253, 'rock, no grass');
     }
-    // Plants and stones near a point above the line: no plant, and no stone where the snow lies.
+    // Plants and stones near a point above the line: no plant, no small stone (a few boulders stand out of the snow).
     const plants = plantsOf(eco), at = ring(eco, landformOf(h).mountain.snowLine * 0.6, 1)[0], eye = toWorld(h.profile, { theta: at.theta, s: at.s, h: at.height + 1.7 });
     let looked = 0;
     for (const sp of plants) {
@@ -66,11 +66,7 @@ for (const { name, params } of MATRIX) {
         for (const list of c.instances) for (let i = 0; i < list.length; i += PLANT_STRIDE) {
           const w: [number, number, number] = [c.origin[0] + list[i], c.origin[1] + list[i + 1], c.origin[2] + list[i + 2]];
           const p = fromWorld(h.profile, ...w);
-          if (sp.what !== 'debris') assert.ok(eco.snowAt(p.theta, p.s, p.h) < 1, `${sp.spec.name} above the snow line`);
-          else if (sp.spec.height[0] < 0.8) {
-            const n = normalAt(eco, p.theta, p.s, p.h, 1), r = Math.hypot(w[0], w[1]);
-            assert.ok(snowLies(f, ...w, -(n[0] * w[0] + n[1] * w[1]) / r) < 1, `${sp.spec.name} on the snow`);
-          }
+          if (sp.what !== 'debris' || sp.spec.height[0] < 0.8) assert.ok(eco.snowAt(p.theta, p.s, p.h) < 1, `${sp.spec.name} above the snow line`);
         }
         looked++;
       }
@@ -78,7 +74,7 @@ for (const { name, params } of MATRIX) {
     assert.ok(looked > 0);
     // The eyes' meter sees the snow's light where it lies, the land's elsewhere.
     const albedo = landAlbedo(eco), field = ring(eco, landformOf(h).mountain.snowLine * 0.2, 1)[0];
-    assert.ok(albedo(field.p) > 0.6, 'snow');
+    assert.ok(albedo(field.p) > 0.5, 'snow');
     assert.equal(albedo(toWorld(h.profile, { theta: 0, s: (h.profile.floorStart + h.profile.floorEnd) / 2, h: 0 })), LAND_ALBEDO);
   });
 }

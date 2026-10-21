@@ -32,7 +32,6 @@ import { groundSlope } from './terrain';
 import { keptClear } from './landmarks';
 import { plantedIn, plantingsOf, scatterKeepsOff } from './planted';
 import { bytesOf } from './shapes';
-import { snowFieldOf, snowLies } from './snow';
 
 /** Shapes per plant form: plants of a species pick one of these by their own hash. */
 export const PLANT_VARIANTS = 3;
@@ -297,19 +296,18 @@ export function plantCell(ecology: Ecology, plants: readonly Species[], k: CellK
 
 /** Debris at least this tall (m, the smallest of its kind) stands out of the snow: boulders, not stones. */
 const OUT_OF_SNOW = 0.8;
+/** The share of boulders the snow buries above the snow line: the rest stand out of it. */
+const BURIED = 0.85;
 
 /**
- * Whether the Mountain's snow keeps a plant or a stone off a point (gen/snow.ts), with `chance` its own number (0 … 1):
- * above the snow line nothing grows, and stones lie only where no snow covers them; boulders stand out of it.
+ * Whether the Mountain's snow keeps a plant or a stone off a point (gen/snow.ts, by gravity: the snow line's band),
+ * with `chance` its own number (0 … 1): above the line nothing grows and no small stones lie (under the snow, or on
+ * walls too steep to hold them); a few boulders stand out of it.
  */
 function snowKeepsOff(ecology: Ecology, sp: Species, theta: number, s: number, ground: number, chance: number): boolean {
   const above = ecology.snowAt(theta, s, ground);
   if (above === 0) return false;
-  if (sp.what !== 'debris') return chance < above;
-  if (sp.spec.height[0] >= OUT_OF_SNOW) return false;
-  const p = toWorld(ecology.terrain.habitat.profile, { theta, s, h: ground }), n = normalAt(ecology, theta, s, ground, 1);
-  const r = Math.max(Math.hypot(p[0], p[1]), 1e-6), level = -(n[0] * p[0] + n[1] * p[1]) / r;
-  return chance < snowLies(snowFieldOf(ecology.terrain.habitat), p[0], p[1], p[2], level);
+  return chance < (sp.what === 'debris' && sp.spec.height[0] >= OUT_OF_SNOW ? BURIED * above : above);
 }
 
 /** A planted cell from its plants' floats per shape. */
