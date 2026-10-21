@@ -44,36 +44,42 @@ export function buildStone(color: Rgb, moss: number, seed: number, variant: numb
   // Its own proportions: wider than high, some longer than wide.
   const rx = 1, ry = rng.range(0.45, 0.8), rz = rng.range(0.65, 1);
   // Where it split: planes it is cut back to (a normal, and how far out along it).
-  const breaks = Array.from({ length: rng.int(2, 5) }, () => {
+  const breaks = Array.from({ length: rng.int(3, 6) }, () => {
     const n = rng.onSphere();
-    return { n, d: rng.range(0.62, 0.85) };
+    return { n, d: rng.range(0.55, 0.85) };
   });
   const shade = rng.range(0.85, 1.12);
   const body: Rgb = [color[0] * shade, color[1] * shade * rng.range(0.97, 1.03), color[2] * shade * rng.range(0.95, 1.05)];
 
-  /** A point of the surface, from a direction on the unit sphere; `detail` adds the finest bumps. */
-  const surface = (d: readonly number[], detail: boolean): [number, number, number] => {
-    let x = d[0] * rx, y = d[1] * ry, z = d[2] * rz;
+  /**
+   * A point of the surface, from a direction on the unit sphere, and how far its bumps stand out of the lump (its
+   * pits negative: darker, as dirt and shade gather there); `detail` adds the finest bumps.
+   */
+  const surface = (d: readonly number[], detail: boolean): { p: [number, number, number]; bump: number } => {
+    const r0 = 1 + 0.12 * lump.fbm3(d[0] * 1.4, d[1] * 1.4, d[2] * 1.4, 2);
+    let x = d[0] * rx * r0, y = d[1] * ry * r0, z = d[2] * rz * r0;
     for (const b of breaks) {
       const out = x * b.n[0] + y * b.n[1] + z * b.n[2] - b.d;
-      // Cut back to the plane, softly, so the break's edge is a little worn.
-      if (out > 0) { const k = out * 0.92; x -= b.n[0] * k; y -= b.n[1] * k; z -= b.n[2] * k; }
+      // Cut back to the plane where it split, leaving a hint of the old surface (a worn edge).
+      if (out > 0) { const k = out * 0.97; x -= b.n[0] * k; y -= b.n[1] * k; z -= b.n[2] * k; }
     }
-    let r = 1 + 0.13 * lump.fbm3(d[0] * 1.6, d[1] * 1.6, d[2] * 1.6, 3);
-    if (detail) r += 0.035 * fine.fbm3(d[0] * 6, d[1] * 6, d[2] * 6, 3);
-    return [x * r, y * r, z * r];
+    let bump = 0.05 * lump.fbm3(d[0] * 3.5 + 7, d[1] * 3.5, d[2] * 3.5, 2);
+    if (detail) bump += 0.025 * fine.fbm3(d[0] * 9, d[1] * 9, d[2] * 9, 3);
+    const r = 1 + bump;
+    return { p: [x * r, y * r, z * r], bump };
   };
 
   const levels = STONE_DETAIL.map((n) => {
     const { verts, faces } = icosphere(n);
-    return { pos: verts.map((d) => surface(d, n === STONE_DETAIL[0])), faces, dirs: verts };
+    const at = verts.map((d) => surface(d, n === STONE_DETAIL[0]));
+    return { pos: at.map((a) => a.p), bumps: at.map((a) => a.bump), faces, dirs: verts };
   });
   // One unit high above the ground: the full stone's top, its base sunk by SINK.
   let lo = Infinity, hi = -Infinity;
   for (const p of levels[0].pos) { lo = Math.min(lo, p[1]); hi = Math.max(hi, p[1]); }
   const ground = lo + (hi - lo) * SINK, k = 1 / (hi - ground);
 
-  const [full, lite, hull] = levels.map(({ pos, faces, dirs }) => {
+  const [full, lite, hull] = levels.map(({ pos, bumps, faces, dirs }) => {
     const normals = smoothNormals(pos, faces);
     const positions = new Float32Array(pos.length * 3), colors = new Float32Array(pos.length * 3), nrm = new Float32Array(pos.length * 3);
     pos.forEach((p, i) => {
@@ -82,8 +88,9 @@ export function buildStone(color: Rgb, moss: number, seed: number, variant: numb
       nrm.set(normals[i], i * 3);
       // The rock varied over the stone, darker where it meets the ground, moss where its top faces up and holds damp.
       const d = dirs[i], v = 1 + 0.16 * tint.fbm3(d[0] * 2.5, d[1] * 2.5, d[2] * 2.5, 2);
-      const low = 0.55 + 0.45 * smoothstep(-0.1, 0.35, y);
-      let c = [body[0] * v * low, body[1] * v * low, body[2] * v * low] as [number, number, number];
+      const low = 0.55 + 0.45 * smoothstep(-0.1, 0.35, y), pit = 0.8 + 0.2 * Math.max(-1, Math.min(1, bumps[i] / 0.04));
+      const f = v * low * pit;
+      let c = [body[0] * f, body[1] * f, body[2] * f] as [number, number, number];
       const mossy = moss * smoothstep(0.35, 0.85, normals[i][1] + 0.35 * tint.fbm3(d[0] * 4 + 9, d[1] * 4, d[2] * 4, 2));
       c = mixRgb(c, [MOSS[0], MOSS[1], MOSS[2]], Math.min(1, mossy));
       colors.set(c, i * 3);

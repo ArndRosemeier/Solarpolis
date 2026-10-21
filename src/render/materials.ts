@@ -517,7 +517,7 @@ export const STONE = kind('stone', ['position', 'normal', 'color', 'plant'], { c
   const n = varying(normalOf(normalLocal));
   // The grain: a stone's own surface in metres (each stone its own, by where it lies), a hand and a finger across.
   const at = varying(positionLocal.mul(inst.w).add(inst.xyz.mul(0.37)));
-  const grain = mx_noise_float(at.mul(9)).mul(0.09).add(mx_noise_float(at.mul(31)).mul(0.06)).add(1);
+  const grain = mx_noise_float(at.mul(9)).mul(0.12).add(mx_noise_float(at.mul(31)).mul(0.08)).add(1);
   m.colorNode = throughAir(vertexColor().rgb.mul(grain).mul(sunlit(plantHorizon, normalize(n))));
   return m;
 });

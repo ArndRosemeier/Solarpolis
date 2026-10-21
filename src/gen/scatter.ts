@@ -304,8 +304,8 @@ function tiltAt(ecology: Ecology, theta: number, s: number, p: Vec3): [number, n
   return [rise(side, theta - dth, s, theta + dth, s), rise([0, 0, 1], theta, s0, theta, s1)];
 }
 
-/** How steep the ground is at a point (0 flat … 1 a wall), from its height a step either way. */
-function slopeAt(ecology: Ecology, theta: number, s: number, ground: number, step: number): number {
+/** How steep the ground is at a point (0 flat … 1 a wall), from its height a step either way (m). */
+export function slopeAt(ecology: Ecology, theta: number, s: number, ground: number, step: number): number {
   const t = ecology.terrain, { profile } = t.habitat;
   const p = profile.at(s), r = Math.max(p.r, 1e-6), d = Math.max(step * 0.5, 0.5);
   const dh = Math.hypot(t.heightAt(theta + d / r, s) - ground, t.heightAt(theta, Math.min(profile.length, s + d)) - ground) / d;
