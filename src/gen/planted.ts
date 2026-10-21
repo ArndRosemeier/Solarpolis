@@ -123,11 +123,25 @@ function fromMiddle(t: Terrain, g: Grove, theta: number, s: number): number {
 
 /**
  * Whether scattered trees, shrubs and debris keep off a point: inside a grove's clearing and under its ring (grass
- * still grows there: the clearing is a lawn).
+ * still grows there: the clearing is a lawn, `plantedLawn`).
  */
 export function scatterKeepsOff(t: Terrain, theta: number, s: number): boolean {
   for (const g of plantingsOf(t).groves) if (Math.abs(s - g.s) < g.clear && fromMiddle(t, g, theta, s) < g.clear) return true;
   return false;
+}
+
+/**
+ * How much a point is a grove's lawn (0 … 1): its clearing and the ground under its ring, mown, soft at the edge. The
+ * ecology gives it to its open, grassy biome there (`biomesAt`), so the ground, its floor and its grass agree.
+ */
+export function plantedLawn(t: Terrain, theta: number, s: number): number {
+  let lawn = 0;
+  for (const g of plantingsOf(t).groves) {
+    const edge = g.crown / 2;
+    if (Math.abs(s - g.s) > g.clear + edge) continue;
+    lawn = Math.max(lawn, 1 - smoothstep(g.clear - edge, g.clear + edge, fromMiddle(t, g, theta, s)));
+  }
+  return lawn;
 }
 
 /**

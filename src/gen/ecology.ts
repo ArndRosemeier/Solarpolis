@@ -16,7 +16,7 @@ import { FLOOR_LAYERS, climateOf, toWorld, type BiomeSpec, type Climate, type Fl
 import type { Terrain } from './terrain';
 import { riverAt } from './rivers';
 import { canopyColor } from './trees';
-import { plantedCanopy } from './planted';
+import { plantedCanopy, plantedLawn } from './planted';
 
 /** Plants at least this tall (m, full grown) are trees: they make up the canopy of woods. */
 export const TREE_HEIGHT = 6;
@@ -120,18 +120,30 @@ export function makeEcology(terrain: Terrain): Ecology {
       sum += out[b];
     }
     if (sum > 0) for (let b = 0; b < count; b++) out[b] /= sum;
-    else {
-      // Nothing suits (very steep, or out of every range): the nearest fit, by moisture, takes it.
-      let best = 0, gap = Infinity;
-      for (let b = 0; b < count; b++) {
-        const [lo, hi] = biomes[b].moisture, d = m < lo ? lo - m : m > hi ? m - hi : 0;
-        if (d < gap) { gap = d; best = b; }
-      }
-      out.fill(0, 0, count);
-      out[best] = 1;
+    else nearestFit(m, out);
+    // A grove's lawn (gen/planted.ts) is the open, grassy biome's.
+    const lawn = plantedLawn(terrain, theta, s);
+    if (lawn > 0) {
+      for (let b = 0; b < count; b++) out[b] *= 1 - lawn;
+      out[open] += lawn;
     }
     return out;
   };
+  /** Nothing suits (very steep, or out of every range): the nearest fit, by moisture, takes it. */
+  const nearestFit = (m: number, out: Float32Array): void => {
+    let best = 0, gap = Infinity;
+    for (let b = 0; b < count; b++) {
+      const [lo, hi] = biomes[b].moisture, d = m < lo ? lo - m : m > hi ? m - hi : 0;
+      if (d < gap) { gap = d; best = b; }
+    }
+    out.fill(0, 0, count);
+    out[best] = 1;
+  };
+  /** The open, grassy biome: no trees, the most grass on its floor (a grove's lawn is it). */
+  const open = biomes.reduce((best, b, k) => {
+    const grass = (x: BiomeSpec) => (x.floor.grass ?? 0) + (x.floor['dry grass'] ?? 0) - (x.plants.some((p) => p.height[1] >= TREE_HEIGHT) ? 10 : 0);
+    return grass(b) > grass(biomes[best]) ? k : best;
+  }, 0);
 
   const shares = new Float32Array(count);
   const woods = biomes.map(canopyOf);

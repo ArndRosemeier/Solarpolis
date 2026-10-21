@@ -85,6 +85,9 @@ test('planted: the grove\'s trees are drawn at every level, each once, and from 
   const tree = g.trees[0], onRing = plantedCanopy(t, tree.theta, tree.s);
   assert.ok(onRing && onRing.cover > 0.5 && onRing.height > g.spec.height[1], 'the ring\'s crowns');
   assert.equal(plantedCanopy(t, g.theta, g.s), null, 'the clearing');
+  // The clearing is lawn: none of its ground goes to a biome with trees.
+  const shares = eco.biomesAt(g.theta, g.s, t.heightAt(g.theta, g.s), 0, new Float32Array(eco.climate.biomes.length));
+  eco.climate.biomes.forEach((b, k) => { if (b.plants.some((p) => p.height[1] >= TREE_HEIGHT)) assert.equal(shares[k], 0, `${b.name} in the clearing`); });
   const out = new Float32Array(3), canopy = new Float32Array(4);
   eco.colorAt(tree.theta, tree.s, t.heightAt(tree.theta, tree.s), 0, out, 0, canopy);
   assert.ok(canopy[3] > g.spec.height[1] * 0.5, `canopy raise ${canopy[3]}`);
