@@ -12,12 +12,25 @@
  * parkland does. Pure and continuous like the terrain: any point, in any order, gives the same answer.
  */
 import { Noise, deriveSeed, smoothstep } from '@futuremagic/core';
-import { climateOf, toWorld, type BiomeSpec, type Climate } from '../blueprint';
+import { FLOOR_LAYERS, climateOf, toWorld, type BiomeSpec, type Climate } from '../blueprint';
 import type { Terrain } from './terrain';
 import { canopyColor } from './trees';
 
 /** Plants at least this tall (m, full grown) are trees: they make up the canopy of woods. */
 export const TREE_HEIGHT = 6;
+
+/** Under closed crowns, the share of the sunline's direct light that still reaches the ground, on average (sunflecks). */
+export const UNDER_CROWNS = 0.12;
+/** The canopy raise (`colorAt`'s canopy height, m) at which the crowns count as closed: three quarters of a tall tree. */
+export const CLOSED_RAISE = 0.75 * TREE_HEIGHT * 1.5;
+/**
+ * How closed the crowns are over a point (0 open … 1 closed), from its canopy raise: where no shadow map reaches, the
+ * ground's shade under the woods (GROUND), and the eyes' meter in a wood (view.ts). Sparse trees barely raise the
+ * canopy (`colorAt`), so the raise tells closed woods from scattered ones.
+ */
+export function crownsClosed(raise: number): number {
+  return smoothstep(0.25, 1, raise / CLOSED_RAISE);
+}
 
 /**
  * A biome's woods seen from afar: how much of the ground its trees' crowns cover where it is pure (a crown about half
@@ -48,9 +61,10 @@ export interface Ecology {
   /**
    * Linear RGB of the ground seen from a distance, with the slope (0 flat … 1 vertical), into `out` at `i`. With
    * `canopy`, also the woods' canopy over it there, at `i / 3 * 4`: the linear RGB seen from far above (the ground
-   * where the trees stand apart, their crowns where they close up) and the canopy's height (m).
+   * where the trees stand apart, their crowns where they close up) and the canopy's height (m). With `floor`, the
+   * share of each of `FLOOR_LAYERS` there (0 … 255, summing to about 255), at `i / 3 * 8`.
    */
-  colorAt(theta: number, s: number, h: number, slope: number, out: Float32Array, i: number, canopy?: Float32Array): void;
+  colorAt(theta: number, s: number, h: number, slope: number, out: Float32Array, i: number, canopy?: Float32Array, floor?: Uint8Array): void;
 }
 
 /** How soft the edges of a biome's moisture and height ranges are (in moisture units, and in shares of the radius). */
@@ -113,7 +127,14 @@ export function makeEcology(terrain: Terrain): Ecology {
 
   const shares = new Float32Array(count);
   const woods = biomes.map(canopyOf);
-  const colorAt = (theta: number, s: number, height: number, slope: number, out: Float32Array, i: number, canopy?: Float32Array): void => {
+  // Each biome's floor as shares of the layers (summing to 1).
+  const L = FLOOR_LAYERS.length, SAND = FLOOR_LAYERS.indexOf('sand'), DIRT = FLOOR_LAYERS.indexOf('dirt'), ROCK = FLOOR_LAYERS.indexOf('rock');
+  const floors = biomes.map((b) => {
+    const f = FLOOR_LAYERS.map((l) => b.floor[l] ?? 0), sum = f.reduce((a, x) => a + x, 0) || 1;
+    return f.map((x) => x / sum);
+  });
+  const layers = new Float32Array(L);
+  const colorAt = (theta: number, s: number, height: number, slope: number, out: Float32Array, i: number, canopy?: Float32Array, floor?: Uint8Array): void => {
     biomesAt(theta, s, height, slope, shares);
     const [x, y, z] = toWorld(profile, { theta, s, h: 0 });
     let c0 = 0, c1 = 0, c2 = 0;
@@ -123,11 +144,12 @@ export function makeEcology(terrain: Terrain): Ecology {
       const spec = biomes[b], v = 1 + spec.vary * tint.fbm3(x / 90 + b * 7.3, y / 90, z / 90, 2);
       c0 += w * spec.color[0] * v; c1 += w * spec.color[1] * v; c2 += w * spec.color[2] * v;
     }
+    let sand = 0, bed = 0;
     if (lake && Math.abs(s - lake.s) < lake.halfWidth + reach) {
       // Sand at the waterline, the lake's bed below it (only by the lake: terraces elsewhere dip below its level too).
       const below = lake.level - height;
-      const sand = smoothstep(-1.5, 0, below) * (1 - smoothstep(0.5, 3, below));
-      const bed = smoothstep(0.5, 3, below);
+      sand = smoothstep(-1.5, 0, below) * (1 - smoothstep(0.5, 3, below));
+      bed = smoothstep(0.5, 3, below);
       const sh = climate.shore, bd = climate.bed;
       c0 += (sh[0] - c0) * sand; c1 += (sh[1] - c1) * sand; c2 += (sh[2] - c2) * sand;
       c0 += (bd[0] - c0) * bed; c1 += (bd[1] - c1) * bed; c2 += (bd[2] - c2) * bed;
@@ -137,6 +159,15 @@ export function makeEcology(terrain: Terrain): Ecology {
     out[i] = Math.min(1, Math.max(0, c0));
     out[i + 1] = Math.min(1, Math.max(0, c1));
     out[i + 2] = Math.min(1, Math.max(0, c2));
+    if (floor) {
+      // The biomes' floors, then sand, the bed (dirt) and rock over them, as the colour has them.
+      layers.fill(0);
+      for (let b = 0; b < count; b++) if (shares[b]) for (let l = 0; l < L; l++) layers[l] += shares[b] * floors[b][l];
+      const over = (l: number, k: number) => { for (let m = 0; m < L; m++) layers[m] *= 1 - k; layers[l] += k; };
+      over(SAND, sand); over(DIRT, bed); over(ROCK, rock);
+      const at = (i / 3) * L;
+      for (let l = 0; l < L; l++) floor[at + l] = Math.round(layers[l] * 255);
+    }
     if (!canopy) return;
     // The woods over it: crowns cover their biome's share of the point (rock and water hold none).
     let cover = 0, tall = 0, k0 = 0, k1 = 0, k2 = 0;

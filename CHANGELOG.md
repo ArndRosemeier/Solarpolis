@@ -2,6 +2,18 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.033 — Light in the woods
+
+- Your eyes adapt in a wood: walking under closed crowns, the view opens up over a few seconds, and closes again when you step back into the open.
+- Woods stay shaded all the way out, not just near you: past the reach of the near shadows, the floor under closed crowns is lit the way the shadows would light it.
+
+## v0.032 — The ground up close
+
+- Walking on the floor, the ground now shows what it is made of: grass, dry grass, leaf litter, pine needles, bare earth, gravel, sand and rock, each with its own relief and shading.
+- Each biome has its own floor (leaf litter under oaks, needles under pines, stony earth in the maquis), and the two main layers at a spot blend by their relief, so grass grows between stones instead of fading into them.
+- From afar the ground keeps the colours it had; the textures add detail only as you come closer.
+- Trees now cast their shadows on the ground: under a closed wood the floor lies in shade, with sunflecks where the crowns open.
+
 ## v0.031 — The spindle, berth arms, mast and dishes up close
 
 - The berth arms and the mast are real trusses now, from any distance: chords, battens and diagonals, and as you fly in, tubes, gusset plates, bolts, cable trays with their cables and ties, lights, and on the arms a walkway with handrails and, up close, a grating deck.

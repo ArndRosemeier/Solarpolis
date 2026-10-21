@@ -164,7 +164,7 @@ export function skinShown(): Node<'bool'> {
   const di = d.sub(around.mul(floor(d.div(around).add(0.5)))), dj = floor(fj.div(size)).sub(skin.hidden.z);
   const inside = size.greaterThan(0).and(abs(di).lessThanEqual(ROOT_SPAN)).and(abs(dj).lessThanEqual(ROOT_SPAN));
   const bit = di.add(ROOT_SPAN).mul(side).add(dj.add(ROOT_SPAN)), slot = floor(bit.div(24)), shift = bit.sub(slot.mul(24));
-  const b = skin.hiddenBits, words = [b.x, b.y, b.z, b.w].slice(0, MASK_WORDS);
+  const words = (['x', 'y', 'z', 'w'] as const).slice(0, MASK_WORDS).map((c) => skin.hiddenBits[c]);
   let word = words[0] as Node<'float'>;
   for (let k = 1; k < words.length; k++) word = select(slot.equal(k), words[k], word);
   const set = fract(floor(word.div(pow(2, shift))).mul(0.5)).greaterThan(0.25);

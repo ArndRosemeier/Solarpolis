@@ -8,9 +8,10 @@ import type { Mat3 } from '../space';
 import { Shape } from '../gen/shapes';
 
 /** An indexed geometry from named attributes: each one its data and its item size. Absent ones are left out. */
-export function meshGeometry(index: Uint32Array, attributes: Record<string, readonly [Float32Array, number] | undefined>): BufferGeometry {
+export function meshGeometry(index: Uint32Array, attributes: Record<string, readonly [Float32Array | Uint8Array, number] | undefined>): BufferGeometry {
   const g = new BufferGeometry();
-  for (const [name, a] of Object.entries(attributes)) if (a) g.setAttribute(name, new BufferAttribute(a[0], a[1]));
+  // Bytes are shares 0 … 255, read as 0 … 1 (normalized).
+  for (const [name, a] of Object.entries(attributes)) if (a) g.setAttribute(name, new BufferAttribute(a[0], a[1], a[0] instanceof Uint8Array));
   g.setIndex(new BufferAttribute(index, 1));
   g.computeBoundingSphere();
   return g;

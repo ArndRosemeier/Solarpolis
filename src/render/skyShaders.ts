@@ -11,7 +11,7 @@
  * The scene's axes are the home habitat's orbit frame (src/space: ecliptic of date), and the camera sits at the origin:
  * everything is placed relative to the eye, so `positionWorld` is the offset from the eye.
  */
-import { DataTexture, LinearFilter, Matrix3, RGBAFormat, SRGBColorSpace, Vector2, Vector3, type Texture } from 'three/webgpu';
+import { DataTexture, Matrix3, RGBAFormat, Vector2, Vector3, type Texture } from 'three/webgpu';
 import {
   abs, asin, atan, length, log, min, attribute, cameraProjectionMatrix, clamp, cross, dFdx, dFdy, dot, exp, float, fract, max, mix,
   modelViewMatrix, modelWorldMatrix, mx_fractal_noise_float, normalize, positionLocal, positionWorld, pow,
@@ -19,6 +19,7 @@ import {
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { GLARE, GLARE_REACH, STAR_SIGMA } from './exposure';
+import { filtered } from './textures';
 
 /** Everything the outside's shaders read; set each frame by the view (render/outside.ts). */
 export const outside = {
@@ -53,12 +54,7 @@ export const outside = {
  * sampler for a texture with nearest filters, yet `.grad()` still samples through one, so the sky would not compile.
  */
 const blank = (): Texture => {
-  const t = new DataTexture(new Uint8Array([20, 20, 30, 255]), 1, 1, RGBAFormat);
-  t.colorSpace = SRGBColorSpace;
-  t.magFilter = LinearFilter;
-  t.minFilter = LinearFilter;
-  t.needsUpdate = true;
-  return t;
+  return filtered(new DataTexture(new Uint8Array([20, 20, 30, 255]), 1, 1, RGBAFormat), { srgb: true });
 };
 
 /** The surface maps; their `.value` takes the loaded texture. */

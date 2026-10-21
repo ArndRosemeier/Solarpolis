@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CLIMATES, MATRIX, derive, validate, withParams, type HabitatParams } from '../src/blueprint';
 import { makeTerrain } from '../src/gen/terrain';
-import { makeEcology, type Ecology } from '../src/gen/ecology';
+import { CLOSED_RAISE, UNDER_CROWNS, crownsClosed, makeEcology, type Ecology } from '../src/gen/ecology';
+import { insideExposure, underCrowns } from '../src/render/exposure';
 
 /** A grid of points over the whole interior: (θ, s, height, slope of the profile). */
 function sample(eco: Ecology, around = 24, along = 60): { theta: number; s: number; h: number; slope: number }[] {
@@ -70,3 +71,26 @@ test('ecology: an unknown climate is an invalid habitat', () => {
   assert.ok(findings.some((f) => f.id === 'climate' && f.severity === 'invalid'));
   assert.ok(!validate(derive(MATRIX[0].params)).some((f) => f.id === 'climate'));
 });
+
+for (const { name, params } of MATRIX) {
+  test(`ecology (${name}): closed woods shade, open land does not, and the eyes open up under them`, () => {
+    const eco = makeEcology(makeTerrain(derive(params)));
+    const color = new Float32Array(3), canopy = new Float32Array(4);
+    let open = 0, closed = 0;
+    for (const p of sample(eco, 16, 40)) {
+      eco.colorAt(p.theta, p.s, p.h, p.slope, color, 0, canopy);
+      const c = crownsClosed(canopy[3]);
+      assert.ok(c >= 0 && c <= 1);
+      if (c === 0) open++;
+      if (c > 0.9) closed++;
+    }
+    assert.ok(open > 0 && closed > 0, `open land (${open}) and closed woods (${closed}) both exist`);
+    assert.equal(crownsClosed(0), 0);
+    assert.equal(crownsClosed(CLOSED_RAISE), 1);
+    // The eyes: unchanged in the open, more open under closed crowns, but not all the way.
+    const sky = 0.35, shade = underCrowns(1, sky, UNDER_CROWNS);
+    assert.equal(underCrowns(0, sky, UNDER_CROWNS), 1);
+    assert.equal(insideExposure(1), 1);
+    assert.ok(insideExposure(shade) > 1.5 && insideExposure(shade) < 1 / shade, `${insideExposure(shade)} under crowns letting ${shade} through`);
+  });
+}

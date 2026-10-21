@@ -93,6 +93,24 @@ export function exposureFor(m: Meterable, rays: readonly Vec3[], darkest: number
   return Math.min(KEY / Math.exp(sum / rays.length), HIGHLIGHT_LEVEL / high, anchored);
 }
 
+/**
+ * Inside, the eyes open up where the light around them is dimmer than in the open at the same hour (a wood's shade):
+ * `light` is that share (1 in the open). They make up most of it, not all: a wood still looks shady. Night is not
+ * metered here; the hour's own light stays as it is.
+ */
+export const INSIDE_MAKES_UP = 0.8;
+export function insideExposure(light: number): number {
+  return Math.pow(1 / Math.max(light, 0.05), INSIDE_MAKES_UP);
+}
+
+/**
+ * The share of the open's light around the eye under crowns `closed` (0 … 1, `crownsClosed`), when `skyShare` of the
+ * light is the air's glow, which the crowns are taken to pass (the GROUND kind lights the floor the same way).
+ */
+export function underCrowns(closed: number, skyShare: number, underCrowns: number): number {
+  return (1 - skyShare) * (1 - (1 - underCrowns) * closed) + skyShare;
+}
+
 /** Move the exposure toward the target: about a second to adapt to light, four to open up in the dark. */
 export function adapt(exposure: number, target: number, dt: number): number {
   const tau = target < exposure ? 0.6 : 4;

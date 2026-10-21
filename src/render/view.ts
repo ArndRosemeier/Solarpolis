@@ -6,9 +6,9 @@
  * Q or C sinks. On foot the physics carries the player (`physics/character.ts`): up is toward the axis, and gravity
  * is the spin's. The player is an Actors human (`render/actors`); V looks at them from behind, V again from their eyes.
  */
-import { Color, CylinderGeometry, Mesh, PerspectiveCamera, Scene, SphereGeometry, type WebGPURenderer } from 'three/webgpu';
+import { Color, CylinderGeometry, DoubleSide, FrontSide, Mesh, type Material, PerspectiveCamera, Scene, SphereGeometry, type WebGPURenderer } from 'three/webgpu';
 import { Stage, createRenderer } from '@futuremagic/stage';
-import { deriveSeed, v3dot, v3madd, v3norm } from '@futuremagic/core';
+import { deriveSeed, smoothstep, v3dot, v3madd, v3norm } from '@futuremagic/core';
 import { fromWorld, toView, toWorld, type Habitat, type Vec3 } from '../blueprint';
 import { makeTerrain, type Terrain } from '../gen/terrain';
 import { Walker, type View } from '../world/walker';
@@ -17,14 +17,16 @@ import { PhysicsWorld } from '../physics/world';
 import { HUMAN, type Character } from '../physics/character';
 import { Figure, type MoveState } from './actors/figure';
 import { playerLook } from './actors/looks';
-import { addLights, key, shineOn } from './lights';
+import { addLights, key, shineOn, sky } from './lights';
+import { adapt, insideExposure, underCrowns } from './exposure';
 import { sharedPool } from '../workers/pool';
 import { BALL, SUNLINE, air, allKinds, setAir, setEmission, setSunline, standInAttribute, view } from './materials';
 import { dayPhase, emissionMean, nearestLit, sunlineEmission, sunlineNorm, EMISSION_SAMPLES } from '../world/sunline';
 import { densityFalloff, seenMid } from '../world/air';
 import { TerrainView, describeLayout } from './terrain';
 import { PlantView } from './plants';
-import { makeEcology, type Ecology } from '../gen/ecology';
+import { setFloorEye } from './groundShaders';
+import { UNDER_CROWNS, crownsClosed, makeEcology, type Ecology } from '../gen/ecology';
 import { FrameLoop, dragToLook, draw, fitCanvas, moveKeys } from './surface';
 
 /** Running is this many times the walking speed. */
@@ -133,9 +135,19 @@ export class InteriorView {
   private async loadPlayer(): Promise<void> {
     const figure = await Figure.load(await playerLook(deriveSeed(this.habitat.params.seed, 'player')));
     figure.object.visible = false;
-    figure.object.traverse((o) => { o.layers.set(BODY_LAYER); o.castShadow = true; o.receiveShadow = true; });
+    figure.object.traverse((o) => {
+      o.layers.set(BODY_LAYER);
+      o.receiveShadow = true;
+      // The parts worn cast (the pack's other garments stay hidden; a change of clothes would prepare the figure again).
+      o.castShadow = o.visible;
+      // A see-through two-sided part (lashes, brows) is drawn in two passes, one shader each; its shadow needs one side.
+      const m = (o as Mesh).material as Material | undefined;
+      if (m && !Array.isArray(m) && m.transparent && m.side === DoubleSide) m.shadowSide = FrontSide;
+    });
     key.shadow.camera.layers.enable(BODY_LAYER);
-    await this.stage.add(figure.object);
+    // Every part's shadow is warmed, not one per kind of part: a figure's shadow shaders are its own (Stage.prepare).
+    await this.stage.prepare(figure.object, { everyCaster: true });
+    this.scene.add(figure.object);
     this.figure = figure;
   }
 
@@ -165,7 +177,7 @@ export class InteriorView {
       this.stage.hudLine(),
       `${this.tiles?.info() ?? 'terrain: none'} · ${describeLayout(this.terrain)} · ${this.pool.workers} workers`,
       this.plants?.info() ?? 'plants: none',
-      `θ ${(a.theta * 180 / Math.PI).toFixed(1)}°, s ${(a.s / 1000).toFixed(2)} of ${(this.habitat.profile.length / 1000).toFixed(2)} km, ground ${this.terrain.standAt(a.theta, a.s).toFixed(1)} m, ${mode}`,
+      `θ ${(a.theta * 180 / Math.PI).toFixed(1)}°, s ${(a.s / 1000).toFixed(2)} of ${(this.habitat.profile.length / 1000).toFixed(2)} km, ground ${this.terrain.standAt(a.theta, a.s).toFixed(1)} m, ${mode}, eyes ×${this.exposure.toFixed(2)}`,
     ].join('\n');
   }
 
@@ -342,6 +354,7 @@ export class InteriorView {
   private place(): void {
     const v = this.current();
     view.eye.value.set(...v.eye);
+    setFloorEye(v.eye);
     this.camera.position.set(0, 0, 0);
     this.camera.up.set(...v.up);
     this.camera.lookAt(v.look[0], v.look[1], v.look[2]);
@@ -378,12 +391,37 @@ export class InteriorView {
     if (Math.abs(this.chase - this.chaseGoal) < 1e-3) this.chase = this.chaseGoal;
   }
 
+  /** The eyes' exposure, adapting over time (`adapt`). */
+  private exposure = 1;
+  private readonly meterColor = new Float32Array(3);
+  private readonly meterCanopy = new Float32Array(4);
+
+  /**
+   * The eyes open up in a wood's shade (`insideExposure`): the crowns over the eye, unless it is above them. Applied to
+   * every inside kind (`view.exposure`) and to three's lights, which light the player's body.
+   */
+  private adaptEyes(eye: Vec3): void {
+    let closed = 0;
+    if (this.ecology) {
+      const at = fromWorld(this.habitat.profile, ...eye), ground = this.terrain.heightAt(at.theta, at.s);
+      this.ecology.colorAt(at.theta, at.s, ground, 0, this.meterColor, 0, this.meterCanopy);
+      const raise = this.meterCanopy[3];
+      closed = crownsClosed(raise) * (1 - smoothstep(raise * 0.8, raise * 1.2, at.h - ground));
+    }
+    const target = insideExposure(underCrowns(closed, air.skyLight.value, UNDER_CROWNS));
+    this.exposure = adapt(this.exposure, target, Math.min(this.frameDt, 0.25));
+    view.exposure.value = this.exposure;
+    key.intensity *= this.exposure;
+    sky.intensity *= this.exposure;
+  }
+
   /** Light the player's body where it stands and pose it for the frame (relative to the camera's eye). */
   private pose(eye: Vec3): void {
     const f = this.figure, c = this.character;
     // Light and shade around the player (or under the flyer).
     const centre = this.flyer || !c ? eye : v3madd(this.walker.feetAt(), c.up, HUMAN.height / 2);
     shineOn(this.habitat, this.terrain, this.emission, emissionMean(this.emission), air.skyLight.value, this.norm, centre, eye);
+    this.adaptEyes(eye);
     if (!f) return;
     // On foot the body is always there and casts its shadow; the camera sees it once it is out of the head (BODY_LAYER).
     f.object.visible = !!c && !this.flyer;

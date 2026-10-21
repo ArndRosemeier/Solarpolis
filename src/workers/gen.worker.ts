@@ -13,6 +13,7 @@ import { buildTree, LITE_DETAIL, type TreeModel } from '../gen/trees';
 import { barkAtlas, type BarkAtlas } from '../gen/foliage';
 import type { PlantForm } from '../blueprint';
 import { leafAtlas } from './leaves';
+import { groundLayer } from '../gen/groundTex';
 import { makeSkin, type Skin } from '../gen/skin';
 import { buildPartTile, detailParts, type DetailPart, type PartTile } from '../gen/hullParts';
 import type { TileKey as DetailKey } from '../gen/detailTree';
@@ -23,6 +24,7 @@ export type GenRequest =
   | { kind: 'plants'; params: HabitatParams; key: CellKey }
   | { kind: 'tree'; params: HabitatParams; form: PlantForm; variant: number }
   | { kind: 'foliage'; params: HabitatParams }
+  | { kind: 'floor'; params: HabitatParams; layer: number }
   | { kind: 'hull'; params: HabitatParams; part: string; key: DetailKey };
 export type GenAnswer =
   | { kind: 'tile'; tile: TileMesh }
@@ -30,6 +32,7 @@ export type GenAnswer =
   | { kind: 'plants'; cell: PlantCell }
   | { kind: 'tree'; full: TreeModel; lite: TreeModel }
   | { kind: 'foliage'; bark: BarkAtlas; leaves: Uint8Array }
+  | { kind: 'floor'; layer: number; albedo: Uint8Array; relief: Uint8Array; mean: [number, number, number] }
   | { kind: 'hull'; partTile: PartTile }
   | { error: string };
 
@@ -68,6 +71,11 @@ self.onmessage = (e: MessageEvent<GenRequest>) => {
     const post = (answer: GenAnswer, transfer: Transferable[] = buffers(answer)): void => (self as unknown as DedicatedWorkerGlobalScope).postMessage(answer, transfer);
     if (req.kind === 'foliage') {
       post({ kind: 'foliage', bark: barkAtlas(), leaves: leafAtlas() });
+      return;
+    }
+    if (req.kind === 'floor') {
+      const l = groundLayer(req.layer);
+      post({ kind: 'floor', layer: req.layer, albedo: l.albedo, relief: l.normal, mean: l.mean });
       return;
     }
     if (req.kind === 'tree') {
