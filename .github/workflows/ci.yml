@@ -57,4 +57,7 @@ jobs:
           id=$(gh run list --repo "$GITHUB_REPOSITORY" --branch main --workflow CI --status success -L 1 --json databaseId -q '.[0].databaseId')
           [ -n "$id" ] && gh run download "$id" --repo "$GITHUB_REPOSITORY" -n suite-times -D base || echo "no timings from main yet"
           node tools/ci/suite-diff.mjs base/suite-times.json suite-times.json | tee -a "$GITHUB_STEP_SUMMARY"
+      # The code must build; the Actors asset pack (300 MB) is only copied in for Pages.
       - run: npx vite build
+        env:
+          ACTORS_PACK: skip

@@ -104,8 +104,8 @@ export class Walker {
     this.pitch = 0;
   }
 
-  /** Where the feet are: on the physics body, or on the ground under (θ, s). */
-  private standing(): Vec3 {
+  /** Where the feet are (world): on the physics body, or on the ground under (θ, s). */
+  feetAt(): Vec3 {
     const { theta, s } = this.at;
     return this.feet ?? toWorld(this.profile, { theta, s, h: this.ground(theta, s) });
   }
@@ -115,7 +115,7 @@ export class Walker {
    * toward the axis (on the axis itself, the ground's normal).
    */
   private frame(): { along: Vec3; side: Vec3; up: Vec3 } {
-    const up = upAt(this.standing()) ?? groundNormal(this.profile, this.at.theta, this.at.s);
+    const up = upAt(this.feetAt()) ?? groundNormal(this.profile, this.at.theta, this.at.s);
     // along × up: on the floor at θ that is (sin θ, −cos θ, 0), toward −θ.
     return { along: [0, 0, 1], side: [-up[1], up[0], 0], up };
   }
@@ -124,7 +124,7 @@ export class Walker {
     const { along, side, up } = this.frame();
     const ch = Math.cos(this.heading), sh = Math.sin(this.heading), cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
     const look: Vec3 = [0, 1, 2].map((i) => cp * (ch * along[i] + sh * side[i]) + sp * up[i]) as Vec3;
-    return { eye: v3madd(this.standing(), up, this.at.h), look, up };
+    return { eye: v3madd(this.feetAt(), up, this.at.h), look, up };
   }
 }
 
