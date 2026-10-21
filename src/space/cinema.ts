@@ -187,11 +187,11 @@ export function arrival(space: Space, after: number): Arrival {
     at(elapsed: number): ArrivalFrame | null {
       if (elapsed < 0 || elapsed >= ARRIVAL_SHOTS[0] + ARRIVAL_SHOTS[1]) return null;
       if (elapsed < ARRIVAL_SHOTS[0]) {
-        // Shot 4: behind and above the ship's back (toward the axis), a little to its side, looking past its nose at
-        // the spindle: the whole ship low in the frame, nose to stern within 6° to 13° below the middle.
+        // Shot 4: behind the ship, above its back (toward the axis) and out to its sunlit side, looking past its nose
+        // at the spindle: the ship in three-quarter view, low and to one side of the frame.
         const clock = guest.docked - lead + elapsed, s = shipAt(h, guest, clock)!;
         const mid = v3add(s.position, v3scale(s.forward, L / 2));
-        const eye = v3add(mid, v3add(v3scale(s.forward, -2.6 * L), v3add(v3scale(s.up, 0.38 * L), v3scale(side, 0.15 * L))));
+        const eye = v3add(mid, v3add(v3scale(s.forward, -2.2 * L), v3add(v3scale(s.up, 0.45 * L), v3scale(side, 0.6 * L))));
         const target: Vec3 = [0, 0, h.exterior.spindle.arms.z];
         return { shot: 3, time: elapsed, length: ARRIVAL_SHOTS[0], eye: toOrbit(eye, clock), target: toOrbit(target, clock), up: dirOrbit(s.up, clock), fov: 50, ship: null, title: 0, clock };
       }
