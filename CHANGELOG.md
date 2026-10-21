@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.071 — The ground-tile speed check moves to the slow tests
+
+- Behind the scenes: the check that a ground tile builds within 40 ms now runs warmed up in the slow test suite, because GitHub's machines vary too much in speed for it to be fair on every change.
+
 ## v0.070 — Ground tiles build a little faster again
 
 - The ground streams in a little faster: the district lookup skips neighbours that cannot be nearest, and a few slow distance calculations in the ground's inner loops are done the quick way.
