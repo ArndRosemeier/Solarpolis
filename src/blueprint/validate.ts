@@ -58,6 +58,9 @@ export function validate(h: Habitat): Finding[] {
   const rl = p.relief, floor = h.profile.floorEnd - h.profile.floorStart;
   if (!(rl.hills >= 0 && rl.terraceStep > 0) || (rl.ringLake && !(rl.ringLake.width > 0 && rl.ringLake.depth > 0 && rl.ringLake.width < floor / 2)))
     out.push({ id: 'relief', severity: 'invalid', message: 'the relief needs hills ≥ 0, a terrace step > 0, and a ring lake narrower than half the floor' });
+  const rv = rl.rivers;
+  if (rv && !(Number.isInteger(rv.count) && rv.count >= 0 && rv.width > 0 && rv.depth > 0 && rv.width < (rl.ringLake?.width ?? Infinity)))
+    out.push({ id: 'relief', severity: 'invalid', message: 'rivers need a whole count ≥ 0, a width and depth > 0, and to be narrower than the lake they run into' });
   if (!climateOf(p.climate)) out.push({ id: 'climate', severity: 'invalid', message: `no climate "${p.climate}" in the catalogue (${Object.keys(CLIMATES).join(', ')})` });
   if (!(p.population >= 0)) out.push({ id: 'population', severity: 'invalid', message: 'the population must not be negative' });
   return out;
