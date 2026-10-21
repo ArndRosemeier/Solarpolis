@@ -2,7 +2,8 @@
  * The one way to turn arrays into an indexed mesh geometry. Every kind's meshes are indexed (the index is part of the
  * shader's cache key, @futuremagic/stage), and each attribute is named as its kind lists it (materials.ts).
  */
-import { BufferAttribute, BufferGeometry, Matrix4, type Mesh, type WebGPURenderer } from 'three/webgpu';
+import { BufferAttribute, BufferGeometry, Matrix4, Mesh, type Material } from 'three/webgpu';
+import type { Stage } from '@futuremagic/stage';
 import type { Vec3 } from '@futuremagic/core';
 import type { Mat3 } from '../space';
 import { Shape } from '../gen/shapes';
@@ -101,7 +102,7 @@ export function freeMesh(mesh: Mesh, owned: Owned = 'all'): void {
  * Whether an attribute is uploaded is read from the renderer's own bookkeeping (`info.memoryMap`, three r186); if that
  * is not there, nothing is let go.
  */
-export function dropUploaded(mesh: Mesh, renderer: WebGPURenderer): number {
+export function dropUploaded(mesh: Mesh, renderer: Stage['renderer']): number {
   const uploaded = (renderer.info as unknown as { memoryMap?: WeakMap<object, unknown> }).memoryMap;
   if (!uploaded) return 0;
   const g = mesh.geometry;
@@ -113,6 +114,25 @@ export function dropUploaded(mesh: Mesh, renderer: WebGPURenderer): number {
     a.array = new Typed(0);
   }
   return bytes;
+}
+
+/**
+ * A static mesh's arrays onto the GPU now, and off the CPU: prepared while visible (three's compile skips hidden
+ * objects), so the renderer uploads them, then hidden (until its view draws it) with the CPU's copies let go
+ * (`dropUploaded`). Returns the bytes let go.
+ */
+export async function uploadStatic(stage: Stage, mesh: Mesh): Promise<number> {
+  await stage.prepare(mesh);
+  mesh.visible = false;
+  return dropUploaded(mesh, stage.renderer);
+}
+
+/** A named mesh placed by `setPose` (its matrix set directly, never from its position and rotation). */
+export function posedMesh(geometry: BufferGeometry, material: Material, name: string): Mesh {
+  const m = new Mesh(geometry, material);
+  m.name = name;
+  m.matrixAutoUpdate = false;
+  return m;
 }
 
 /** The one way to pose a mesh: its matrix from axes (columns: its own axes in the scene) and an origin relative to the eye. */

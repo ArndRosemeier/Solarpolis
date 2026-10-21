@@ -13,7 +13,7 @@ import { Mesh } from 'three/webgpu';
 import { Rng, deriveSeed, v3add, type Vec3 } from '@futuremagic/core';
 import type { Habitat } from '../blueprint';
 import { apply, type Mat3 } from '../space';
-import { ShapeBuilder, setPose, type RGB } from './geometry';
+import { ShapeBuilder, posedMesh, setPose, type RGB } from './geometry';
 import { BORE, LAMP } from './materials';
 import { BORE_LAMPS, BORE_LIGHT, LAMP_GLOW } from './hullShaders';
 
@@ -109,9 +109,7 @@ export class BoreMeshes {
       const g = shape.build();
       // Exactly the kind's attributes, or the mesh is not the shader the Stage warmed (a build when the view starts).
       for (const name of Object.keys(g.attributes)) if (!kind.attributes.includes(name)) g.deleteAttribute(name);
-      const mesh = new Mesh(g, kind.material);
-      mesh.name = `${name} ${what}`;
-      mesh.matrixAutoUpdate = false;
+      const mesh = posedMesh(g, kind.material, `${name} ${what}`);
       mesh.frustumCulled = false;
       return { mesh, turning };
     };

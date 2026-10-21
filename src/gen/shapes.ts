@@ -5,7 +5,7 @@
  *
  * Every face is flat-shaded and counter-clockwise seen from the side its normal points to.
  */
-import type { Vec3 } from '@futuremagic/core';
+import { v3dot, v3sub, type Vec3 } from '@futuremagic/core';
 
 /** Bytes some typed arrays hold (a built tile's, for the memory watchdog). */
 export const bytesOf = (arrays: readonly ArrayBufferView[]): number => arrays.reduce((n, a) => n + a.byteLength, 0);
@@ -16,15 +16,45 @@ export type RGB = [number, number, number];
 const along = (c: Vec3, a: Vec3, x: number, b: Vec3, y: number, n: Vec3, z: number): Vec3 =>
   [c[0] + a[0] * x + b[0] * y + n[0] * z, c[1] + a[1] * x + b[1] * y + n[1] * z, c[2] + a[2] * x + b[2] * y + n[2] * z];
 
+/** A mapped shape's arrays: its mesh, with each vertex's place on its surface (m) and its finish. */
+export interface MappedArrays {
+  positions: Float32Array;
+  normals: Float32Array;
+  colors: Float32Array | null;
+  index: Uint32Array;
+  uvs: Float32Array;
+  finishes: Float32Array;
+}
+
 export class Shape {
   readonly pos: number[] = [];
   readonly nrm: number[] = [];
   readonly col: number[] = [];
   readonly idx: number[] = [];
-  constructor(protected readonly segments: number, readonly colored: boolean) {}
+  /**
+   * With `mapped`: each vertex's place on its surface (m), for patterns drawn in the shader, and its `finish` (what the
+   * surface is made of, a small whole number its kind reads). A band is mapped by arc length around and by height up a
+   * wall (or radius across a floor); every flat face by its plane: x and y across a floor, the height and the
+   * horizontal along a wall, so neighbouring faces of one plane continue each other's pattern.
+   */
+  readonly uv: number[] = [];
+  readonly fin: number[] = [];
+  /** The finish given to the vertices that follow. */
+  finish = 0;
+  constructor(protected readonly segments: number, readonly colored: boolean, readonly mapped = false) {}
 
   /** Vertices so far. */
   get vertices(): number { return this.pos.length / 3; }
+
+  /** One vertex: its place, normal, colour (if coloured) and surface coordinates (if mapped: given, or from its plane). */
+  protected put(p: readonly number[], n: readonly number[], c?: readonly number[], uv?: readonly [number, number]): void {
+    this.pos.push(p[0], p[1], p[2]);
+    this.nrm.push(n[0], n[1], n[2]);
+    if (this.colored) this.col.push(...(c ?? [1, 1, 1]));
+    if (!this.mapped) return;
+    this.uv.push(...(uv ?? planeMap(p, n)));
+    this.fin.push(this.finish);
+  }
 
   /**
    * A surface of revolution between two rings (z0, r0) and (z1, r1), with the given outward normal in (z, r).
@@ -32,13 +62,20 @@ export class Shape {
    * the rings so that is the given normal.
    */
   band(z0: number, r0: number, z1: number, r1: number, nz: number, nr: number, c?: RGB): void {
-    const n = this.segments, base = this.vertices;
+    this.arc(z0, r0, z1, r1, nz, nr, 0, 2 * Math.PI, this.segments, c);
+  }
+
+  /**
+   * A piece of a band: the angles a0 … a1 (counter-clockwise from +x), in `n` steps. Mapped: a wall by arc length
+   * around (at the mean radius) and height, a floor or roof by its plane.
+   */
+  arc(z0: number, r0: number, z1: number, r1: number, nz: number, nr: number, a0: number, a1: number, n: number, c?: RGB): void {
+    const base = this.vertices, wall = Math.abs(nr) >= Math.abs(nz), rm = (r0 + r1) / 2;
     for (let i = 0; i <= n; i++) {
-      const a = (i / n) * 2 * Math.PI, ca = Math.cos(a), sa = Math.sin(a);
+      const a = a0 + ((a1 - a0) * i) / n, ca = Math.cos(a), sa = Math.sin(a);
       for (const [z, r] of [[z0, r0], [z1, r1]]) {
-        this.pos.push(r * ca, r * sa, z);
-        this.nrm.push(nr * ca, nr * sa, nz);
-        if (c) this.col.push(...c);
+        const p = [r * ca, r * sa, z], nn = [nr * ca, nr * sa, nz];
+        this.put(p, nn, c, wall ? [a * rm, z] : planeMap(p, nn));
       }
     }
     for (let i = 0; i < n; i++) {
@@ -55,11 +92,7 @@ export class Shape {
   /** A flat quad from its four corners, counter-clockwise seen from the side `n` points to. */
   quad(a: Vec3, b: Vec3, c: Vec3, d: Vec3, n: Vec3, col?: RGB): void {
     const base = this.vertices;
-    for (const p of [a, b, c, d]) {
-      this.pos.push(p[0], p[1], p[2]);
-      this.nrm.push(n[0], n[1], n[2]);
-      if (this.colored) this.col.push(...(col ?? [1, 1, 1]));
-    }
+    for (const p of [a, b, c, d]) this.put(p, n, col);
     this.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
   }
 
@@ -97,11 +130,7 @@ export class Shape {
     }
     // The cap: a fan around its middle.
     const base = this.vertices, top = along(c, ex, 0, ey, 0, up, height);
-    for (const p of [top, ...Array.from({ length: sides }, (_, k) => ring(k, height))]) {
-      this.pos.push(p[0], p[1], p[2]);
-      this.nrm.push(up[0], up[1], up[2]);
-      if (this.colored) this.col.push(...col);
-    }
+    for (const p of [top, ...Array.from({ length: sides }, (_, k) => ring(k, height))]) this.put(p, up, col);
     for (let k = 0; k < sides; k++) this.idx.push(base, base + 1 + k, base + 1 + ((k + 1) % sides));
   }
 
@@ -135,6 +164,13 @@ export class Shape {
       }
     }
     if (this.colored) this.col.push(...b.col);
+    if (this.mapped) {
+      // Its own surface coordinates if it has them, else from the planes where it now lies.
+      if (b.mapped) { this.uv.push(...b.uv); this.fin.push(...b.fin); } else for (let v = base; v < this.vertices; v++) {
+        this.uv.push(...planeMap(this.pos.slice(v * 3, v * 3 + 3), this.nrm.slice(v * 3, v * 3 + 3)));
+        this.fin.push(this.finish);
+      }
+    }
     for (const i of b.idx) this.idx.push(base + i);
   }
 
@@ -147,6 +183,21 @@ export class Shape {
       index: new Uint32Array(this.idx),
     };
   }
+
+  /** The arrays with the surface coordinates and finishes (a `mapped` shape). */
+  mappedArrays(): MappedArrays {
+    return { ...this.arrays(), uvs: new Float32Array(this.uv), finishes: new Float32Array(this.fin) };
+  }
+}
+
+/**
+ * Where a point lies on the plane of its face (m): across a floor or roof (normal mostly along z) its x and y; on a
+ * wall its run along the horizontal in the wall (z × n) and its height.
+ */
+export function planeMap(p: readonly number[], n: readonly number[]): [number, number] {
+  if (Math.abs(n[2]) > 0.7) return [p[0], p[1]];
+  const l = Math.hypot(n[0], n[1]) || 1;
+  return [(p[1] * n[0] - p[0] * n[1]) / l, p[2]];
 }
 
 /**
@@ -174,3 +225,17 @@ export function icosphere(subdivisions: number): { verts: Vec3[]; faces: [number
   }
   return { verts, faces };
 }
+
+/** A local frame: its axes and its origin, in the frame it sits in (a part on the hull, a landmark on the land). */
+export interface Place {
+  ex: Vec3;
+  ey: Vec3;
+  ez: Vec3;
+  at: Vec3;
+}
+
+/** A point given in a place, in the frame the place sits in. */
+export const outOfPlace = (p: Place, q: Vec3): Vec3 => [0, 1, 2].map((a) => p.at[a] + p.ex[a] * q[0] + p.ey[a] * q[1] + p.ez[a] * q[2]) as Vec3;
+
+/** A point of the frame a place sits in, in the place. */
+export const intoPlace = (p: Place, v: Vec3): Vec3 => { const d = v3sub(v, p.at); return [v3dot(d, p.ex), v3dot(d, p.ey), v3dot(d, p.ez)]; };

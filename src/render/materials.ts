@@ -29,6 +29,7 @@ import { floorSurface, woodsFromAfar } from './groundShaders';
 import { RISE_RANGE } from '../gen/tiles';
 import { filtered } from './textures';
 import { cloudMarch, cloudShade } from './cloudShaders';
+import { builtAlbedo, roofHorizons } from './builtShaders';
 import { boreColor, flameColor, hardwareColor, lampColor, radiatorColor, skinColor, skinDetailColor, skinShown } from './hullShaders';
 
 /** The air's look, shared by every kind (uniforms: changing them never builds a shader). */
@@ -614,7 +615,7 @@ export function standInAttribute(g: BufferGeometry, name: string): boolean {
   else if (name === 'uv') g.setAttribute('uv', new Float32BufferAttribute(new Array(6).fill(0), 2));
   else if (name === 'floorA' || name === 'floorB') g.setAttribute(name, new Uint8BufferAttribute(new Array(12).fill(name === 'floorA' ? 255 : 0), 4, true));
   else if (name === 'canopy') g.setAttribute('canopy', new Float32BufferAttribute([0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0], 4));
-  else if (name === 'wind' || name === 'occ' || name === 'tint' || name === 'kind') g.setAttribute(name, new Float32BufferAttribute([0, 0, 0], 1));
+  else if (name === 'wind' || name === 'occ' || name === 'tint' || name === 'kind' || name === 'finish') g.setAttribute(name, new Float32BufferAttribute([0, 0, 0], 1));
   else return false;
   return true;
 }
@@ -640,6 +641,23 @@ export function outsideKinds(): readonly Kind[] {
   return [SKY, STARS, SKIN, SKIN_DETAIL, RADIATOR, HARDWARE, FLAME, BORE, LAMP];
 }
 
+/**
+ * Built things: the landmarks (gen/landmarks.ts; the pavilion, gen/pavilion.ts). Vertex albedo with its finish's
+ * pattern in metres over it (builtShaders.ts: `uv` the surface's own coordinates, `finish` what it is made of), lit by
+ * the sunline as far as the mesh's round roof lets it in (`userData.roof`: outer radius, eaves' height, oculus radius
+ * and height, in the mesh's own frame; none if absent). They cast shadows.
+ */
+export const BUILT = kind('built', ['position', 'normal', 'color', 'uv', 'finish'], { cast: true, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial();
+  const roof = uniform(new Vector4()).onObjectUpdate(({ object }) => (object?.userData.roof as Vector4 | undefined) ?? NO_ROOF);
+  const h = roofHorizons(positionLocal, roof), n = normalize(normalWorld);
+  const lit = sunlit(h.past, n).add(sunlit(h.back, n)).add(sunlit(h.oculus, n));
+  const albedo = builtAlbedo(vertexColor().rgb, uv(), attribute<'float'>('finish', 'float'));
+  m.colorNode = throughAir(albedo.mul(lit));
+  return m;
+});
+const NO_ROOF = new Vector4(0, 0, 0, 0);
+
 /** Things the physics moves (for now the debug menu's test balls): one colour, lit by the sunline, through the air. */
 export const BALL = kind('ball', ['position', 'normal'], { cast: true, receive: false }, () => {
   const m = new MeshBasicNodeMaterial();
@@ -649,5 +667,5 @@ export const BALL = kind('ball', ['position', 'normal'], { cast: true, receive: 
 
 /** Every kind, for the Stage's warm-up. */
 export function allKinds(): readonly Kind[] {
-  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS, STONE, CLOUDS_FAR, CLOUDS_NEAR];
+  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS, STONE, BUILT, CLOUDS_FAR, CLOUDS_NEAR];
 }

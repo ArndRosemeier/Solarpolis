@@ -74,6 +74,16 @@ export interface CloudLayer {
   wind: { along: number; around: number };
 }
 
+/**
+ * The landmarks: the few buildings on a surface that is otherwise park, at most one to a district, each one seen from
+ * across the habitat and so a way to find one's bearings. `size` is how wide the largest one is (m); `handrail` is how
+ * high a railing stands, the one human size, from which steps, seats, posts and benches follow (m).
+ */
+export interface Landmarks {
+  size: number;
+  handrail: number;
+}
+
 export interface Relief {
   /** The highest hills on the floor, above the mean surface (m). */
   hills: number;
@@ -193,6 +203,8 @@ export interface HabitatParams {
   relief: Relief;
   /** The cloud layer, or null for a sky without clouds (too small a habitat for them, or none wanted). */
   clouds: CloudLayer | null;
+  /** The landmarks' scale, or null for a habitat with none. */
+  landmarks: Landmarks | null;
   day: DayCycle;
   exterior: ExteriorShape;
   /** The climate and biome profile, by name (`CLIMATES` in climates.ts; laid out by the ecology stage). */

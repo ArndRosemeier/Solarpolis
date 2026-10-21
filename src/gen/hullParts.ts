@@ -20,7 +20,9 @@
  */
 import { Rng, deriveSeed, hash3f, v3add, v3cross, v3dot, v3len, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
 import type { Habitat } from '../blueprint';
-import { Shape, bytesOf, type RGB } from './shapes';
+import { Shape, bytesOf, intoPlace, outOfPlace, type Place, type RGB } from './shapes';
+
+export type { Place };
 import { cellsOf, wantedCells, type Grid, type GridEye, type TileKey, type WantedTile } from './detailTree';
 import { buildHullTile, skinEye, skinGrid, type HullTile } from './hullDetail';
 import type { Skin } from './skin';
@@ -28,13 +30,6 @@ import type { Skin } from './skin';
 /** Which frame a part is drawn in: the spinning body's, or the despun spindle's. */
 export type PartFrame = 'body' | 'spindle';
 
-/** A part's own axes and origin in its frame. */
-export interface Place {
-  ex: Vec3;
-  ey: Vec3;
-  ez: Vec3;
-  at: Vec3;
-}
 
 interface Common {
   id: string;
@@ -171,8 +166,6 @@ const COLOR: Record<string, RGB> = {
 };
 
 const X: Vec3 = [1, 0, 0], Y: Vec3 = [0, 1, 0], Z: Vec3 = [0, 0, 1];
-const at3 = (p: Place, q: Vec3): Vec3 => [0, 1, 2].map((a) => p.at[a] + p.ex[a] * q[0] + p.ey[a] * q[1] + p.ez[a] * q[2]) as Vec3;
-const local = (p: Place, v: Vec3): Vec3 => { const d = v3sub(v, p.at); return [v3dot(d, p.ex), v3dot(d, p.ey), v3dot(d, p.ez)]; };
 
 /** The antennas: dishes on the despun spindle's tip, one on the mast's tip, and the mast's three whips' lengths. */
 export function antennas(h: Habitat): { dishes: { id: string; frame: PartFrame; diameter: number; boom: number; place: Place }[]; whips: number[] } {
@@ -230,7 +223,7 @@ export const wholeTile = (p: DetailPart): TileKey => ({ level: p.grid.root, i: 0
 export function partEye(p: DetailPart, skin: Skin, eye: Vec3): GridEye {
   const g = p.grid;
   if (p.kind === 'skin') return skinEye(skin, eye);
-  const q = local(p.place, eye), rho = Math.hypot(q[0], q[1]), turn = Math.atan2(q[1], q[0]) / (2 * Math.PI), u = (turn - Math.floor(turn)) * g.nU;
+  const q = intoPlace(p.place, eye), rho = Math.hypot(q[0], q[1]), turn = Math.atan2(q[1], q[0]) / (2 * Math.PI), u = (turn - Math.floor(turn)) * g.nU;
   if (p.kind === 'plating') return { u, v: (q[2] - p.from) / g.edgeV, h: Math.max(0, rho - p.radius) };
   if (p.kind === 'truss') return { u: 0.5, v: q[2] / g.edgeV, h: Math.max(0, rho - p.width / 2) };
   // A dish: the nearer of its bowl and its feed (the feed belongs to the middle cell).
@@ -265,7 +258,7 @@ export function buildPartTile(h: Habitat, skin: Skin, p: DetailPart, key: TileKe
     const t = buildHullTile(skin, key);
     return { part: p.id, key, origin: t.origin, glass: t.glass, parts: t.parts };
   }
-  const origin = at3(p.place, middleOf(p, key)), shape = new Shape(16, true), detail = partDetail(key.level);
+  const origin = outOfPlace(p.place, middleOf(p, key)), shape = new Shape(16, true), detail = partDetail(key.level);
   const cells = cellsOf(p.grid, key).map(({ i, j }) => [i, j] as const);
   if (p.kind === 'plating') plating(shape, h, p, cells, detail);
   else if (p.kind === 'truss') truss(shape, h, p, cells.map(([, j]) => j), detail);
