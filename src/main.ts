@@ -237,6 +237,28 @@ go('The foot of the port endcap', (h) => h.profile.floorEnd - 20);
 // Where the sunline meets the endcaps: the axis at the wild end, the dock hub at the port end.
 go('Near the wild endcap\'s tip', (h) => h.profile.floorStart * 0.05);
 go('Near the port endcap\'s hub', (h) => h.profile.length - (h.profile.length - h.profile.floorEnd) * 0.05);
+/**
+ * Viewpoints high over the land, for judging how the interior reads from afar (docs/far-view.md): the eye `up` shares of
+ * the radius over the floor's middle, looking at a ground point `around` radians further round and `along` radii further
+ * along the axis. Every distance is a share of the habitat's own size.
+ */
+const viewpoint = (label: string, up: number, around: number, along: number, s0 = 0.5): void => debug.add({
+  label, group: 'Go', run: () => {
+    const h = lab.habitat, v = view();
+    if (!v || !h) return;
+    const { profile } = h, theta = v.walker.at.theta;
+    const s = profile.floorStart + (profile.floorEnd - profile.floorStart) * s0;
+    const to = Math.min(profile.length, Math.max(0, s + along * h.radius));
+    const eye = toWorld(profile, { theta, s, h: up * h.radius }), at = toWorld(profile, { theta: theta + around, s: to, h: 0 });
+    const d = Math.hypot(at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]);
+    v.floatAt(eye, [(at[0] - eye[0]) / d, (at[1] - eye[1]) / d, (at[2] - eye[2]) / d]);
+  },
+});
+viewpoint('Fly: low over the floor, looking along it', 0.05, 0, 2.5);
+viewpoint('Fly: a quarter of the way up, looking across the curve', 0.25, Math.PI / 2, 0.4);
+viewpoint('Fly: halfway up, looking at the far side', 0.5, Math.PI, 0.6);
+viewpoint('Fly: high up, looking down', 0.6, 0.05, 0.25);
+viewpoint('Fly: near the axis at the wild end, looking along the tube', 0.9, 0.02, 3, 0);
 debug.add({ label: 'Travel 10× faster (toggle)', group: 'Go', run: () => { const v = view(); if (v) v.boost = v.boost === 1 ? 10 : 1; } });
 debug.addInfo(() => view()?.clockLine() ?? '');
 /** The next of a cycle of clock speeds. */

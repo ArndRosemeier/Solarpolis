@@ -14,7 +14,7 @@
  */
 import { DataArrayTexture, Vector3, type Node } from 'three/webgpu';
 import { filtered } from './textures';
-import { abs, attribute, clamp, dFdx, dFdy, float, int, max, min, mix, normalize, positionWorld, pow, select, smoothstep, texture, uniform, uniformArray, vec2, vec3 } from 'three/tsl';
+import { abs, attribute, clamp, dFdx, dFdy, exp, float, floor, int, length, log, max, min, mix, mx_noise_float, fract, dot, normalize, positionWorld, pow, select, smoothstep, sqrt, texture, uniform, uniformArray, vec2, vec3 } from 'three/tsl';
 import { FLOOR_LAYERS, type HabitatParams } from '../blueprint';
 import type { WorkerPool } from '../workers/pool';
 import { GROUND_LAYERS, GROUND_TEX } from '../gen/groundTex';
@@ -128,4 +128,73 @@ export function floorSurface(color: Node<'vec3'>, normal: Node<'vec3'>): { color
   const near = albedo.mul(color.div(max(mean, vec3(1e-3, 1e-3, 1e-3))));
   const bump = mix(A.slope, B.slope, k);
   return { color: near, normal: normalize(normal.add(bump.sub(normal.mul(bump.dot(normal))))) };
+}
+
+/**
+ * Three numbers in 0 … 1 for a lattice cell (whole-number coordinates, up to some ten thousand): a few multiplies and
+ * fractions (Dave Hoskins' hash without sine), cheap enough to run for eight cells per pixel of ground.
+ */
+function cellHash(c: Node<'vec3'>): Node<'vec3'> {
+  const a = fract(c.mul(vec3(0.1031, 0.103, 0.0973)));
+  const b = a.add(dot(a, a.yxz.add(33.33)));
+  return fract(b.xxy.add(b.yxx).mul(b.zyx));
+}
+
+/** A crown's radius in its cell (the cells are the trees' spacing apart), for a mean-sized tree. */
+const CROWN = 0.8;
+/**
+ * With a crown in every cell by chance P, the share of the ground they cover is 1 − e^(−CLOSE · P): the cells are a
+ * jittered 3D lattice sliced by the ground, so crowns overlap and leave gaps as a real canopy does.
+ */
+const CLOSE = 2.14;
+/** The crowns' light, at their tops and its mean over a crown: the hull level's crowns (HULL) look the same on average. */
+const CROWN_TOP = 0.85;
+const CROWN_MEAN = 0.5;
+/** The floor between the crowns of a closed wood keeps this share of its light. */
+const GAP_SHADE = 0.25;
+
+/**
+ * The woods from afar (GROUND, past the trees' last level, docs/far-view.md): crowns and the shaded gaps between them,
+ * clumps, and stands that thin into glades, drawn per pixel from a tile point's crown `cover` (0 … 1) and the trees'
+ * `spacing` (m). `ground` is the floor's colour from afar, `crown` the crowns'. Each scale fades to its mean once a
+ * pixel's footprint would make it shimmer, so a wood seen across the habitat has the light of the same wood seen close.
+ * Closed woods stay closed and open land stays open: the stands and clumps only move the cover where it is between.
+ */
+export function woodsFromAfar(ground: Node<'vec3'>, crown: Node<'vec3'>, cover: Node<'float'>, spacing: Node<'float'>, world: Node<'vec3'>): Node<'vec3'> {
+  // The pixel's footprint on the ground (m).
+  const foot = max(length(dFdx(positionWorld)), length(dFdy(positionWorld)));
+  const cell = max(spacing, 2);
+  const shown = (size: Node<'float'>): Node<'float'> => float(1).sub(smoothstep(0.15, 0.45, foot.div(size)));
+  // Stands (two dozen trees across), groves (ten) and clumps (five): the cover wanders where the woods are open or
+  // thinning, so their edges break into groves and clearings rather than fading over the tile's points.
+  const between = sqrt(clamp(cover.mul(float(1).sub(cover)), 0, 0.25)).mul(2);
+  const stands = mx_noise_float(world.div(cell.mul(24))).mul(shown(cell.mul(24)));
+  const groves = mx_noise_float(world.div(cell.mul(10)).add(vec3(3.7, 11.2, 1.9))).mul(shown(cell.mul(10)));
+  const clumps = mx_noise_float(world.div(cell.mul(5)).add(vec3(17.3, 5.1, 9.7))).mul(shown(cell.mul(5)));
+  const local = clamp(cover.add(stands.mul(0.8).add(groves.mul(0.55)).add(clumps.mul(0.4)).mul(between)), 0, 1);
+  // The crowns: one per cell by chance, so that together they cover `local`; the nearest one decides.
+  const chance = clamp(log(max(float(1).sub(local.mul(0.999)), 1e-3)).negate().div(CLOSE), 0, 1);
+  const p = world.div(cell), base = floor(p.sub(0.5));
+  let q: Node<'float'> = float(9);
+  for (let o = 0; o < 8; o++) {
+    const c = base.add(vec3(o & 1, (o >> 1) & 1, (o >> 2) & 1));
+    const jitter = cellHash(c);
+    const there = fract(jitter.x.mul(7.31).add(jitter.y.mul(3.17)).add(jitter.z.mul(5.73))).lessThan(chance);
+    const d = length(p.sub(c.add(jitter.mul(0.6).add(0.2)))).div(jitter.z.mul(0.3).add(0.85).mul(CROWN));
+    q = select(there, min(q, d), q);
+  }
+  const edge = foot.div(cell.mul(CROWN)).add(0.04);
+  const inside = float(1).sub(smoothstep(float(1).sub(edge), float(1).add(edge), q));
+  // Lit tops, darker rims (the sunline is overhead); the floor between them in their shade.
+  const dome = clamp(float(1).sub(q.mul(q).mul(0.5)), 0.5, 1);
+  // A dome's mean over a crown is 0.75 (q² is even over its disc): the light runs from the mean there to the top's.
+  const slope = (CROWN_TOP - CROWN_MEAN) / 0.25;
+  const crowns = crown.mul(dome.mul(slope).add(CROWN_TOP - slope));
+  const gap = ground.mul(mix(float(1), float(GAP_SHADE), smoothstep(0.15, 0.6, local)));
+  const near = mix(gap, crowns, inside);
+  // Beyond the crowns' size: their mean over the covered share.
+  const covered = float(1).sub(exp(chance.mul(-CLOSE)));
+  const far = mix(gap, crown.mul(CROWN_MEAN), covered);
+  // The land itself is never one flat colour: stands and clumps tint it a little, woods and open ground alike.
+  return mix(near, far, smoothstep(0.35, 1.2, foot.div(cell))).mul(stands.mul(0.1).add(groves.mul(0.06)).add(clumps.mul(0.05)).add(1));
 }

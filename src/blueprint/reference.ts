@@ -12,7 +12,7 @@ export const REFERENCE: HabitatParams = {
   floorGravity: 9.81,
   sunDistanceAu: 1,
   axisOrientation: 'side-on',
-  air: { floorPressure: 101325, temperature: 288, gasConstant: 287 },
+  air: { floorPressure: 101325, temperature: 288, gasConstant: 287, hazeDistance: 60000 },
   layers: { soilMin: 1, soilMax: 5, ceilingDeck: 3, living: 20, floorDeck: 2, service: 10, solarSkin: 0.5 },
   // Refined asteroid steel, as the design doc has it.
   hull: { density: 7800, strength: 1.5e9, safetyFactor: 1.5 },
