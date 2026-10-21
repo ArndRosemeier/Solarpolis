@@ -3,11 +3,12 @@
  * passes an `unusual` one through with its findings shown, so small and odd cylinders stay possible.
  */
 import type { Habitat } from './derive';
+import { CLIMATES, climateOf } from './climates';
 
 export type Severity = 'invalid' | 'unusual';
 
 export interface Finding {
-  id: 'spin' | 'hull' | 'hull-thick' | 'axis-air' | 'haze' | 'heat' | 'light' | 'layers' | 'population' | 'sunline' | 'relief' | 'day' | 'brims';
+  id: 'spin' | 'hull' | 'hull-thick' | 'axis-air' | 'haze' | 'heat' | 'light' | 'layers' | 'population' | 'sunline' | 'relief' | 'day' | 'brims' | 'climate';
   severity: Severity;
   message: string;
 }
@@ -55,6 +56,7 @@ export function validate(h: Habitat): Finding[] {
   const rl = p.relief, floor = h.profile.floorEnd - h.profile.floorStart;
   if (!(rl.hills >= 0 && rl.terraceStep > 0) || (rl.ringLake && !(rl.ringLake.width > 0 && rl.ringLake.depth > 0 && rl.ringLake.width < floor / 2)))
     out.push({ id: 'relief', severity: 'invalid', message: 'the relief needs hills ≥ 0, a terrace step > 0, and a ring lake narrower than half the floor' });
+  if (!climateOf(p.climate)) out.push({ id: 'climate', severity: 'invalid', message: `no climate "${p.climate}" in the catalogue (${Object.keys(CLIMATES).join(', ')})` });
   if (!(p.population >= 0)) out.push({ id: 'population', severity: 'invalid', message: 'the population must not be negative' });
   return out;
 }
