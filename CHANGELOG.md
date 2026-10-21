@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.018 — The mouse wheel shows you
+
+- On foot, the mouse wheel glides the camera smoothly from your own eyes out to behind you and back, instead of the V key. Flying still shows no body.
+
 ## v0.017 — Shadows near you
 
 - You and things near you cast shadows on the ground. The sunline is a long tube of light, so shadows are sharp across the cylinder and soft along it, crisp where they touch the ground and blurred higher up.
