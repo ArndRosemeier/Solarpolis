@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.030 — Real-GPU screenshots
+
+- Behind the scenes: `npm run shots` renders any branch on Arnd's PC in real WebGPU, checks every shader the game compiles, and publishes the pictures and a report to the `renders` branch, so every change can be looked at as it really draws.
+
 ## v0.029 — Real trees, and woods that never vanish
 
 - The trees are new, grown like the ones in Scale: branching wood with bark textures, leaf cards drawn from real twigs (oak, linden, maple, birch, chestnut, plane, ginkgo, pines, cypress) plus new willow, olive, heather and holm oak, all moving in the wind.

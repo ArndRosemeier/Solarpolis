@@ -10,3 +10,6 @@ looks-out/
 /.gate-lock/
 /worktrees/
 .actors-pack/
+
+# Real-GPU screenshots (scripts/shots)
+/.render/
