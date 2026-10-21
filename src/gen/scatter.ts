@@ -11,9 +11,13 @@
  * crown hull), in multiples of its sight unit (`unit`); neighbouring levels hand it over in a dithered band. Each level
  * has its own grid of cells, larger the farther it reaches, so the number of cells drawn stays small. Pure: runs in the
  * generation workers.
+ *
+ * Ground cover (the climate's `cover`: grass tufts) is planted the same way, but where its floor layer is, as densely
+ * as the layer's share of the ground (`coverChance`), and drawn at the first two levels only, out to `COVER_FADE`
+ * metres; past them the floor's own texture is the cover.
  */
 import { hash3f, deriveSeed } from '@futuremagic/core';
-import { fromWorld, toWorld, wrapAngle, type PlantSpec, type Vec3 } from '../blueprint';
+import { FLOOR_LAYERS, fromWorld, toWorld, wrapAngle, type CoverSpec, type PlantSpec, type Vec3 } from '../blueprint';
 import { TREE_HEIGHT, type Ecology } from './ecology';
 import { horizonAt } from './horizon';
 import { bytesOf } from './shapes';
@@ -33,18 +37,29 @@ export const LEVELS = [
 ] as const;
 export type Level = 0 | 1 | 2;
 
+/**
+ * Ground cover's bands (m from the eye) at the full and the light level: the full tufts out to a dozen metres, the light
+ * ones on to forty, where they sink into the floor (`userData.sink` of their meshes) and its texture carries on.
+ */
+export const COVER_FADE = [[-2, -1, 12, 16], [12, 16, 32, 40]] as const;
+/** The lattice (m) the cover's floor layer is read on and blended between: finer than any patch edge or shore. */
+export const COVER_GRID = 2;
+
 /** A plant's sight unit (m): its greatest height, but never less than a small tree's, so shrubs are seen too. */
 export const unit = (spec: PlantSpec): number => Math.max(spec.height[1], 6);
 /** Plant cells: the smallest and largest side (m). */
 const CELL_MIN = 16;
 const CELL_MAX = 512;
 
-/** One plant of the climate: the biome it grows in, its spec, its index in `plantsOf`. */
+/** One plant of the climate: the biome it grows in (or the floor layer, for cover), its spec, its index in `plantsOf`. */
 export interface Species {
   id: number;
+  /** The biome it grows in; -1 for ground cover. */
   biome: number;
-  spec: PlantSpec;
-  /** Per level: the side of its cells (m), and its bands (m from the eye: fade in x..y, out z..w). */
+  /** Ground cover: its floor layer's index in FLOOR_LAYERS; -1 for a biome's plant. */
+  on: number;
+  spec: PlantSpec | CoverSpec;
+  /** Per level it is drawn at (all of `LEVELS`, or the first two for cover): the side of its cells (m), and its bands (m from the eye: fade in x..y, out z..w). */
   cell: number[];
   band: [number, number, number, number][];
   /** How far it is seen at all (m). */
@@ -71,12 +86,19 @@ export function plantsOf(ecology: Ecology): Species[] {
       const u = unit(spec);
       const band = LEVELS.map((l) => l.fade.map((f) => f * u) as [number, number, number, number]);
       if (spec.height[1] >= TREE_HEIGHT) [band[LEVELS.length - 1][2], band[LEVELS.length - 1][3]] = woods;
-      const cell = LEVELS.map((l, k) => Math.min(CELL_MAX, Math.max(CELL_MIN, 2 ** Math.round(Math.log2(band[k][3] / l.across)))));
-      out.push({ id: out.length, biome, spec, cell, band, seen: band[LEVELS.length - 1][3] });
+      out.push({ id: out.length, biome, on: -1, spec, cell: cellsFor(band), band, seen: band[LEVELS.length - 1][3] });
     }
   });
+  for (const spec of ecology.climate.cover) {
+    const band = COVER_FADE.map((f) => [...f] as [number, number, number, number]);
+    out.push({ id: out.length, biome: -1, on: FLOOR_LAYERS.indexOf(spec.on), spec, cell: cellsFor(band), band, seen: band[band.length - 1][3] });
+  }
   return out;
 }
+
+/** The side of a plant's cells at each level it is drawn at: a few across its far edge. */
+const cellsFor = (band: readonly (readonly number[])[]): number[] =>
+  band.map((b, k) => Math.min(CELL_MAX, Math.max(CELL_MIN, 2 ** Math.round(Math.log2(b[3] / LEVELS[k].across)))));
 
 /** A plant cell: one species at one level, a row along s (`j`) and a column around the axis (`i`). */
 export interface CellKey {
@@ -110,6 +132,7 @@ export interface NearCell {
 
 /** The cells of a plant at a level that may hold something it draws seen from `eye` (world), nearest first. */
 export function cellsNear(ecology: Ecology, sp: Species, level: Level, eye: Vec3): NearCell[] {
+  if (level >= sp.band.length) return []; // not drawn at this level
   const { profile } = ecology.terrain.habitat;
   const at = fromWorld(profile, eye[0], eye[1], eye[2]);
   const [near, , , far] = sp.band[level], cell = sp.cell[level], tall = sp.spec.height[1];
@@ -163,6 +186,7 @@ export function plantCell(ecology: Ecology, plants: readonly Species[], k: CellK
   const shapes = LEVELS[k.level].variants;
   const lists: number[][] = Array.from({ length: shapes }, () => []);
   const shares = new Float32Array(ecology.climate.biomes.length);
+  const cover = sp.on >= 0 ? coverChance(ecology, sp.on) : null;
   const gap = spec.spacing;
   for (let row = Math.floor(b.s0 / gap); row * gap < b.s1; row++) {
     const s0 = row * gap, r = profile.at(Math.min(profile.length, s0 + gap / 2)).r;
@@ -172,13 +196,16 @@ export function plantCell(ecology: Ecology, plants: readonly Species[], k: CellK
     for (let col = Math.floor(b.theta0 / dTheta); col * dTheta < b.theta1; col++) {
       const it = ((col % n) + n) % n;
       const f = (q: number) => hash3f(seed, row, it, q);
-      const ps = spec.rows ? s0 : s0 + f(0) * gap, pt = spec.rows ? col * dTheta : (col + f(1)) * dTheta;
+      const rows = 'rows' in spec && spec.rows;
+      const ps = rows ? s0 : s0 + f(0) * gap, pt = rows ? col * dTheta : (col + f(1)) * dTheta;
       if (ps < b.s0 || ps >= b.s1 || pt < b.theta0 || pt >= b.theta1 || ps > profile.length) continue;
+      if (cover && f(2) >= cover(pt, ps)) continue;
       const ground = t.heightAt(pt, ps);
       if (t.standAt(pt, ps) > ground + 0.05) continue; // under water
-      const slope = slopeAt(ecology, pt, ps, ground, gap);
-      ecology.biomesAt(pt, ps, ground, slope, shares);
-      if (f(2) >= shares[sp.biome]) continue;
+      if (!cover) {
+        ecology.biomesAt(pt, ps, ground, slopeAt(ecology, pt, ps, ground, gap), shares);
+        if (f(2) >= shares[sp.biome]) continue;
+      }
       const p = toWorld(profile, { theta: pt, s: ps, h: ground });
       const shape = Math.min(shapes - 1, Math.floor(f(5) * shapes));
       lists[shape].push(p[0] - origin[0], p[1] - origin[1], p[2] - origin[2], spec.height[0] + (spec.height[1] - spec.height[0]) * f(3), f(4) * 2 * Math.PI);
@@ -187,6 +214,37 @@ export function plantCell(ecology: Ecology, plants: readonly Species[], k: CellK
   const instances = lists.map((l) => new Float32Array(l));
   const horizon = horizonAt(t, (b.theta0 + b.theta1) / 2, (b.s0 + b.s1) / 2);
   return { key: k, origin, instances, count: instances.reduce((n, a) => n + a.length / PLANT_STRIDE, 0), horizon };
+}
+
+/**
+ * How much of the ground a floor layer covers at a point (0 … 1), read on the `COVER_GRID` lattice (rows along s, as
+ * many columns around as fit) and blended between its four nearest points: the same at a point whichever cell asks,
+ * and a few hundred floor readings for a cell rather than one per tuft. Each call keeps its own readings.
+ */
+export function coverChance(ecology: Ecology, layer: number): (theta: number, s: number) => number {
+  const t = ecology.terrain, { profile } = t.habitat, G = COVER_GRID, L = FLOOR_LAYERS.length;
+  const read = new Map<number, number>(), rgb = new Float32Array(3), floor = new Uint8Array(L);
+  const rows = Math.ceil(profile.length / G) + 1;
+  const columns = (k: number) => Math.max(1, Math.round(profile.circumference(Math.min(profile.length, k * G)) / G));
+  const reading = (k: number, c: number, n: number): number => {
+    const id = k + rows * c;
+    let v = read.get(id);
+    if (v === undefined) {
+      const theta = (2 * Math.PI * c) / n, s = Math.min(profile.length, k * G), ground = t.heightAt(theta, s);
+      ecology.colorAt(theta, s, ground, slopeAt(ecology, theta, s, ground, G), rgb, 0, undefined, floor);
+      v = floor[layer] / 255;
+      read.set(id, v);
+    }
+    return v;
+  };
+  const inRow = (k: number, theta: number): number => {
+    const n = columns(k), u = (wrapAngle(theta) / (2 * Math.PI)) * n, c = Math.floor(u), f = u - c;
+    return reading(k, c % n, n) * (1 - f) + reading(k, (c + 1) % n, n) * f;
+  };
+  return (theta, s) => {
+    const v = s / G, k = Math.floor(v), f = v - k;
+    return inRow(k, theta) * (1 - f) + inRow(k + 1, theta) * f;
+  };
 }
 
 /** Bytes a planted cell holds (memory watchdog). */

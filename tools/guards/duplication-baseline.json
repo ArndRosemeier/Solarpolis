@@ -252,10 +252,6 @@
     "reason": "gen/trees.ts is ported from Scale's vegetation.ts, which used three's Vector3; its small mutable vector V (three cannot be imported in gen/) keeps Vector3's method names so the ported code reads line for line like the original."
   },
   {
-    "key": "same name: solarpolis/render/outside.ts#info + solarpolis/render/plants.ts#info",
-    "reason": "info() is each view's line in the debug menu (debug.addInfo): the plants' cells and draws, the outside's bodies. Same role, different content."
-  },
-  {
     "key": "idiom: [.s .theta] in solarpolis/gen/ecology.ts + solarpolis/render/view.ts + solarpolis/world/flyer.ts + solarpolis/world/walker.ts",
     "reason": "(theta, s) is the habitat's one surface coordinate pair (around the axis, along the profile); reading both fields of a place is how every user of a place starts, not a copied helper."
   },

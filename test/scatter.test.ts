@@ -81,14 +81,14 @@ test('scatter: cells are bigger for plants seen farther, and for farther levels'
   const { plants } = cellAt('oak');
   const by = (n: string): Species => plants.find((p) => p.spec.name === n)!;
   assert.ok(by('oak').cell[0] >= by('reeds').cell[0] && by('oak').seen > by('reeds').seen);
-  for (const sp of plants) assert.ok(sp.cell[0] <= sp.cell[1] && sp.cell[1] <= sp.cell[2], `${sp.spec.name}: ${sp.cell}`);
+  for (const sp of plants) assert.ok(sp.cell.every((c, k) => !k || sp.cell[k - 1] <= c), `${sp.spec.name}: ${sp.cell}`);
 });
 
 test('scatter: each level takes a plant over exactly where the one before lets it go, and woods hand over to the canopy', () => {
   for (const climate of ['temperate-mild', 'mediterranean']) {
     const eco = makeEcology(makeTerrain(derive(withParams({ climate })))), woods = canopyBand(eco);
     for (const sp of plantsOf(eco)) {
-      for (let k = 1; k < LEVELS.length; k++) assert.deepEqual(sp.band[k].slice(0, 2), sp.band[k - 1].slice(2), `${sp.spec.name} level ${k}`);
+      for (let k = 1; k < sp.band.length; k++) assert.deepEqual(sp.band[k].slice(0, 2), sp.band[k - 1].slice(2), `${sp.spec.name} level ${k}`);
       for (const b of sp.band) assert.ok(b[0] < b[1] && b[1] <= b[2] && b[2] < b[3], `${sp.spec.name}: ${b}`);
       if (sp.spec.height[1] >= TREE_HEIGHT) assert.deepEqual(sp.band[LEVELS.length - 1].slice(2), woods, `${sp.spec.name}: hulls last until the canopy`);
     }
