@@ -2,6 +2,11 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.069 — The floor has its valleys, and the entrances their courts
+
+- The floor now rises from each valley's middle to the ridges between the valleys, so each valley is a long room: a broad meadow floor with its river down the middle, and rolling, drier ground up its sides, where heath takes the driest ridge tops.
+- Every entrance to the living layer digs its court into the ground: a level floor a few metres under the lowest ground on its rim, laid in gravel and stone, with a steep wall up to the rim and no trees over it or round it. Its walls and stairs come next.
+
 ## v0.068 — The Lift Stair climbs the Gate
 
 - The Gate at the port end now has its Lift Stair: a stone stair from a forecourt on the floor all the way up to near the hub, about 13,000 steps over almost 4 km of height in the reference habitat.
