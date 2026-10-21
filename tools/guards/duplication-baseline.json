@@ -274,5 +274,25 @@
   {
     "key": "same name: solarpolis/render/hullDetail.ts#follow + solarpolis/render/plants.ts#follow",
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/hullDetail.ts#follow + solarpolis/render/traffic.ts#follow",
+    "reason": "The ship traffic view (render/traffic.ts) has the views' own interface (follow each frame, dispose), like the streamed and necklace views, with a body of its own."
+  },
+  {
+    "key": "same name: solarpolis/render/necklace.ts#dispose + solarpolis/render/traffic.ts#dispose",
+    "reason": "The ship traffic view (render/traffic.ts) has the views' own interface (follow each frame, dispose), like the streamed and necklace views, with a body of its own."
+  },
+  {
+    "key": "same name: solarpolis/render/necklace.ts#follow + solarpolis/render/traffic.ts#follow",
+    "reason": "The ship traffic view (render/traffic.ts) has the views' own interface (follow each frame, dispose), like the streamed and necklace views, with a body of its own."
+  },
+  {
+    "key": "same name: solarpolis/render/plants.ts#follow + solarpolis/render/traffic.ts#follow",
+    "reason": "The ship traffic view (render/traffic.ts) has the views' own interface (follow each frame, dispose), like the streamed and necklace views, with a body of its own."
+  },
+  {
+    "key": "same name: solarpolis/render/terrain.ts#follow + solarpolis/render/traffic.ts#follow",
+    "reason": "The ship traffic view (render/traffic.ts) has the views' own interface (follow each frame, dispose), like the streamed and necklace views, with a body of its own."
   }
 ]
