@@ -53,6 +53,7 @@ function neighbour(home: HabitatParams, rng: Rng, spread: number, seed: number):
         hills: home.relief.hills * k,
         ringLake: home.relief.ringLake && { width: home.relief.ringLake.width * j, depth: home.relief.ringLake.depth * k },
         terraceStep: home.relief.terraceStep * k,
+        massif: home.relief.massif * k,
         rivers: home.relief.rivers && { ...home.relief.rivers, width: home.relief.rivers.width * k, depth: home.relief.rivers.depth * k },
       },
       clouds: home.clouds && { ...home.clouds, base: home.clouds.base * k, thickness: home.clouds.thickness * k, size: home.clouds.size * k },

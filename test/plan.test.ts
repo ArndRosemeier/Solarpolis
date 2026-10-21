@@ -55,7 +55,7 @@ for (const { name, plan } of plans) {
   test(`plan (${name}): the Gate has one face per valley and one Stair face; the Mountain has its summit up the main valley`, () => {
     assert.equal(plan.faces.length, plan.valleys);
     assert.equal(plan.faces.filter((f) => f.kind === 'stair').length, 1);
-    for (const f of plan.faces) assert.equal(plan.faceAt(f.theta), f);
+    for (const f of plan.faces) assert.equal(plan.faceAt(f.theta, profile.length), f);
     assert.ok(Math.abs(wrap(plan.mountain.summit - plan.valleyAt(0, 0))) < 1e-9);
     assert.ok(Math.abs(Math.abs(wrap(plan.mountain.cirque - plan.mountain.summit)) - Math.PI) < 1e-9);
   });
@@ -111,7 +111,7 @@ for (const { name, plan } of plans) {
   test(`plan (${name}): landmarks where the plan keeps them`, () => {
     const at = (kind: string) => plan.sites.find((s) => s.kind === kind);
     const stair = at('lift-stair'), hut = at('summit-hut'), grove = at('founders-grove'), pavilion = at('lake-pavilion');
-    assert.ok(stair && Math.abs(stair.s - profile.floorEnd) < 1e-6 && plan.faceAt(stair.theta).kind === 'stair', 'the Lift Stair climbs the Stair face');
+    assert.ok(stair && Math.abs(stair.s - profile.floorEnd) < 1e-6 && plan.faceAt(stair.theta, stair.s).kind === 'stair', 'the Lift Stair climbs the Stair face');
     assert.ok(hut && hut.s < profile.floorStart, 'the summit hut is on the Mountain');
     assert.ok(grove && grove.s > plan.reserveEnd && grove.s < profile.floorEnd, "the founders' grove is on the worked floor");
     if (plan.lake) {

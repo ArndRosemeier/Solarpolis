@@ -1,11 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MATRIX, derive, toWorld } from '../src/blueprint';
-import { makeTerrain } from '../src/gen/terrain';
+import { CIRQUE, GATE_TERRACES, HORN, makeTerrain } from '../src/gen/terrain';
 import { makeEcology } from '../src/gen/ecology';
 import { slopeAt } from '../src/gen/scatter';
 import { makeLayout, roots, bounds, buildTile, select, children, parent, keyId, cellSize, spheres, splitsAround, splitAround, packRelief, unpackRelief, CELL_PIXELS, RISE_RANGE, TILE_CELLS, type TileKey, type TileFit, type TileLayout, type TileMesh } from '../src/gen/tiles';
 
+const wrap = (a: number): number => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
 const PX_PER_RAD = 1440 / (70 * Math.PI / 180);
 
 /** A child tile's points plus their morph land on its parent's surface: its points, edges and cell diagonals. */
@@ -39,7 +40,10 @@ for (const { name, params } of MATRIX) {
       const theta = k * 2.399, s = (k / 200) * h.profile.length;
       assert.ok(Math.abs(t.heightAt(theta, s) - t.heightAt(theta + 2 * Math.PI, s)) < 1e-6, 'no seam at θ = 2π');
       const g = t.heightAt(theta, s);
-      assert.ok(g <= Math.max(rl.hills, rl.terraceStep) * 1.2 + 0.5 && g >= -(rl.ringLake?.depth ?? 0) - Math.max(rl.terraceStep, 1) - 0.5, `height ${g} at ${s}`);
+      // The endcaps' landforms add at most a spur, its crags and the horn above, and the cirque's floor below.
+      const above = Math.max(rl.hills, rl.terraceStep) * 1.2 + rl.massif * (2.7 + HORN.height * 1.15) + 0.5;
+      const below = (rl.ringLake?.depth ?? 0) + Math.max(rl.terraceStep, 1) + (rl.massif * CIRQUE.depth) / 0.2 + 0.5;
+      assert.ok(g <= above && g >= -below, `height ${g} at ${s}`);
     }
     if (rl.ringLake) {
       assert.ok(t.lake, 'a ring lake');
@@ -52,24 +56,71 @@ for (const { name, params } of MATRIX) {
     } else assert.equal(t.lake, null);
   });
 
-  test(`terrain (${name}): the endcaps climb in ledges and walls that wander around the axis, not in rings`, () => {
-    const P = h.profile, step = params.relief.terraceStep, n = 48;
-    let rings = 0, partly = 0, level = 0, all = 0;
-    for (const [a, b] of [[0, P.floorStart], [P.floorEnd, P.length]]) for (let k = 2; k < 20; k++) {
-      const s = a + ((b - a) * k) / 20;
-      let ledge = 0;
-      for (let i = 0; i < n; i++) {
-        const theta = (i / n) * 2 * Math.PI, slope = slopeAt(eco, theta, s, t.heightAt(theta, s), step * 0.02);
-        if (slope < 0.3) ledge++;
-        if (slope < 0.45) level++;
-        all++;
-      }
-      // A ring of the slope with a ledge somewhere has it only partly around: the ledges wander.
-      if (ledge > n * 0.02) { rings++; if (ledge < n * 0.9) partly++; }
+  test(`terrain (${name}): the Mountain has spurs between its couloirs, a horn at the head of the main valley, a level cirque`, () => {
+    const P = h.profile, form = t.form, massif = params.relief.massif, R = h.radius;
+    // Up the middle slopes the spurs stand well above the couloirs.
+    let ridge = 0, couloir = 0, nr = 0, nc = 0;
+    for (let i = 0; i < 400; i++) {
+      const s = form.endcapAt(true, 0.4 + 0.35 * ((i * 0.618034) % 1)), theta = i * 2.399963;
+      const a = Math.abs(form.acrossAt(theta, s).across), g = t.heightAt(theta, s);
+      if (Math.abs(wrap(theta - form.valleyAt(0, s) - Math.PI)) * P.at(s).r < massif * CIRQUE.halfWidth * 1.2) continue;
+      if (a > 0.8) { ridge += g; nr++; } else if (a < 0.2) { couloir += g; nc++; }
     }
-    assert.ok(rings >= 10 && partly >= rings * 0.9, `${rings} rings with ledges, ${partly} of them only partly around`);
-    // Ledges level enough to grow on, though the slopes are mostly steeper than a meadow could hold.
-    assert.ok(level / all > 0.08, `${((100 * level) / all).toFixed(0)} % of the endcaps level enough to grow on`);
+    if (form.valleys > 1) assert.ok(ridge / nr - couloir / nc > massif * 0.4, `spurs ${(ridge / nr).toFixed(1)} over couloirs ${(couloir / nc).toFixed(1)} m`);
+    // The horn rises out of the slope at the head of the main valley.
+    const hornS = form.endcapAt(true, HORN.gravity);
+    assert.ok(t.heightAt(form.valleyAt(0, hornS), hornS) > massif * HORN.height * 0.6, 'the horn stands out');
+    // The cirque's floor is dug level: the same elevation (height in from the hull) across it, below the slope around.
+    const elevation = (theta: number, s: number): number => { const p = P.at(s); return R - p.r - t.heightAt(theta, s) * p.nr; };
+    const lipS = form.endcapAt(true, CIRQUE.gravity), levels: number[] = [];
+    for (const over of [0.2, 0.4, 0.6]) {
+      const s = form.endcapAt(true, CIRQUE.gravity - (over * massif * CIRQUE.depth) / R);
+      for (const off of [-0.3, 0, 0.3]) levels.push(elevation(form.valleyAt(0, s) + Math.PI + (off * massif * CIRQUE.halfWidth) / P.at(s).r, s));
+    }
+    const lip = R * (1 - CIRQUE.gravity);
+    assert.ok(levels.every((l) => Math.abs(l - lip) < params.relief.terraceStep * 0.15 + massif * 0.15), `the cirque's floor at ${levels.map((l) => (l - lip).toFixed(1)).join(', ')} m from its lip`);
+    assert.ok(lipS < P.floorStart);
+  });
+
+  test(`terrain (${name}): the Gate has its faces between buttresses: level rings on the Stair face, the Lift Stair's ramp up its middle`, () => {
+    const P = h.profile, form = t.form, step = params.relief.terraceStep;
+    const stair = form.faces.find((f) => f.kind === 'stair')!;
+    // On the Stair face, away from the ramp and the buttresses, a ring of the slope stands at one height: formal rings.
+    let rings = 0, tried = 0;
+    for (let k = 3; k < 17; k++) {
+      const s = P.floorEnd + ((P.length - P.floorEnd) * k) / 20, mid = form.valleyAt(stair.index, s), r = P.at(s).r;
+      const half = Math.PI / form.valleys, ramp = (form.stairHalfWidth * 1.4) / r;
+      if (ramp > half * 0.5) continue;
+      const a = t.heightAt(mid + ramp + (half * 0.5 - ramp) * 0.3, s), b = t.heightAt(mid + ramp + (half * 0.5 - ramp) * 0.9, s);
+      tried++;
+      if (Math.abs(a - b) < step * 0.01 + 0.05) rings++;
+    }
+    assert.ok(tried === 0 || rings >= tried * 0.8, `${rings} of ${tried} rings level across the Stair face`);
+    // The ramp is a plain slope: no terraces in it, only the endcap's roughness.
+    let plain = 0, n = 0;
+    for (let k = 3; k < 17; k++) {
+      const s = P.floorEnd + ((P.length - P.floorEnd) * k) / 20;
+      plain = Math.max(plain, Math.abs(t.heightAt(form.valleyAt(stair.index, s), s)));
+      n++;
+    }
+    assert.ok(plain < step * GATE_TERRACES.stair.step * 0.35 + 1, `the ramp keeps within ${plain.toFixed(1)} m of the plain slope`);
+    // Buttresses between the faces stand out of the slope.
+    if (form.valleys > 1) {
+      const s = form.endcapAt(false, 0.6);
+      const between = (form.valleyAt(0, s) + form.valleyAt(1, s)) / 2;
+      assert.ok(t.heightAt(between, s) > params.relief.massif * 0.4, 'a buttress between the first two faces');
+    }
+    // Every face has ledges level enough to grow on (the slope is steep, so walls take most of it, as on any terraced cliff).
+    const level: Record<string, number> = {}, all: Record<string, number> = {};
+    for (let i = 0; i < 1500; i++) {
+      const s = P.floorEnd + (P.length - P.floorEnd) * (0.1 + 0.8 * ((i * 0.618034) % 1)), theta = i * 2.399963;
+      const at = form.acrossAt(theta, s);
+      if (Math.abs(at.across) > 0.6) continue;
+      const kind = form.faces[at.valley].kind;
+      all[kind] = (all[kind] ?? 0) + 1;
+      if (slopeAt(eco, theta, s, t.heightAt(theta, s), step * 0.02) < 0.45) level[kind] = (level[kind] ?? 0) + 1;
+    }
+    for (const kind of Object.keys(all)) assert.ok((level[kind] ?? 0) / all[kind] > 0.05, `${(((level[kind] ?? 0) * 100) / all[kind]).toFixed(0)} % of the ${kind} face level enough to grow on`);
   });
 
   test(`tiles (${name}): bands cover the profile, neighbours meet, faces look into the air`, () => {

@@ -265,6 +265,7 @@ viewpoint('Fly: halfway up, looking at the far side', 0.5, Math.PI, 0.6);
 viewpoint('Fly: high up, looking down', 0.6, 0.05, 0.25);
 viewpoint('Fly: near the axis at the wild end, looking along the tube', 0.9, 0.02, 3, 0);
 viewpoint('Fly: over the floor, looking up the wild endcap', 0.1, 0, -1.5, 0.08);
+viewpoint('Fly: over the floor, looking up the port endcap', 0.1, 0, 1.5, 0.92);
 /** The Inside view and something of its terrain (`pick`), when both are there. */
 function inView<T>(pick: (t: Terrain) => T | undefined): { v: InteriorView; x: T } | null {
   const v = view(), t = v?.ecology?.terrain, x = t && pick(t);
