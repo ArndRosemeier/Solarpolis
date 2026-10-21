@@ -1,0 +1,11 @@
+node_modules/
+dist/
+reports/
+*.log
+suite-times.json
+looks-out/
+
+# The gate
+/.gate-logs/
+/.gate-lock/
+/worktrees/

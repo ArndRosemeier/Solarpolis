@@ -1,0 +1,23 @@
+# Working on Solarpolis
+
+Solarpolis is a detailed 3D simulation set about 1000 years from now, starting inside a mature O'Neill cylinder in Earth orbit (TypeScript, three.js on WebGPU, Vite). The vision and Arnd's decisions are in [docs/design/README.md](docs/design/README.md). Read them before starting anything.
+
+1. **Nothing about the habitat is hardcoded.** The cylinder is a parametric blueprint (`src/blueprint`) that will later fill the whole solar system. Every size, rate and count comes from `HabitatParams` through `derive()`. Figures like 8 × 30 km are example values. Every geometry test runs over the whole `MATRIX` (small, reference, large, long), so a hidden constant fails there.
+2. **Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (the seam index) before writing any helper.** Use the one way it names. A new seam gets its row in the same PR. Rows marked *planned* name the seam to build; do not invent a different one.
+3. **WebGPU only, no fallbacks** (Arnd, 2026-10-21). No `forceWebGL`, no WebGL context (guarded). A browser without WebGPU gets a clear message, not a degraded game.
+4. **Shaders follow [docs/SHADERS.md](docs/SHADERS.md):** materials only from the material registry, things enter the scene through `stage.add`, no `onBeforeCompile`, no `renderer.compile*` outside the Stage. 100 ms per build is the hard limit.
+5. **No `Math.random`, no wall clock in the simulation.** Every random number comes from a seed (`Rng`, `deriveSeed` from `@futuremagic/core`). The population is derived from seed + clock; only people the player touches are simulated in detail.
+6. **Pure layers stay pure.** `src/blueprint` (and later `src/gen`, `src/world`, `src/sim`) never import three or the DOM (guarded), so they run in workers and headless tests.
+7. **Shortcuts only for performance.** Arnd: performance matters, but so does feeling different. Never simplify the physics or the look just to save work.
+8. **Every PR description has a `COPIES:` line**: `COPIES: 1 — checked (grepped: ...)` or `COPIES: 3→1 — <seam>`.
+9. **`npm test` must be green.** It runs the guards (banned patterns, layer boundaries, the duplication ratchet). A `NEW` finding means fold the copy into one seam, or add it to `tools/guards/duplication-baseline.json` with a reason.
+10. **CI has a hard 2-minute cap** ([docs/CI.md](docs/CI.md)). Each test, file and the whole suite has a budget in `tools/ci/budget.json`. A slow test is made faster or moved to `test/slow/` (`npm run test:slow`); the cap is never raised without Arnd.
+11. **Each PR adds a change note** `changes/<slug>.md` (see [changes/README.md](changes/README.md)). Never edit `CHANGELOG.md`; a workflow folds the notes after the merge into the next version (v0.001, +0.001 per merge), which the What's new button shows.
+12. **Memory is watched from the start.** Anything holding big buffers reports them with `memory.track(owner, bytes)` and gives memory back through `memory.onPressure(level, shed)` (`src/app/memory.ts`). iPads are a target, and Safari kills a tab long before the device runs out of RAM.
+13. **Developer tools go in the one debug menu** (Shift+Ctrl+F12, `debug.add` / `debug.addInfo`, made in `src/main.ts`). No thread adds its own debug key or overlay.
+14. **Merge your own PRs.** Arnd does not do Git: the thread that opens a PR squash-merges it as soon as CI is green and review findings are handled. When main has moved, bring it in first and let CI run again.
+15. **Porting from Dunfinity, SimWorld or Scale:** take the code with its tests, adapt the names, and note the source file in the header comment.
+
+Shared packages come from the AssetGenerator submodule (`vendor/assetgenerator/packages`: `@futuremagic/core`). Clone with `--recurse-submodules`, or run `git submodule update --init`. Humanoid robot bodies and people will come from Arnd's Actors package.
+
+Checks that need a browser: `npm run build`, then `npx vite preview` and a headless Chromium (in the cloud container: `/opt/pw-browsers/chromium-1194/chrome-linux/chrome --headless=new --enable-unsafe-webgpu --screenshot=out.png <url>`).

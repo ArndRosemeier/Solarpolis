@@ -1,0 +1,14 @@
+# CI: a hard 2-minute cap
+
+Arnd (2026-10-21): "A CI limitation to 2 minutes. Don't want to get all dev time being eaten by this since this will get quadratic (more commits that each take longer than the last)."
+
+## How it is kept
+
+- **One job, `timeout-minutes: 2`** (`.github/workflows/ci.yml`): change note check, `npm ci`, typecheck, `npm test`, `vite build`. A newer push to a PR cancels the older run.
+- **Budgets per test, per file and for the whole suite** (`tools/ci/budget.json`). The budget reporter (`tools/ci/budget-reporter.mjs`) fails the run when any is crossed, so a slow test is caught on the PR that adds it, long before the cap is reached.
+- **Cost report**: each PR's step summary compares its test timings with main's last green run (`tools/ci/suite-diff.mjs`).
+- **Slow tests live in `test/slow/`** and run with `npm run test:slow`, locally or on demand, never in the PR check.
+
+## When a budget is crossed
+
+Make the test faster (smaller habitat from the `MATRIX`, fewer samples, test the function instead of the whole pipeline), or move it to `test/slow/`. Raise a budget only with a reason in `budget.json`, and never the 2-minute cap without Arnd.
