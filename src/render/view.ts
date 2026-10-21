@@ -1,6 +1,7 @@
 /**
  * The view from inside: the one renderer (WebGPU only), the Stage, the whole interior surface and the sunline,
- * seen by a walker on the ground. Drag to look around; W A S D or the arrow keys to walk, Shift to run.
+ * seen by a walker on the ground. Hold the right mouse button to look around (the pointer stays free for clicking
+ * things); W A S D or the arrow keys to walk, Shift to run.
  */
 import { BufferAttribute, BufferGeometry, Color, CylinderGeometry, Mesh, PerspectiveCamera, Scene, type WebGPURenderer } from 'three/webgpu';
 import { Stage, createRenderer } from '@futuremagic/stage';
@@ -100,11 +101,27 @@ export class InteriorView {
   }
 
   private listen(): void {
-    let dragging = false;
-    this.canvas.addEventListener('pointerdown', (e) => { dragging = true; this.canvas.setPointerCapture(e.pointerId); });
-    this.canvas.addEventListener('pointerup', (e) => { dragging = false; this.canvas.releasePointerCapture(e.pointerId); });
+    // The pointer stays visible and free (Arnd, 2026-10-21): the left button is for clicking things in the world,
+    // the right button held down looks around. On touch screens a one-finger drag looks around.
+    let looking: number | null = null;
+    const looks = (e: PointerEvent): boolean => (e.pointerType === 'touch' ? e.isPrimary : e.button === 2);
+    this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    this.canvas.addEventListener('pointerdown', (e) => {
+      if (!looks(e) || looking !== null) return;
+      looking = e.pointerId;
+      this.canvas.setPointerCapture(e.pointerId);
+      this.canvas.classList.add('looking');
+    });
+    const stop = (e: PointerEvent): void => {
+      if (e.pointerId !== looking) return;
+      looking = null;
+      if (this.canvas.hasPointerCapture(e.pointerId)) this.canvas.releasePointerCapture(e.pointerId);
+      this.canvas.classList.remove('looking');
+    };
+    this.canvas.addEventListener('pointerup', stop);
+    this.canvas.addEventListener('pointercancel', stop);
     this.canvas.addEventListener('pointermove', (e) => {
-      if (!dragging) return;
+      if (e.pointerId !== looking) return;
       const k = 0.004;
       this.walker.turn(e.movementX * k, -e.movementY * k);
     });
