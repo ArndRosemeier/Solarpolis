@@ -76,6 +76,9 @@ button { font: inherit; color: inherit; }
 .sec-ground { fill: var(--ground); }
 .sec-sunline { stroke: var(--accent); stroke-width: 2; }
 .sec-label { fill: var(--quiet); font-size: 12px; }
+.sec-brim { fill: #c9b27c; }
+.sec-spindle { fill: #9aa3ad; }
+.sec-mast { stroke: #9aa3ad; stroke-width: 1.5; }
 .stack-name, .stack-value { fill: var(--quiet); font-size: 12px; }
 .stack-band { fill: var(--sky); }
 .stack-0 { fill: #7a6248; } .stack-1 { fill: #8a96a3; } .stack-2 { fill: var(--accent); } .stack-3 { fill: #8a96a3; }

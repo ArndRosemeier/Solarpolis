@@ -22,6 +22,7 @@ export const REFERENCE: HabitatParams = {
   collectorRatio: 1,
   solarEfficiency: 0.5,
   lightTarget: 100,
+  pipedLight: 0.5,
   radiator: { emissivity: 0.9, temperature: 330 },
   hubRadius: 60,
   sunlineRadius: 15,
@@ -29,6 +30,7 @@ export const REFERENCE: HabitatParams = {
   relief: { hills: 60, ringLake: { width: 500, depth: 15 }, terraceStep: 150 },
   // An Earth day, two thirds lit; the bright stretch a seventh of the length; a dim blue-hour glow at night.
   day: { length: 86400, daylight: 0.65, peakWidth: 0.14, base: 0.3, night: 0.03 },
+  exterior: { brimReach: 1.6, brimSpacing: 0.4, maxBrims: 8, brimThickness: 2, brimMaterial: { density: 1800, strength: 3e9, safetyFactor: 1.5 }, spindleLength: 0.25, mastLength: 0.05, berthArms: 6 },
   climate: 'temperate-mild',
   population: 300000,
   age: 200,

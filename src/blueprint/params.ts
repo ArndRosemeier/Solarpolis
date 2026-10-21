@@ -68,6 +68,29 @@ export interface Relief {
 
 export type AxisOrientation = 'side-on' | 'end-on';
 
+/**
+ * The outside: radiator brims, the despun dock spindle and the wild end's mast (design "Solarpolis: the outside").
+ * Brims are flat rings around the endcaps, in the endcap's plane: the only radiator that keeps its edge to the Sun at
+ * every angle of spin. When one ring per end is not enough, more are stacked inward along the drum.
+ */
+export interface ExteriorShape {
+  /** The largest brim tip radius, as a multiple of the outer radius. */
+  brimReach: number;
+  /** Gap between stacked brims along the axis, as a multiple of the outer radius. */
+  brimSpacing: number;
+  /** The most brims one end may carry. */
+  maxBrims: number;
+  brimThickness: number;
+  /** What the brims are made of: a light, strong composite, since their tips move faster than the hull. */
+  brimMaterial: HullMaterial;
+  /** How far the despun spindle reaches out from the port endcap, as a multiple of the outer radius. Its radius is `hubRadius`. */
+  spindleLength: number;
+  /** How far the wild end's maintenance mast reaches out, as a multiple of the outer radius. */
+  mastLength: number;
+  /** Berth arms on the spindle. */
+  berthArms: number;
+}
+
 export interface HabitatParams {
   /** Floor radius R: from the axis to the mean ground surface (m). */
   radius: number;
@@ -99,6 +122,8 @@ export interface HabitatParams {
   solarEfficiency: number;
   /** Visible light the sunline delivers to the floor, as a daily mean (W/m²). */
   lightTarget: number;
+  /** Share of the sunline's light that is sunlight piped in from the collectors (0–1); the rest is made from electricity. */
+  pipedLight: number;
   /** The endcap radiators: emissivity and working temperature (K). */
   radiator: { emissivity: number; temperature: number };
   /** Radius of the non-rotating dock hub at the port end's axis (m). The wild end climbs to the axis itself. */
@@ -108,6 +133,7 @@ export interface HabitatParams {
   endcaps: { wild: EndcapShape; port: EndcapShape };
   relief: Relief;
   day: DayCycle;
+  exterior: ExteriorShape;
   /** The climate and biome profile, by name (catalogue comes with the ecology stage). */
   climate: string;
   population: number;
