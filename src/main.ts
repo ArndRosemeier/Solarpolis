@@ -96,7 +96,7 @@ const insideSlot = new ViewSlot('Hold the right mouse button to look around · W
   memory.track('player body', () => v.bodyBytes());
   return v;
 });
-const outsideSlot = new ViewSlot('Hold the right mouse button to swing around · wheel to come closer · 1 habitat, 2 Earth, 3 Moon, 4 nearest neighbour · F to fly (W A S D, E up, Q down, Shift faster)', 'Building the sky…', 'sky maps and stars', (h) => OutsideView.create(h));
+const outsideSlot = new ViewSlot('Hold the right mouse button to swing around · wheel to come closer · 1 habitat, 2 Earth, 3 Moon, 4 nearest neighbour · F to fly (W A S D, E up, Q down, Shift faster)', 'Building the sky…', 'sky maps, stars and skin detail', (h) => OutsideView.create(h));
 // The views fill the window below the header, whatever height the header wraps to.
 const fit = (): void => { for (const s of [insideSlot, outsideSlot]) s.box.style.setProperty('--top', `${header.getBoundingClientRect().bottom}px`); };
 new ResizeObserver(fit).observe(header);

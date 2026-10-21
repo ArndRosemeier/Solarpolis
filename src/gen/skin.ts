@@ -51,10 +51,13 @@ export interface Skin {
   dronesPerTrack: number;
   droneSize: number;
   droneSpeed: number;
+  /** Solar modules a panel holds around and along (the same both ways), cells a module holds a side. */
+  modules: number;
+  cells: number;
 }
 
 /** The hash's third argument: which property of a panel or a patch is drawn. */
-export const SALT = { campaign: 0, offset: 1, replaced: 2, replacedAge: 3, shade: 4, starfloor: 5, radiator: 6, drone: 7, droneSpeed: 8 } as const;
+export const SALT = { campaign: 0, offset: 1, replaced: 2, replacedAge: 3, shade: 4, starfloor: 5, radiator: 6, drone: 7, droneSpeed: 8, module: 9, cell: 10, wear: 11, pit: 12 } as const;
 
 /** The look of each kind: albedo (linear RGB) and how glossy the glass is (0–1). The shader reads these numbers too. */
 export const LOOK = {
@@ -70,6 +73,11 @@ export const LOOK = {
   starfloorGloss: 0.8,
   /** How far one panel's shade may stray from its kind (± half of this share). */
   shade: 0.3,
+  /** How far one module's shade may stray from its panel's (± half of this share; the mean stays the panel's). */
+  moduleShade: 0.16,
+  /** Share of the cells that have died (dark, cracked), and their albedo. */
+  deadCells: 0.003,
+  cellDead: [0.045, 0.035, 0.03] as Vec3,
   /** A panel's mean brightness with its darker frame (the shader's seams) counted in: what the far view sees. */
   frameMean: 0.98,
   /** A drone track: the dark steel channel, its two polished rails (centred at ±railAt of the width, railWidth wide), ties every tieEvery m. */
@@ -109,6 +117,8 @@ export function makeSkin(h: Habitat): Skin {
     dronesPerTrack: Math.max(1, Math.round((x.portFace - x.wildFace) / p.drones.spacing)),
     droneSize: p.drones.size,
     droneSpeed: p.drones.speed,
+    modules: Math.max(1, Math.round(p.panel / p.parts.module)),
+    cells: Math.max(1, Math.round(p.parts.module / p.parts.cell)),
   };
 }
 

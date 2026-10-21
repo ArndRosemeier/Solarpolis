@@ -1,7 +1,7 @@
 /**
  * The maintenance drones on a habitat's skin (design "Solarpolis: the outside", O4): each one a small body on its
  * track's rails with a darker sensor head at the end it is heading for, placed every frame from the seed and the
- * clock (`dronesAt`, gen/skin.ts). One HARDWARE mesh holds them all, in the blueprint frame, posed with the body.
+ * clock (`dronesAt`, gen/skin.ts), riding on the rails of the skin's detail tiles (`railTop`). One HARDWARE mesh holds them all, in the blueprint frame, posed with the body.
  * Near the skin they are meshes; further out than DRONES_WITHIN drone lengths, where one is below a pixel, each is a
  * point of its own reflected sunlight drawn as stars are (STARS), so they fade with distance as they would to the eye
  * instead of vanishing (Arnd, 2026-10-21).
@@ -11,6 +11,7 @@ import { v3len, v3scale, type Vec3 } from '@futuremagic/core';
 import { apply, transpose, type Mat3 } from '../space';
 import { meshGeometry } from './geometry';
 import { dronesAt, tracksOf, type Skin } from '../gen/skin';
+import { railTop } from '../gen/hullDetail';
 import { ShapeBuilder, type RGB } from './geometry';
 
 /** The share of a drone's length² it shows from above (its body's top) and the mean albedo of what shows. */
@@ -110,7 +111,7 @@ export class DroneMesh {
 
   /** Move every drone to where it is at clock time t. */
   moveTo(t: number): void {
-    const s = this.skin, size = s.droneSize, tp = this.t.pos, tn = this.t.nrm, per = tp.length;
+    const s = this.skin, size = s.droneSize, tp = this.t.pos, tn = this.t.nrm, per = tp.length, rails = s.radius + railTop(s);
     const g = this.mesh.geometry, pos = g.attributes.position as BufferAttribute, nrm = g.attributes.normal as BufferAttribute;
     const P = pos.array as Float32Array, N = nrm.array as Float32Array;
     let o = 0;
@@ -120,7 +121,7 @@ export class DroneMesh {
       // right-handed: +z × −around = out), z out.
       for (let k = 0; k < per; k += 3) {
         const x = tp[k] * h, y = tp[k + 1] * h, z = tp[k + 2];
-        const r = s.radius + z * size, a = -y * size;
+        const r = rails + z * size, a = -y * size;
         P[o + k] = r * c - a * sn;
         P[o + k + 1] = r * sn + a * c;
         P[o + k + 2] = d.z + x * size;
