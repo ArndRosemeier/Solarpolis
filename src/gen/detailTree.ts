@@ -93,6 +93,13 @@ export function wantedCells(g: Grid, eye: GridEye): WantedTile[] {
 
 export const tileId = (k: TileKey): string => `${k.level}:${k.i}:${k.j}`;
 
+/** A grid's root tiles: its far form, all of it. */
+export function rootTiles(g: Grid): TileKey[] {
+  const size = Math.pow(2, g.root), out: TileKey[] = [];
+  for (let j = 0; j < g.nV; j += size) for (let i = 0; i < g.nU; i += size) out.push({ level: g.root, i, j });
+  return out;
+}
+
 /**
  * A tile's rectangle in one cell's units (0–1 across and along), and what it owns of that cell: a point if it lies
  * inside (half-open, so each point has one owner; closed at the grid's far edges, `endU`/`endV`).

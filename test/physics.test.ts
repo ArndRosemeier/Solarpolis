@@ -12,6 +12,10 @@ for (const { name, params } of MATRIX) {
   const t = makeTerrain(h);
   const s = (h.profile.floorStart + h.profile.floorEnd) / 2;
   const height = Math.min(50, h.radius * 0.2);
+  // Away from the entrance courts (the terrain digs them however flat the land): the first angle with none near.
+  const clear = (theta: number): boolean => t.courts.every((c) => Math.hypot(Math.atan2(Math.sin(c.theta - theta), Math.cos(c.theta - theta)) * h.radius, c.s - s) > c.radius + 200);
+  let theta0 = 0;
+  while (!clear(theta0) && theta0 < 2 * Math.PI) theta0 += 0.002;
 
   test(`motion (${name}): a dropped ball lands antispinward by the blueprint's drop offset`, () => {
     const start = toWorld(h.profile, { theta: 0, s, h: height });
@@ -23,15 +27,15 @@ for (const { name, params } of MATRIX) {
 
   test(`physics (${name}): Rapier in the turning frame drops a ball the same way and it comes to rest`, async () => {
     const world = await PhysicsWorld.create(h);
-    world.setGround(buildPatch(t, 0, s, 192, 2));
+    world.setGround(buildPatch(t, theta0, s, 192, 2));
     const radius = 0.25;
-    const id = world.addBall(toWorld(h.profile, { theta: 0, s, h: height + radius }), [0, 0, 0], radius);
+    const id = world.addBall(toWorld(h.profile, { theta: theta0, s, h: height + radius }), [0, 0, 0], radius);
     let landed: number | null = null;
     for (let i = 0; i < 120 * 20 && landed === null; i++) {
       world.advance(1 / 120);
       const b = world.states().find((x) => x.id === id)!;
       const at = fromWorld(h.profile, ...b.position);
-      if (at.h < radius + 0.05) landed = at.theta > Math.PI ? at.theta - 2 * Math.PI : at.theta;
+      if (at.h < radius + 0.05) landed = Math.atan2(Math.sin(at.theta - theta0), Math.cos(at.theta - theta0));
     }
     assert.ok(landed !== null, 'landed');
     const off = -landed! * h.radius, want = h.dropOffset(height);

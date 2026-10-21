@@ -101,15 +101,15 @@ export interface LiftStair {
 
 /** A step's riser at 1 g and its tread, as shares of the handrail's height (15 cm and 36 cm for 1.1 m). */
 const RISER_1G = 0.14;
-const TREAD = 0.33;
+export const TREAD = 0.33;
 /** The shallowest tread a stair is laid with at all, and the deepest (a stepped ramp at the very foot), in handrails. */
 const TREAD_MIN = 0.27;
 const TREAD_MAX = 1.5;
 /** The highest riser, in handrails: near the hub a step is a ledge one bounds up. */
 const RISER_MAX = 1.5;
 /** Steps in a flight before a rest landing, and the landing's depth (handrails). */
-const FLIGHT = 18;
-const REST = 1.5;
+export const FLIGHT = 18;
+export const REST = 1.5;
 /** A leg's width as a share of the ramp's half width, within these bounds (handrails). */
 const WIDTH = 0.12;
 const WIDTH_MIN = 2.5;
