@@ -13,6 +13,7 @@ import type { WorkerPool } from '../workers/pool';
 import type { GenAnswer, GenRequest } from '../workers/gen.worker';
 import { StreamCache, type Streamed } from './streamed';
 import { GROUND, WATER } from './materials';
+import { FLOOR_BYTES, loadFloor } from './groundShaders';
 
 /** A tile's error may cover at most this many pixels before the tile splits. */
 const MAX_PIXELS = 2;
@@ -34,7 +35,7 @@ export class TerrainView {
   private readonly cache: StreamCache<Entry>;
   private drawn: Entry[] = [];
 
-  constructor(private readonly terrain: Terrain, private readonly stage: Stage, pool: WorkerPool) {
+  constructor(private readonly terrain: Terrain, private readonly stage: Stage, private readonly pool: WorkerPool) {
     this.layout = makeLayout(terrain);
     this.sphereOf = spheres(terrain, this.layout);
     this.group.name = 'terrain';
@@ -55,10 +56,12 @@ export class TerrainView {
   /** Build the root tiles: the whole interior, coarse. Resolves when they are on screen. */
   async load(): Promise<void> {
     await Promise.all(roots(this.layout).map((k) => this.cache.ask(keyId(k), this.job(k))));
+    // Then the floor's textures, for up close (after the roots: nothing waits for them).
+    loadFloor(this.pool, this.terrain.habitat.params);
   }
 
-  /** Bytes the cached tiles hold (memory watchdog). */
-  bytes(): number { return this.cache.bytes; }
+  /** Bytes the cached tiles and the floor's textures hold (memory watchdog). */
+  bytes(): number { return this.cache.bytes + FLOOR_BYTES; }
 
   /** Give memory back: drop every cached tile not drawn now. */
   shed(): void { this.cache.shed(); }
@@ -98,7 +101,7 @@ export class TerrainView {
   private async make(answer: GenAnswer, id: string): Promise<Entry | null> {
     if (!('tile' in answer)) return null;
     const tile = answer.tile;
-    const mesh = new Mesh(geometry(tile.positions, tile.normals, tile.index, tile.colors, tile.morph, tile.horizon, tile.canopy), GROUND.material);
+    const mesh = new Mesh(geometry(tile.positions, tile.normals, tile.index, tile.colors, tile.morph, tile.horizon, tile.canopy, tile.floorA, tile.floorB), GROUND.material);
     mesh.name = `tile ${id}`;
     mesh.visible = false;
     const water = tile.water ? new Mesh(geometry(tile.water.positions, tile.water.normals, tile.water.index), WATER.material) : null;
@@ -116,10 +119,10 @@ export class TerrainView {
   }
 }
 
-function geometry(positions: Float32Array, normals: Float32Array, index: Uint32Array, colors?: Float32Array, morph?: Float32Array, horizon?: Float32Array, canopy?: Float32Array): BufferGeometry {
+function geometry(positions: Float32Array, normals: Float32Array, index: Uint32Array, colors?: Float32Array, morph?: Float32Array, horizon?: Float32Array, canopy?: Float32Array, floorA?: Uint8Array, floorB?: Uint8Array): BufferGeometry {
   return meshGeometry(index, {
     position: [positions, 3], normal: [normals, 3],
-    color: colors && [colors, 3], morph: morph && [morph, 3], horizon: horizon && [horizon, 2], canopy: canopy && [canopy, 4],
+    color: colors && [colors, 3], morph: morph && [morph, 3], horizon: horizon && [horizon, 2], canopy: canopy && [canopy, 4], floorA: floorA && [floorA, 4], floorB: floorB && [floorB, 4],
   });
 }
 

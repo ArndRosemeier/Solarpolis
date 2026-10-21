@@ -49,6 +49,12 @@ for (const { name, params } of MATRIX) {
         assert.ok(Math.abs(wa - wb) < 2e-3 + Math.abs(wa) * 2e-7, `edge point ${j} axis ${c}: ${wa} vs ${wb}`);
       }
     }
+    // Each point's floor layers share it whole (255 between them, give or take rounding).
+    for (let v = 0; v < row * row; v += 31) {
+      let sum = 0;
+      for (let c = 0; c < 4; c++) sum += ta.floorA[v * 4 + c] + ta.floorB[v * 4 + c];
+      assert.ok(Math.abs(sum - 255) <= 4, `floor shares at ${v} sum to ${sum}`);
+    }
     // Normals face the air (towards the axis on the floor).
     for (let v = 0; v < row * row; v += 97) {
       const x = ta.origin[0] + ta.positions[v * 3], y = ta.origin[1] + ta.positions[v * 3 + 1];

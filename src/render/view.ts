@@ -24,6 +24,7 @@ import { dayPhase, emissionMean, nearestLit, sunlineEmission, sunlineNorm, EMISS
 import { densityFalloff, seenMid } from '../world/air';
 import { TerrainView, describeLayout } from './terrain';
 import { PlantView } from './plants';
+import { setFloorEye } from './groundShaders';
 import { makeEcology, type Ecology } from '../gen/ecology';
 import { FrameLoop, dragToLook, draw, fitCanvas, moveKeys } from './surface';
 
@@ -342,6 +343,7 @@ export class InteriorView {
   private place(): void {
     const v = this.current();
     view.eye.value.set(...v.eye);
+    setFloorEye(v.eye);
     this.camera.position.set(0, 0, 0);
     this.camera.up.set(...v.up);
     this.camera.lookAt(v.look[0], v.look[1], v.look[2]);

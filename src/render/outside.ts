@@ -11,12 +11,13 @@
  * Exposure follows what is in sight (render/exposure.ts), so the stars show only when nothing bright is in view, as
  * for eyes; the "night eyes" augmentation (debug menu) lets the eyes open much further.
  */
-import { Color, Mesh, PerspectiveCamera, Vector4, Scene, SphereGeometry, Texture, LinearFilter, LinearMipmapLinearFilter, SRGBColorSpace, type WebGPURenderer } from 'three/webgpu';
+import { Color, Mesh, PerspectiveCamera, Vector4, Scene, SphereGeometry, Texture, type WebGPURenderer } from 'three/webgpu';
 import { Stage, createRenderer } from '@futuremagic/stage';
 import { Rng, deriveSeed, v3add, v3cross, v3dot, v3len, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
 import type { Habitat } from '../blueprint';
 import { DAY, EARTH, MOON, REFERENCE_SPACE, SpaceFlyer, TORCH_SHIP, attractLoop, calendarOf, chooseStart, decodeStars, julianDay, makeSpace, skyFrom, torchShip, type Cinema, type CinemaFrame, type Mat3, type Space, type SkyView } from '../space';
 import { FLAME, HARDWARE, SKY, STARS, outsideKinds, standInAttribute } from './materials';
+import { filtered } from './textures';
 import { outside, skyMaps } from './skyShaders';
 import { DARKEST, PERIPHERY, adapt, exposureFor, starExposure, sunInView, type Meterable } from './exposure';
 import { NecklaceView } from './necklace';
@@ -472,12 +473,6 @@ async function mipmapped(url: string): Promise<Texture> {
   }
   const t = new Texture(top);
   t.mipmaps = levels as unknown as HTMLCanvasElement[]; // three takes any image source per level
-  t.generateMipmaps = false;
   t.flipY = false;
-  t.colorSpace = SRGBColorSpace;
-  t.magFilter = LinearFilter;
-  t.minFilter = LinearMipmapLinearFilter;
-  t.anisotropy = 8;
-  t.needsUpdate = true;
-  return t;
+  return filtered(t, { srgb: true, mips: 'own', anisotropy: 8 });
 }
