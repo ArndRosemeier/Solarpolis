@@ -4,7 +4,7 @@
  * is full, least recently drawn first.
  */
 import { Group, Mesh, type BufferGeometry } from 'three/webgpu';
-import { meshGeometry } from './geometry';
+import { freeMesh, meshGeometry } from './geometry';
 import type { Stage } from '@futuremagic/stage';
 import { toView, type Vec3 } from '../blueprint';
 import type { Terrain } from '../gen/terrain';
@@ -19,6 +19,8 @@ import { FLOOR_BYTES, loadFloor } from './groundShaders';
 const MAX_PIXELS = 2;
 /** Built tiles kept, drawn or not: a few times what one view needs, so turning around costs nothing. */
 const CACHE = 3000;
+/** ...but never more than this (bytes; a tile is about 0.4 MB, and the GPU holds a second copy). */
+const CACHE_BYTES = 384 * 1024 * 1024;
 /** Tile jobs in flight at once: enough to keep every worker busy, few enough to drop stale ones quickly. */
 const IN_FLIGHT = 16;
 
@@ -40,13 +42,12 @@ export class TerrainView {
     this.sphereOf = spheres(terrain, this.layout);
     this.group.name = 'terrain';
     this.cache = new StreamCache<Entry>(pool, {
-      limit: CACHE, inFlight: IN_FLIGHT,
+      limit: CACHE, maxBytes: CACHE_BYTES, inFlight: IN_FLIGHT,
       id: (r) => (r.kind === 'tile' ? keyId(r.key) : ''),
       make: (answer, id) => this.make(answer, id),
       free: (e) => {
-        this.group.remove(e.mesh);
-        e.mesh.geometry.dispose();
-        if (e.water) { this.group.remove(e.water); e.water.geometry.dispose(); }
+        freeMesh(e.mesh);
+        if (e.water) freeMesh(e.water);
       },
       // The roots always stay: they are the fallback for everything.
       pinned: (e) => e.tile.key.level === 0,

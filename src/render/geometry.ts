@@ -34,6 +34,30 @@ export class ShapeBuilder extends Shape {
   }
 }
 
+/**
+ * What of a mesh's geometry is its own to free: all of it, none of it (a geometry other meshes draw too), or the
+ * attributes a test picks (the rest, and the index, are shared with other meshes and stay).
+ */
+export type Owned = 'all' | 'none' | ((attribute: string) => boolean);
+
+/**
+ * The one way to give up a mesh for good: out of its parent, its own geometry's buffers freed, and the mesh itself
+ * disposed. The last step is the one that matters most: three's WebGPU renderer keeps a record of every mesh it has
+ * drawn or compiled (its render objects, with their bind groups and uniform buffers, held through the material's
+ * listeners) until the mesh itself is disposed. Disposing only the geometry kept every streamed tile and cell alive,
+ * arrays and all, for as long as their material lived: for the shared kinds, forever.
+ */
+export function freeMesh(mesh: Mesh, owned: Owned = 'all'): void {
+  mesh.removeFromParent();
+  const g = mesh.geometry;
+  if (typeof owned === 'function') {
+    for (const name of Object.keys(g.attributes)) if (!owned(name)) g.deleteAttribute(name);
+    g.setIndex(null);
+  }
+  if (owned !== 'none') g.dispose();
+  mesh.dispose();
+}
+
 /** The one way to pose a mesh: its matrix from axes (columns: its own axes in the scene) and an origin relative to the eye. */
 export function setPose(mesh: Mesh, a: Mat3, o: Vec3): void {
   mesh.matrix.copy(new Matrix4().set(a[0], a[1], a[2], o[0], a[3], a[4], a[5], o[1], a[6], a[7], a[8], o[2], 0, 0, 0, 1));
