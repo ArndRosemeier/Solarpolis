@@ -2,6 +2,11 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.010 — Radiator brims and a dock spindle
+
+- The habitat now has an outside: flat radiator rings ("brims") around both endcaps, a despun dock spindle at the port end and a mast at the wild end. The Blueprint section draws them to scale.
+- Radiators now carry only the heat released inside the habitat; the solar panels shed their own. The reference habitat sheds 203 GW through one brim per end reaching 5.9 km from the axis; long, thin habitats stack several.
+
 ## v0.009 — The sky gets a clock
 
 - The habitat now has a place in space: the geostationary ring ("the Necklace"), 42,164 km above Earth, with 24 habitats strung around it and yours hanging over 10° East.
