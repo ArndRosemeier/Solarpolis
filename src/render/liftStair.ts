@@ -91,7 +91,10 @@ export class StairView {
     for (const k of this.roots) if (!covered.has(tileId(k))) drawTile(tileId(k));
     // Built tiles on the way to the drawn ones stay too: dropping one would only have it built again.
     for (const w of wanted) { const e = this.cache.get(tileId(w.key)); if (e) this.cache.mark(e); }
-    this.cache.want(wanted.map((w) => ({ id: tileId(w.key), request: this.job(w.key) })));
+    // The roots first, wherever the eye is (a job left out here is dropped from the queue), then the quadtree's tiles.
+    const ids = new Set(wanted.map((w) => tileId(w.key)));
+    const roots = this.roots.filter((k) => !ids.has(tileId(k))).map((k) => ({ id: tileId(k), request: this.job(k) }));
+    this.cache.want([...roots, ...wanted.map((w) => ({ id: tileId(w.key), request: this.job(w.key) }))]);
   }
 
   dispose(): void {
