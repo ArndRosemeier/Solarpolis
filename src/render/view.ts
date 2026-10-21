@@ -136,7 +136,9 @@ export class InteriorView {
     figure.object.visible = false;
     figure.object.traverse((o) => { o.layers.set(BODY_LAYER); o.castShadow = true; o.receiveShadow = true; });
     key.shadow.camera.layers.enable(BODY_LAYER);
-    await this.stage.add(figure.object);
+    // Every part's shadow is warmed, not one per kind of part: a figure's shadow shaders are its own (Stage.prepare).
+    await this.stage.prepare(figure.object, { everyCaster: true });
+    this.scene.add(figure.object);
     this.figure = figure;
   }
 
