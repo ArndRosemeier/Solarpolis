@@ -50,3 +50,5 @@ git push origin HEAD:refs/heads/shots-req/<who>/<view,view,…>     # e.g. shots
 The watcher runs while Arnd's PC is on. If nothing happens for a few minutes, ask in the thread "GPU rendering on Arnd's PC" (through the project's coordinator).
 
 Anyone who can push to this repository can make the PC build and run a branch, which is why requests are taken from this repository only.
+
+Pushing a request again under the same name while it renders is safe: the watcher renders the commit the request pointed to when it saw it, and deletes the branch only if it still points there, so the newer push is rendered next. Only one watcher runs per machine (`.render/watch.lock`).
