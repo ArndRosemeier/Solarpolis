@@ -14,7 +14,7 @@
  */
 import { DataArrayTexture, Vector3, type Node } from 'three/webgpu';
 import { filtered } from './textures';
-import { abs, attribute, clamp, dFdx, dFdy, exp, float, floor, int, length, log, max, min, mix, mx_noise_float, fract, dot, normalize, positionWorld, pow, select, smoothstep, sqrt, texture, uniform, uniformArray, vec2, vec3 } from 'three/tsl';
+import { Fn, If, abs, attribute, clamp, dFdx, dFdy, exp, float, floor, int, length, log, max, min, mix, mx_noise_float, fract, dot, normalize, positionWorld, pow, select, smoothstep, sqrt, texture, uniform, uniformArray, vec2, vec3 } from 'three/tsl';
 import { FLOOR_LAYERS, type FloorLayer, type HabitatParams } from '../blueprint';
 import type { WorkerPool } from '../workers/pool';
 import { GROUND_LAYERS, GROUND_TEX } from '../gen/groundTex';
@@ -234,36 +234,53 @@ const BED_MEAN = BED_TONES.reduce((sum, [share, t]) => sum + share * (t[0] + t[1
 const LICHEN_MEAN = 0.2;
 const LICHEN = vec3(0.95, 1.05, 0.62);
 
+/** Streaks down steep rock where water runs (darker), as a share of the rock's light, and how much of it they cover. */
+const STREAK_DARK = 0.7, STREAK_MEAN = 0.3;
+
 /**
  * Rock from afar (GROUND, where the floor is rock: the `rock` share, docs/far-view.md): the climate's one rock colour
  * becomes packages of darker, warmer and paler beds, folded and dipping across the slope and showing where the rock is
- * steep (on ledges they weather to one surface), broad tones over many beds, and lichen in patches. Each scale gives
- * way to its mean as the footprint grows (`footprint`), so rock seen across the habitat keeps the light it has close up.
+ * steep (on ledges they weather to one surface), dark streaks down the fall line where water runs, broad tones over
+ * many beds, and lichen in patches. Each scale gives way to its mean as the footprint grows (`footprint`), so rock seen
+ * across the habitat keeps the light it has close up. Ground with no rock skips all of it.
  */
 export function rockFromAfar(color: Node<'vec3'>, rock: Node<'float'>, world: Node<'vec3'>, normal: Node<'vec3'>): Node<'vec3'> {
+  // Footprints first: derivatives are only defined outside the branch.
   const { shown } = footprint();
   const bed = rockBed;
-  // The beds: the dip, folded at two scales.
-  const fold = mx_noise_float(world.div(bed.mul(20))).mul(6).add(mx_noise_float(world.div(bed.mul(7)).add(vec3(2.3, 9.1, 4.7))).mul(1.5));
-  const u = dot(world, vec3(DIP.x, DIP.y, DIP.z)).div(bed).add(fold);
-  const toneOf = (k: Node<'float'>): Node<'vec3'> => {
-    const pack = cellHash(vec3(floor(k.div(PACKAGE)), 7, 3)).x, own = cellHash(vec3(k, 1, 5)).x.sub(0.5).mul(0.12).add(1);
-    let t: Node<'vec3'> = vec3(...BED_TONES[0][1]), from = BED_TONES[0][0];
-    for (const [share, tone] of BED_TONES.slice(1)) { t = select(pack.greaterThan(from), vec3(...tone), t); from += share; }
-    return t.mul(own);
-  };
-  const k = floor(u), seam = smoothstep(0.8, 1, fract(u));
-  const beds = mix(toneOf(k), toneOf(k.add(1)), seam).div(BED_MEAN);
-  // Steep rock shows its beds; a ledge's top is one weathered surface. Up is toward the axis.
-  const up = vec3(world.x, world.y, 0).normalize().negate();
-  const steep = smoothstep(0.15, 0.6, float(1).sub(dot(normal, up)));
-  const layered = mix(vec3(1), beds, shown(bed.mul(1.5)).mul(steep));
-  // Broad tones over thirty beds: warmer where darker.
-  const broad = mx_noise_float(world.div(bed.mul(30)).add(vec3(5.3, 1.7, 8.1))).mul(shown(bed.mul(30)));
-  const tones = vec3(broad.mul(0.25).add(1), broad.mul(0.2).add(1), broad.mul(0.12).add(1));
-  // Lichen in patches of a few beds across.
-  const patches = smoothstep(0.05, 0.45, mx_noise_float(world.div(bed.mul(2.5)).add(vec3(11.1, 2.9, 6.4))));
-  const lichen = mix(float(LICHEN_MEAN), patches, shown(bed.mul(2.5))).mul(0.5);
-  const stone = color.mul(layered).mul(tones);
-  return mix(color, mix(stone, stone.mul(LICHEN), lichen), rock);
+  const showBeds = shown(bed.mul(1.5)), showStreaks = shown(bed.mul(0.8)), showBroad = shown(bed.mul(30)), showLichen = shown(bed.mul(2.5));
+  return Fn(() => {
+    const out = vec3(color).toVar();
+    If(rock.greaterThan(0.004), () => {
+      // The beds: the dip, folded at two scales.
+      const fold = mx_noise_float(world.div(bed.mul(20))).mul(6).add(mx_noise_float(world.div(bed.mul(7)).add(vec3(2.3, 9.1, 4.7))).mul(1.5));
+      const u = dot(world, vec3(DIP.x, DIP.y, DIP.z)).div(bed).add(fold);
+      const toneOf = (k: Node<'float'>): Node<'vec3'> => {
+        const pack = cellHash(vec3(floor(k.div(PACKAGE)), 7, 3)).x, own = cellHash(vec3(k, 1, 5)).x.sub(0.5).mul(0.12).add(1);
+        let t: Node<'vec3'> = vec3(...BED_TONES[0][1]), from = BED_TONES[0][0];
+        for (const [share, tone] of BED_TONES.slice(1)) { t = select(pack.greaterThan(from), vec3(...tone), t); from += share; }
+        return t.mul(own);
+      };
+      const k = floor(u), seam = smoothstep(0.8, 1, fract(u));
+      const beds = mix(toneOf(k), toneOf(k.add(1)), seam).div(BED_MEAN);
+      // Steep rock shows its beds and its streaks; a ledge's top is one weathered surface. Up is toward the axis.
+      const up = vec3(world.x, world.y, 0).normalize().negate();
+      const steep = smoothstep(0.15, 0.6, float(1).sub(dot(normal, up)));
+      const layered = mix(vec3(1), beds, showBeds.mul(steep));
+      // Streaks: noise drawn out down the fall line (narrow across it, long along it).
+      const fall = up.sub(normal.mul(dot(up, normal))).normalize(), side = normal.cross(fall);
+      const along = vec3(dot(world, side).div(bed.mul(0.8)), dot(world, fall).div(bed.mul(10)), 0.5);
+      const streak = mix(float(STREAK_MEAN), smoothstep(0.1, 0.4, mx_noise_float(along)), showStreaks);
+      const wet = float(1).sub(streak.mul(steep).mul(1 - STREAK_DARK));
+      // Broad tones over thirty beds: warmer where darker.
+      const broad = mx_noise_float(world.div(bed.mul(30)).add(vec3(5.3, 1.7, 8.1))).mul(showBroad);
+      const tones = vec3(broad.mul(0.25).add(1), broad.mul(0.2).add(1), broad.mul(0.12).add(1));
+      // Lichen in patches of a few beds across.
+      const patches = smoothstep(0.05, 0.45, mx_noise_float(world.div(bed.mul(2.5)).add(vec3(11.1, 2.9, 6.4))));
+      const lichen = mix(float(LICHEN_MEAN), patches, showLichen).mul(0.5);
+      const stone = color.mul(layered).mul(tones).mul(wet);
+      out.assign(mix(color, mix(stone, stone.mul(LICHEN), lichen), rock));
+    });
+    return out;
+  })() as unknown as Node<'vec3'>;
 }
