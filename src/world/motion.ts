@@ -35,3 +35,12 @@ export function coast(h: Habitat, p: Vec3, v: Vec3, seconds: number, dt = 1 / 24
   }
   return { p: P, v: V, t };
 }
+
+/**
+ * Which way is up at `p`: straight toward the axis, against the spin's apparent gravity (its strength there is
+ * `habitat.gravityAt(r)`). On the axis itself there is no up, and this returns null.
+ */
+export function upAt(p: Vec3): Vec3 | null {
+  const r = Math.hypot(p[0], p[1]);
+  return r < 1e-6 ? null : [-p[0] / r, -p[1] / r, 0];
+}

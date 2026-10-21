@@ -7,7 +7,7 @@
  * come from the blueprint's relief (`HabitatParams.relief`): hills, the ring lake, the terrace step.
  */
 import { Noise, Rng, deriveSeed, smoothstep } from '@futuremagic/core';
-import type { Habitat } from '../blueprint';
+import { fromWorld, type Habitat, type Vec3 } from '../blueprint';
 
 export interface Lake {
   /** Where the lake's centre line lies along the profile, and its half width (m). */
@@ -27,6 +27,8 @@ export interface Terrain {
   heightAt(theta: number, s: number): number;
   /** Where something standing there rests: the ground, or the water's surface over the lake. */
   standAt(theta: number, s: number): number;
+  /** How deep a world point lies under the lake's surface (m); 0 or less where there is no water over it. */
+  waterDepth(p: Vec3): number;
   /** Linear RGB of the ground at a point whose height is known, with the slope (0 flat … 1 vertical). */
   colorAt(theta: number, s: number, h: number, slope: number, out: Float32Array, i: number): void;
 }
@@ -134,5 +136,11 @@ export function makeTerrain(h: Habitat): Terrain {
     out[i + 2] = Math.min(1, Math.max(0, c2 * v));
   };
 
-  return { habitat: h, lake, heightAt, standAt, colorAt };
+  const waterDepth = (p: Vec3): number => {
+    const at = fromWorld(profile, p[0], p[1], p[2]);
+    const surface = standAt(at.theta, at.s);
+    return surface > heightAt(at.theta, at.s) ? surface - at.h : 0;
+  };
+
+  return { habitat: h, lake, heightAt, standAt, waterDepth, colorAt };
 }

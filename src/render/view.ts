@@ -2,7 +2,9 @@
  * The view from inside: the one renderer (WebGPU only), the Stage, the terrain tiles and the sunline, seen by a walker
  * on the ground or a flyer in the air. Everything is drawn relative to the eye (`toView`): the camera sits at the origin
  * and the world moves. Hold the right mouse button to look around (the pointer stays free for clicking things);
- * W A S D or the arrow keys to move, Shift to run; F takes off or lands, and in the air E or Space climbs, Q or C sinks.
+ * W A S D or the arrow keys to move, Shift to run, Space to jump; F takes off or lands, and in the air E or Space climbs,
+ * Q or C sinks. On foot the physics carries the player (`physics/character.ts`): up is toward the axis, and gravity
+ * is the spin's.
  */
 import { Color, CylinderGeometry, Mesh, PerspectiveCamera, Scene, SphereGeometry, type WebGPURenderer } from 'three/webgpu';
 import { Stage, createRenderer } from '@futuremagic/stage';
@@ -11,6 +13,7 @@ import { makeTerrain, type Terrain } from '../gen/terrain';
 import { Walker, type View } from '../world/walker';
 import { Flyer } from '../world/flyer';
 import { PhysicsWorld } from '../physics/world';
+import type { Character } from '../physics/character';
 import { WorkerPool } from '../workers/pool';
 import { BALL, SUNLINE, air, allKinds, setAir, setEmission, setSunline, standInAttribute, view } from './materials';
 import { dayPhase, emissionMean, nearestLit, sunlineEmission, sunlineNorm, EMISSION_SAMPLES } from '../world/sunline';
@@ -22,6 +25,8 @@ const RUN = 8;
 /** The physics' ground patch: side (m) and cell (m). */
 const PATCH_SIZE = 192;
 const PATCH_CELL = 1;
+/** The player stops walking this share of the patch's size from its centre until the next patch arrives. */
+const PATCH_EDGE = 0.4;
 /** One sphere shared by every test ball (the kind's attributes: position and normal). */
 const BALL_GEOMETRY = new SphereGeometry(0.25, 20, 14).deleteAttribute('uv');
 /** Clock seconds per real second by default: a day in about 24 minutes, so the sun is seen to travel. */
@@ -56,6 +61,9 @@ export class InteriorView {
   private physics: PhysicsWorld | null = null;
   private physicsLoading: Promise<PhysicsWorld> | null = null;
   private patchAsked = false;
+  /** The player's body on foot, once the physics has ground under it; null while flying. */
+  private character: Character | null = null;
+  private jump = false;
   private readonly balls = new Map<number, Mesh>();
   /** The last dropped ball: where it was let go (θ) and from how high, and how far it landed behind, once it has. */
   private drop: { id: number; theta: number; height: number; landed: number | null } | null = null;
@@ -79,6 +87,7 @@ export class InteriorView {
     await v.stage.warmUp();
     await v.build();
     v.listen();
+    void v.physicsReady();
     return v;
   }
 
@@ -95,7 +104,9 @@ export class InteriorView {
   /** Lines for the debug menu. */
   info(): string {
     const a = this.flyer ? fromWorld(this.habitat.profile, ...this.flyer.eye) : this.walker.at;
-    const mode = this.flyer ? `flying ${this.flyer.clearance().toFixed(0)} m up` : 'on foot';
+    const c = this.character, g = this.habitat.gravityAt(Math.hypot(...this.current().eye.slice(0, 2) as [number, number]));
+    const mode = this.flyer ? `flying ${this.flyer.clearance().toFixed(0)} m up`
+      : !c ? 'on foot (waiting for the physics)' : `on foot, ${c.swimming ? 'swimming' : c.grounded ? 'standing' : 'in the air'}, gravity ${(g / 9.81).toFixed(2)} g`;
     return [
       this.stage.hudLine(),
       `${this.tiles?.info() ?? 'terrain: none'} · ${describeLayout(this.terrain)} · ${this.pool.workers} workers`,
@@ -171,6 +182,17 @@ export class InteriorView {
     const answer = await this.pool.job({ kind: 'patch', params: this.habitat.params, theta: at.theta, s: at.s, size: PATCH_SIZE, cell: PATCH_CELL });
     if ('patch' in answer && this.physics) this.physics.setGround(answer.patch);
     this.patchAsked = false;
+    this.standUp();
+  }
+
+  /** Give the walker a body once the physics has ground under it (at the start, and after landing). */
+  private standUp(): void {
+    const p = this.physics;
+    if (!p || this.flyer || this.character) return;
+    const { theta, s } = this.walker.at;
+    const feet = toWorld(this.habitat.profile, { theta, s, h: this.terrain.standAt(theta, s) + 0.05 });
+    if (p.offPatch(feet, PATCH_EDGE)) return;
+    this.character = p.addCharacter(feet, this.terrain.waterDepth);
   }
 
   /** Step the physics and put the balls where it says. */
@@ -178,7 +200,15 @@ export class InteriorView {
     const p = this.physics;
     if (!p) return;
     if (p.needsGround(eye)) void this.groundFor(eye);
+    const c = this.character;
+    const o = p.groundPatch?.origin;
+    if (c && o && p.offPatch(c.feet(), PATCH_EDGE)) {
+      // At the patch's edge, walk only back toward its middle until the next patch arrives: no ground beyond it yet.
+      const f = c.feet(), w = c.stride.walk;
+      if (w[0] * (f[0] - o[0]) + w[1] * (f[1] - o[1]) + w[2] * (f[2] - o[2]) > 0) c.stride.walk = [0, 0, 0];
+    }
     p.advance(dt);
+    if (c) this.walker.follow(c.feet(p.blend));
     const alive = new Set<number>();
     for (const b of p.states()) {
       alive.add(b.id);
@@ -206,6 +236,7 @@ export class InteriorView {
     this.habitat = h;
     this.terrain = makeTerrain(h);
     this.flyer = null;
+    this.character = null;
     this.clearBalls();
     this.physics?.dispose();
     this.physics = null;
@@ -259,7 +290,10 @@ export class InteriorView {
       const at = fromWorld(this.habitat.profile, ...this.flyer.eye);
       this.walker.land(at.theta, at.s, this.flyer.look);
       this.flyer = null;
+      this.standUp();
     } else {
+      this.physics?.removeCharacter();
+      this.character = null;
       this.flyer = new Flyer(this.habitat.profile, this.walker.view(), this.terrain.standAt);
     }
   }
@@ -293,7 +327,7 @@ export class InteriorView {
     window.addEventListener('keydown', (e) => {
       if (!this.running) return;
       if (e.code === 'KeyF' && !e.repeat) this.toggleFlying();
-      if (e.code === 'Space') e.preventDefault();
+      if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) this.jump = true; }
       this.keys.add(e.code);
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
@@ -326,9 +360,15 @@ export class InteriorView {
     } else {
       const base = this.walker.speed;
       this.walker.speed = base * run;
-      this.walker.step({ forward, right }, dt);
+      if (this.character) {
+        this.character.stride.walk = this.walker.stride({ forward, right });
+        if (this.jump) this.character.stride.jump = true;
+      } else {
+        this.walker.step({ forward, right }, dt);
+      }
       this.walker.speed = base;
     }
+    this.jump = false;
     const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
     if (w && h && (this.canvas.width !== Math.round(w * this.renderer.getPixelRatio()) || this.camera.aspect !== w / h)) {
       this.renderer.setSize(w, h, false);
