@@ -15,7 +15,7 @@ import {
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { GLINT_GAIN, GLINT_POWER, LOOK, SALT, type Columns, type Skin } from '../gen/skin';
-import { outside } from './skyShaders';
+import { DISPLAY_CAP, outside } from './skyShaders';
 
 /** A habitat's skin as the four vectors its mesh hands the shader (`mesh.userData.skin`). */
 export interface SkinUniforms {
@@ -170,6 +170,29 @@ export function radiatorColor(): Node<'vec3'> {
   const albedo = v3(RADIATOR).mul(strip).mul(mix(float(0.6), float(1), lines));
   const n = normalWorld, light = lightOn(n);
   return albedo.mul(light.all).add(glint(n, light.sun, float(0.05))).mul(outside.exposure);
+}
+
+/** A torch's exhaust plume: its glowing length, how hard the drive thrusts (0–1), per mesh in `userData.flame`. */
+export interface FlameUniforms {
+  /** (plume length at full thrust (m), throttle 0–1, nozzle radius (m), unused). */
+  flame: Vector4;
+}
+const noFlame: FlameUniforms = { flame: new Vector4(1, 0, 1, 0) };
+const flameOf = uniform(new Vector4()).onObjectUpdate(({ object }) => ((object?.userData.flame as FlameUniforms | undefined) ?? noFlame).flame);
+/** The plasma's glow at the nozzle at full thrust, in the outside's radiance units. */
+const FLAME_GLOW = 60;
+
+/**
+ * The exhaust of a fusion torch: hot plasma glowing violet-white at the nozzle and fading to blue down the plume. The
+ * glow shortens with the throttle and goes out with it; seen edge-on the thin sheath of plasma fades, so it is soft.
+ */
+export function flameColor(): Node<'vec3'> {
+  const length = flameOf.x, throttle = flameOf.y;
+  const s = clamp(positionLocal.x.negate().div(length), 0, 1);
+  const fall = s.negate().div(throttle.mul(0.25).add(1e-3)).exp();
+  const facing = pow(dot(normalWorld, normalize(positionWorld)).abs(), 1.5);
+  const tint = mix(vec3(0.88, 0.84, 1), vec3(0.42, 0.52, 1), smoothstep(0, 0.5, s));
+  return min(tint.mul(fall).mul(facing).mul(throttle).mul(FLAME_GLOW).mul(outside.exposure), DISPLAY_CAP);
 }
 
 /** Plain hardware (spindle, berth arms, mast): albedo from the vertex colour, a dull metal sheen. */

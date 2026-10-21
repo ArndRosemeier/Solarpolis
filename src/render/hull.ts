@@ -7,69 +7,14 @@
  * without the spin.
  */
 import type { BufferGeometry } from 'three/webgpu';
-import { meshGeometry } from './geometry';
+import { ShapeBuilder as Builder, type RGB } from './geometry';
 import type { Habitat } from '../blueprint';
 
-type RGB = [number, number, number];
 /** Albedos of the hardware: the pale spindle and arms, the grey mast. */
 const SPINDLE: RGB = [0.55, 0.55, 0.56];
 const MAST: RGB = [0.32, 0.31, 0.3];
 /** Segments around the drum: the facets stay within a few centimetres of the true circle even for the largest habitats. */
 const DRUM_SEGMENTS = 2048;
-
-class Builder {
-  readonly pos: number[] = [];
-  readonly nrm: number[] = [];
-  readonly col: number[] = [];
-  readonly idx: number[] = [];
-  constructor(private readonly segments: number, private readonly colored: boolean) {}
-
-  /**
-   * A surface of revolution between two rings (z0, r0) and (z1, r1), with the given outward normal in (z, r).
-   * Straight pieces only, so flat shading across the band is exact.
-   */
-  band(z0: number, r0: number, z1: number, r1: number, nz: number, nr: number, c?: RGB): void {
-    const n = this.segments, base = this.pos.length / 3;
-    for (let i = 0; i <= n; i++) {
-      const a = (i / n) * 2 * Math.PI, ca = Math.cos(a), sa = Math.sin(a);
-      for (const [z, r] of [[z0, r0], [z1, r1]]) {
-        this.pos.push(r * ca, r * sa, z);
-        this.nrm.push(nr * ca, nr * sa, nz);
-        if (c) this.col.push(...c);
-      }
-    }
-    for (let i = 0; i < n; i++) {
-      const a = base + i * 2;
-      this.idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
-    }
-  }
-
-  /** A box (berth arm) from its centre and half sizes, axis-aligned in the blueprint frame. */
-  box(c: [number, number, number], h: [number, number, number], col: RGB): void {
-    for (let axis = 0; axis < 3; axis++) {
-      for (const side of [-1, 1]) {
-        const base = this.pos.length / 3, u = (axis + 1) % 3, v = (axis + 2) % 3;
-        for (const [su, sv] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
-          const p = [0, 0, 0], n = [0, 0, 0];
-          p[axis] = c[axis] + side * h[axis];
-          p[u] = c[u] + su * h[u];
-          p[v] = c[v] + sv * h[v];
-          n[axis] = side;
-          this.pos.push(...p);
-          this.nrm.push(...n);
-          this.col.push(...col);
-        }
-        this.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
-      }
-    }
-  }
-
-  build(): BufferGeometry {
-    const attrs: Record<string, [Float32Array, number]> = { position: [new Float32Array(this.pos), 3], normal: [new Float32Array(this.nrm), 3] };
-    if (this.colored) attrs.color = [new Float32Array(this.col), 3];
-    return meshGeometry(new Uint32Array(this.idx), attrs);
-  }
-}
 
 export interface HullGeometry {
   /** The drum's solar skin (SKIN). */

@@ -11,16 +11,18 @@
  * Exposure follows what is in sight (render/exposure.ts), so the stars show only when nothing bright is in view, as
  * for eyes; the "night eyes" augmentation (debug menu) lets the eyes open much further.
  */
-import { Color, Mesh, PerspectiveCamera, Scene, SphereGeometry, Texture, LinearFilter, LinearMipmapLinearFilter, SRGBColorSpace, type WebGPURenderer } from 'three/webgpu';
+import { Color, Mesh, PerspectiveCamera, Vector4, Scene, SphereGeometry, Texture, LinearFilter, LinearMipmapLinearFilter, SRGBColorSpace, type WebGPURenderer } from 'three/webgpu';
 import { Stage, createRenderer } from '@futuremagic/stage';
-import { Rng, deriveSeed, v3add, v3dot, v3len, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
+import { Rng, deriveSeed, v3add, v3cross, v3dot, v3len, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
 import type { Habitat } from '../blueprint';
-import { DAY, EARTH, MOON, REFERENCE_SPACE, SpaceFlyer, calendarOf, decodeStars, julianDay, makeSpace, skyFrom, type Mat3, type Space, type SkyView } from '../space';
-import { SKY, STARS, outsideKinds, standInAttribute } from './materials';
+import { DAY, EARTH, MOON, REFERENCE_SPACE, SpaceFlyer, TORCH_SHIP, attractLoop, calendarOf, chooseStart, decodeStars, julianDay, makeSpace, skyFrom, torchShip, type Cinema, type CinemaFrame, type Mat3, type Space, type SkyView } from '../space';
+import { FLAME, HARDWARE, SKY, STARS, outsideKinds, standInAttribute } from './materials';
 import { outside, skyMaps } from './skyShaders';
 import { DARKEST, PERIPHERY, adapt, exposureFor, type Meterable } from './exposure';
 import { NecklaceView, setPose } from './necklace';
 import { meshGeometry } from './geometry';
+import { SHIP_ALBEDO, shipGeometry } from './ship';
+import type { FlameUniforms } from './hullShaders';
 import { FrameLoop, dragToLook, draw, fitCanvas, moveKeys } from './surface';
 
 /** Clock seconds per real second by default: Earth turns visibly, a day in 24 minutes. */
@@ -46,6 +48,12 @@ export class OutsideView {
   private flyer: SpaceFlyer | null = null;
   private readonly loop = new FrameLoop((dt) => this.frame(dt), (e) => this.key(e));
   private sky: SkyView | null = null;
+  /** The title's attract loop while it plays (space/cinema.ts): the shots, seconds into them, this frame. */
+  private attract: { cinema: Cinema; elapsed: number; frame: CinemaFrame } | null = null;
+  private readonly shipShape = torchShip(TORCH_SHIP);
+  private ship: { body: Mesh; plume: Mesh; flame: FlameUniforms } | null = null;
+  /** Called each frame of the attract loop with how far the title has faded in (0–1). */
+  onTitle: ((fade: number) => void) | null = null;
   /** Clock seconds since the space's epoch, and how many pass per real second. */
   time: number;
   timeScale = SPACE_SPEED;
@@ -206,6 +214,7 @@ export class OutsideView {
 
   /** Where the eye is in the orbit frame, and what it looks at. */
   private eyeAndTarget(): { eye: Vec3; target: Vec3 } {
+    if (this.attract) return { eye: this.attract.frame.eye, target: this.attract.frame.target };
     if (this.flyer) return { eye: this.flyer.eye, target: v3add(this.flyer.eye, this.flyer.look()) };
     const cp = Math.cos(this.pitch);
     const eye: Vec3 = v3scale([cp * Math.cos(this.yaw), cp * Math.sin(this.yaw), Math.sin(this.pitch)], this.distance);
@@ -260,14 +269,64 @@ export class OutsideView {
     this.necklace?.follow(eye, t, sky, px / ((this.camera.fov * Math.PI) / 180));
     if (this.stars) setPose(this.stars, sp.frames.relative('sun', f, t).axes, [0, 0, 0]);
     this.camera.position.set(0, 0, 0);
-    this.camera.up.set(0, 0, 1);
+    const shot = this.attract?.frame;
+    this.camera.up.set(...(shot?.up ?? [0, 0, 1]));
     const look = v3sub(target, eye);
     this.camera.lookAt(look[0], look[1], look[2]);
-    this.camera.fov = this.look === 'habitat' || this.flyer ? 45 : this.zoom;
+    this.camera.fov = shot ? shot.fov : this.look === 'habitat' || this.flyer ? 45 : this.zoom;
+    this.placeShip(eye, shot?.ship ?? null);
     // Close to a surface the near plane comes in with it; reversed depth keeps the far side precise.
     this.camera.near = Math.max(0.05, Math.min(10, this.clearance([0, 0, 0]) * 0.25));
     this.camera.updateProjectionMatrix();
     this.camera.updateMatrixWorld();
+  }
+
+  /** The torch ship of the title flight, where the shot puts it (hidden otherwise). */
+  private placeShip(eye: Vec3, at: CinemaFrame['ship']): void {
+    if (!this.ship) return;
+    const { body, plume, flame } = this.ship;
+    body.visible = plume.visible = !!at;
+    if (!at) return;
+    // Ship axes: x to the nose, z the radiator wings' side, y completing them.
+    const x = at.forward, z = v3norm(v3cross(x, at.up)), y = v3cross(z, x);
+    const axes: Mat3 = [x[0], y[0], z[0], x[1], y[1], z[1], x[2], y[2], z[2]];
+    setPose(body, axes, v3sub(at.position, eye));
+    setPose(plume, axes, v3sub(at.position, eye));
+    flame.flame.y = at.throttle;
+  }
+
+  /**
+   * Play the title's attract loop (shots 1 to 3) on the real clock from the moment the cinematographer picks in the
+   * first two days of the game clock, until `stopAttract`.
+   */
+  async startAttract(): Promise<void> {
+    if (!this.ship) {
+      const g = shipGeometry(this.shipShape);
+      const flame: FlameUniforms = { flame: new Vector4(this.shipShape.plumeLength, 1, this.shipShape.nozzle, 0) };
+      const body = new Mesh(g.body, HARDWARE.material), plume = new Mesh(g.plume, FLAME.material);
+      for (const m of [body, plume]) { m.matrixAutoUpdate = false; m.frustumCulled = false; m.visible = false; }
+      body.name = 'torch ship';
+      plume.name = 'torch plume';
+      plume.userData.flame = flame;
+      this.ship = { body, plume, flame };
+      await Promise.all([this.stage.add(body), this.stage.add(plume)]);
+    }
+    this.flyer = null;
+    const start = chooseStart(this.space, 0);
+    const cinema = attractLoop(this.space, start, this.habitat.params.exterior.keepOut, this.shipShape.params.length);
+    this.attract = { cinema, elapsed: 0, frame: cinema.at(0) };
+    this.time = start;
+  }
+
+  /** Back to the free view, from where the loop left the clock. */
+  stopAttract(): void {
+    this.attract = null;
+    if (this.ship) this.ship.body.visible = this.ship.plume.visible = false;
+    this.frameHabitat();
+  }
+
+  get attracting(): boolean {
+    return this.attract !== null;
   }
 
   private bindControls(): void {
@@ -312,10 +371,22 @@ export class OutsideView {
   private frame(dt: number): void {
     fitCanvas(this.canvas, this.renderer, this.camera);
     if (this.flyer) this.flyer.step(moveKeys(this.loop.keys), dt, (p) => this.clearance(v3sub(p, this.flyer!.eye)));
-    this.time += dt * this.timeScale;
-    outside.clouds.value.z = outside.clouds.value.z - (dt * this.timeScale / DAY) * 0.05;
+    // The attract loop runs on the real clock: every shot plays at real speed.
+    const speed = this.attract ? 1 : this.timeScale;
+    let cut = false;
+    if (this.attract) {
+      const a = this.attract;
+      a.elapsed += dt;
+      const next = a.cinema.at(a.elapsed);
+      cut = next.shot !== a.frame.shot;
+      a.frame = next;
+      this.onTitle?.(next.title);
+    }
+    this.time += dt * speed;
+    outside.clouds.value.z = outside.clouds.value.z - (dt * speed / DAY) * 0.05;
     this.place();
-    this.meterAndAdapt(dt);
+    // A cut is a new camera: it meters afresh instead of adapting from the last shot.
+    this.meterAndAdapt(cut ? Infinity : dt);
     const ratio = this.renderer.getPixelRatio(), px = (this.canvas.clientHeight || 720) * ratio;
     outside.pixelSolidAngle.value = ((this.camera.fov * Math.PI) / 180 / px) ** 2;
     outside.viewport.value.set((this.canvas.clientWidth || 1280) * ratio, px);
@@ -333,7 +404,14 @@ export class OutsideView {
       const x = ((i + 0.5) / 16 * 2 - 1) * th * aspect, y = ((j + 0.5) / 9 * 2 - 1) * th;
       rays.push(v3norm(v3add(fwd, v3add(v3scale(right, x), v3scale(up, y)))));
     }
-    const metered: Meterable = { sky: this.sky, hulls: this.necklace?.hulls() ?? [], earthshine: outside.earthshine.value };
+    const hulls = this.necklace?.hulls() ?? [];
+    const ship = this.attract?.frame.ship, eye = this.attract?.frame.eye;
+    if (ship && eye) {
+      // The title's ship fills much of shot 1: the meter sees it as the cylinder of its crew section's beam.
+      const L = this.shipShape.params.length;
+      hulls.push({ center: v3sub(v3add(ship.position, v3scale(ship.forward, L / 2)), eye), axis: ship.forward, radius: this.shipShape.params.beam / 2, halfLength: L / 2, albedo: SHIP_ALBEDO });
+    }
+    const metered: Meterable = { sky: this.sky, hulls, earthshine: outside.earthshine.value };
     this.exposure = adapt(this.exposure, exposureFor(metered, rays, this.nightEyes ? DARKEST.nightEyes : DARKEST.plain), dt);
     outside.exposure.value = this.exposure;
   }

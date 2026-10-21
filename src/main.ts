@@ -5,6 +5,7 @@
  */
 import './app/style.css';
 import { el } from './app/dom';
+import { TitleCard } from './app/title';
 import { DebugMenu } from './app/debug';
 import { MemoryWatchdog, browserHeap, thisDeviceBudget, type PressureLevel } from './app/memory';
 import { VERSION, whatsNewButton } from './app/whatsNew';
@@ -23,7 +24,9 @@ const header = el('header', 'top');
 const tabs = el('nav', 'tabs');
 const labTab = el('button', 'tab on', 'Blueprint'), insideTab = el('button', 'tab', 'Inside'), outsideTab = el('button', 'tab', 'Outside');
 tabs.append(labTab, insideTab, outsideTab);
-header.append(el('h1', '', 'Solarpolis'), tabs, whatsNewButton());
+const home = el('h1', '', 'Solarpolis');
+home.title = 'Back to the title';
+header.append(home, tabs, whatsNewButton());
 app.append(header);
 
 // ---- the memory watchdog --------------------------------------------------------------------------
@@ -42,7 +45,7 @@ const lab = new BlueprintLab(new URLSearchParams(location.search), (query) => {
   // The Lab owns the habitat's fields; the open view rides along.
   const q = new URLSearchParams(query);
   const open = new URLSearchParams(location.search).get('view');
-  if (open === 'inside' || open === 'outside') q.set('view', open);
+  if (open === 'inside' || open === 'outside' || open === 'lab') q.set('view', open);
   const all = q.toString();
   history.replaceState(null, '', all ? `?${all}` : location.pathname);
 });
@@ -99,27 +102,43 @@ const fit = (): void => { for (const s of [insideSlot, outsideSlot]) s.box.style
 new ResizeObserver(fit).observe(header);
 let starting: Promise<void> | null = null;
 
-type Tab = 'lab' | 'inside' | 'outside';
+// The title: the Outside view flying its attract loop, with the card over it. It is where the page opens.
+const title = new TitleCard(() => showTab('inside'));
+outsideSlot.box.append(title.root);
+
+type Tab = 'title' | 'lab' | 'inside' | 'outside';
 function showTab(which: Tab): void {
   labTab.classList.toggle('on', which === 'lab');
   insideTab.classList.toggle('on', which === 'inside');
   outsideTab.classList.toggle('on', which === 'outside');
   lab.root.hidden = which !== 'lab';
+  const titled = which === 'title';
+  title.show(titled);
+  outsideSlot.box.classList.toggle('titled', titled);
   for (const [tab, slot] of [['inside', insideSlot], ['outside', outsideSlot]] as const) {
-    slot.box.hidden = which !== tab;
-    if (which === tab) starting = (starting ?? Promise.resolve()).then(() => slot.show());
+    const on = which === tab || (titled && tab === 'outside');
+    slot.box.hidden = !on;
+    if (on) starting = (starting ?? Promise.resolve()).then(() => slot.show());
     else slot.view?.setRunning(false);
   }
+  starting = (starting ?? Promise.resolve()).then(async () => {
+    const v = outsideSlot.view;
+    if (!v) return;
+    v.onTitle = titled ? (x) => title.fade(x) : null;
+    if (titled && !v.attracting) await v.startAttract();
+    else if (!titled && v.attracting) v.stopAttract();
+  });
   const q = new URLSearchParams(location.search);
-  if (which !== 'lab') q.set('view', which); else q.delete('view');
+  if (which !== 'title') q.set('view', which); else q.delete('view');
   const query = q.toString();
   history.replaceState(null, '', query ? `?${query}` : location.pathname);
 }
+home.addEventListener('click', () => showTab('title'));
 labTab.addEventListener('click', () => showTab('lab'));
 insideTab.addEventListener('click', () => showTab('inside'));
 outsideTab.addEventListener('click', () => showTab('outside'));
 const opened = new URLSearchParams(location.search).get('view');
-if (opened === 'inside' || opened === 'outside') showTab(opened);
+showTab(opened === 'inside' || opened === 'outside' || opened === 'lab' ? opened : 'title');
 
 // ---- the debug menu ------------------------------------------------------------------------------
 debug.addInfo(() => `Solarpolis ${VERSION}`);

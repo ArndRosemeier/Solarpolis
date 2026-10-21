@@ -38,6 +38,14 @@ export function rayLuminance(m: Meterable, d: Vec3): number {
   return rayMeter(m, d).luminance;
 }
 
+/**
+ * The light the eyes judge a surface by: once anything in view is in sunlight, they know the light is sunlight,
+ * however slanted it falls there (a ship's flank in grazing light is not white paper in shadow).
+ */
+function lit(sun: number, sunlight: number): number {
+  return sun > 0 ? sunlight : 0;
+}
+
 function rayMeter(m: Meterable, d: Vec3): { luminance: number; light: number } {
   const s = m.sky;
   const a = v3len(v3cross(d, s.sunDir));
@@ -48,13 +56,13 @@ function rayMeter(m: Meterable, d: Vec3): { luminance: number; light: number } {
     if (h && h.t < near) { near = h.t; hit = { n: h.n, albedo: c.albedo }; }
   }
   if (hit) {
-    const light = Math.max(0, v3dot(hit.n, s.sunDir)) * s.sunlight + m.earthshine;
-    return { luminance: hit.albedo * light + glare, light };
+    const sun = Math.max(0, v3dot(hit.n, s.sunDir)) * s.sunlight;
+    return { luminance: hit.albedo * (sun + m.earthshine) + glare, light: lit(sun, s.sunlight) + m.earthshine };
   }
   const earth = sphereNormal(d, s.earth.center, s.earth.radius);
-  if (earth) { const light = Math.max(0, v3dot(earth, s.sunDir)) * s.sunlight; return { luminance: 0.3 * light + 1e-5 + glare, light }; }
+  if (earth) { const sun = Math.max(0, v3dot(earth, s.sunDir)) * s.sunlight; return { luminance: 0.3 * sun + 1e-5 + glare, light: lit(sun, s.sunlight) }; }
   const moon = sphereNormal(d, s.moon.center, s.moon.radius);
-  if (moon) { const light = Math.max(0, v3dot(moon, s.sunDir)) * s.sunlight; return { luminance: 0.12 * light + glare, light }; }
+  if (moon) { const sun = Math.max(0, v3dot(moon, s.sunDir)) * s.sunlight; return { luminance: 0.12 * sun + glare, light: lit(sun, s.sunlight) }; }
   return { luminance: glare, light: 0 };
 }
 
