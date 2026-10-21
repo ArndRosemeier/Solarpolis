@@ -10,7 +10,7 @@
  * same field shades the land below (`cloudShade`).
  */
 import { Vector2, type Node } from 'three/webgpu';
-import { Fn, Loop, clamp, dot, exp, float, max, mx_fractal_noise_float, pow, select, smoothstep, sqrt, uniform, vec2, vec3 } from 'three/tsl';
+import { Fn, Loop, abs, clamp, min, dot, exp, float, max, mx_fractal_noise_float, pow, select, smoothstep, sqrt, uniform, vec2, vec3 } from 'three/tsl';
 import { band } from './shaderMath';
 import { coverThreshold, type CloudSpan, type CloudState } from '../world/clouds';
 
@@ -37,16 +37,16 @@ const cloud = {
 /** How widely the field's values spread (their standard deviation): four octaves of MaterialX noise. */
 const FIELD_SPREAD = 0.3;
 /** Samples along a line of sight through one crossing of the layer. */
-const STEPS = 14;
+const STEPS = 18;
 /** Field over the threshold for a column the layer's whole thickness tall. */
 const COLUMN = 0.3;
 /** Extinction in a cloud (1/m): light gets about this far into one. */
 const SIGMA = 0.012;
 /** How deep in a cloud the sunline's light from above is down to a third (m), and what is left below any depth. */
-const LIGHT_DEPTH = 160;
-const UNDER = 0.3;
+const LIGHT_DEPTH = 120;
+const UNDER = 0.22;
 /** How much brighter a thin edge is, seen against the light (silver lining). */
-const FORWARD = 1.6;
+const FORWARD = 0.5;
 /** How much of the sunline a cloud overhead keeps off the land at most. */
 const SHADE = 0.6;
 
@@ -92,13 +92,16 @@ export function cloudShade(p: V3): F {
 }
 
 /**
- * The layer along a line of sight from `eye` (world) along `d` (unit), through one crossing: the near one (`far`
- * false: from where it enters the base to the top, or the closest approach to the axis) or the far one (onward to
- * where it leaves the base; from the eye itself when the eye is in or above the layer). `jitter` (0 … 1, per pixel)
+ * The layer along a line of sight from `eye` (world) along `d` (unit) to the fragment `D` metres away. The layer is a
+ * closed can (radius `base`, from `z0` to `z1`) with a hole around the axis (inside `top`); a line crosses the can
+ * once, and the hole splits that into a stretch before it and one after. The can's outer faces (`far` false, seen
+ * from outside it) march the stretch before the hole from where the line enters (the fragment); its inner faces
+ * (`far` true) march the stretch after the hole up to where it leaves (the fragment), and from an eye inside the can
+ * also the stretch before. So the clouds in front of the sunline are drawn in front of it. `jitter` (0 … 1, per pixel)
  * staggers the samples. Returns the light scattered toward the eye (as a share of the sunline's light on the layer's
  * top) and the opacity.
  */
-export function cloudMarch(eye: V3, d: V3, far: boolean, jitter: F): Node<'vec2'> {
+export function cloudMarch(eye: V3, d: V3, D: F, far: boolean, jitter: F): Node<'vec2'> {
   return Fn(() => {
     const A = max(dot(d.xy, d.xy), 1e-8), B = dot(eye.xy, d.xy), E = dot(eye.xy, eye.xy);
     // Where the line meets a cylinder of radius rho: the nearer and farther crossing, and whether it does.
@@ -107,17 +110,22 @@ export function cloudMarch(eye: V3, d: V3, far: boolean, jitter: F): Node<'vec2'
       const root = sqrt(max(disc, 0));
       return { ok: disc.greaterThan(0), near: B.negate().sub(root).div(A), far: B.negate().add(root).div(A) };
     };
-    const outer = meet(cloud.base), inner = meet(cloud.top), closest = B.negate().div(A);
-    // Two stretches (a, then b) of the line inside the layer.
+    const outer = meet(cloud.base), hole = meet(cloud.top);
+    // Into and out of the can: past both its side and its ends.
+    const dz = select(abs(d.z).lessThan(1e-6), float(1e-6), d.z);
+    const t0 = cloud.z0.sub(eye.z).div(dz), t1 = cloud.z1.sub(eye.z).div(dz);
+    const into = max(outer.near, min(t0, t1)), outOf = min(outer.far, max(t0, t1));
+    // Whether the line passes through the hole while in the can.
+    const crossed = hole.ok.and(hole.far.greaterThan(max(into, 0))).and(hole.near.lessThan(outOf));
     let a0: F, a1: F, b0: F, b1: F;
     if (!far) {
-      a0 = max(outer.near, 0); a1 = select(inner.ok, inner.near, closest); b0 = a1; b1 = a1;
+      a0 = D; a1 = select(crossed, clamp(hole.near, D, outOf), outOf); b0 = a1; b1 = a1;
     } else {
-      const under = E.greaterThan(cloud.base.mul(cloud.base));
-      b1 = max(outer.far, 0);
-      a0 = select(under, select(inner.ok, inner.far, closest), float(0));
-      a1 = select(under, b1, select(inner.ok, clamp(inner.near, 0, b1), b1));
-      b0 = select(under, b1, select(inner.ok, clamp(inner.far, 0, b1), b1));
+      const inCan = into.lessThan(0);
+      b1 = D;
+      a0 = select(inCan, float(0), D);
+      a1 = select(inCan, select(crossed, clamp(hole.near, 0, D), D), D);
+      b0 = select(crossed, clamp(hole.far, max(into, 0), D), D);
     }
     const lenA = max(a1.sub(a0), 0), lenB = max(b1.sub(b0), 0);
     const dt = lenA.add(lenB).div(STEPS);
@@ -133,7 +141,7 @@ export function cloudMarch(eye: V3, d: V3, far: boolean, jitter: F): Node<'vec2'
       const c = column(p, 4);
       const wear = mx_fractal_noise_float(inField(p, r).mul(3.3), 2, 2, 0.5);
       const inside = band(b, 0, 0.04, 0.97, 1).mul(smoothstep(0, 0.12, c));
-      const density = clamp(c.sub(b.mul(b).mul(0.9)).add(wear.mul(0.22)).mul(5), 0, 1).mul(inside);
+      const density = clamp(c.sub(b.mul(b).mul(0.9)).add(wear.mul(0.22)).mul(3), 0, 1).mul(inside);
       // Light from the sunline above, dimmed by the cloud over the sample; brighter seen against it (forward scatter).
       const through = exp(max(c.sub(b), 0).mul(thick).div(-LIGHT_DEPTH));
       const out = p.xy.div(r);

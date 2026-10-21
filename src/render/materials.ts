@@ -285,16 +285,15 @@ export const WATER = kind('water', ['position', 'normal', 'flow', 'dir'], { cast
 });
 
 /**
- * The clouds (cloudShaders.ts): a cylinder at the cloud layer's base radius, along the stretch of the axis the layer
- * spans, carrying position only. Its outer faces (seen from under the layer) march the crossing overhead, its inner
- * faces the crossing on the far side of the axis (or all of it, from in or above the layer); the far one is drawn
- * first. White, lit by the sunline over the layer, seen through the air; see-through where they are thin.
+ * The clouds (cloudShaders.ts): a closed can at the cloud layer's base radius, along the stretch of the axis the layer
+ * spans, carrying position only. Its outer faces march the clouds a line of sight meets before the hole around the
+ * axis, its inner faces those after it (and all of them from inside the can); the inner ones are drawn first. White, lit by the sunline over the layer, seen through the air; see-through where they are thin.
  */
 function clouds(name: string, far: boolean): Kind {
   return kind(name, ['position'], { cast: false, receive: false }, () => {
     const m = new MeshBasicNodeMaterial({ side: far ? BackSide : FrontSide, transparent: true, depthWrite: false });
-    const d = normalize(positionWorld.sub(cameraPosition));
-    const march = cloudMarch(view.eye.add(cameraPosition), d, far, interleavedGradientNoise(screenCoordinate.xy));
+    const ray = positionWorld.sub(cameraPosition), D = ray.length();
+    const march = cloudMarch(view.eye.add(cameraPosition), ray.div(D), D, far, interleavedGradientNoise(screenCoordinate.xy));
     const w = worldPosition();
     const lit = sunlit(vec2(OPEN_SKY, OPEN_SKY), normalize(vec3(w.x.negate(), w.y.negate(), 0)), 0, float(1), false);
     m.colorNode = throughAir(vec3(0.93, 0.94, 0.96).mul(lit).mul(march.x.div(max(march.y, 1e-4))));

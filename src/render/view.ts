@@ -372,7 +372,7 @@ export class InteriorView {
     }
   }
 
-  /** The cloud layer's meshes (world/clouds.ts): one cylinder at its base radius, drawn from both sides. */
+  /** The cloud layer's meshes (world/clouds.ts): one closed cylinder at its base radius, drawn from both sides. */
   private cloudLayer(): Group | null {
     const h = this.habitat, span = cloudSpan(h);
     setCloudSpan(span, h.params.clouds?.size ?? 1);
@@ -380,7 +380,8 @@ export class InteriorView {
     if (!span) return null;
     // Fine enough around that its faces lie within a metre of the true cylinder (the march itself is exact).
     const around = Math.min(1024, Math.max(64, Math.ceil(Math.PI / Math.acos(1 - 1 / span.base))));
-    const g = new CylinderGeometry(span.base, span.base, span.z1 - span.z0, around, 1, true);
+    // Closed: a line of sight from inside the layer may leave it through an end.
+    const g = new CylinderGeometry(span.base, span.base, span.z1 - span.z0, around, 1, false);
     g.deleteAttribute('uv');
     g.deleteAttribute('normal'); // the kinds' attribute is position only (docs/SHADERS.md)
     g.rotateX(Math.PI / 2);

@@ -30,7 +30,7 @@ export const REFERENCE: HabitatParams = {
   endcaps: { wild: { reach: 0.6, rise: 1.6 }, port: { reach: 0.5, rise: 1.8 } },
   relief: { hills: 60, ringLake: { width: 500, depth: 15 }, terraceStep: 150, rivers: { count: 6, width: 14, depth: 1.6 } },
   // Fair-weather cumulus: bases at 1.2 km, a third of the sky, a light breeze down the axis.
-  clouds: { base: 1200, thickness: 450, cover: 0.35, size: 900, wind: { along: 3, around: 1 } },
+  clouds: { base: 1200, thickness: 450, cover: 0.3, size: 700, wind: { along: 3, around: 1 } },
   // An Earth day, two thirds lit; the bright stretch a seventh of the length; a dim blue-hour glow at night.
   day: { length: 86400, daylight: 0.65, peakWidth: 0.14, base: 0.3, night: 0.03 },
   exterior: { brimReach: 1.6, brimSpacing: 0.4, maxBrims: 8, brimThickness: 2, brimMaterial: { density: 1800, strength: 3e9, safetyFactor: 1.5 }, spindleLength: 0.25, mastLength: 0.05, berthArms: 6, keepOut: 500, panel: 40, campaign: { around: 12, along: 30 }, panelLife: 120, starfloors: 0.004, drones: { trackEvery: 24, spacing: 2500, size: 3, speed: 1.5 }, antennas: { count: 5, dish: 0.6 }, parts: { module: 2.5, cell: 0.156, plate: 3, handrail: 1.1 } },
