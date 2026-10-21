@@ -12,14 +12,13 @@ Where the work stands, for the next thread. Update it in the PR that changes it.
 - **Sunline light**: `src/world/sunline.ts` (line-light integral over an emission profile along the axis) and `src/gen/horizon.ts` (two horizon angles per point, baked per tile on a 9×9 grid). The shaders sum the integral in 8 steps per pixel instead of the plan's (r, z) table: horizons need a per-point integral anyway, and it needs no compute pass. The day cycle only rewrites the emission texture.
 - **Haze**: `src/world/air.ts` and `throughAir`: density from the blueprint's pressure profile, lit by the sunline (a halo near it), marched per pixel in 10 pieces with the halo term integrated exactly. The plan's froxel volume (compute) is not built: per pixel is exact and needs no compute pass. It becomes worth it when clouds and night lights join the air (milestone 4).
 - **Travelling sun**: `HabitatParams.day` and `sunlineEmission(h, t)`: a bright stretch crosses the tube from the wild end to the port end over the daylight hours, the tube dims at night; the sunline mesh, ground light, sky light and haze all follow it. The view's clock runs ×60 by default (a day in 24 minutes); debug menu, Time.
+- **Rotating-frame physics (milestone 3, part 1)**: `src/world/motion.ts` (centrifugal plus Coriolis), `src/physics/world.ts` (Rapier with gravity off and the apparent force added per step, a bubble that moves with the player over a ground patch from the worker pool). Debug menu, Physics: a ball dropped from 20 m lands about `habitat.dropOffset(20)` behind the spot below it, tested over the whole `MATRIX`.
 - **Fly camera**: `src/world/flyer.ts`, F in the Inside view; E/Space climb, Q/C sink; speed grows with height.
 
 ## Next
 
-1. Milestone 3, "Standing in it": rotating-frame physics (Rapier, Coriolis), the character controller with a moving up, the player as an Actors human, the near shadow map.
-2. The sunline's day: the travelling sun and the night dimming.
-3. Physics for the walker (Rapier, Coriolis), then Actors' humanoid bodies.
-4. Dunfinity can switch to `@futuremagic/stage` and drop its own copy (its own PR, in its own thread).
+1. Milestone 3, "Standing in it": the character controller in `PhysicsWorld` with a moving up (replaces the walker's glide), the player as an Actors human, the near shadow map.
+2. Dunfinity can switch to `@futuremagic/stage` and drop its own copy (its own PR, in its own thread).
 
 ## The outside (plan "Solarpolis: the outside": https://claude.ai/artifact/5aV6F3oGzxDapsjV59haXi)
 

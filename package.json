@@ -15,6 +15,7 @@
     "repeated": "node tools/repeated-code/find-repeated-code.mjs"
   },
   "dependencies": {
+    "@dimforge/rapier3d-compat": "0.19.3",
     "@futuremagic/core": "file:vendor/assetgenerator/packages/core",
     "@futuremagic/stage": "file:vendor/assetgenerator/packages/stage",
     "three": "^0.186.1"
