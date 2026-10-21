@@ -2,6 +2,11 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.008 — Haze that glows around the sunline
+
+- The air is now thinner toward the axis, as its pressure says, so in a large cylinder the far side shows through more clearly.
+- The air around the sunline glows: the light tube wears a soft halo, and looking along the axis the air shines brighter.
+
 ## v0.007 — Fly through the cylinder
 
 - Press F to take off and F again to land. In the air, W A S D moves where you look, E or Space climbs, Q or C sinks, and Shift goes faster.
