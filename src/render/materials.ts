@@ -10,13 +10,14 @@
  * world position is the `view.eye` uniform, for whatever needs the true place (the axis, ground patterns).
  */
 import { MeshBasicNodeMaterial, DoubleSide, type Material } from 'three/webgpu';
-import { abs, atan, attribute, cameraPosition, clamp, color, cos, dot, exp, float, max, mix, mx_fractal_noise_float, normalize, min, modelWorldMatrix, normalWorld, positionLocal, positionWorld, pow, sin, smoothstep, texture, uniform, vec2, vec3, vec4, vertexColor } from 'three/tsl';
+import { abs, atan, attribute, cameraPosition, clamp, color, cos, log, select, sign, sqrt, dot, exp, float, max, mix, mx_fractal_noise_float, normalize, min, modelWorldMatrix, normalWorld, positionLocal, positionWorld, pow, sin, smoothstep, texture, uniform, vec2, vec3, vec4, vertexColor } from 'three/tsl';
 import { ClampToEdgeWrapping, DataTexture, DataUtils, Float32BufferAttribute, HalfFloatType, LinearFilter, RedFormat, Vector3, type BufferGeometry } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 import type { StageKind } from '@futuremagic/stage';
 import { HAZE_DIAMETER } from '../blueprint';
 import { OPEN_SKY } from '../gen/horizon';
 import { EMISSION_SAMPLES, SUNLINE_STEPS } from '../world/sunline';
+import { HAZE_STEPS } from '../world/air';
 
 /** The air's look, shared by every kind (uniforms: changing them never builds a shader). */
 export const air = {
@@ -29,6 +30,13 @@ export const air = {
   extinction: uniform(Math.log(4) / HAZE_DIAMETER),
   /** Share of the sunline's light scattered back from the air onto everything (the sky light). */
   skyLight: uniform(0.35),
+};
+
+/** The habitat's air (world/air.ts): how density falls toward the axis, the radius, the mid floor's view of the sunline. */
+export const airShape = {
+  kappa: uniform(0),
+  radius: uniform(1),
+  seenMid: uniform(1),
 };
 
 /** Where the eye is in the habitat (world axes, m); set each frame by the view. */
@@ -55,6 +63,13 @@ export const light = {
   norm: uniform(1),
   nearest: uniform(1),
 };
+
+/** Load a habitat's air into the shaders' uniforms (world/air.ts). */
+export function setAir(kappa: number, radius: number, seenMid: number): void {
+  airShape.kappa.value = kappa;
+  airShape.radius.value = radius;
+  airShape.seenMid.value = seenMid;
+}
 
 /** Load a habitat's sunline into the shaders' uniforms and emission texture. */
 export function setSunline(emission: Float32Array, length: number, norm: number, nearest: number): void {
@@ -93,9 +108,42 @@ function sunlit(horizon: Node<'vec2'> = vec2(OPEN_SKY, OPEN_SKY)): Node<'float'>
 
 /** The look of distant things: mix towards the haze by the length of air between the eye and the point. */
 function throughAir(c: Node<'vec3'>): Node<'vec3'> {
-  const d = positionWorld.sub(cameraPosition).length();
-  const seen = exp(d.mul(air.extinction).negate());
-  return mix(air.haze, c, seen);
+  // The line of sight from the eye (world) to this point, in HAZE_STEPS pieces (world/air.ts, `hazeAlong`).
+  const ray = positionWorld.sub(cameraPosition);
+  const D = max(ray.length(), 1e-3);
+  const d = ray.div(D);
+  const eye = view.eye;
+  const R = airShape.radius, near = light.nearest;
+  // The R / r term over a piece, exactly: ∫ dt / sqrt(|eye_xy + t d_xy|² + near²).
+  const A = d.x.mul(d.x).add(d.y.mul(d.y));
+  const B = eye.x.mul(d.x).add(eye.y.mul(d.y)).mul(2);
+  const C = eye.x.mul(eye.x).add(eye.y.mul(eye.y)).add(near.mul(near));
+  const disc = sqrt(max(A.mul(C).mul(4).sub(B.mul(B)), 1e-12));
+  const sqrtA = sqrt(max(A, 1e-12));
+  const primitive = (t: Node<'float'>): Node<'float'> => asinhOf(A.mul(t).mul(2).add(B).div(disc)).div(sqrtA);
+  const along = A.lessThan(1e-6);
+  let T: Node<'float'> = float(1), glow: Node<'float'> = float(0);
+  for (let k = 0; k < HAZE_STEPS; k++) {
+    const t0 = D.mul(k / HAZE_STEPS), t1 = D.mul((k + 1) / HAZE_STEPS), dt = D.div(HAZE_STEPS), tm = D.mul((k + 0.5) / HAZE_STEPS);
+    const p = eye.add(d.mul(tm));
+    const r = max(p.xy.length(), near);
+    const sigma = air.extinction.mul(exp(airShape.kappa.mul(r.mul(r).sub(R.mul(R)))));
+    const seen = atan(light.length.sub(p.z).div(r)).add(atan(p.z.div(r))).div(airShape.seenMid);
+    const lit = seen.mul(texture(emissionTexture, vec2(p.z.div(light.length), 0.5)).r);
+    const inv = select(along, dt.div(sqrt(C)), primitive(t1).sub(primitive(t0)));
+    const source = air.skyLight.mul(dt).add(float(1).sub(air.skyLight).mul(R).mul(lit).mul(inv));
+    const tau = sigma.mul(dt);
+    const inside = float(1).sub(exp(tau.negate())).div(max(tau, 1e-6));
+    glow = glow.add(T.mul(sigma).mul(source).mul(inside));
+    T = T.mul(exp(tau.negate()));
+  }
+  return c.mul(T).add(air.haze.mul(glow));
+}
+
+/** asinh, without cancellation for large negative arguments. */
+function asinhOf(x: Node<'float'>): Node<'float'> {
+  const a = abs(x);
+  return sign(x).mul(log(a.add(sqrt(a.mul(a).add(1)))));
 }
 
 export interface Kind extends StageKind {
