@@ -13,7 +13,7 @@ import { intoPlace, type Place } from '../gen/shapes';
 import { PAVILION_LEVELS, pavilionPlan, roofAt, type PavilionPlan } from '../gen/pavilion';
 import type { WorkerPool } from '../workers/pool';
 import { BUILT } from './materials';
-import { freeMesh, meshGeometry, posedMesh, setPose, uploadStatic } from './geometry';
+import { arraysGeometry, freeMesh, posedMesh, setPose, uploadStatic } from './geometry';
 
 type Level = (typeof PAVILION_LEVELS)[number];
 
@@ -117,7 +117,7 @@ export class LandmarkView {
     void this.pool.job({ kind: 'landmark', params: this.habitat.params, index: i, level }).then(async (answer) => {
       if (this.disposed || !s.asked.has(level) || !('mesh' in answer)) return;
       const a = answer.mesh;
-      const g = meshGeometry(a.index, { position: [a.positions, 3], normal: [a.normals, 3], color: a.colors ? [a.colors, 3] : undefined, uv: [a.uvs, 2], finish: [a.finishes, 1] });
+      const g = arraysGeometry(a, { uv: [a.uvs, 2], finish: [a.finishes, 1] });
       const m = posedMesh(g, BUILT.material, `landmark ${i} ${level}`);
       m.castShadow = true;
       m.userData.roof = s.roof;
