@@ -26,6 +26,7 @@ export const URL_FIELDS: UrlField[] = [
   { key: 'living', get: (p) => p.layers.living, set: (p, v) => ({ ...p, layers: { ...p.layers, living: v } }) },
   { key: 'hullGPa', get: (p) => p.hull.strength / 1e9, set: (p, v) => ({ ...p, hull: { ...p.hull, strength: v * 1e9 } }) },
   { key: 'hub', get: (p) => p.hubRadius, set: (p, v) => ({ ...p, hubRadius: v }) },
+  { key: 'sunline', get: (p) => p.sunlineRadius, set: (p, v) => ({ ...p, sunlineRadius: v }) },
   { key: 'pop', get: (p) => p.population, set: (p, v) => ({ ...p, population: Math.round(v) }) },
   { key: 'seed', get: (p) => p.seed, set: (p, v) => ({ ...p, seed: Math.trunc(v) }) },
 ];

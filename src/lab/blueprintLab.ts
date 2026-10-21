@@ -1,5 +1,5 @@
 /**
- * The Blueprint Lab (`?lab=blueprint`, and the start page until the habitat can be walked in): habitat parameters
+ * The Blueprint Lab (the Blueprint tab, the start page): habitat parameters
  * in, derived numbers, validity findings and a to-scale section out. Every change rewrites the URL, so a link is a
  * habitat. Plain DOM and SVG; it needs no renderer.
  */

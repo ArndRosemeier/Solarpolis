@@ -36,10 +36,11 @@ test('shader rules: materials, onBeforeCompile and compile calls outside their o
   const root = fixture({
     'src/lab/a.ts': 'const m = new MeshBasicNodeMaterial();\nm.onBeforeCompile = f;\nrenderer.compileAsync(o, c, s);\n',
     'src/render/materials.ts': 'const m = new MeshStandardNodeMaterial();',
+    // The Stage now lives in @futuremagic/stage: a compile call anywhere in src is reported.
     'src/render/stage.ts': 'await this.renderer.compileAsync(g, c, s);',
   });
   const p = checkBanned(root, listFiles(root, 'src'));
-  assert.deepEqual(p.map((x) => x.split('  ')[0]), ['src/lab/a.ts:1', 'src/lab/a.ts:2', 'src/lab/a.ts:3']);
+  assert.deepEqual(p.map((x) => x.split('  ')[0]), ['src/lab/a.ts:1', 'src/lab/a.ts:2', 'src/lab/a.ts:3', 'src/render/stage.ts:1']);
 });
 
 test('typed Fns: one that closes over a uniform bag or shader input is reported, one reading its parameters is not', () => {
