@@ -129,7 +129,7 @@ const litter: Gen = (t) => {
   const rng = new Rng(4404);
   // Old leaves (grey-brown) and this year's (tan, ochre, a few red), in drifts.
   const old: RGB[] = [rgb(104, 82, 60), rgb(92, 72, 52), rgb(118, 94, 68), rgb(84, 66, 50)];
-  const fresh: RGB[] = [rgb(150, 104, 56), rgb(166, 120, 64), rgb(132, 86, 46), rgb(176, 132, 72), rgb(140, 72, 40), rgb(120, 98, 52)];
+  const fresh: RGB[] = [rgb(142, 104, 64), rgb(156, 118, 72), rgb(126, 88, 54), rgb(164, 128, 80), rgb(132, 78, 48), rgb(116, 96, 60)];
   // Leaves are laid lowest first, so each one's soft edge lies over what is under it.
   const leaves = Array.from({ length: Math.round((W * W) / (0.05 * 0.03) * 2.2) }, () => ({ cx: rng.float() * W, cy: rng.float() * W, z0: rng.float() * 0.02, seed: rng.int(0, 0x7fffffff) }));
   leaves.sort((p, q) => p.z0 - q.z0);

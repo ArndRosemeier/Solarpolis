@@ -84,9 +84,9 @@ export const CLIMATES: Readonly<Record<string, Climate>> = {
     edges: 8,
     biomes: [
       { name: 'meadow', color: [0.16, 0.32, 0.08], vary: 0.12, moisture: [0.25, 0.7], height: [0, 0.2], slope: 0.6, share: 1.2, plants: [{ name: 'hawthorn', form: 'shrub', height: [1.5, 3.5], spacing: 28 }], floor: { grass: 1, dirt: 0.06 } },
-      { name: 'woodland', color: [0.17, 0.09, 0.032], vary: 0.1, moisture: [0.35, 0.8], height: [0, 0.3], slope: 0.7, share: 1, plants: [{ name: 'oak', form: 'oak', height: [14, 24], spacing: 10 }, { name: 'hazel', form: 'shrub', height: [2, 4], spacing: 9 }], floor: { litter: 1, dirt: 0.2, grass: 0.08 } },
+      { name: 'woodland', color: [0.085, 0.05, 0.022], vary: 0.1, moisture: [0.35, 0.8], height: [0, 0.3], slope: 0.7, share: 1, plants: [{ name: 'oak', form: 'oak', height: [14, 24], spacing: 10 }, { name: 'hazel', form: 'shrub', height: [2, 4], spacing: 9 }], floor: { litter: 1, dirt: 0.2, grass: 0.08 } },
       { name: 'wetland', color: [0.2, 0.26, 0.09], vary: 0.15, moisture: [0.75, 1], height: [0, 0.05], slope: 0.25, share: 0.8, plants: [{ name: 'reeds', form: 'reeds', height: [1.5, 2.6], spacing: 1.6 }, { name: 'willow', form: 'willow', height: [7, 12], spacing: 30 }], floor: { grass: 0.7, dirt: 0.5 } },
-      { name: 'pinewood', color: [0.11, 0.05, 0.022], vary: 0.08, moisture: [0.15, 0.7], height: [0.12, 0.6], slope: 0.8, share: 1, plants: [{ name: 'pine', form: 'pine', height: [16, 28], spacing: 7 }], floor: { needles: 1, dirt: 0.12 } },
+      { name: 'pinewood', color: [0.08, 0.042, 0.02], vary: 0.08, moisture: [0.15, 0.7], height: [0.12, 0.6], slope: 0.8, share: 1, plants: [{ name: 'pine', form: 'pine', height: [16, 28], spacing: 7 }], floor: { needles: 1, dirt: 0.12 } },
       { name: 'heath', color: [0.2, 0.17, 0.09], vary: 0.15, moisture: [0, 0.32], height: [0.3, 1], slope: 0.85, share: 1, plants: [{ name: 'heather', form: 'heather', height: [0.4, 1], spacing: 2.5 }, { name: 'juniper', form: 'juniper', height: [3, 7], spacing: 25 }], floor: { 'dry grass': 0.6, dirt: 0.4, gravel: 0.25 } },
     ],
     rock: [0.28, 0.26, 0.22],
@@ -102,9 +102,9 @@ export const CLIMATES: Readonly<Record<string, Climate>> = {
     biomes: [
       { name: 'dry grass', color: [0.33, 0.27, 0.1], vary: 0.15, moisture: [0, 0.55], height: [0, 0.25], slope: 0.6, share: 1.2, plants: [{ name: 'broom', form: 'shrub', height: [0.8, 1.6], spacing: 18 }], floor: { 'dry grass': 1, dirt: 0.25 } },
       { name: 'olive grove', color: [0.13, 0.16, 0.07], vary: 0.1, moisture: [0.2, 0.6], height: [0, 0.15], slope: 0.4, share: 0.9, plants: [{ name: 'olive', form: 'olive', height: [4, 7], spacing: 9, rows: true }], floor: { dirt: 0.7, 'dry grass': 0.5 } },
-      { name: 'holm oak', color: [0.15, 0.08, 0.03], vary: 0.08, moisture: [0.4, 0.9], height: [0, 0.35], slope: 0.7, share: 0.8, plants: [{ name: 'holm oak', form: 'holm-oak', height: [8, 15], spacing: 9 }, { name: 'myrtle', form: 'evergreen-shrub', height: [1.5, 3], spacing: 8 }], floor: { litter: 1, dirt: 0.3 } },
+      { name: 'holm oak', color: [0.08, 0.048, 0.022], vary: 0.08, moisture: [0.4, 0.9], height: [0, 0.35], slope: 0.7, share: 0.8, plants: [{ name: 'holm oak', form: 'holm-oak', height: [8, 15], spacing: 9 }, { name: 'myrtle', form: 'evergreen-shrub', height: [1.5, 3], spacing: 8 }], floor: { litter: 1, dirt: 0.3 } },
       { name: 'maquis', color: [0.1, 0.13, 0.06], vary: 0.15, moisture: [0.1, 0.5], height: [0.15, 0.8], slope: 0.85, share: 1, plants: [{ name: 'rosemary and cistus', form: 'evergreen-shrub', height: [0.6, 2], spacing: 3 }], floor: { dirt: 0.6, gravel: 0.4, 'dry grass': 0.3 } },
-      { name: 'umbrella pines', color: [0.11, 0.06, 0.02], vary: 0.1, moisture: [0.2, 0.6], height: [0.1, 0.5], slope: 0.6, share: 0.7, plants: [{ name: 'stone pine', form: 'stone-pine', height: [12, 20], spacing: 14 }], floor: { needles: 1, 'dry grass': 0.3 } },
+      { name: 'umbrella pines', color: [0.11, 0.07, 0.03], vary: 0.1, moisture: [0.2, 0.6], height: [0.1, 0.5], slope: 0.6, share: 0.7, plants: [{ name: 'stone pine', form: 'stone-pine', height: [12, 20], spacing: 14 }], floor: { needles: 1, 'dry grass': 0.3 } },
     ],
     rock: [0.36, 0.32, 0.26],
     shore: [0.5, 0.45, 0.33],
