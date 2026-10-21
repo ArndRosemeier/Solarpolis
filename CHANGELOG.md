@@ -2,6 +2,11 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.033 — Light in the woods
+
+- Your eyes adapt in a wood: walking under closed crowns, the view opens up over a few seconds, and closes again when you step back into the open.
+- Woods stay shaded all the way out, not just near you: past the reach of the near shadows, the floor under closed crowns is lit the way the shadows would light it.
+
 ## v0.032 — The ground up close
 
 - Walking on the floor, the ground now shows what it is made of: grass, dry grass, leaf litter, pine needles, bare earth, gravel, sand and rock, each with its own relief and shading.
