@@ -2,6 +2,14 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.073 — The paths are in the land
+
+- The Sunwalk runs the length of the floor as a broad way of pale stone, levelled into the hills, down the side of the main valley.
+- Ways join every entrance to the Sunwalk and swing gently from side to side. Each district lays its stretch in its own material: mown grass in the orchards, laid stone in the stone gardens, leaf litter in the groves, trodden earth in the pastures, pale sand by the playing fields. You can see a way change where it crosses a border.
+- A trail climbs the Mountain to the summit hut.
+- Trees, bushes and stones keep off the paths. From far away a path shows as a faint pale line.
+- Debug menu → Go: onto the Sunwalk, onto the nearest way, onto the Mountain trail.
+
 ## v0.072 — A summit hut hangs on the Mountain's cliff
 
 - High on the Mountain, below the snow, a hut hangs on the rock face: a stone buttress built into the cliff, and an open timber hall under a steep slate roof whose ridge points down the whole length of the cylinder.
