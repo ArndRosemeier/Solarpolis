@@ -2,6 +2,12 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.011 — The travelling sun
+
+- The sunline now has a day. In the morning its brightest stretch rises out of the wild end, crosses the cylinder over the day and sinks into the port end in the evening. Then the tube dims to a faint night glow.
+- The ground, the sky light and the haze follow the sun: the land under it is brightest, and at night everything goes dark blue.
+- A day takes about 24 minutes for now. The debug menu has a new Time section to change the speed or jump two hours ahead.
+
 ## v0.010 — Radiator brims and a dock spindle
 
 - The habitat now has an outside: flat radiator rings ("brims") around both endcaps, a despun dock spindle at the port end and a mast at the wild end. The Blueprint section draws them to scale.
