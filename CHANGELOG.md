@@ -2,6 +2,12 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.007 — Fly through the cylinder
+
+- Press F to take off and F again to land. In the air, W A S D moves where you look, E or Space climbs, Q or C sinks, and Shift goes faster.
+- The higher you are, the faster you fly, so you can cross the cylinder in moments and still drift slowly over the grass.
+- Up always points toward the axis. Fly through the middle and the view rolls over smoothly, with the far side becoming the ground below.
+
 ## v0.006 — Light from the sunline
 
 - The light now comes from the whole glowing line along the axis: the middle of the floor is brightest, the ends near the walls get less, and the endcap slopes close to the axis glow.
