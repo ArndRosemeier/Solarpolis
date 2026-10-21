@@ -10,7 +10,7 @@
  */
 import type { BufferGeometry } from 'three/webgpu';
 import { ShapeBuilder as Builder, type RGB } from './geometry';
-import type { Habitat } from '../blueprint';
+import { berthArmAt, type Habitat } from '../blueprint';
 import { antennas } from '../gen/hullParts';
 
 /** Albedos of the hardware: the pale spindle, the grey mast. */
@@ -72,7 +72,7 @@ export function hullGeometry(h: Habitat): HullGeometry {
   spindle.band(s.to, s.radius, s.to, 0, 1, 0, SPINDLE);
   // Berth arms' ends, where ships tie up: a docking collar and clamps at each arm's tip.
   for (let i = 0; i < s.berthArms; i++) {
-    const a = (i / s.berthArms) * 2 * Math.PI, ca = Math.cos(a), sa = Math.sin(a);
+    const [ca, sa] = berthArmAt(s, i);
     const out = [ca, sa, 0], around = [-sa, ca, 0], axial = [0, 0, 1];
     spindle.append(berthEnd(arms.length, arms.width), out, around, axial, [ca * s.radius, sa * s.radius, arms.z]);
   }

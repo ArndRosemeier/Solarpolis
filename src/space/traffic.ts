@@ -22,7 +22,7 @@
  * Pure: no three.js.
  */
 import { Rng, deriveSeed, smoothstep, type Vec3 } from '@futuremagic/core';
-import type { Habitat } from '../blueprint';
+import { berthArmAt, type Habitat } from '../blueprint';
 import { SHIP_DESIGN, deriveShip, type ShipParams } from './ship';
 import type { PlacedHabitat, Space } from './space';
 
@@ -73,7 +73,7 @@ export interface ShipNow {
 
 /** A berth: the docking collar's face at the arm's tip and the arm's outward direction, in the spindle frame. */
 export function berthOf(h: Habitat, arm: number): { collar: Vec3; radial: Vec3 } {
-  const s = h.exterior.spindle, a = (arm / s.berthArms) * 2 * Math.PI, radial: Vec3 = [Math.cos(a), Math.sin(a), 0];
+  const s = h.exterior.spindle, radial: Vec3 = [...berthArmAt(s, arm), 0];
   const r = s.radius + s.arms.length;
   return { collar: [radial[0] * r, radial[1] * r, s.arms.z], radial };
 }

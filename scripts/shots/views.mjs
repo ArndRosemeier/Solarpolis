@@ -69,6 +69,10 @@ export const views = {
   'pavilion-floor': { query: 'view=inside', about: 'on the pavilion\'s speaking floor by the pool: ahead at the seats (-ahead), then up at the oculus', settle: 6000, steps: [{ debug: 'Onto the pavilion\'s speaking floor' }, { wait: 9000 }, { shot: 'ahead' }, { look: [0, -260] }, { wait: 1500 }] },
   'pavilion-by': { query: 'view=inside', about: 'floating beside the pavilion, a little above its roof, looking at it', settle: 6000, steps: [{ debug: 'Fly: by the pavilion' }, { wait: 9000 }] },
   'pavilion-far': { query: 'view=inside', about: 'floating far from the pavilion and high over the lake, looking at it', settle: 6000, steps: [{ debug: 'Fly: the pavilion from afar' }, { wait: 9000 }] },
+  // The founders' grove (gen/planted.ts): inside its ring, over it, and from afar.
+  'grove-in': { query: 'view=inside', about: 'standing inside the founders\' grove, looking across its clearing at the ring of trees', settle: 6000, steps: [{ debug: 'To the founders\' grove' }, { wait: 9000 }] },
+  'grove-over': { query: 'view=inside', about: 'floating above the founders\' grove, looking down at the ring', settle: 6000, steps: [{ debug: 'Fly: over the founders\' grove' }, { wait: 9000 }] },
+  'grove-far': { query: 'view=inside', about: 'floating far from the founders\' grove, looking at it', settle: 6000, steps: [{ debug: 'Fly: the founders\' grove from afar' }, { wait: 12000 }] },
   'inside-wild-tip': { query: 'view=inside', about: 'near the wild endcap\'s tip, where the sunline meets it; logs the terrain line every 250 ms for 6 s (LOD flicker)', settle: 6000, steps: [{ debug: 'Near the wild endcap\'s tip' }, { wait: 8000 }, { run: logTiles }, { look: [0, -200] }, { wait: 1500 }] },
   'inside-port-hub': { query: 'view=inside', about: 'near the port endcap\'s hub, where the sunline meets it; logs the terrain line every 250 ms for 6 s (LOD flicker)', settle: 6000, steps: [{ debug: 'Near the port endcap\'s hub' }, { wait: 8000 }, { run: logTiles }, { look: [0, -200] }, { wait: 1500 }] },
   // The far view (docs/far-view.md): high over the land, every distance band from a few hundred metres to across the tube.
@@ -79,6 +83,7 @@ export const views = {
   'far-tube': { query: 'view=inside', about: 'near the axis at the wild end, looking along the tube', steps: [{ debug: 'Fly: near the axis' }, { wait: 9000 }] },
   'far-tube-clear': { query: 'view=inside', about: 'as far-tube, with no clouds (to tell the air from the clouds)', steps: [...Array(4).fill({ debug: 'Clouds: schedule' }), { debug: 'Fly: near the axis' }, { wait: 9000 }] },
   'far-endcap': { query: 'view=inside', about: 'over the floor near the wild end, looking up its endcap', steps: [{ debug: 'Fly: over the floor, looking up' }, { wait: 9000 }] },
+  'far-gate': { query: 'view=inside', about: 'over the floor near the port end, looking up the Gate', steps: [{ debug: 'Fly: over the floor, looking up the port endcap' }, { wait: 9000 }] },
   'far-meadow-up': { query: 'view=inside', about: 'standing in a meadow, looking up at the far side', settle: 6000, steps: [{ debug: 'Into the nearest meadow' }, { wait: 5000 }, { look: [0, -260] }, { wait: 3000 }] },
   outside: { query: 'view=outside', about: 'the home habitat from outside', default: true },
   'outside-earth': { query: 'view=outside', about: 'looking at Earth (key 2)', steps: [{ key: 'Digit2' }, { wait: 3000 }] },

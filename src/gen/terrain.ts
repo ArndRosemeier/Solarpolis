@@ -19,7 +19,7 @@
 import { Noise, deriveSeed, smoothstep } from '@futuremagic/core';
 import { fromWorld, toWorld, type FaceKind, type Habitat, type Vec3 } from '../blueprint';
 import { carve, makeRivers, riverAt, valleyReach, type River, type RiverHit } from './rivers';
-import { makeLandform, type Lake, type Landform } from './plan';
+import { landformOf, type Lake, type Landform } from './plan';
 
 export type { Lake } from './plan';
 
@@ -106,7 +106,7 @@ export function makeTerrain(h: Habitat): Terrain {
   const hillWave = Math.max(hills * 40, 1);
   const step = relief.terraceStep;
 
-  const form = makeLandform(h), lake = form.lake;
+  const form = landformOf(h), lake = form.lake;
   const massif = relief.massif, R = h.radius;
   const cragNoise = new Noise(deriveSeed(h.seed, 'terrain', 'crags'));
   const hornS = form.endcapAt(true, HORN.gravity), hornRadius = Math.max(massif * HORN.radius, 1e-6);

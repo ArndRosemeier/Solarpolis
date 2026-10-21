@@ -2,6 +2,21 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.058 — The founders' grove
+
+- On its site near the port end stands the founders' grove: a ring of the oldest and tallest oaks in the habitat (stone pines in a Mediterranean habitat) around a mown lawn, planted when the habitat was new. A small habitat gets one great tree instead.
+- The ring stays visible from far away and from the far side, where it shows as a ring of dark crowns in the land.
+- Go → "To the founders' grove" takes you into its clearing.
+
+## v0.057 — The pavilion on the Sunwalk
+
+- The assembly pavilion now stands where the habitat plan puts it: in the middle of the ring lake, where the Sunwalk crosses it. The long path runs over its bridges and through its hall.
+
+## v0.056 — Eyes adapt to the glow near the axis
+
+- Looking down the tube from near the axis toward the sun, your eyes now stop down, so the bright air reads as sunlit haze instead of burning out to white.
+- Views along the floor look as before; looking up at the far side at noon is a touch darker.
+
 ## v0.055 — The habitat has a plan for its land
 
 - The Blueprint tab shows a new "Land plan": the floor unrolled and both endcaps face-on, as the habitat's mind planned them.

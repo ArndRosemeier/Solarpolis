@@ -22,6 +22,7 @@
  */
 import { Rng, Noise, angleDiff, deriveSeed, smoothstep } from '@futuremagic/core';
 import { cultureOf, wrapAngle, type Culture, type DistrictStyle, type FaceKind, type Habitat } from '../blueprint';
+import { kept } from './kept';
 
 const TURN = 2 * Math.PI;
 
@@ -176,6 +177,15 @@ function faceKinds(n: number): FaceKind[] {
   return out;
 }
 
+/** A plan's site of a kind: the first (a landmark has one), or undefined. */
+export const siteOf = (plan: Plan, kind: SiteKind): Site | undefined => plan.sites.find((x) => x.kind === kind);
+
+/** The habitat's plan, made once per habitat and then kept (making one walks the whole floor). */
+export const planOf: (h: Habitat) => Plan = kept(makePlan);
+
+/** The habitat's landform, made once per habitat and kept (the terrain and the plan share it). */
+export const landformOf: (h: Habitat) => Landform = kept(makeLandform);
+
 export function makeLandform(h: Habitat): Landform {
   const { profile, params } = h, R = h.radius, spec = params.plan;
   const { floorStart, floorEnd } = profile, floor = floorEnd - floorStart;
@@ -281,7 +291,7 @@ export function makeLandform(h: Habitat): Landform {
 export function makePlan(h: Habitat): Plan {
   const culture = cultureOf(h.params.culture);
   if (!culture) throw new Error(`no culture "${h.params.culture}" in the catalogue`);
-  const form = makeLandform(h);
+  const form = landformOf(h);
   const { profile, params } = h, R = h.radius, spec = params.plan;
   const { floorStart, floorEnd } = profile, floor = floorEnd - floorStart;
   const { lake, reserveEnd, faces, rivers, phase, careAt, valleyAt, acrossAt, routeOf, endcapAt } = form;

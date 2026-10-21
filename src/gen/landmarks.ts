@@ -2,14 +2,16 @@
  * The landmarks (Arnd, 2026-10-21: the surface is park and nature reserve with only a few landmark buildings): where
  * each one stands and how big it is, from the blueprint's `landmarks` and the land. Each one is placed by a rule, not
  * by chance, so the layout can be designed: for now the one landmark is the assembly pavilion (gen/pavilion.ts draws
- * it), in the middle of the ring lake, on the meridian farthest from every river mouth, with a bridge to each shore
- * along the axis. Pure.
+ * it), on the habitat plan's lake-pavilion site (gen/plan.ts: in the ring lake's middle, where the Sunwalk crosses
+ * it, clear of the rivers), with a bridge to each shore along the axis, so the Sunwalk runs through it. Pure.
  */
 import { fromWorld, toWorld, type Habitat } from '../blueprint';
 import { deriveSeed } from '@futuremagic/core';
 import type { Terrain } from './terrain';
 import { pavilionPlan, pavilionTop } from './pavilion';
+import { planOf, siteOf } from './plan';
 import { intoPlace, outOfPlace, type Place } from './shapes';
+import { kept } from './kept';
 
 /** A bridge along the axis from the deck's edge (`from`, m from the centre) to the shore (`to`), `end` m over the water there. */
 export interface Bridge {
@@ -37,33 +39,18 @@ export interface Pavilion {
 
 export type Landmark = Pavilion;
 
-/** Candidate meridians the rule weighs (it takes the best; ties go to the first). */
-const MERIDIANS = 96;
-/** The pavilion's deck reaches at most this share of the way from the lake's middle to its shore. */
-const LAKE_SHARE = 0.55;
 
 /** The landmarks of a terrain (placed once per terrain, then kept). */
-export function landmarksOf(t: Terrain): readonly Landmark[] {
-  let l = placed.get(t);
-  if (!l) { l = placeLandmarks(t); placed.set(t, l); }
-  return l;
-}
-const placed = new WeakMap<Terrain, readonly Landmark[]>();
+export const landmarksOf: (t: Terrain) => readonly Landmark[] = kept(placeLandmarks);
 
 export function placeLandmarks(t: Terrain): Landmark[] {
   const h = t.habitat, spec = h.params.landmarks, lake = t.lake;
-  if (!spec || !lake) return [];
-  const radius = Math.min(spec.size / 2, lake.halfWidth * LAKE_SHARE);
+  const site = spec && lake ? siteOf(planOf(h), 'lake-pavilion') : undefined;
+  if (!spec || !lake || !site) return [];
+  // The deck within the ground the plan keeps for it.
+  const radius = Math.min(spec.size / 2, site.size);
   if (radius < spec.handrail * 5) return [];
-  // The rule: the meridian farthest (around the lake) from every river's mouth, so the bridges land on quiet shore.
-  const mouths = t.rivers.map((r) => r.theta[r.from === 'wild' ? r.count - 1 : 0]);
-  let theta = 0, best = -1;
-  for (let i = 0; i < MERIDIANS; i++) {
-    const a = (i / MERIDIANS) * 2 * Math.PI;
-    const clear = mouths.length ? Math.min(...mouths.map((m) => Math.abs(Math.atan2(Math.sin(a - m), Math.cos(a - m))))) : 0;
-    if (clear > best + 1e-9) { best = clear; theta = a; }
-  }
-  const p: Pavilion = { kind: 'pavilion', theta, s: lake.s, level: lake.level, radius, handrail: spec.handrail, depth: lake.depth, bridges: [], seed: deriveSeed(h.seed, 'landmark', 'pavilion') };
+  const p: Pavilion = { kind: 'pavilion', theta: site.theta, s: site.s, level: lake.level, radius, handrail: spec.handrail, depth: lake.depth, bridges: [], seed: deriveSeed(h.seed, 'landmark', 'pavilion') };
   p.bridges = ([1, -1] as const).map((dir) => bridgeTo(t, p, dir));
   return [p];
 }
@@ -83,8 +70,13 @@ function bridgeTo(t: Terrain, p: Pavilion, dir: 1 | -1): Bridge {
  * the axis, y around, z toward the axis (up).
  */
 export function frameOf(h: Habitat, l: Landmark): Place {
-  const at = toWorld(h.profile, { theta: l.theta, s: l.s, h: l.level });
-  const c = Math.cos(l.theta), sn = Math.sin(l.theta);
+  return placeAt(h, l.theta, l.s, l.level);
+}
+
+/** A frame standing on the profile at (θ, s), `height` above it: x along the axis, y around, z toward the axis (up). */
+export function placeAt(h: Habitat, theta: number, s: number, height: number): Place {
+  const at = toWorld(h.profile, { theta, s, h: height });
+  const c = Math.cos(theta), sn = Math.sin(theta);
   return { at, ex: [0, 0, 1], ey: [-sn, c, 0], ez: [-c, -sn, 0] };
 }
 
