@@ -6,7 +6,7 @@
  * Q or C sinks. On foot the physics carries the player (`physics/character.ts`): up is toward the axis, and gravity
  * is the spin's. The player is an Actors human (`render/actors`); V looks at them from behind, V again from their eyes.
  */
-import { Color, CylinderGeometry, Mesh, PerspectiveCamera, Scene, SphereGeometry, type WebGPURenderer } from 'three/webgpu';
+import { Color, CylinderGeometry, DoubleSide, FrontSide, Mesh, type Material, PerspectiveCamera, Scene, SphereGeometry, type WebGPURenderer } from 'three/webgpu';
 import { Stage, createRenderer } from '@futuremagic/stage';
 import { deriveSeed, v3dot, v3madd, v3norm } from '@futuremagic/core';
 import { fromWorld, toView, toWorld, type Habitat, type Vec3 } from '../blueprint';
@@ -24,6 +24,7 @@ import { dayPhase, emissionMean, nearestLit, sunlineEmission, sunlineNorm, EMISS
 import { densityFalloff, seenMid } from '../world/air';
 import { TerrainView, describeLayout } from './terrain';
 import { PlantView } from './plants';
+import { setFloorEye } from './groundShaders';
 import { makeEcology, type Ecology } from '../gen/ecology';
 import { FrameLoop, dragToLook, draw, fitCanvas, moveKeys } from './surface';
 
@@ -133,9 +134,19 @@ export class InteriorView {
   private async loadPlayer(): Promise<void> {
     const figure = await Figure.load(await playerLook(deriveSeed(this.habitat.params.seed, 'player')));
     figure.object.visible = false;
-    figure.object.traverse((o) => { o.layers.set(BODY_LAYER); o.castShadow = true; o.receiveShadow = true; });
+    figure.object.traverse((o) => {
+      o.layers.set(BODY_LAYER);
+      o.receiveShadow = true;
+      // The parts worn cast (the pack's other garments stay hidden; a change of clothes would prepare the figure again).
+      o.castShadow = o.visible;
+      // A see-through two-sided part (lashes, brows) is drawn in two passes, one shader each; its shadow needs one side.
+      const m = (o as Mesh).material as Material | undefined;
+      if (m && !Array.isArray(m) && m.transparent && m.side === DoubleSide) m.shadowSide = FrontSide;
+    });
     key.shadow.camera.layers.enable(BODY_LAYER);
-    await this.stage.add(figure.object);
+    // Every part's shadow is warmed, not one per kind of part: a figure's shadow shaders are its own (Stage.prepare).
+    await this.stage.prepare(figure.object, { everyCaster: true });
+    this.scene.add(figure.object);
     this.figure = figure;
   }
 
@@ -342,6 +353,7 @@ export class InteriorView {
   private place(): void {
     const v = this.current();
     view.eye.value.set(...v.eye);
+    setFloorEye(v.eye);
     this.camera.position.set(0, 0, 0);
     this.camera.up.set(...v.up);
     this.camera.lookAt(v.look[0], v.look[1], v.look[2]);

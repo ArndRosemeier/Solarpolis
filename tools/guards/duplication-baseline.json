@@ -256,6 +256,10 @@
     "reason": "info() is each view's line in the debug menu (debug.addInfo): the plants' cells and draws, the outside's bodies. Same role, different content."
   },
   {
+    "key": "idiom: [.s .theta] in solarpolis/gen/ecology.ts + solarpolis/render/view.ts + solarpolis/world/flyer.ts + solarpolis/world/walker.ts",
+    "reason": "(theta, s) is the habitat's one surface coordinate pair (around the axis, along the profile); reading both fields of a place is how every user of a place starts, not a copied helper."
+  },
+  {
     "key": "idiom: [.cache .shed] in solarpolis/render/hullDetail.ts + solarpolis/render/plants.ts + solarpolis/render/terrain.ts",
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView) each drive their own StreamCache (render/streamed.ts) the one way it is driven: frame, want, mark, bytes, clear; their requests are told apart by kind and key."
   },

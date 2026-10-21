@@ -11,7 +11,7 @@
  */
 import { MeshBasicNodeMaterial, DoubleSide, BackSide, AdditiveBlending, type Material } from 'three/webgpu';
 import { abs, atan, attribute, cross, dFdx, dFdy, floor, fract, inverseSqrt, log2, mx_noise_float, uv, cameraPosition, hash, normalLocal, step, time, varying, clamp, color, cos, log, select, sign, sqrt, dot, exp, float, max, mix, mx_fractal_noise_float, normalize, min, modelWorldMatrix, normalWorld, positionLocal, positionWorld, pow, sin, smoothstep, texture, uniform, vec2, vec3, vec4, vertexColor } from 'three/tsl';
-import { ClampToEdgeWrapping, DataTexture, LinearMipmapLinearFilter, RGBAFormat, RepeatWrapping, SRGBColorSpace, UnsignedByteType, Vector4, DataUtils, Float32BufferAttribute, HalfFloatType, InstancedInterleavedBuffer, InterleavedBufferAttribute, LinearFilter, RedFormat, Vector2, Vector3, type BufferGeometry } from 'three/webgpu';
+import { DataTexture, Uint8BufferAttribute, RGBAFormat, UnsignedByteType, Vector4, DataUtils, Float32BufferAttribute, HalfFloatType, InstancedInterleavedBuffer, InterleavedBufferAttribute, RedFormat, Vector2, Vector3, type BufferGeometry } from 'three/webgpu';
 import { PLANT_STRIDE } from '../gen/scatter';
 import { BARK_STRIPS } from '../gen/trees';
 import { BARK_TEXELS } from '../gen/foliage';
@@ -24,6 +24,8 @@ import { OPEN_SKY } from '../gen/horizon';
 import { EMISSION_SAMPLES, SUNLINE_STEPS } from '../world/sunline';
 import { HAZE_STEPS } from '../world/air';
 import { skyDome, starColor, starVertex } from './skyShaders';
+import { floorSurface } from './groundShaders';
+import { filtered } from './textures';
 import { flameColor, hardwareColor, radiatorColor, skinColor, skinDetailColor } from './hullShaders';
 
 /** The air's look, shared by every kind (uniforms: changing them never builds a shader). */
@@ -60,11 +62,7 @@ const worldPosition = (): Node<'vec3'> => positionWorld.add(view.eye);
  * counts. Set by the view per habitat (`setSunline`); the travelling sun only rewrites the texture.
  */
 const emissionData = new Uint16Array(EMISSION_SAMPLES);
-const emissionTexture = new DataTexture(emissionData, EMISSION_SAMPLES, 1, RedFormat, HalfFloatType);
-emissionTexture.magFilter = LinearFilter;
-emissionTexture.minFilter = LinearFilter;
-emissionTexture.wrapS = ClampToEdgeWrapping;
-emissionTexture.wrapT = ClampToEdgeWrapping;
+const emissionTexture = filtered(new DataTexture(emissionData, EMISSION_SAMPLES, 1, RedFormat, HalfFloatType));
 export const light = {
   /** The emission's mean over the length: how much light the air scatters back (the sky light) at this hour. */
   mean: uniform(1),
@@ -192,7 +190,7 @@ const MORPH_START = 0.6;
  * The ground of the whole interior (floor and endcap slopes): vertex colour, lit from the axis, seen through the air.
  * Its meshes carry position, normal, color, morph and horizon (tiles.ts).
  */
-export const GROUND = kind('ground', ['position', 'normal', 'color', 'morph', 'horizon', 'canopy'], { cast: false, receive: false }, () => {
+export const GROUND = kind('ground', ['position', 'normal', 'color', 'morph', 'horizon', 'canopy', 'floorA', 'floorB'], { cast: false, receive: false }, () => {
   const m = new MeshBasicNodeMaterial();
   const seen = modelWorldMatrix.mul(vec4(positionLocal, 1)).xyz.sub(cameraPosition).length();
   const blend = smoothstep(morphFar.mul(MORPH_START), morphFar, seen);
@@ -202,15 +200,13 @@ export const GROUND = kind('ground', ['position', 'normal', 'color', 'morph', 'h
   const woods = smoothstep(canopyBand.x, canopyBand.y, seen);
   m.positionNode = positionLocal.add(attribute<'vec3'>('morph', 'vec3').mul(blend)).add(normalLocal.mul(canopy.w.mul(woods)));
   const far = varying(woods);
-  // Close up, the ground gets a mottle of tufts and bare patches (metres across), finer than its grid; it fades out
-  // with distance before it could shimmer. Plants will take over from it.
+  // Close up, the floor's own surface (groundShaders.ts): grass, litter, sand, rock, resolving as the eye comes near.
   const away = positionWorld.sub(cameraPosition).length();
-  const near = float(1).sub(smoothstep(150, 1200, away));
-  const mottle = mx_fractal_noise_float(worldPosition().mul(1 / 5), 4, 2.1, 0.5).mul(0.35).mul(near).add(1);
+  const floorUp = floorSurface(vertexColor().rgb, normalize(normalWorld));
   // The canopy's crowns: lit tops and shaded gaps a crown across, fading where they would shimmer.
   const crowns = mx_fractal_noise_float(worldPosition().mul(1 / 6), 2, 2.2, 0.5).mul(0.45).mul(far).mul(smoothstep(1, 5, canopy.w)).mul(float(1).sub(smoothstep(4000, 9000, away))).add(1);
-  const ground = mix(vertexColor().rgb, canopy.rgb, far);
-  m.colorNode = throughAir(ground.mul(sunlit(attribute<'vec2'>('horizon', 'vec2'))).mul(mottle).mul(crowns));
+  const ground = mix(floorUp.color, canopy.rgb, far);
+  m.colorNode = throughAir(ground.mul(sunlit(attribute<'vec2'>('horizon', 'vec2'), floorUp.normal)).mul(crowns));
   return m;
 });
 
@@ -315,20 +311,11 @@ const plantHorizon = uniform(new Vector2(OPEN_SKY, OPEN_SKY)).onObjectUpdate(({ 
 /** The bark atlas (gen/foliage.ts) and the leaf atlas (render/foliage.ts), filled in once the workers have drawn them. */
 export const BARK_SIZE = { width: BARK_TEXELS.strip * BARK_STRIPS, height: BARK_TEXELS.height };
 export const LEAF_ATLAS = LEAF_ATLAS_SIZE;
-function atlas(width: number, height: number, srgb: boolean): DataTexture {
-  const t = new DataTexture(new Uint8Array(width * height * 4).fill(srgb ? 90 : 128), width, height, RGBAFormat, UnsignedByteType);
-  t.magFilter = LinearFilter;
-  t.minFilter = LinearMipmapLinearFilter;
-  t.generateMipmaps = true;
-  t.anisotropy = 4;
-  if (srgb) t.colorSpace = SRGBColorSpace;
-  t.needsUpdate = true;
-  return t;
+function atlas(width: number, height: number, srgb: boolean, repeatV = false): DataTexture {
+  return filtered(new DataTexture(new Uint8Array(width * height * 4).fill(srgb ? 90 : 128), width, height, RGBAFormat, UnsignedByteType), { srgb, mips: true, anisotropy: 4, repeat: repeatV ? 'v' : false });
 }
-const barkMap = atlas(BARK_SIZE.width, BARK_SIZE.height, true);
-barkMap.wrapT = RepeatWrapping;
-const barkNormal = atlas(BARK_SIZE.width, BARK_SIZE.height, false);
-barkNormal.wrapT = RepeatWrapping;
+const barkMap = atlas(BARK_SIZE.width, BARK_SIZE.height, true, true);
+const barkNormal = atlas(BARK_SIZE.width, BARK_SIZE.height, false, true);
 const leafMap = atlas(LEAF_ATLAS, LEAF_ATLAS, true);
 leafMap.image.data!.fill(0);
 
@@ -355,7 +342,9 @@ function plantVertex(flutter: number, seed: Node<'float'> = float(0)) {
   const c = cos(turn), sn = sin(turn);
   const ax = side.mul(c).add(axis.mul(sn)), az = side.mul(sn.negate()).add(axis.mul(c));
   // The band: each plant has its own threshold, so in a hand-over band one level takes it where the other leaves it.
-  const away = foot.sub(cameraPosition).length();
+  // Measured from the eye (the origin of the drawn world), not the camera: the shadow pass draws from the light's
+  // camera, hundreds of metres away, and would drop every near plant from the shadow map.
+  const away = foot.length();
   const pick = hash(inst.x.mul(13.7).add(inst.z.mul(7.1)).add(inst.y.mul(3.3)));
   const into = smoothstep(plantBand.x, plantBand.y, away), out = smoothstep(plantBand.z, plantBand.w, away);
   const keep = step(pick, into.mul(1.0001)).mul(step(out, pick));
@@ -457,6 +446,7 @@ export function standInAttribute(g: BufferGeometry, name: string): boolean {
   else if (name === 'horizon') g.setAttribute('horizon', new Float32BufferAttribute(new Array(6).fill(OPEN_SKY), 2));
   else if (name === 'plant') plantInstances(g, new Float32Array([0, 0, 0, 1, 0]));
   else if (name === 'uv') g.setAttribute('uv', new Float32BufferAttribute(new Array(6).fill(0), 2));
+  else if (name === 'floorA' || name === 'floorB') g.setAttribute(name, new Uint8BufferAttribute(new Array(12).fill(name === 'floorA' ? 255 : 0), 4, true));
   else if (name === 'canopy') g.setAttribute('canopy', new Float32BufferAttribute([0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0], 4));
   else if (name === 'wind' || name === 'occ' || name === 'tint' || name === 'kind') g.setAttribute(name, new Float32BufferAttribute([0, 0, 0], 1));
   else return false;
