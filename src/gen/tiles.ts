@@ -11,6 +11,7 @@
 import { toWorld, type Vec3 } from '../blueprint';
 import type { Terrain } from './terrain';
 import { horizonAt } from './horizon';
+import type { Ecology } from './ecology';
 
 /** Cells along each side of a tile. */
 export const TILE_CELLS = 64;
@@ -193,7 +194,8 @@ export function tileBytes(t: TileMesh): number {
 }
 
 /** Build a tile's ground (and the lake's water over it). */
-export function buildTile(terrain: Terrain, layout: TileLayout, k: TileKey): TileMesh {
+export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): TileMesh {
+  const terrain = ecology.terrain;
   const { profile } = terrain.habitat;
   const b = bounds(layout, k);
   const N = TILE_CELLS, row = N + 1;
@@ -239,7 +241,7 @@ export function buildTile(terrain: Terrain, layout: TileLayout, k: TileKey): Til
       // Slope: how far the ground tilts from the profile's own direction (0 flat, 1 a wall); the profile's slope too.
       const tilt = 1 - (nx * air[0] + ny * air[1] + nz * air[2]);
       const slope = Math.min(1, Math.max(Math.abs(pp.nz), tilt * 3));
-      terrain.colorAt(theta, s, heights[(j + 1) * W + (i + 1)], slope, colors, v);
+      ecology.colorAt(theta, s, heights[(j + 1) * W + (i + 1)], slope, colors, v);
     }
   }
 
