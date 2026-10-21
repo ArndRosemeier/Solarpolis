@@ -24,6 +24,7 @@ import type { Terrain } from './gen/terrain';
 import { outOfPlace } from './gen/shapes';
 import { landformOf } from './gen/plan';
 import { pavilionPlan } from './gen/pavilion';
+import { legShapesOf, liftStairOf, onLeg, rampOf, stairTopAt, type LiftStair } from './gen/liftStair';
 
 const app = document.getElementById('app')!;
 const debug = new DebugMenu();
@@ -345,6 +346,47 @@ const overGrove = (label: string, out: number, up: number): void => debug.add({
 });
 overGrove('Fly: over the founders\' grove', 1.6, 0.9);
 overGrove('Fly: the founders\' grove from afar', 12, 3);
+/** The Lift Stair up the Gate (gen/liftStair.ts). */
+const stair = (): { v: InteriorView; st: LiftStair; h: Habitat } | null => {
+  const f = inView((t) => liftStairOf(t.habitat) ?? undefined), h = lab.habitat;
+  return f && h ? { v: f.v, st: f.x, h } : null;
+};
+/** Stand on the stair at a plan point (z along the axis, w across the ramp), facing up the Gate. */
+const standOnStair = (f: NonNullable<ReturnType<typeof stair>>, z: number, w: number): void => {
+  const top = stairTopAt(f.st, [z, w]) ?? 0, at = fromWorld(f.h.profile, ...rampOf(f.h).world(z, w, top + 0.05));
+  f.v.goTo(at.theta, at.s, 0);
+};
+debug.add({
+  label: 'To the Lift Stair: its forecourt at the foot of the Gate', group: 'Go', run: () => {
+    const f = stair(), q = f?.st.platforms[0];
+    if (f && q) standOnStair(f, (q.z0 + q.z1) / 2, 0);
+  },
+});
+debug.add({
+  label: 'Onto the Lift Stair: a landing halfway up', group: 'Go', run: () => {
+    const f = stair();
+    if (!f) return;
+    const s = legShapesOf(f.st)[Math.floor(f.st.legs.length / 2)], k = s.steps.find((x) => x.landing) ?? s.steps[0];
+    const p = onLeg(s, (k.a0 + k.a1) / 2, 0);
+    standOnStair(f, p[0], p[1]);
+  },
+});
+/** Float off the stair at leg `share` of the way up: `back` m down the axis and `up` m higher than its middle, looking at it. */
+const byStair = (label: string, share: number, back: number, up: number, across = 0): void => debug.add({
+  label, group: 'Go', run: () => {
+    const f = stair();
+    if (!f) return;
+    const s = legShapesOf(f.st)[Math.min(f.st.legs.length - 1, Math.floor(f.st.legs.length * share))], ramp = rampOf(f.h);
+    const m = onLeg(s, s.run / 2, 0), e = (s.leg.e0 + s.leg.e1) / 2;
+    const eye = ramp.world(m[0] - back, m[1] + across, e + up), at = ramp.world(m[0], m[1], e);
+    const d = Math.hypot(at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]);
+    f.v.floatAt(eye, [(at[0] - eye[0]) / d, (at[1] - eye[1]) / d, (at[2] - eye[2]) / d]);
+  },
+});
+byStair('Fly: the Lift Stair from over the floor', 0.3, 900, 120);
+byStair('Fly: beside the Lift Stair', 0.5, 60, 25, 30);
+byStair('Fly: the Lift Stair close up', 0.5, 8, 4, 3);
+byStair('Fly: the Lift Stair near the hub', 0.9, 120, 40);
 debug.add({ label: 'Travel 10× faster (toggle)', group: 'Go', run: () => { const v = view(); if (v) v.boost = v.boost === 1 ? 10 : 1; } });
 debug.addInfo(() => view()?.clockLine() ?? '');
 /** The next of a cycle of clock speeds. */

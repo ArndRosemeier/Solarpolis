@@ -22,6 +22,7 @@ import type { TileKey as DetailKey } from '../gen/detailTree';
 import { landmarksOf } from '../gen/landmarks';
 import { buildPavilion, type PavilionLevel } from '../gen/pavilion';
 import type { MappedArrays } from '../gen/shapes';
+import { buildStairTile, type StairTile } from '../gen/liftStairMesh';
 
 export type GenRequest =
   | { kind: 'tile'; params: HabitatParams; key: TileKey }
@@ -34,7 +35,8 @@ export type GenRequest =
   | { kind: 'foliage'; params: HabitatParams }
   | { kind: 'floor'; params: HabitatParams; layer: number }
   | { kind: 'hull'; params: HabitatParams; part: string; key: DetailKey }
-  | { kind: 'landmark'; params: HabitatParams; index: number; level: PavilionLevel };
+  | { kind: 'landmark'; params: HabitatParams; index: number; level: PavilionLevel }
+  | { kind: 'stair'; params: HabitatParams; key: DetailKey };
 export type GenAnswer =
   | { kind: 'tile'; tile: TileMesh }
   | { kind: 'patch'; patch: GroundPatch }
@@ -47,6 +49,7 @@ export type GenAnswer =
   | { kind: 'floor'; layer: number; albedo: Uint8Array; relief: Uint8Array; mean: [number, number, number] }
   | { kind: 'hull'; partTile: PartTile }
   | { kind: 'landmark'; index: number; level: PavilionLevel; mesh: MappedArrays }
+  | { kind: 'stair'; stairTile: StairTile }
   | { error: string };
 
 /** Every typed array's buffer in an answer, to transfer rather than copy. */
@@ -124,6 +127,10 @@ self.onmessage = (e: MessageEvent<GenRequest>) => {
       const l = landmarksOf(terrain)[req.index];
       if (!l) throw new Error(`no landmark ${req.index}`);
       post({ kind: 'landmark', index: req.index, level: req.level, mesh: buildPavilion(l, req.level).mappedArrays() });
+      return;
+    }
+    if (req.kind === 'stair') {
+      post({ kind: 'stair', stairTile: buildStairTile(terrain.habitat, req.key) });
       return;
     }
     if (req.kind === 'plants') {

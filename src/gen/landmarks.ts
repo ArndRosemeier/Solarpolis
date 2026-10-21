@@ -12,6 +12,7 @@ import { pavilionPlan, pavilionTop } from './pavilion';
 import { planOf, siteOf } from './plan';
 import { intoPlace, outOfPlace, type Place } from './shapes';
 import { kept } from './kept';
+import { stairKeepsClear, stairStandAt } from './liftStair';
 
 /** A bridge along the axis from the deck's edge (`from`, m from the centre) to the shore (`to`), `end` m over the water there. */
 export interface Bridge {
@@ -92,11 +93,12 @@ function across(h: Habitat, l: Landmark, theta: number, s: number): [number, num
 }
 
 /**
- * Whether plants keep off a point: under a landmark, or by a bridge's landing (a few handrails around it), so nothing
- * grows through the deck or blocks the way onto it.
+ * Whether plants keep off a point: under a landmark or the Lift Stair, or by a bridge's landing (a few handrails
+ * around it), so nothing grows through the deck or the steps or blocks the way onto them.
  */
 export function keptClear(t: Terrain, theta: number, s: number): boolean {
   const h = t.habitat;
+  if (h.params.landmarks && stairKeepsClear(h, theta, s, h.params.landmarks.handrail * 2)) return true;
   for (const l of landmarksOf(t)) {
     if (Math.abs(s - l.s) > reachOf(l) + l.handrail * 4) continue;
     const [x, y] = across(h, l, theta, s), q = pavilionPlan(l), margin = l.handrail * 3;
@@ -108,10 +110,12 @@ export function keptClear(t: Terrain, theta: number, s: number): boolean {
 
 /**
  * The height above the profile of the walkable top of a landmark over (θ, s), or null where none is: the deck, the
- * seats, the bridges. Someone set down there stands on it, not in the water under it.
+ * seats, the bridges, the Lift Stair's steps and platforms. Someone set down there stands on it, not in the water or
+ * the slope under it.
  */
 export function landmarkTopAt(t: Terrain, theta: number, s: number): number | null {
-  const h = t.habitat;
+  const h = t.habitat, stair = stairStandAt(h, theta, s);
+  if (stair !== null) return stair;
   for (const l of landmarksOf(t)) {
     if (Math.abs(s - l.s) > reachOf(l)) continue;
     const f = frameOf(h, l), [x, y] = across(h, l, theta, s), z = pavilionTop(l, x, y);
