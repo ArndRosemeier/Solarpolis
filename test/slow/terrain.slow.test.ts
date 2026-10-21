@@ -44,3 +44,18 @@ for (const { name, params } of MATRIX) {
     assert.equal(new Set(sel.draw.map(keyId)).size, sel.draw.length);
   });
 }
+
+test('tiles: a warm tile builds within its budget (40 ms on the reference habitat)', () => {
+  const h = derive(MATRIX[0].params);
+  const t = makeTerrain(h), eco = makeEcology(t), layout = makeLayout(t);
+  // A worker builds hundreds of tiles; the first few also pay for compiling the code, so they are not counted.
+  for (let i = 0; i < 8; i++) buildTile(eco, layout, { band: 3, column: 10 + i, level: 2, i: 1, j: 1 });
+  const times: number[] = [];
+  for (let i = 0; i < 5; i++) {
+    const t0 = performance.now();
+    buildTile(eco, layout, { band: 3, column: i, level: 2, i: 1, j: 1 });
+    times.push(performance.now() - t0);
+  }
+  const ms = times.sort((a, b) => a - b)[2];
+  assert.ok(ms < 40, `${ms.toFixed(1)} ms per tile (median of 5, warm)`);
+});
