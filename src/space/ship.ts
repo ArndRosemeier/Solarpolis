@@ -1,24 +1,32 @@
 /**
- * A torch ship's shape (design "Solarpolis: the outside": fusion torch ships are what citizens take, thrusting the
- * whole way and turning over at the midpoint, so there is always gravity on board, toward the engine). The first
- * ship blueprint, for the title flight; O6 adds its mind, berth and crossing.
+ * Ship blueprints (design "Solarpolis: the outside"). Two drives (Arnd, 2026-10-21): fusion torch ships, what citizens
+ * take, thrusting the whole way and turning over at the midpoint, so there is always gravity on board, toward the
+ * engine; and laser-sail freighters, pushed and braked by the arrays on the Moon, their sail folded into its drum
+ * before the approach. Near a habitat both come in on thrusters (`rcs`).
  *
- * Ship frame: +x from the drive's exit (x = 0) to the nose (x = length), the exhaust leaving along −x; +z is the side
- * the radiator wings stand out from. Every size comes from `ShipParams`. Pure.
+ * Ship frame: +x from the stern (x = 0, a torch's drive exit) to the nose (x = length), a torch's exhaust leaving along
+ * −x; +z is the side the radiator wings stand out from. Every size comes from `ShipParams`; `deriveShip` makes them
+ * from a seed and the berth the ship must fit. Pure.
  */
 import { Rng } from '@futuremagic/core';
 
+export type Drive = 'torch' | 'sail';
+
 export interface ShipParams {
-  /** Drive exit to nose (m). */
+  drive: Drive;
+  /** Stern to nose (m). */
   length: number;
-  /** The widest part of the hull, the crew section's diameter (m). */
+  /** The widest part of the hull, the crew section's (or the cargo ring's) diameter (m). */
   beam: number;
-  /** How far the exhaust glows behind the ship at full thrust, as a multiple of its length. */
+  /** How far a torch's exhaust glows behind the ship at full thrust, as a multiple of its length (0 for a sail). */
   plume: number;
+  /** The torch's acceleration (m/s², about 1 g; 0 for a sail), and the thrusters' near a habitat (m/s²). */
+  thrust: number;
+  rcs: number;
   seed: number;
 }
 
-export type ShipRole = 'hull' | 'crew' | 'tank' | 'radiator' | 'drive' | 'truss';
+export type ShipRole = 'hull' | 'crew' | 'tank' | 'radiator' | 'drive' | 'truss' | 'cargo' | 'sail';
 
 /** A round piece along the ship's axis, or a box (radiator wings, truss). Positions in the ship frame (m). */
 export type ShipPart =
@@ -29,15 +37,14 @@ export type ShipPart =
 export interface ShipShape {
   params: ShipParams;
   parts: ShipPart[];
-  /** The drive's exit: radius of the bell's mouth at x = 0 (m). */
+  /** A torch's drive exit: radius of the bell's mouth at x = 0 (m; 0 without a torch). */
   nozzle: number;
-  /** The exhaust's glowing length at full thrust (m), and its radius where it ends. */
+  /** The exhaust's glowing length at full thrust (m), and its radius where it ends (0 without a torch). */
   plumeLength: number;
   plumeRadius: number;
 }
-
 /** The torch ship of the title flight. */
-export const TORCH_SHIP: ShipParams = { length: 180, beam: 16, plume: 8, seed: 11 };
+export const TORCH_SHIP: ShipParams = { drive: 'torch', length: 180, beam: 16, plume: 8, thrust: 9.81, rcs: 0.5, seed: 11 };
 
 /**
  * From the stern: the drive bell, the reactor, a truss spine carrying the radiator wings (in the plane of the axis,
@@ -69,4 +76,56 @@ export function torchShip(p: ShipParams): ShipShape {
   parts.push({ shape: 'cylinder', role: 'crew', from: tankTo, to: L * 0.96, radius: B / 2 });
   parts.push({ shape: 'cone', role: 'hull', from: L * 0.96, to: L, r0: B / 2, r1: B * 0.2 });
   return { params: p, parts, nozzle, plumeLength: p.plume * L, plumeRadius: nozzle * 6 };
+}
+
+/**
+ * From the stern: the folded sail in its drum (the sail and its rigging packed for the approach), a truss spine
+ * carrying a ring of cargo pods, a radiator pair, and the small control section at the nose.
+ */
+export function sailShip(p: ShipParams): ShipShape {
+  const L = p.length, B = p.beam, rng = new Rng(p.seed);
+  const parts: ShipPart[] = [];
+  const drum = L * rng.range(0.12, 0.16);
+  parts.push({ shape: 'cylinder', role: 'sail', from: 0, to: drum, radius: B * 0.42 });
+  parts.push({ shape: 'cone', role: 'sail', from: drum, to: drum + L * 0.03, r0: B * 0.42, r1: B * 0.12 });
+  // The spine and the cargo pods around it, in rings.
+  const spineFrom = drum + L * 0.03, spineTo = L * 0.86;
+  parts.push({ shape: 'box', role: 'truss', center: [(spineFrom + spineTo) / 2, 0, 0], half: [(spineTo - spineFrom) / 2, B * 0.06, B * 0.06] });
+  const rings = rng.int(2, 4), pods = 6, podR = B * 0.16, ringLength = (spineTo - spineFrom - L * 0.08) / rings;
+  for (let k = 0; k < rings; k++) {
+    const from = spineFrom + L * 0.04 + k * ringLength, to = from + ringLength * 0.9;
+    for (let q = 0; q < pods; q++) {
+      const a = (q / pods) * 2 * Math.PI;
+      parts.push({ shape: 'cylinder', role: 'cargo', from, to, radius: podR, offset: [Math.cos(a) * (B / 2 - podR), Math.sin(a) * (B / 2 - podR)] });
+    }
+  }
+  // A radiator pair for the crew and the electronics, edge-on along the spine.
+  const span = B * 0.5;
+  for (const side of [-1, 1]) parts.push({ shape: 'box', role: 'radiator', center: [spineTo - L * 0.06, 0, side * (B * 0.2 + span / 2)], half: [L * 0.05, B * 0.01, span / 2] });
+  parts.push({ shape: 'cylinder', role: 'crew', from: spineTo, to: L * 0.97, radius: B * 0.2 });
+  parts.push({ shape: 'cone', role: 'hull', from: L * 0.97, to: L, r0: B * 0.2, r1: B * 0.08 });
+  return { params: p, parts, nozzle: 0, plumeLength: 0, plumeRadius: 0 };
+}
+
+/** A ship's shape from its blueprint. */
+export const shipShape = (p: ShipParams): ShipShape => (p.drive === 'sail' ? sailShip(p) : torchShip(p));
+
+/** The ranges ships are made in: length as a multiple of the berth arm's, beam of the length, thrusters (m/s²). */
+export const SHIP_DESIGN = {
+  torchShare: 0.7,
+  torch: { length: [0.8, 1.5], beam: [0.08, 0.1], plume: 8, thrust: [0.8, 1.2], rcs: [0.4, 0.6] },
+  sail: { length: [1, 1.8], beam: [0.12, 0.16], rcs: [0.15, 0.25] },
+} as const;
+/** Standard gravity (m/s²): a torch thrusts at about 1 g. */
+const G0 = 9.80665;
+
+/** A ship that fits a berth arm `berth` m long, from a seed. */
+export function deriveShip(seed: number, berth: number): ShipParams {
+  const rng = new Rng(seed), torch = rng.chance(SHIP_DESIGN.torchShare);
+  const d = torch ? SHIP_DESIGN.torch : SHIP_DESIGN.sail;
+  const length = berth * rng.range(d.length[0], d.length[1]), beam = length * rng.range(d.beam[0], d.beam[1]);
+  const rcs = rng.range(d.rcs[0], d.rcs[1]);
+  if (!torch) return { drive: 'sail', length, beam, plume: 0, thrust: 0, rcs, seed: rng.nextU32() };
+  const t = SHIP_DESIGN.torch;
+  return { drive: 'torch', length, beam, plume: t.plume, thrust: G0 * rng.range(t.thrust[0], t.thrust[1]), rcs, seed: rng.nextU32() };
 }

@@ -11,19 +11,18 @@
  * Exposure follows what is in sight (render/exposure.ts), so the stars show only when nothing bright is in view, as
  * for eyes; the "night eyes" augmentation (debug menu) lets the eyes open much further.
  */
-import { Color, Mesh, PerspectiveCamera, Vector4, Scene, SphereGeometry, Texture, type WebGPURenderer } from 'three/webgpu';
+import { Color, Mesh, PerspectiveCamera, Scene, SphereGeometry, Texture, type WebGPURenderer } from 'three/webgpu';
 import { Stage, createRenderer } from '@futuremagic/stage';
-import { Rng, deriveSeed, v3add, v3cross, v3dot, v3len, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
+import { Rng, deriveSeed, v3add, v3dot, v3len, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
 import type { Habitat } from '../blueprint';
 import { DAY, EARTH, MOON, REFERENCE_SPACE, SpaceFlyer, TORCH_SHIP, attractLoop, calendarOf, chooseStart, decodeStars, julianDay, makeSpace, skyFrom, torchShip, type Cinema, type CinemaFrame, type Mat3, type Space, type SkyView } from '../space';
-import { FLAME, HARDWARE, SKY, STARS, outsideKinds, standInAttribute } from './materials';
+import { SKY, STARS, outsideKinds, standInAttribute } from './materials';
 import { filtered } from './textures';
 import { outside, skyMaps } from './skyShaders';
 import { DARKEST, PERIPHERY, adapt, exposureFor, starExposure, sunInView, type Meterable } from './exposure';
 import { NecklaceView } from './necklace';
 import { meshGeometry, setPose } from './geometry';
-import { SHIP_ALBEDO, shipGeometry } from './ship';
-import type { FlameUniforms } from './hullShaders';
+import { SHIP_ALBEDO, ShipMeshes, shipAxes } from './ship';
 import { FrameLoop, dragToLook, draw, fitCanvas, moveKeys } from './surface';
 
 /**
@@ -55,7 +54,7 @@ export class OutsideView {
   /** The title's attract loop while it plays (space/cinema.ts): the shots, seconds into them, this frame. */
   private attract: { cinema: Cinema; elapsed: number; frame: CinemaFrame } | null = null;
   private readonly shipShape = torchShip(TORCH_SHIP);
-  private ship: { body: Mesh; plume: Mesh; flame: FlameUniforms } | null = null;
+  private ship: ShipMeshes | null = null;
   /** Called each frame of the attract loop with how far the title has faded in (0–1). */
   onTitle: ((fade: number) => void) | null = null;
   /** Clock seconds since the space's epoch, and how many pass per real second. */
@@ -202,6 +201,7 @@ export class OutsideView {
       s ? `sunlight ${(s.sunlight * 100).toFixed(0)}% · Earth ${(2 * Math.asin(s.earth.radius / Math.hypot(...s.earth.center)) * 180 / Math.PI).toFixed(1)}° across · ${this.flyer ? 'flying' : `looking at ${this.look}`}` : '',
       `${distanceOf(this.clearance([0, 0, 0]))} from the nearest surface · nearest neighbour ${distanceOf(v3len(this.necklace?.nearestNeighbour() ?? [0, 0, 0]))} away`,
       this.necklace?.detailInfo() ?? '',
+      this.necklace?.trafficInfo() ?? '',
     ].join('\n');
   }
 
@@ -292,15 +292,8 @@ export class OutsideView {
   /** The torch ship of the title flight, where the shot puts it (hidden otherwise). */
   private placeShip(eye: Vec3, at: CinemaFrame['ship']): void {
     if (!this.ship) return;
-    const { body, plume, flame } = this.ship;
-    body.visible = plume.visible = !!at;
-    if (!at) return;
-    // Ship axes: x to the nose, z the radiator wings' side, y completing them.
-    const x = at.forward, z = v3norm(v3cross(x, at.up)), y = v3cross(z, x);
-    const axes: Mat3 = [x[0], y[0], z[0], x[1], y[1], z[1], x[2], y[2], z[2]];
-    setPose(body, axes, v3sub(at.position, eye));
-    setPose(plume, axes, v3sub(at.position, eye));
-    flame.flame.y = at.throttle;
+    if (!at) { this.ship.hide(); return; }
+    this.ship.pose(shipAxes(at.forward, at.up), v3sub(at.position, eye), at.throttle);
   }
 
   /**
@@ -309,18 +302,9 @@ export class OutsideView {
    */
   async startAttract(): Promise<void> {
     if (!this.ship) {
-      const g = shipGeometry(this.shipShape);
-      const flame: FlameUniforms = { flame: new Vector4(this.shipShape.plumeLength, 1, this.shipShape.nozzle, 0) };
-      const body = new Mesh(g.body, HARDWARE.material), plume = new Mesh(g.plume, FLAME.material);
-      for (const m of [body, plume]) { m.matrixAutoUpdate = false; m.frustumCulled = false; }
-      body.name = 'torch ship';
-      plume.name = 'torch plume';
-      plume.userData.flame = flame;
-      // Added while visible, so the Stage compiles them under its cap (three's compile skips hidden objects, which
-      // then built both shaders in the first frame they showed); hidden until the loop poses them.
-      await Promise.all([this.stage.add(body), this.stage.add(plume)]);
-      for (const m of [body, plume]) m.visible = false;
-      this.ship = { body, plume, flame };
+      const ship = new ShipMeshes(this.shipShape, 'torch ship');
+      await ship.addTo(this.stage);
+      this.ship = ship;
     }
     this.flyer = null;
     const start = chooseStart(this.space, 0);
@@ -332,7 +316,7 @@ export class OutsideView {
   /** Back to the free view, from where the loop left the clock. */
   stopAttract(): void {
     this.attract = null;
-    if (this.ship) this.ship.body.visible = this.ship.plume.visible = false;
+    this.ship?.hide();
     this.frameHabitat();
   }
 
