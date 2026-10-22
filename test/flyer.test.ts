@@ -1,16 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MATRIX, derive, fromWorld, type Vec3 } from '../src/blueprint';
-import { makeTerrain } from '../src/gen/terrain';
+import { MATRIX, fromWorld, type Vec3 } from '../src/blueprint';
 import { Flyer, MIN_CLEARANCE } from '../src/world/flyer';
 import { Walker } from '../src/world/walker';
+import { terrainOf } from './worlds';
 
 const dot = (a: Vec3, b: Vec3): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const inward = (p: Vec3): Vec3 => { const r = Math.hypot(p[0], p[1]); return [-p[0] / r, -p[1] / r, 0]; };
 
-for (const { name, params } of MATRIX) {
-  const h = derive(params);
-  const t = makeTerrain(h);
+for (const { name } of MATRIX) {
+  const t = terrainOf(name), h = t.habitat;
 
   test(`flyer (${name}): stays above the ground, climbs to the axis and rolls over it smoothly, lands facing its way`, () => {
     const walker = new Walker(h.profile, undefined, t.standAt);

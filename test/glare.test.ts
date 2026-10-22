@@ -2,9 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { v3cross, v3norm, v3sub, type Vec3 } from '@futuremagic/core';
 import { MATRIX, derive, toWorld } from '../src/blueprint';
-import { makeTerrain } from '../src/gen/terrain';
 import { sunlineEmission, sunlineNorm } from '../src/world/sunline';
 import { glareOf, insideGlare, insideRayLuminance, meterRays, type InsideMeterable } from '../src/render/exposure';
+import { terrainOf } from './worlds';
 
 /** The 70° view the interior's camera has, from `eye` toward `at`, up toward the axis. */
 function view(eye: Vec3, at: Vec3): Vec3[] {
@@ -33,7 +33,7 @@ for (const { name, params } of MATRIX) {
     // Where the air across the habitat is thick enough to glow (a tenth of the haze distance or more), the axis glares.
     // Against the land itself (the view meters it so): standing on the wild endcap near its tip, looking down the tube,
     // the land close to the axis is lit many times the floor's light, and the eyes stop down at least as much.
-    const terrain = makeTerrain(h), tip = p.floorStart * 0.05, onTip = toWorld(p, { theta: 0, s: tip, h: terrain.heightAt(0, tip) + 2 });
+    const terrain = terrainOf(name), tip = p.floorStart * 0.05, onTip = toWorld(p, { theta: 0, s: tip, h: terrain.heightAt(0, tip) + 2 });
     const down = view(onTip, toWorld(p, { theta: 0.3, s: mid, h: 0 })), landed = { ...meter(0.25), heightAt: terrain.heightAt };
     const seen = down.map((d) => insideRayLuminance(landed, onTip, d));
     assert.ok(seen.every((l) => Number.isFinite(l) && l >= 0), 'every ray sees something finite');

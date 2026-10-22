@@ -5,13 +5,13 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MATRIX, derive, toWorld, withParams, type Vec3 } from '../src/blueprint';
+import { MATRIX, toWorld, type Vec3 } from '../src/blueprint';
 import { buildPatch } from '../src/gen/patch';
 import { coast, upAt } from '../src/world/motion';
 import { PhysicsWorld, PHYSICS_STEP } from '../src/physics/world';
 import { JUMP_SPEED, afterMove } from '../src/physics/character';
-import { makeTerrain } from '../src/gen/terrain';
 import { RUN, around, rise } from './runs';
+import { flatOf } from './worlds';
 
 test('afterMove: the controller stops a body but never throws it', () => {
   const up: Vec3 = [0, 1, 0];
@@ -28,10 +28,9 @@ test('afterMove: the controller stops a body but never throws it', () => {
   assert.ok(Math.hypot(...slid) <= 1 + 1e-12, `slid at ${Math.hypot(...slid)}`);
 });
 
-for (const { name, params } of MATRIX) {
+for (const { name } of MATRIX) {
   // Flat land: any lift is the controller's alone.
-  const h = derive(withParams({ relief: { hills: 0, ringLake: null, terraceStep: params.relief.terraceStep, massif: 0, rivers: null }, landmarks: null }, params));
-  const t = makeTerrain(h);
+  const t = flatOf(name), h = t.habitat;
   const s = (h.profile.floorStart + h.profile.floorEnd) / 2 + Math.min(1234, (h.profile.floorEnd - h.profile.floorStart) / 4);
 
   test(`running (${name}): a fast run over flat ground stays on it, both ways around`, async () => {

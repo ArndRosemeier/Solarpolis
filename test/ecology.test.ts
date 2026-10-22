@@ -1,10 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CLIMATES, MATRIX, derive, validate, withParams, type HabitatParams } from '../src/blueprint';
-import { makeTerrain } from '../src/gen/terrain';
 import { CLOSED_RAISE, UNDER_CROWNS, crownsClosed, makeEcology, type Ecology } from '../src/gen/ecology';
 import { insideExposure, underCrowns } from '../src/render/exposure';
-import { ecologyOf } from './worlds';
+import { ecologyOf, terrainOf } from './worlds';
 
 /** A grid of points over the whole interior: (θ, s, height, slope of the profile). */
 function sample(eco: Ecology, around = 24, along = 60): { theta: number; s: number; h: number; slope: number }[] {
@@ -26,7 +25,7 @@ const habitats: { name: string; params: HabitatParams }[] = [
 
 for (const { name, params } of habitats) {
   test(`ecology (${name}): planted patches with clear edges, several biomes, the same every time`, () => {
-    const eco = ecologyOf(name, params), again = makeEcology(makeTerrain(derive(params)));
+    const eco = ecologyOf(name, params), again = makeEcology(terrainOf(name, params));
     const n = eco.climate.biomes.length, w = new Float32Array(n), w2 = new Float32Array(n);
     const cover = new Array<number>(n).fill(0);
     let clear = 0;

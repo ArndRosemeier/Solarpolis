@@ -1,13 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MATRIX, derive, fromWorld, toWorld, withParams, type DebrisSpec } from '../src/blueprint';
-import { makeTerrain } from '../src/gen/terrain';
-import { makeEcology } from '../src/gen/ecology';
+import { MATRIX, fromWorld, toWorld, type DebrisSpec } from '../src/blueprint';
 import { planOf } from '../src/gen/plan';
 import { buildStone, type StoneMesh } from '../src/gen/stones';
 import { buildFallenWood, BARK_STRIPS } from '../src/gen/trees';
 import { LEVELS, cellsNear, plantCell, plantsOf, PLANT_STRIDE, type Level } from '../src/gen/scatter';
-import { ecologyOf } from './worlds';
+import { climateOf, ecologyOf } from './worlds';
 
 const tris = (m: { index: Uint32Array }) => m.index.length / 3;
 
@@ -110,7 +108,7 @@ for (const { name } of MATRIX) {
 }
 
 test('debris: the mediterranean has stones and fallen pine; every fallen piece names a tree', () => {
-  const med = makeEcology(makeTerrain(derive(withParams({ climate: 'mediterranean' }))));
+  const med = climateOf('mediterranean');
   const d = med.climate.debris as readonly DebrisSpec[];
   assert.ok(d.some((x) => x.form === 'stone') && d.some((x) => x.form === 'log'));
   for (const eco of [med, ecologyOf(MATRIX[0].name)]) for (const x of eco.climate.debris) if (x.form !== 'stone') assert.ok(x.wood, `${x.name} names its tree`);

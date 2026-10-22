@@ -1,14 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MATRIX, derive, fromWorld, toWorld, withParams } from '../src/blueprint';
-import { makeTerrain } from '../src/gen/terrain';
-import { canopyOf, makeEcology, TREE_HEIGHT } from '../src/gen/ecology';
+import { MATRIX, fromWorld, toWorld } from '../src/blueprint';
+import { canopyOf, TREE_HEIGHT } from '../src/gen/ecology';
 import { canopyBand, cellBounds, cellSphere, cellsNear, LEVELS, levelRunOf, plantCell, plantsOf, PLANT_STRIDE, type CellKey, type Level, type Species } from '../src/gen/scatter';
-import { ecologyOf } from './worlds';
+import { climateOf, ecologyOf } from './worlds';
 
 /** A cell of a plant near a point of the floor, and the plant. */
-function cellAt(name: string, params = MATRIX[0].params, at?: (lake: number, floor: [number, number]) => number) {
-  const eco = params === MATRIX[0].params ? ecologyOf(MATRIX[0].name) : makeEcology(makeTerrain(derive(params))), h = eco.terrain.habitat, plants = plantsOf(eco);
+function cellAt(name: string, climate = MATRIX[0].params.climate, at?: (lake: number, floor: [number, number]) => number) {
+  const eco = climateOf(climate), h = eco.terrain.habitat, plants = plantsOf(eco);
   const sp = plants.find((p) => p.spec.name === name)!;
   const s = at ? at(eco.terrain.lake?.s ?? 0, [h.profile.floorStart, h.profile.floorEnd]) : (h.profile.floorStart + h.profile.floorEnd) / 2;
   const eye = toWorld(h.profile, { theta: 0.3, s, h: eco.terrain.heightAt(0.3, s) + 1.7 });
@@ -64,7 +63,7 @@ test('scatter: woods are about as dense as their spacing says where the biome is
 });
 
 test('scatter: olive groves are planted in straight rows (their spacing apart along the level run)', () => {
-  const { eco, plants, sp, cells } = cellAt('olive', withParams({ climate: 'mediterranean' }));
+  const { eco, plants, sp, cells } = cellAt('olive', 'mediterranean');
   const { profile } = eco.terrain.habitat, run = levelRunOf(profile);
   let n = 0;
   for (const k of cells.slice(0, 40)) {
@@ -88,7 +87,7 @@ test('scatter: cells are bigger for plants seen farther, and for farther levels'
 
 test('scatter: each level takes a plant over exactly where the one before lets it go, and woods hand over to the canopy', () => {
   for (const climate of ['temperate-mild', 'mediterranean']) {
-    const eco = makeEcology(makeTerrain(derive(withParams({ climate })))), woods = canopyBand(eco);
+    const eco = climateOf(climate), woods = canopyBand(eco);
     for (const sp of plantsOf(eco)) {
       for (let k = 1; k < sp.band.length; k++) assert.deepEqual(sp.band[k].slice(0, 2), sp.band[k - 1].slice(2), `${sp.spec.name} level ${k}`);
       for (const b of sp.band) assert.ok(b[0] < b[1] && b[1] <= b[2] && b[2] < b[3], `${sp.spec.name}: ${b}`);

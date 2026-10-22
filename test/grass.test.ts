@@ -1,11 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { COVER_FORMS, FLOOR_LAYERS, MATRIX, derive, fromWorld, toWorld, withParams } from '../src/blueprint';
-import { makeTerrain } from '../src/gen/terrain';
-import { makeEcology, nearestFloor } from '../src/gen/ecology';
+import { COVER_FORMS, FLOOR_LAYERS, MATRIX, fromWorld, toWorld } from '../src/blueprint';
+import { nearestFloor } from '../src/gen/ecology';
 import { buildTuft, type TuftMesh } from '../src/gen/grass';
 import { COVER_FADE, LEVELS, cellBounds, cellsNear, coverChance, plantCell, plantsOf, PLANT_STRIDE } from '../src/gen/scatter';
-import { ecologyOf } from './worlds';
+import { climateOf, ecologyOf } from './worlds';
 
 const tris = (m: TuftMesh) => m.index.length / 3;
 
@@ -91,6 +90,6 @@ test('grass: no grass on bare rock, at the waterline or on the lake bed; dry gra
   assert.ok(m, 'a meadow near the middle of the floor');
   const r = profile.at(m.s).r;
   assert.ok(grass(m.theta + (m.way[0] * 10) / r, m.s + m.way[1] * 10) > 0.6, 'thick grass 10 m in');
-  const med = makeEcology(makeTerrain(derive(withParams({ climate: 'mediterranean' }))));
+  const med = climateOf('mediterranean');
   assert.deepEqual(plantsOf(med).filter((p) => p.what === 'cover').map((p) => p.spec.form), ['dry-grass']);
 });
