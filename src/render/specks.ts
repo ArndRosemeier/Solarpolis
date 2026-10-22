@@ -109,7 +109,6 @@ export class SpeckView {
     g.setAttribute(SPECK_SHOWN, shown);
     g.instanceCount = s.count;
     const mesh = drawnAnywhere(g, SPECK.material, 'specks');
-    mesh.renderOrder = 1;
     await this.stage.prepare(mesh);
     dropUploaded(mesh, this.stage.renderer, [SPECK_SHOWN]);
     return { mesh, t: s.t, key: s.key, shown, stamp: new Uint32Array(s.count), off: [], gpuBytes: data.byteLength + shown.array.byteLength };

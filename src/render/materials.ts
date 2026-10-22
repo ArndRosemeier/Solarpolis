@@ -725,7 +725,8 @@ export const CROWD = kind('crowd', ['position', 'normal', 'part', ...STAND_IN_AT
 /**
  * People further off than the stand-ins (render/specks.ts): each the patch of screen their body covers, as faint as it
  * is small (`speckLook`, crowdShaders.ts), lit as the stand-ins are, through the air. Drawn over what is behind
- * them without writing depth. Corner (the quad's) and the `SPECK_ATTRIBUTES` per person.
+ * them without writing depth, before the clouds (render order 0; the clouds' meshes come after), so a cloud covers
+ * those under it. Corner (the quad's) and the `SPECK_ATTRIBUTES` per person.
  */
 export const SPECK = kind('speck', ['position', 'corner', ...SPECK_ATTRIBUTES, SPECK_SHOWN], { cast: false, receive: false }, () => {
   const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false });

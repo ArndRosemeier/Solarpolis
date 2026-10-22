@@ -160,7 +160,6 @@ export class PeopleView {
     const mesh = drawnAnywhere(g, CROWD.material, 'stand-ins');
     mesh.castShadow = true;
     const specks = drawnAnywhere(quadInstances(), SPECK.material, 'near specks');
-    specks.renderOrder = 1;
     this.speckMesh = specks;
     this.growSpecks(64);
     (specks.geometry as InstancedBufferGeometry).instanceCount = 0;
