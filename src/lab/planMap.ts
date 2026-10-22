@@ -105,7 +105,7 @@ function paint(plan: Plan, img: PlanImage, where: (x: number, y: number) => [num
 }
 
 /** A round dot of radius r at (x, y). */
-function dot(img: PlanImage, x: number, y: number, r: number, c: Rgb): void {
+export function dot(img: PlanImage, x: number, y: number, r: number, c: Rgb): void {
   const { width, height, data } = img;
   for (let j = Math.floor(y - r); j <= Math.ceil(y + r); j++) for (let i = Math.floor(x - r); i <= Math.ceil(x + r); i++) {
     if (i < 0 || j < 0 || i >= width || j >= height) continue;
@@ -186,6 +186,14 @@ export function floorPixel(plan: Plan, width: number, theta: number, s: number):
   return [(s - profile.floorStart) * scale, (wrapAngle(theta) / (2 * Math.PI)) * height];
 }
 
+/** Where a point of an endcap lies on its map (`endcapMap`), or null off that endcap. */
+export function endcapPixel(plan: Plan, end: 'wild' | 'port', size: number, theta: number, s: number): [number, number] | null {
+  const { profile } = plan.habitat, half = size / 2, flip = end === 'port' ? -1 : 1;
+  if (end === 'wild' ? s > profile.floorStart : s < profile.floorEnd) return null;
+  const r = profile.at(s).r / plan.habitat.radius;
+  return [half + flip * Math.cos(theta) * r * half, half - Math.sin(theta) * r * half];
+}
+
 /**
  * One endcap face-on, as seen from the floor looking at it: the axis in the middle, the endcap's foot at the rim. The
  * port end's hub is the hole in the middle.
@@ -211,11 +219,6 @@ export function endcapMap(plan: Plan, end: 'wild' | 'port', size: number): PlanI
     const s = sOf(r);
     return s === null ? null : [Math.atan2(v, u * flip), s];
   });
-  const to = (theta: number, s: number): [number, number] | null => {
-    if (end === 'wild' ? s > profile.floorStart : s < profile.floorEnd) return null;
-    const r = profile.at(s).r / R;
-    return [half + flip * Math.cos(theta) * r * half, half - Math.sin(theta) * r * half];
-  };
-  overlay(plan, img, to, half / R);
+  overlay(plan, img, (theta, s) => endcapPixel(plan, end, size, theta, s), half / R);
   return img;
 }

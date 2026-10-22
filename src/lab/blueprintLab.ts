@@ -7,6 +7,7 @@ import { derive, validate, isValid, MATRIX, type Habitat, type HabitatParams, ty
 import { habitatFromUrl, habitatToUrl, presetOf } from '../app/params';
 import { el } from '../app/dom';
 import { PlanView } from './planView';
+import { LifeView } from './lifeView';
 
 const G = 9.80665;
 const SVG = 'http://www.w3.org/2000/svg';
@@ -69,6 +70,7 @@ export class BlueprintLab {
   private readonly presets = el('div', 'lab-presets');
   private readonly error = el('p', 'lab-error');
   private readonly plan = new PlanView();
+  private readonly life = new LifeView();
   habitat: Habitat | null = null;
 
   constructor(search: URLSearchParams, private readonly onChange: (query: string) => void = () => {}) {
@@ -95,7 +97,7 @@ export class BlueprintLab {
       this.sliders.push({ c, input, out });
     }
     const results = el('section', 'lab-results');
-    results.append(el('h2', '', 'Section'), this.section, el('h2', '', 'Land plan'), this.plan.root, el('h2', '', 'Under the floor'), this.stack, el('h2', '', 'Checks'), this.error, this.findings, el('h2', '', 'Derived'), this.table);
+    results.append(el('h2', '', 'Section'), this.section, el('h2', '', 'Land plan'), this.plan.root, el('h2', '', 'Who is out on the land'), this.life.root, el('h2', '', 'Under the floor'), this.stack, el('h2', '', 'Checks'), this.error, this.findings, el('h2', '', 'Derived'), this.table);
     this.root.append(controls, results);
     this.syncSliders();
     this.update();
@@ -125,6 +127,7 @@ export class BlueprintLab {
       this.section.replaceChildren();
       this.stack.replaceChildren();
       this.plan.show(null);
+      this.life.show(null);
       return;
     }
     this.habitat = h;
@@ -135,6 +138,7 @@ export class BlueprintLab {
     this.section.replaceChildren(sectionSvg(h));
     this.stack.replaceChildren(stackSvg(h));
     this.plan.show(isValid(findings) ? h : null);
+    this.life.show(isValid(findings) ? h : null);
   }
 
   private showFindings(fs: Finding[]): void {

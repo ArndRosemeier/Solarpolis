@@ -154,8 +154,19 @@ Each row is a question you will have while coding, and the one place that answer
 | Where does the page open, and how does it get there again? | The title (`TitleCard`, `title.ts`) over the Outside view playing `startAttract`; `showTab('title' \| 'lab' \| 'inside' \| 'outside')` in `main.ts`, with `?view=` for the others. Start plays `OutsideView.arrive` (the card gone, any key skips), then a short fade (`drawCurtain`) into the Inside view floating at the Hub (`InteriorView.floatAt` at `hubView`); any key on the card goes straight in. The header's name goes back to the title. |
 | How do I make a DOM element? | `el(tag, className, text)` (`dom.ts`). |
 
+## The society (`src/sim`, pure)
+
+| Question | The one way |
+|---|---|
+| Who lives here? | `residentOf(habitat, i)` (`population.ts`): resident i of `HabitatParams.population` is the same person every time (home court, human or mind, grown body or shell, look seed, walking speed). Never shown by the body. |
+| Who is up on the land now, and where? | `peopleAt(habitat, t, near?)` (`population.ts`): everyone (or everyone within an area) at clock time t, with position, heading, activity and the court they came up at. Pure function of seed and clock, no simulation; each court's day is made once and kept (bounded), routes too. Sizes and shares from `HabitatParams.life`. |
+| Where do people go on the land? | `venuesOf(habitat)` (`venues.ts`): courts, district commons (activity by style, `STYLE_ACTIVITY`), the Sunwalk near each court, the lake shore, reserve hikes, and the landmarks with their share of all outings (`LANDMARK_SHARE`). Each belongs to the court people come up at to reach it. |
+| How do people walk from one place to another? | `walksOf(habitat)` (`walks.ts`): the plan's Sunwalk, ways and trail as one tree; `between(a, b)` is the route along the paths, `nearest` the net's point nearest a place, `pointAlong(route, R, d)` a point on it. |
+| How are a day's outings dealt out so nobody is in two places? | `shuffleOf(n, seed)` (`permute.ts`): a seeded permutation with its inverse, never stored. |
+| How do I see where everyone is over a day? | The Blueprint tab's "Who is out on the land" (`src/lab/lifeView.ts`): one dot per person over the land plan's maps, with a slider through the day. |
+| What happens when the player touches someone? | *Planned:* they become a live agent in `src/sim`, starting from their derived state, and go back to their routine after. |
+
 ## Planned
 
 | Question | The one way (to build) |
 |---|---|
-| Who lives here, and what are they doing now? | Derived from seed + clock (`src/sim`); only touched people are simulated. |
