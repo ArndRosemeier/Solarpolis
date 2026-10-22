@@ -185,6 +185,10 @@ export const views = {
   works: { query: 'view=inside', about: 'the districts\' works, one kind after another, each from two of its radii off: pyramid, cone, sunken court, mesa, fold, dome, down, scarp, vale, bowl, stepwell, half-pipe, amphitheatre, ramp, drumlin, tor', settle: 6000, steps: [
     ...['pyramid', 'cone', 'sunken', 'mesa', 'fold', 'dome', 'down', 'scarp', 'vale', 'bowl', 'stepwell', 'halfpipe', 'amphitheatre', 'ramp', 'drumlin', 'tor'].flatMap((kind) => [{ debug: 'Fly: the next district work' }, { wait: 9000 }, { shot: kind }]),
   ] },
+  // The signature works (gen/works.ts `SIGNATURE_KINDS`): each from 1.6 of its radii off, then from the floor across the axis.
+  signature: { query: 'view=inside', about: 'the signature works in turn: the Spiral, the Wave Field, the Tilt (before its cliff), each up close and then from the far side of the cylinder', settle: 6000, steps: [
+    ...['spiral', 'wave-field', 'tilt'].flatMap((kind) => [{ debug: 'Fly: the next signature work' }, { wait: 10000 }, { shot: kind }, { debug: 'Fly: the signature work from the far side' }, { wait: 10000 }, { shot: `${kind}-far` }]),
+  ] },
   'far-meadow-up': { query: 'view=inside', about: 'standing in a meadow, looking up at the far side', settle: 6000, steps: [{ debug: 'Into the nearest meadow' }, { wait: 5000 }, { look: [0, -260] }, { wait: 3000 }] },
   outside: { query: 'view=outside', about: 'the home habitat from outside', default: true },
   'outside-earth': { query: 'view=outside', about: 'looking at Earth (key 2)', steps: [{ key: 'Digit2' }, { wait: 3000 }] },

@@ -20,12 +20,21 @@
  * end, softened toward the reserve. Faces that should catch the travelling sun face along the axis.
  *
  * Sizes are shares of the habitat's tallest work (`relief.landforms.works` radii), so every habitat of the blueprint
- * gets them at its own scale. Pure: no three, no DOM.
+ * gets them at its own scale.
+ *
+ * Besides the districts' works stand a few signature works (design step 4), made by the habitat's people together and
+ * read from the far side: the Spiral, a mound with a ramp winding up it; the Wave Field, grass waves round the cylinder
+ * that the travelling sun lights one after another; and the Tilt, a slab of meadow tilted up to a cliff flyers leave
+ * from. They are works too (the same `Work`, surface and terrain), sized as shares of the radius (`SIGNATURE_KINDS`).
+ * Pure: no three, no DOM.
  */
 import { smoothstep } from '@futuremagic/core';
 import type { DistrictStyle } from '../blueprint';
 
-export type WorkKind =
+const TURN = 2 * Math.PI;
+
+/** The kinds of the districts' works. */
+export type DistrictWorkKind =
   | 'pyramid' | 'cone' | 'sunken'
   | 'mesa' | 'fold'
   | 'dome'
@@ -35,11 +44,16 @@ export type WorkKind =
   | 'halfpipe' | 'amphitheatre' | 'ramp'
   | 'drumlin' | 'tor';
 
+/** The kinds of the signature works. */
+export type SignatureKind = 'spiral' | 'wave-field' | 'tilt';
+
+export type WorkKind = DistrictWorkKind | SignatureKind;
+
 /** A district's work on the floor. */
 export interface Work {
   id: number;
   kind: WorkKind;
-  /** The district that made it. */
+  /** The district that made it (for a signature work, the one it stands in); −1 for the wild reserve. */
   district: number;
   theta: number;
   s: number;
@@ -60,7 +74,7 @@ export interface Work {
  * whether it is dug into the land, and whether it faces along the axis (so the travelling sun lights one face and shades
  * the other) rather than any way.
  */
-export const WORK_KINDS: Readonly<Record<WorkKind, { height: readonly [number, number]; spread: number; dug?: boolean; axial?: boolean }>> = {
+export const WORK_KINDS: Readonly<Record<DistrictWorkKind, { height: readonly [number, number]; spread: number; dug?: boolean; axial?: boolean }>> = {
   pyramid: { height: [0.15, 0.48], spread: 2.2 },
   cone: { height: [0.12, 0.4], spread: 2 },
   sunken: { height: [0.08, 0.16], spread: 4, dug: true },
@@ -80,7 +94,7 @@ export const WORK_KINDS: Readonly<Record<WorkKind, { height: readonly [number, n
 };
 
 /** The kinds each style makes, in the order a district takes them. */
-export const STYLE_WORKS: Readonly<Record<DistrictStyle, readonly WorkKind[]>> = {
+export const STYLE_WORKS: Readonly<Record<DistrictStyle, readonly DistrictWorkKind[]>> = {
   stone: ['pyramid', 'sunken', 'cone'],
   makers: ['mesa', 'fold'],
   orchard: ['dome'],
@@ -98,6 +112,29 @@ export const STYLE_WORKS: Readonly<Record<DistrictStyle, readonly WorkKind[]>> =
  * kept crisp in a district cared for more than `care[1]`, worn soft below `care[0]`.
  */
 export const WORKS = { perDistrict: 6, tries: 12, reach: 0.4, court: 0.12, walk: 3, river: 4, apart: 1.1, care: [0.3, 0.8] as const };
+
+/**
+ * The signature works: height (a wave's crest at its tallest) and footprint radius as shares of the habitat's radius,
+ * at most `room` of the length of a room between two Rings (scaled down whole where that is less), and whether it faces
+ * along the axis. The Spiral is 2 km across and 250 m high in the reference habitat (R 4 km), its ramp winding `turns`
+ * times round; the Wave Field's waves stand up to 30 m, a wave every `wave` heights; the Tilt's slab is 3 km long and
+ * climbs 400 m (about 8°) to its cliff.
+ */
+export const SIGNATURE_KINDS: Readonly<Record<SignatureKind, { height: number; radius: number; room: number; axial?: boolean }>> = {
+  spiral: { height: 0.0625, radius: 0.25, room: 0.23 },
+  'wave-field': { height: 0.0075, radius: 0.3, room: 0.28, axial: true },
+  tilt: { height: 0.1, radius: 0.41, room: 0.38, axial: true },
+};
+
+/**
+ * How the plan places them (`landforms.signature` of them, in `order`): the best of `tries` throws, by sightlines: each
+ * as near the Sunwalk as it fits (seen from it, and from the far side over it), in a room between the Rings of its own.
+ * The Spiral winds `turns` times; a wave is `wave` of its heights long. They are kept at least `crisp`.
+ */
+export const SIGNATURE = { order: ['spiral', 'wave-field', 'tilt'] as const, tries: 160, turns: 4, wave: 6, crisp: 0.6 };
+
+/** Whether a work is a signature work. */
+export const isSignature = (w: Work): boolean => w.kind in SIGNATURE_KINDS;
 
 /** The share of a step's run its riser takes: steep where the work is crisp, worn back where it is not. */
 const riserOf = (crisp: number): number => 0.6 - 0.38 * crisp;
@@ -217,6 +254,28 @@ export function workAt(w: Work, du: number, dv: number): number {
       h = q < 1 ? H * Math.pow(1 - q, 1.6) : 0;
       break;
     }
+    case 'spiral': {
+      // A mound with a level top, its flank one ramp winding up `turns` times: each turn's tread level across, rising
+      // along the way round, a riser up to the next turn inside it.
+      const top = 0.12, T = SIGNATURE.turns, w = riserOf(k);
+      const t = ((1 - rho) / (1 - top)) * T, around = (Math.atan2(y, x) / TURN + 1) % 1;
+      const u = t - around, n = Math.floor(u);
+      h = Math.min(H, Math.max(0, (H / T) * (n + around + smoothstep(1 - w, 1, u - n))));
+      break;
+    }
+    case 'wave-field': {
+      // Parallel waves across its facing (round the cylinder when it faces along the axis), tallest in its middle.
+      const crest = H * (0.35 + 0.65 * (1 - rho2)) * (1 - smoothstep(0.75, 0.97, rho));
+      h = crest * (0.5 - 0.5 * Math.cos((TURN * x * r) / (SIGNATURE.wave * H)));
+      break;
+    }
+    case 'tilt': {
+      // A long slab of meadow rising along its facing to a sheer cliff (78°), its sides walls (70°); wholly inside the
+      // footprint, so it needs no fading at the edge.
+      const a = 0.92, b = 0.36;
+      if (Math.abs(x) > a || ay > b) return 0;
+      return Math.max(0, Math.min(H * (x + a) / (2 * a), (a - x) * r * 4.7, (b - ay) * r * 2.75));
+    }
     case 'tor': {
       // A low knoll crowned by three stacks of rock.
       h = H * 0.4 * (1 - rho2) * (1 - rho2);
@@ -232,4 +291,4 @@ export function workAt(w: Work, du: number, dv: number): number {
 }
 
 /** Whether a work's kind is dug into the land (its surface goes down, not up). */
-export const isDug = (w: Work): boolean => !!WORK_KINDS[w.kind].dug;
+export const isDug = (w: Work): boolean => !isSignature(w) && !!WORK_KINDS[w.kind as DistrictWorkKind].dug;

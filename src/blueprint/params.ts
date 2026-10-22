@@ -108,9 +108,11 @@ export interface Relief {
    * Built hollow (the living layer's great halls stand in them) and placed by the plan (gen/plan.ts, `grounds`).
    * Inside that frame each district shapes its own ground in its style (gen/works.ts): the tallest of those works is
    * `works` radii high. The wild grows bolder natural relief: up the valleys' sides the hills stand `wild` times
-   * higher again where the land is let be (the reserve, care 0). Absent: no works, no wilder relief.
+   * higher again where the land is let be (the reserve, care 0). Absent: no works, no wilder relief. And `signature`
+   * signature works, made by the habitat's people together (0 … 3: the Spiral, the Wave Field, the Tilt, in turn; sized
+   * as shares of the radius, `SIGNATURE_KINDS`). Absent: none.
    */
-  landforms?: { ring: number; ringEvery: number; height: number; heights: number; works?: number; wild?: number } | null;
+  landforms?: { ring: number; ringEvery: number; height: number; heights: number; works?: number; wild?: number; signature?: number } | null;
 }
 
 export type AxisOrientation = 'side-on' | 'end-on';

@@ -30,7 +30,7 @@ import { cultureOf, type Culture, type DistrictStyle, type FaceKind, type Habita
 import { kept } from './kept';
 import { fileUnder, floorGrid } from './floorGrid';
 import { baysOf } from './bays';
-import { STYLE_WORKS, WORKS, WORK_KINDS, workAt, type Work, type WorkKind } from './works';
+import { SIGNATURE, SIGNATURE_KINDS, STYLE_WORKS, WORKS, WORK_KINDS, isSignature, workAt, type DistrictWorkKind, type Work } from './works';
 
 const TURN = 2 * Math.PI;
 
@@ -49,6 +49,9 @@ export interface Lake {
 
 /** How far a place along the axis lies from the ring lake's shore (m, negative in the water; far without a lake). */
 export const fromLake = (lake: Lake | null, s: number): number => (lake ? Math.abs(s - lake.s) - lake.halfWidth : Infinity);
+
+/** How wide the lake's shore is (m): the band past its water where the hills flatten down to meet it (gen/terrain.ts). */
+export const shoreOf = (lake: Lake | null): number => (lake ? Math.max(lake.depth * 10, lake.halfWidth * 0.3) : 0);
 
 export type { FaceKind } from '../blueprint';
 
@@ -672,29 +675,126 @@ export function makePlan(h: Habitat): Plan {
     assigned.add(k.id);
   }
 
+  const spacing = spec.entranceSpacing, widths = spec.pathWidth;
+  const firstEntrance = reserveEnd + spacing * 0.15, lastEntrance = Math.max(firstEntrance, floorEnd - spacing * 0.15);
+  // The Sunwalk's line: along the main valley's side, a quarter of the way out to the ridge.
+  const sunwalkSide = 0.25 * gap / 2;
+  const walkTheta = (s: number): number => valleyAt(0, s) + sunwalkSide;
+
+  // Landmarks.
+  const hutAt = endcapAt(true, 0.3);
+  // The Lift Stair climbs the Stair face from the floor's end, up the main valley's line.
+  const landmarks: Site[] = [
+    { kind: 'lift-stair', theta: wrap(valleyAt(0, floorEnd)), s: floorEnd, size: form.stairHalfWidth, facing: 0, district: -1 },
+    { kind: 'summit-hut', theta: wrap(valleyAt(0, hutAt) + gap * 0.12), s: hutAt, size: Math.max(R * 0.005, 1), facing: 0, district: -1 },
+    { kind: 'founders-grove', theta: wrap(valleyAt(0, floorEnd - floor * 0.06) - gap * 0.18), s: floorEnd - floor * 0.06, size: R * 0.05, facing: 0, district: -1 },
+  ];
+  if (lake) landmarks.push({ kind: 'lake-pavilion', theta: wrap(walkTheta(lake.s)), s: lake.s, size: lake.halfWidth * 0.5, facing: 0, district: -1 });
+  for (const l of landmarks) if (l.s >= reserveEnd && l.s <= floorEnd) l.district = districtAt(l.theta, l.s)?.id ?? -1;
+  const grove = landmarks.find((l) => l.kind === 'founders-grove');
+
+  // Whether a work's footprint of `radius` at a point stays on the land a work may stand on: off the Heights and the
+  // Rings' fronts and crests (it may stand on a Ring's long slope, low down), its middle and `rim` points round it.
+  const onLand = (theta: number, s: number): boolean => {
+    const on = landformAt(theta, s);
+    return !on || (on.form.kind === 'ring' && on.face <= 0 && on.share < 0.5);
+  };
+  const landUnder = (theta: number, s: number, radius: number, rim: number): boolean => {
+    if (!onLand(theta, s)) return false;
+    for (let q = 0; q < rim; q++) {
+      const a = (q / rim) * TURN;
+      if (!onLand(theta + (radius * Math.cos(a)) / R, s + radius * Math.sin(a))) return false;
+    }
+    return true;
+  };
+  /**
+   * Whether a footprint of `radius` keeps `walk` metres off the Sunwalk and `river` widths (past its meander) off each
+   * river's line, at the places `at` along it (shares of its radius either way).
+   */
+  const offLines = (theta: number, s: number, radius: number, walk: number, river: number, at: readonly number[]): boolean => {
+    for (const f of at) {
+      const ds = f * radius;
+      if (Math.abs(wrap(theta - walkTheta(s + ds))) * R < radius + walk) return false;
+      for (const r of rivers) {
+        if (lake && (r.from === 'wild') !== (s + ds < lake.s)) continue;
+        if (Math.abs(wrap(theta - routeOf(r, s + ds))) * R < radius + riverWidth * (river + r.meander)) return false;
+      }
+    }
+    return true;
+  };
+
+  // The signature works (gen/works.ts `SIGNATURE_KINDS`): `landforms.signature` of them, the Spiral, the Wave Field and
+  // the Tilt in turn, placed before the entrances (whose courts keep off them) by sightlines: of the throws that fit (on
+  // the worked floor, clear of the lake, the Sunwalk, the rivers, the founders' grove, the Heights and the Rings' fronts
+  // and crests), the one nearest the Sunwalk's edge, so it stands in full view of the walk and over it from the far
+  // side, and in a room between the Rings no other has where one fits.
+  const works: Work[] = [];
+  const signatures = Math.min(SIGNATURE.order.length, Math.max(0, Math.round(params.relief.landforms?.signature ?? 0)));
+  const ringsOn = form.grounds.filter((g) => g.kind === 'ring');
+  const roomOf = (theta: number, s: number): string => ringsOn.map((g) => (s > form.ringLine(g, theta) ? 1 : 0)).join('');
+  if (signatures > 0) {
+    const grng = new Rng(deriveSeed(h.seed, 'plan', 'signature'));
+    const walkKeep = widths.sunwalk * WORKS.walk, along = [-1, -0.5, 0, 0.5, 1] as const;
+    // How long a room between two Rings is (the whole floor without any).
+    const room = ringsOn.length ? (params.relief.landforms?.ringEvery ?? 1) * R : floor;
+    const sigFits = (theta: number, s: number, radius: number): boolean => {
+      if (s - radius < firstEntrance || s + radius > lastEntrance) return false;
+      if (fromLake(lake, s) < radius + spacing * 0.2) return false;
+      if (!offLines(theta, s, radius, walkKeep, WORKS.river, along)) return false;
+      if (grove && dist(grove.theta, grove.s, theta, s) < radius + grove.size * 1.2) return false;
+      for (const o of works) if (dist(o.theta, o.s, theta, s) < (o.radius + radius) * 1.2) return false;
+      // Never over a district's seed: every district keeps the middle of its ground (and room there for an entrance).
+      for (const d of districts) if (dist(d.theta, d.s, theta, s) < radius + spacing * 0.25) return false;
+      // Off a Ring's crest and front by its way's width, over its whole width round the axis.
+      for (const g of ringsOn) for (const f of [-1, 0, 1]) {
+        const th = theta + (f * radius) / R, line = form.ringLine(g, th), side = s > line ? 1 : -1;
+        if (Math.abs(s - line) < radius + g.height * (GROUND.crest / 2 + (side === g.facing ? GROUND.face : 0)) + widths.way * 2) return false;
+      }
+      return landUnder(theta, s, radius, 16) && landUnder(theta, s, radius * 0.5, 8);
+    };
+    for (let i = 0; i < signatures; i++) {
+      const kind = SIGNATURE.order[i], spec = SIGNATURE_KINDS[kind];
+      const radius = Math.min(spec.radius * R, spec.room * room), height = spec.height * R * (radius / (spec.radius * R));
+      let best: { theta: number; s: number; score: number } | null = null;
+      const lo = firstEntrance + radius, hi = lastEntrance - radius;
+      for (let k = 0; k < SIGNATURE.tries && lo < hi; k++) {
+        const s = grng.range(lo, hi), side = grng.chance(0.5) ? 1 : -1, off = radius + walkKeep + grng.float() ** 2 * gap * R * 0.5;
+        const theta = wrap(walkTheta(s) + (side * off) / R);
+        if (!sigFits(theta, s, radius)) continue;
+        // Nearest the walk, in a room of its own.
+        const shared = works.some((o) => roomOf(o.theta, o.s) === roomOf(theta, s));
+        const score = Math.abs(wrap(theta - walkTheta(s))) * R - radius + (shared ? floor : 0);
+        if (!best || score < best.score) best = { theta, s, score };
+      }
+      if (!best) continue;
+      const care = careAt(best.s), facing = spec.axial ? (grng.chance(0.5) ? 0 : Math.PI) : grng.range(0, TURN);
+      works.push({
+        id: works.length, kind, district: districtAt(best.theta, best.s)?.id ?? -1, theta: best.theta, s: best.s, height, radius, facing,
+        crisp: Math.max(SIGNATURE.crisp, smoothstep(WORKS.care[0], WORKS.care[1], care)), vary: grng.float(),
+      });
+    }
+  }
+  /** Whether a point lies where an entrance's court may not: on a signature work or by its rim. */
+  const onSignature = (theta: number, s: number): boolean => works.some((w) => dist(w.theta, w.s, theta, s) < w.radius + spacing * WORKS.court);
+
   // Entrances: dart throwing inside each district, kept apart by about the spacing, off the river lines and the lake,
   // and as far from the worked floor's ends (the Gate's foot rising at one, the reserve at the other) as from the lake.
   const erng = new Rng(deriveSeed(h.seed, 'plan', 'entrances'));
-  const spacing = spec.entranceSpacing;
   const perDistrict = Math.max(1, Math.round((circumference * worked) / districts.length / (spacing * spacing)));
   const nearRiver = (theta: number, s: number): boolean => rivers.some((r) => Math.abs(wrap(theta - routeOf(r, s))) * R < riverWidth * (3 + r.meander));
   const placed: Site[] = [], bays = baysOf(h);
   // On a landform an entrance keeps to its foot or a low terrace, never its top or a face: the lift down is as deep
   // as the court stands over the layer, which rises inside a landform only as high as a great hall (`under.hall`).
   const lowest = courtCap(h), court = spacing * 0.025;
+  // (Its rim too: a court just off a Ring's foot must not have its rim up the Ring's front.)
   const onFoot = (theta: number, s: number): boolean => {
-    const on = landformAt(theta, s);
-    if (!on) return true;
-    if (on.top > lowest) return false;
     const top = (t: number, u: number): number => landformAt(t, u)?.top ?? 0;
+    if (top(theta, s) > lowest) return false;
     return Math.abs(top(theta, s + court) - top(theta, s - court)) + Math.abs(top(theta + court / R, s) - top(theta - court / R, s)) <= court * COURT_SLOPE * 2;
   };
   // Nor in the Sunwalk's way: its court stands clear of the walk's edge.
-  const sunwalkSide = 0.25 * gap / 2;
-  const walkTheta = (s: number): number => valleyAt(0, s) + sunwalkSide;
   const walkClear = court + COURT.clear * (params.landmarks?.handrail ?? 0) + spec.pathWidth.sunwalk / 2;
-  const fits = (theta: number, s: number): boolean => Math.abs(wrap(theta - walkTheta(s))) * R >= walkClear && onFoot(theta, s);
-  const firstEntrance = reserveEnd + spacing * 0.15, lastEntrance = Math.max(firstEntrance, floorEnd - spacing * 0.15);
+  const fits = (theta: number, s: number): boolean => Math.abs(wrap(theta - walkTheta(s))) * R >= walkClear && onFoot(theta, s) && !onSignature(theta, s);
   // Entrances filed by a grid a spacing wide (around the axis, along it), so a new one checks only its neighbours.
   const bin = new Map<number, Site[]>(), grid = floorGrid(R, spacing);
   const tooClose = (theta: number, s: number): boolean => {
@@ -710,7 +810,7 @@ export function makePlan(h: Habitat): Plan {
       // Each throw lands on the middle of a bay below (gen/bays.ts), where the vault reaches the deck and the court's
       // light well can come down through it; the cheap checks first, and each must pass them all where it lands.
       const at = bays.middleNear(k.theta + (erng.range(-0.75, 0.75) * reach) / R, k.s + erng.range(-0.75, 0.75) * reach), theta = wrap(at.theta), s = at.s;
-      if (fromLake(lake, s) < spacing * 0.15 || s < firstEntrance || s > lastEntrance) continue;
+      if (fromLake(lake, s) < Math.max(spacing * 0.15, shoreOf(lake) + court * 2) || s < firstEntrance || s > lastEntrance) continue;
       if (tooClose(theta, s) || districtAt(theta, s) !== k || nearRiver(theta, s) || !fits(theta, s)) continue;
       const site: Site = { kind: 'entrance', theta, s, size: spacing * 0.025, facing: erng.range(0, TURN), district: k.id };
       k.entrances.push(site);
@@ -738,19 +838,7 @@ export function makePlan(h: Habitat): Plan {
   const walk: number[] = [];
   for (let s = floorStart; s < floorEnd; s += walkStep) walk.push(walkTheta(s), s);
   walk.push(walkTheta(floorEnd), floorEnd);
-  const widths = spec.pathWidth;
   const paths: PlanPath[] = [{ kind: 'sunwalk', width: widths.sunwalk, points: Float64Array.from(walk) }];
-
-  // Landmarks.
-  const hutAt = endcapAt(true, 0.3);
-  // The Lift Stair climbs the Stair face from the floor's end, up the main valley's line.
-  const landmarks: Site[] = [
-    { kind: 'lift-stair', theta: wrap(valleyAt(0, floorEnd)), s: floorEnd, size: form.stairHalfWidth, facing: 0, district: -1 },
-    { kind: 'summit-hut', theta: wrap(valleyAt(0, hutAt) + gap * 0.12), s: hutAt, size: Math.max(R * 0.005, 1), facing: 0, district: -1 },
-    { kind: 'founders-grove', theta: wrap(valleyAt(0, floorEnd - floor * 0.06) - gap * 0.18), s: floorEnd - floor * 0.06, size: R * 0.05, facing: 0, district: -1 },
-  ];
-  if (lake) landmarks.push({ kind: 'lake-pavilion', theta: wrap(walkTheta(lake.s)), s: lake.s, size: lake.halfWidth * 0.5, facing: 0, district: -1 });
-  for (const l of landmarks) if (l.s >= reserveEnd && l.s <= floorEnd) l.district = districtAt(l.theta, l.s)?.id ?? -1;
 
   // The trail up the Mountain: switchbacks from the Sunwalk's start to the summit hut.
   const trail: number[] = [];
@@ -770,7 +858,11 @@ export function makePlan(h: Habitat): Plan {
   const courtFiles = new Map<number, Obstacle[]>();
   const columnOf = (theta: number): number => Math.floor((((theta % TURN) + TURN) % TURN) * R / courtCell);
   const keepOff = (e: Site): number => e.size + COURT.clear * (h.params.landmarks?.handrail ?? 0) + widths.way;
-  const fileObstacle = (o: Obstacle): void => fileUnder(courtFiles, courtKey(columnOf(o.theta), Math.floor(o.s / courtCell)), o);
+  // (One wider than a cell, a signature work, in every cell its keep reaches past the next.)
+  const fileObstacle = (o: Obstacle): void => {
+    const c = columnOf(o.theta), r = Math.floor(o.s / courtCell), n = Math.max(0, Math.ceil(o.keep / courtCell) - 1);
+    for (let dr = -n; dr <= n; dr++) for (let dc = -n; dc <= n; dc++) fileUnder(courtFiles, courtKey(c + dc, r + dr), o);
+  };
   for (const e of placed) fileObstacle({ theta: e.theta, s: e.s, keep: keepOff(e), work: false });
   /** The obstacles near a point, but the courts at `a` and `b`. */
   const obstaclesNear = (theta: number, s: number, a?: { theta: number; s: number }, b?: { theta: number; s: number }): Obstacle[] => {
@@ -788,40 +880,24 @@ export function makePlan(h: Habitat): Plan {
   // a Ring's long slope). Sizes are shares of the tallest (`landforms.works` radii), the footprint at most `WORKS.reach`
   // of the entrance spacing; how crisply each is kept follows its district's care. Those that face along the axis do,
   // one way or the other.
-  const works: Work[] = [];
+  for (const w of works) fileObstacle({ theta: w.theta, s: w.s, keep: w.radius + widths.way * 2, work: true });
   const workScale = (params.relief.landforms?.works ?? 0) * R, workReach = spacing * WORKS.reach;
-  const grove = landmarks.find((l) => l.kind === 'founders-grove');
-  const onLand = (theta: number, s: number): boolean => {
-    const on = landformAt(theta, s);
-    return !on || (on.form.kind === 'ring' && on.face <= 0 && on.share < 0.5);
-  };
   /** Whether a work fits at a point: in district `k` (or the reserve, for null), clear of everything above. */
   const workFits = (k: District | null, theta: number, s: number, radius: number): boolean => {
     if (k ? s - radius < reserveEnd || s + radius > lastEntrance : s - radius < floorStart + spacing * 0.15 || s + radius > reserveEnd) return false;
     if (fromLake(lake, s) < radius + spacing * 0.2) return false;
     if (k && !inside(k, theta, s, radius * 0.7)) return false;
-    for (const ds of [-radius, 0, radius]) {
-      if (Math.abs(wrap(theta - walkTheta(s + ds))) * R < radius + widths.sunwalk * WORKS.walk) return false;
-      for (const r of rivers) {
-        if (lake && (r.from === 'wild') !== (s + ds < lake.s)) continue;
-        if (Math.abs(wrap(theta - routeOf(r, s + ds))) * R < radius + riverWidth * (WORKS.river + r.meander)) return false;
-      }
-    }
+    if (!offLines(theta, s, radius, widths.sunwalk * WORKS.walk, WORKS.river, [-1, 0, 1])) return false;
     if (grove && dist(grove.theta, grove.s, theta, s) < radius + grove.size * 1.2) return false;
     for (const o of obstaclesNear(theta, s)) if (dist(o.theta, o.s, theta, s) < (o.work ? (o.keep + radius) * WORKS.apart : radius + spacing * WORKS.court)) return false;
     // Off the Rings' lines by more than a way bent round it swings out, so no way is bent over a Ring.
     for (const g of form.grounds) if (g.kind === 'ring' && Math.abs(s - form.ringLine(g, theta)) < (radius + widths.way * 2) * 1.3 + radius * 0.1 + widths.way) return false;
-    if (!onLand(theta, s)) return false;
-    for (let q = 0; q < 8; q++) {
-      const a = (q / 8) * TURN;
-      if (!onLand(theta + (radius * Math.cos(a)) / R, s + radius * Math.sin(a))) return false;
-    }
-    return true;
+    return landUnder(theta, s, radius, 8);
   };
   if (workScale > 0) {
     const krng = new Rng(deriveSeed(h.seed, 'plan', 'works'));
     /** Up to `count` works in the kinds given, in turn, thrown round (θ, s) within `around` and `along` (m) each way. */
-    const throwWorks = (k: District | null, kinds: readonly WorkKind[], count: number, theta0: number, s0: number, around: number, along: number): void => {
+    const throwWorks = (k: District | null, kinds: readonly DistrictWorkKind[], count: number, theta0: number, s0: number, around: number, along: number): void => {
       for (let n = 0, tries = 0; n < count && tries < count * WORKS.tries; tries++) {
         const kind = kinds[(n + (k?.id ?? 0)) % kinds.length], spec = WORK_KINDS[kind];
         let height = workScale * krng.range(spec.height[0], spec.height[1]), radius = height * spec.spread;
@@ -842,7 +918,9 @@ export function makePlan(h: Habitat): Plan {
     if (wild > 0) throwWorks(null, STYLE_WORKS['let-go'], Math.round((WORKS.perDistrict * circumference * wild) / (side * side)), 0, floorStart + wild / 2, Math.PI * R, wild / 2);
   }
   // The works filed by every cell of a grid their footprint touches, so a point looks in one cell.
-  const workGrid = floorGrid(R, Math.max(1, ...works.map((w) => w.radius * 2))), workFiles = new Map<number, Work[]>();
+  // (Cells as wide as the districts' works; a signature work is filed in each of the many its footprint covers.)
+  const cellWorks = works.some((w) => !isSignature(w)) ? works.filter((w) => !isSignature(w)) : works;
+  const workGrid = floorGrid(R, Math.max(1, ...cellWorks.map((w) => w.radius * 2))), workFiles = new Map<number, Work[]>();
   for (const w of works) {
     const reach = w.radius / workGrid.size, c = workGrid.column(w.theta);
     for (let j = Math.floor((w.s - w.radius) / workGrid.cell); j <= Math.floor((w.s + w.radius) / workGrid.cell); j++) {
