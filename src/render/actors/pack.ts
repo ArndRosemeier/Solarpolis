@@ -7,7 +7,8 @@
 import type { Fetcher } from '@actors/core';
 import { Character, buildCatalog, defaultConfig, type CharacterCatalog, type CharacterConfig } from '@actors/generator';
 import { Human } from '@actors/human';
-import { IRIS_PRESETS } from '@actors/three';
+import { IRIS_PRESETS, type ActorMaterialKit } from '@actors/three';
+import { nodeMaterials } from '@actors/three/webgpu';
 
 /** The human pack's manifest. */
 export const HUMAN_PACK = `${import.meta.env?.BASE_URL ?? "/"}actors/human/manifest.json`;
@@ -47,5 +48,12 @@ export function humanCatalog(): Promise<{ catalog: CharacterCatalog; base: Chara
   });
   return catalog;
 }
+
+/**
+ * Actors' WebGPU material kit as the game uses it, for people and animals alike. Its face morphs stay three's morph
+ * targets (`attributeMorphs` off): as plain vertex attributes (Actors 0.6.5) a face mesh needs more than WebGPU's 8
+ * vertex buffers, and its pipelines fail. Every other material kind still builds one shader for all characters.
+ */
+export const actorKit: ActorMaterialKit = { ...nodeMaterials, attributeMorphs: false };
 
 export { Character };

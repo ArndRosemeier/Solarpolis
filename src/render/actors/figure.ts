@@ -5,11 +5,10 @@
  * A drawn person or humanoid of Actors: its Character (body, skin, hair, clothes, face) and the game's animator.
  */
 import { DoubleSide, FrontSide, Group, Matrix4, Vector3, type Material, type Mesh, type Object3D } from 'three/webgpu';
-import { nodeMaterials } from '@actors/three/webgpu';
 import type { CharacterPatch } from '@actors/generator';
 import type { Human } from '@actors/human';
 import type { Vec3 } from '../../blueprint';
-import { Character, HUMAN_PACK, packFetch } from './pack';
+import { Character, HUMAN_PACK, actorKit, packFetch } from './pack';
 import { FigureAnimator, type AnimState } from './animator';
 
 export type { AnimState, MoveState, Mood } from './animator';
@@ -95,7 +94,7 @@ export class Figure {
     const character = await Character.load({
       pack: HUMAN_PACK,
       renderer: null,
-      materials: nodeMaterials,
+      materials: actorKit,
       clipLibraries: false,
       fetcher: packFetch,
       config,

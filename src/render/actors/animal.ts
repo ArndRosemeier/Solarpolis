@@ -7,11 +7,10 @@
 import { Group, BufferAttribute, type Mesh, type SkinnedMesh } from 'three/webgpu';
 import { Animal } from '@actors/animal';
 import { ThreeActor, type ActorMaterialKit, type PlayableClip } from '@actors/three';
-import { nodeMaterials } from '@actors/three/webgpu';
 import { paramsOf, type Look } from '../../gen/coat';
 import { animalEyeMaterial, furMaterial } from '../materials';
 import { freeMesh } from '../geometry';
-import { packFetch } from './pack';
+import { actorKit, packFetch } from './pack';
 import { castAsWorn, standAt, type Stance } from './figure';
 import AnimalWorker from '@actors/animal/worker?worker';
 
@@ -20,12 +19,12 @@ export const animalPack = (name: string): string => `${import.meta.env?.BASE_URL
 
 /** Fur (spotted where the look has spots) and animal eyes from the game's materials, everything else as Actors' WebGPU kit makes it. */
 const kitFor = (spotted: boolean): ActorMaterialKit => ({
-  ...nodeMaterials,
+  ...actorKit,
   mesh: (data, actor) => {
     const { kind } = data.def.material;
     if (kind === 'fur') return furMaterial(spotted);
     if (kind === 'eye' && data.def.tags?.includes('animal')) return animalEyeMaterial();
-    return nodeMaterials.mesh(data, actor);
+    return actorKit.mesh(data, actor);
   },
 });
 const kits = [kitFor(false), kitFor(true)];
