@@ -142,8 +142,8 @@ export class Character {
   }
 }
 
-/** The rotation (x, y, z, w) that turns the capsule's own axis (+y) to `up`. */
-function uprightRotation(up: Vec3): [number, number, number, number] {
+/** The rotation (x, y, z, w) that turns a capsule's own axis (+y) to `up` (a unit vector). */
+export function uprightRotation(up: Vec3): [number, number, number, number] {
   const w = 1 + up[1];
   if (w < 1e-9) return [1, 0, 0, 0];
   const n = Math.hypot(up[2], up[0], w);
