@@ -25,7 +25,7 @@ for (const { name, params } of MATRIX) {
     const errorOf = (k: TileKey) => built.get(keyId(k));
     let sel = select(t, layout, eye, PX_PER_RAD, 2, errorOf);
     for (let round = 0; round < 40 && sel.want.length; round++) {
-      for (const k of sel.want) { const b = buildTile(eco, layout, k); built.set(keyId(k), { error: b.error, relief: b.relief }); }
+      for (const k of sel.want) { const b = buildTile(eco, layout, k); built.set(keyId(k), { error: b.error, low: b.low, high: b.high }); }
       sel = select(t, layout, eye, PX_PER_RAD, 2, errorOf);
     }
     // The plan's budget is about 1,000 terrain tiles; the large habitat's tall hills need a little more (still within 1,500 draws).

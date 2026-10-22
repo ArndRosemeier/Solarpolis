@@ -106,8 +106,11 @@ export interface Relief {
    * running round the whole cylinder across its axis, `ringEvery` radii apart along it and at most `ring` radii high;
    * and `heights` lone mounts on the ridges between the valleys, the tallest `height` radii high. Absent or null: none.
    * Built hollow (the living layer's great halls stand in them) and placed by the plan (gen/plan.ts, `grounds`).
+   * Inside that frame each district shapes its own ground in its style (gen/works.ts): the tallest of those works is
+   * `works` radii high. The wild grows bolder natural relief: up the valleys' sides the hills stand `wild` times
+   * higher again where the land is let be (the reserve, care 0). Absent: no works, no wilder relief.
    */
-  landforms?: { ring: number; ringEvery: number; height: number; heights: number } | null;
+  landforms?: { ring: number; ringEvery: number; height: number; heights: number; works?: number; wild?: number } | null;
 }
 
 export type AxisOrientation = 'side-on' | 'end-on';

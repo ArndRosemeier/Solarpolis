@@ -27,7 +27,7 @@ const IN_FLIGHT = 16;
 
 interface Entry extends Streamed {
   /** What the view reads of the tile; its arrays are on the GPU only (`dropUploaded`). */
-  tile: Pick<TileMesh, 'key' | 'origin' | 'error' | 'relief'>;
+  tile: Pick<TileMesh, 'key' | 'origin' | 'error' | 'low' | 'high'>;
   mesh: Mesh;
   water: Mesh | null;
 }
@@ -145,7 +145,7 @@ export class TerrainView {
       this.group.add(m);
     }
     this.made++;
-    return { tile: { key: tile.key, origin: tile.origin, error: tile.error, relief: tile.relief }, mesh, water, bytes: tileBytes(tile), lastDrawn: 0 };
+    return { tile: { key: tile.key, origin: tile.origin, error: tile.error, low: tile.low, high: tile.high }, mesh, water, bytes: tileBytes(tile), lastDrawn: 0 };
   }
 
   dispose(): void {

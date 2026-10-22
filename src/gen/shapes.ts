@@ -17,7 +17,8 @@ export const mappedBytes = (m: MappedArrays): number => bytesOf([m.positions, m.
 /** Linear RGB, 0–1. */
 export type RGB = [number, number, number];
 
-const along = (c: Vec3, a: Vec3, x: number, b: Vec3, y: number, n: Vec3, z: number): Vec3 =>
+/** A point from `c`, x along `a`, y along `b` and z along `n`. */
+export const along = (c: Vec3, a: Vec3, x: number, b: Vec3, y: number, n: Vec3, z: number): Vec3 =>
   [c[0] + a[0] * x + b[0] * y + n[0] * z, c[1] + a[1] * x + b[1] * y + n[1] * z, c[2] + a[2] * x + b[2] * y + n[2] * z];
 
 /** A mapped shape's arrays: its mesh, with each vertex's place on its surface (m) and its finish. */

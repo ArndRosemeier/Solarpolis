@@ -181,6 +181,15 @@ function homeOf(t: Terrain, cell: number, j: number, theta0: number, s0: number,
   return null;
 }
 
+/** Whether the ground round a point is out of closed woods as far as a grazing herd drifts (`DRIFT`), every way. */
+function openRound(t: Terrain, crowns: (theta: number, s: number, ground: number) => number, theta: number, s: number, r: number): boolean {
+  for (let q = 0; q < 6; q++) {
+    const a = (q / 6) * TURN, pt = theta + (DRIFT * Math.cos(a)) / r, ps = s + DRIFT * Math.sin(a);
+    if (crowns(pt, ps, t.heightAt(pt, ps)) >= COVER) return false;
+  }
+  return true;
+}
+
 /**
  * A herd's places within its roam, each on deer land, with room for the herd and a way from home: lying-up spots under
  * closed crowns and grazing in the open. Home stands in for a kind it finds none of.
@@ -193,6 +202,8 @@ function placesOf(t: Terrain, crowns: (theta: number, s: number, ground: number)
     if (!deerLand(h, pt, ps)) continue;
     const c = crowns(pt, ps, t.heightAt(pt, ps)), list = c >= COVER ? cover : c <= OPEN ? graze : null;
     if (!list || list.length >= 2 * PLACES || !roomy(t, pt, ps, size) || !walkable(t, home, [pt, ps])) continue;
+    // A grazing place is open as far as the herd drifts round it, not the edge of a wood it would wander into.
+    if (list === graze && !openRound(t, crowns, pt, ps, r)) continue;
     list.push(pt, ps);
   }
   if (cover.length === 0) cover.push(...home);

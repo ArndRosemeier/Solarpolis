@@ -2,6 +2,40 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.113 — Each district shapes its own ground
+
+- The districts now build their land in their own style, so you can tell who made a place from its shapes: turf pyramids, stepped cones and sunken courts in the stone districts; mesas with sheer cut faces and sharp chevron folds in the makers' districts; terraced domes in the orchards; round downs and long scarps in the herd districts; deep vales in the groves; bowls and stepwells in the water districts; half-pipe valleys, amphitheatres and launch ramps in the play districts; drumlins and rock tors in the let-go districts.
+- Well-tended districts near the port keep their works crisp, with sharp terraces and edges. Toward the reserve they are worn soft.
+- The wild reserve gets nature's own drumlins and tors, and the hills up its valley sides stand up to about two and a half times as high as before. The valley floors, where the rivers and the Sunwalk run, stay gentle.
+- The ways bend round the works and stay off the Rings' crests and steep fronts. Deer graze only where the open ground reaches as far as they wander.
+- The Blueprint land map shades the works. In the debug menu, Go → "Fly: the next district work" visits one kind after another.
+
+## v0.112 — Halls round the hamlets' wellheads
+
+- The ring of bays round each hamlet's wellhead now holds its halls: the kitchen hall where people cook for each other (long tables, a glowing hearth under its hood), the bath (a raised pool of still water behind a low wall, a bath house beside it), the makers' shops with their wide lit doors, a stage with tiers of stone benches, the round room where the hamlet's minds meet people in shells, its walls panels of cool light, and open commons with tables and market stalls.
+- Every hamlet has its minds' room and a stage, with a kitchen, the stage and the minds' room on the square by the wellhead. Makers' districts keep more workshops (with forge chimneys), water districts more baths, orchard districts more kitchens.
+- Debug menu: "Below: at the next kind of hall" visits one of each in turn.
+
+## v0.111 — Sharp ground on top of the Heights
+
+- Standing on top of the tallest Height, the ground around you no longer turns coarse to stay within its memory budget. The floor a kilometre below no longer counts as near.
+- Ground tiles on the floor need about a fifth less memory too.
+
+## v0.110 — A slow test warns instead of failing
+
+- Behind the scenes: a single test or test file over its time budget now shows as a warning on the change instead of failing it. Only the whole test run going over its 30 s limit fails. Test machines vary in speed, so one test near its limit used to fail at random and block everyone's changes. Nothing in the game changes.
+
+## v0.109 — Homes in the hamlets below
+
+- The hamlets under the courts now have their houses: walled homes of tall rooms under the vaults, two to a bay, each with a yard in front and its door facing the wellhead.
+- Every district builds in its own way today (plaster in the orchards, pale stone by the water, timber in the groves, rammed earth with the herds, brick for the makers), and older houses from the founders' cast stone and the screen era's bare panels still stand among them.
+- Lived-in houses glow from their windows; a district that let its land go has let some houses stand empty too.
+- Debug menu: "Below: in a street among a hamlet's homes"; the position line names the houses of the bay you stand in.
+
+## v0.108 — A stay is a chain of beats
+
+- People out on the land no longer hold one pose for hours. A party now does one thing after another, a few minutes each: they talk standing, sit down in the grass and talk on, eat and drink, lie back at a picnic, or stroll off a little way to look about and come back. Before leaving they get up. Figures nearby sit down and stand up on the seat round a court's light well, and lie down and get up again on the grass.
+
 ## v0.107 — Faster test run
 
 - The remaining tests that built their own land now share one per habitat too (also the flat test land and the reference in other climates), so the whole test run takes about 20 s of its 30 s limit instead of about 25 s. Nothing in the game changes.

@@ -108,10 +108,20 @@ The floor gets Rings (to 0.1 R) and Heights (to 0.33 R; design thread, PR #102).
 
 - **Skirts.** A tile's skirt hung about half a cell below its edge. On a sharp crest a coarser neighbour's edge strays from the true ground by about its own error, which can be more than that, so sky would show along ridgelines. Skirts now hang at least two of their tile's errors (`SKIRT_ERRORS`, gen/tiles.ts).
 - **The eyes' meter** walked the terrain only for rays from or onto the endcaps and took the floor's hills as gentle. It now walks every ray (24 steps, closer near the eye, then halvings) and takes the land's own normal where a ray lands (`normalAt`, 8 m), so a sunlit Ring face counts as lit. It meters three rays a frame (about a quarter of a millisecond each) instead of four.
-- Unchanged and fine: heights are float32 throughout, tiles split on their measured error and come nearer by their own relief, horizons walk the whole profile, plants cull on height over the ground under the eye. Far shadow edges are soft (horizons every 8 cells, about 550 m on a root tile) until the tiles refine.
+- Unchanged and fine: heights are float32 throughout, tiles split on their measured error and are measured from a sphere around their own height range (below), horizons walk the whole profile, plants cull on height over the ground under the eye. Far shadow edges are soft (horizons every 8 cells, about 550 m on a root tile) until the tiles refine.
 
 ## Still open
 
 - The endcaps: waterfalls where the rivers drop over the walls (the rivers already fall in cascades); landmarks.
 - The reference relief (hills 60 m in a 4 km radius) is too small to read from across the axis; the hollows-and-ridges light helps only where there is relief.
 - Clouds (the interior thread), landmarks (none yet), paths.
+
+## Standing on a Height
+
+On top of the tallest Height (about 1.4 km up on reference) the ground tiles ran out of their memory budget and went
+coarse (×30). Each tile's distance from the eye counted its whole height off the floor in every direction (a sphere
+at h = 0 grown by `relief`), so the ground all around the Height, and the floor far below, looked as near as the
+ground underfoot, and a headless count wanted 805 MB of tiles for a 384 MB budget. Each tile now measures the lowest
+and highest its ground and water lie (`low`, `high`) and its sphere sits at their middle and holds only that range:
+308 MB on the top, and 290 MB on the floor (368 before, as hills and valleys counted the same way). The sphere still
+holds every point of the tile, so nothing near the eye gets coarser.

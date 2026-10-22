@@ -72,8 +72,7 @@ function makePlaces(t: Terrain): Places {
     if (s - halfAlong < plan.reserveEnd || s + halfAlong > h.profile.floorEnd) return -1;
     if (fromLake(lake, s) < halfAlong + size * 0.5) return -1;
     for (const p of plots) if (Math.abs(gap(p.theta, theta)) < p.halfAround + halfAround + EDGE * 2 && Math.abs(p.s - s) < p.halfAlong + halfAlong + EDGE * 2) return -1;
-    const at = plan.borderAt(theta, s);
-    if (!at || at.district !== d || at.edge < reach * 1.3) return -1;
+    if (!plan.inside(d, theta, s, reach * 1.3)) return -1;
     const corners: [number, number][] = [];
     for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) corners.push([theta + (i * halfAround) / R, s + j * halfAlong]);
     if (corners.some(([pt, ps]) => t.riverAt(pt, ps) || t.courtAt(pt, ps) || plan.districtAt(pt, ps) !== d)) return -1;

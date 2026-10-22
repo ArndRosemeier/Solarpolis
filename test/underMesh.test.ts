@@ -112,13 +112,16 @@ for (const { name } of MATRIX) {
     const patch = buildPatch(t, c.theta, c.s, 64, 4, true), o = patch.origin;
     assert.ok(patch.below && Math.abs(fromWorld(h.profile, o[0], o[1], o[2]).h - l.floor) < 1e-6);
     const solid = underSolid(t, o, 64);
+    // A house's plinth and its yard's walls reach into a sloping floor down to its lowest under them.
+    const into = Math.max(h.pillars.radius, h.params.under.grade * u.bay);
+    // Every third vertex (the halls and houses make tens of thousands; each check finds its levels).
     let onFloor = 0;
-    for (let v = 0; v < solid.positions.length / 3; v++) {
+    for (let v = 0; v < solid.positions.length / 3; v += 3) {
       const w: Vec3 = [o[0] + solid.positions[v * 3], o[1] + solid.positions[v * 3 + 1], o[2] + solid.positions[v * 3 + 2]], p = fromWorld(h.profile, w[0], w[1], w[2]), q = lv.levelAt(p.theta, p.s);
-      assert.ok(p.h >= q.floor - h.pillars.radius && p.h <= q.ceiling + 0.5, `solid at ${p.h.toFixed(2)}: ${q.floor.toFixed(2)} … ${q.ceiling.toFixed(2)}, s ${p.s.toFixed(1)}`);
+      assert.ok(p.h >= q.floor - into && p.h <= q.ceiling + 0.5, `solid at ${p.h.toFixed(2)}: ${q.floor.toFixed(2)} … ${q.ceiling.toFixed(2)}, s ${p.s.toFixed(1)}`);
       if (Math.abs(p.h - q.floor) < 1e-3) onFloor++;
     }
-    assert.ok(onFloor >= 9, 'the floors');
+    assert.ok(onFloor >= 3, 'the floors');
   });
 }
 

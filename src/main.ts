@@ -32,7 +32,11 @@ import type { Terrain } from './gen/terrain';
 import { floorAt, floorPoint, outOfPlace, placeAt, type FloorFrame } from './gen/shapes';
 import { crossingsOf, type Crossing, type CrossingKind } from './gen/crossings';
 import { landformOf, planOf, type GroundForm } from './gen/plan';
-import { underOf, type Hamlet } from './gen/under';
+import { WORK_KINDS, isDug, type Work, type WorkKind } from './gen/works';
+import { angleDiff } from '@futuremagic/core';
+import { baysOfHamlet, underOf, type Hamlet } from './gen/under';
+import { HALL_KINDS, hallAt } from './gen/halls';
+import { doorToward } from './gen/homes';
 import { underLiftOf } from './gen/underMesh';
 import { GLASS, SKIES, hamletSkiesOf, skyOverBay } from './gen/skies';
 import { pavilionPlan } from './gen/pavilion';
@@ -675,6 +679,38 @@ debug.add({
     if (v && g) v.goTo(g.theta, g.s, 0);
   },
 });
+/**
+ * The districts' works (gen/works.ts): each press floats by the work of the next kind (in `WORK_KINDS` order) nearest
+ * the eye, two of its radii off and half of one up, looking at its middle; a work that faces along the axis is seen
+ * from its face's side. The line names what it is and who made it.
+ */
+let workTurn = -1, workSeen = '';
+debug.add({
+  label: 'Fly: the next district work', group: 'Go', run: () => {
+    const v = view(), t = v?.ecology?.terrain, h = lab.habitat;
+    if (!v || !t || !h) return;
+    const plan = planOf(h), kinds = Object.keys(WORK_KINDS) as WorkKind[], R = h.radius, at = v.walker.at;
+    for (let k = 1; k <= kinds.length; k++) {
+      const kind = kinds[(workTurn + k) % kinds.length];
+      const w = plan.works.filter((x) => x.kind === kind).reduce<Work | undefined>((a, x) => {
+        const d = (y: Work): number => Math.hypot(angleDiff(at.theta, y.theta) * R, y.s - at.s);
+        return !a || d(x) < d(a) ? x : a;
+      }, undefined);
+      if (!w) continue;
+      workTurn = (workTurn + k) % kinds.length;
+      const style = w.district >= 0 ? `the ${plan.districts[w.district].style} district ${w.district}` : 'the wild reserve';
+      workSeen = `${w.kind}, ${w.height.toFixed(0)} m ${isDug(w) ? 'deep' : 'high'}, ${(w.radius * 2).toFixed(0)} m across, made by ${style}`;
+      const dir = WORK_KINDS[kind].axial ? -1 : 1, du = Math.sin(w.facing) * dir, dv = Math.cos(w.facing) * dir;
+      const et = w.theta + (du * w.radius * 2) / R, es = w.s + dv * w.radius * 2;
+      const eye = toWorld(h.profile, { theta: et, s: es, h: t.heightAt(et, es) + w.radius * 0.5 });
+      const { theta, s } = w, mid = toWorld(h.profile, { theta, s, h: t.heightAt(theta, s) });
+      const d = Math.hypot(mid[0] - eye[0], mid[1] - eye[1], mid[2] - eye[2]);
+      v.floatAt(eye, [(mid[0] - eye[0]) / d, (mid[1] - eye[1]) / d, (mid[2] - eye[2]) / d]);
+      return;
+    }
+  },
+});
+debug.addInfo(() => (workSeen ? `work: ${workSeen}` : ''));
 /** The founders' grove (gen/planted.ts). */
 const grove = (): { v: InteriorView; g: Grove } | null => {
   const f = inView((t) => plantingsOf(t).groves[0]);
@@ -757,9 +793,13 @@ goBelow('Below: the pillar forest under here', (h, theta, s) => {
   const u = underOf(h);
   return u.bayAt(theta, Math.min(u.s0 + (u.along - 0.5) * u.bay, Math.max(u.s0 + u.bay / 2, s)));
 });
-goBelow("Below: under the nearest entrance court (its hamlet's wellhead)", (h, theta, s) => {
+/** The hamlets nearest (θ, s) first (over the unrolled floor). */
+const hamletsNear = (h: Habitat, theta: number, s: number): Hamlet[] => {
   const R = h.radius, away = (m: Hamlet): number => Math.hypot(Math.atan2(Math.sin(m.site.theta - theta), Math.cos(m.site.theta - theta)) * R, m.site.s - s);
-  const m = [...underOf(h).hamlets].sort((a, b) => away(a) - away(b))[0];
+  return [...underOf(h).hamlets].sort((a, b) => away(a) - away(b));
+};
+goBelow("Below: under the nearest entrance court (its hamlet's wellhead)", (h, theta, s) => {
+  const m = hamletsNear(h, theta, s)[0];
   return m ? { i: m.i, j: m.j } : null;
 });
 /** Below, in the middle of a bay under sky `want` (gen/skies.ts), off the wellhead and its lanes. */
@@ -768,15 +808,48 @@ function underSky(want: number): void {
   if (!h || !v) return;
   const u = underOf(h), skies = hamletSkiesOf(h);
   for (const m of u.hamlets.filter((x) => skies[x.court] === want)) {
-    for (let r = 1; r < 6; r++) for (let di = -r; di <= r; di++) for (const dj of [-r, r]) {
-      const i = m.i + di, j = m.j + dj;
-      if (j < 0 || j >= u.along || u.hamletOf(i, j) !== m || skyOverBay(h, i, j) !== want || u.useAt(i, j) === 'lane') continue;
+    for (const { i, j } of baysOfHamlet(u, m, 5)) {
+      if (skyOverBay(h, i, j) !== want || u.useAt(i, j) === 'lane' || u.useAt(i, j) === 'well') continue;
       const c = u.centreOf(i, j);
       v.goBelow(c.theta, c.s, 0);
       return;
     }
   }
 }
+/** Below, in a hamlet's street: on the walk between two of its home bays, looking along the axis down it. */
+debug.add({
+  label: "Below: in a street among a hamlet's homes", group: 'Go', run: () => {
+    const h = lab.habitat, v = view();
+    if (!h || !v) return;
+    const u = underOf(h);
+    for (const m of hamletsNear(h, v.walker.at.theta, v.walker.at.s).slice(0, 8)) {
+      for (const { i, j } of baysOfHamlet(u, m, 8)) {
+        if (u.useAt(i, j) !== 'home' || u.useAt(i - 1, j) !== 'home') continue;
+        const c = u.centreOf(i, j);
+        v.goBelow(c.theta - u.dTheta / 2, c.s, 0);
+        return;
+      }
+    }
+  },
+});
+/** Below, at a hamlet's hall of the next kind (gen/halls.ts): on the walk on its wellhead side, looking at its front. */
+let nextHall = 0;
+debug.add({
+  label: "Below: at the next kind of hall (kitchen, bath, shop, stage, minds' room, commons)", group: 'Go', run: () => {
+    const h = lab.habitat, v = view();
+    if (!h || !v) return;
+    const u = underOf(h), want = HALL_KINDS[nextHall++ % HALL_KINDS.length];
+    for (const m of hamletsNear(h, v.walker.at.theta, v.walker.at.s).slice(0, 8)) {
+      for (const { i, j } of baysOfHamlet(u, m, Math.ceil(m.hall) + 1)) {
+        if (hallAt(h, i, j) !== want) continue;
+        // On the walk on its wellhead side, a few steps back, facing it (a positive heading turns toward −θ).
+        const c = u.centreOf(i, j), toward = doorToward(u, m, i);
+        v.goBelow(c.theta + toward * 0.65 * u.dTheta, c.s, (toward * Math.PI) / 2);
+        return;
+      }
+    }
+  },
+});
 let nextSky = 0;
 debug.add({ label: 'Below: under the next kind of hamlet sky', group: 'Go', run: () => underSky(nextSky++ % SKIES.length) });
 debug.add({ label: 'Below: under a glass deck (the real sky above)', group: 'Go', run: () => underSky(GLASS) });
