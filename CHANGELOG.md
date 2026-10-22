@@ -2,6 +2,19 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.097 — People come up together and stand together
+
+- Most people now go up on the land with others: friends in pairs, small groups of up to six. They walk two abreast and stay together.
+- A group that talks stands in a ring facing in, and takes turns: one speaks with their hands while the others nod and listen. Others sit side by side on the stone seat round a court's light well, lie side by side for a picnic or under the stars, or stand in a row looking out.
+- The courts are stops now, not afternoons: people meet there for about twenty minutes and go on. Every court has a green along its way out, used the way its district uses its commons (picnics, workbenches, dancing, herds, bathing), so the land around the courts is busy instead of the courts.
+
+## v0.096 — Each hamlet below paints its own sky
+
+- In the Understorey, each hamlet now shows its own sky on the ceiling between the vaults. It looks infinitely far away and moves with the hour. There are six so far: an old Earth summer sky with drifting clouds, a polar night with aurora, the sky from the Moon with Earth hanging in it, a dusty Martian day, a forest canopy seen from below, and the sea seen from underneath.
+- Each district's style leans toward some skies: groves toward canopies, water districts toward the sea, makers toward the Moon and Mars.
+- A wellhead keeps its plain stone around the real light well, and the galleries and the Dim have no painted sky.
+- Debug menu: "Below: under the next kind of hamlet sky" steps through them.
+
 ## v0.095 — Eyes and real skin on people; the shader monitor names repeated shaders
 
 - The debug menu's shader line now says how many shaders were built again with exactly the same code after the loading screen, and `shaders.repeats()` lists them, the costliest first. Each one is a thing that builds its shader per copy instead of once, the usual reason stutters come back.

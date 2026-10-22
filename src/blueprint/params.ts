@@ -246,6 +246,16 @@ export interface Life {
   outings: number;
   /** How long an outing lasts on average, from the court back down (s). */
   stay: number;
+  /**
+   * How long people stay on average when the court they came up at is where they meet (s): the courts are the
+   * entrances to the living layer, places of coming and going, not of whole afternoons.
+   */
+  pause: number;
+  /**
+   * How many go up together: the share of parties of one, two, three … people (they sum to 1). A party comes up
+   * together, walks together and stands or sits together at its place.
+   */
+  parties: number[];
   /** Share of residents who keep a rhythm: the same weekdays, the same hour, the same place near home (0 … 1). */
   regulars: number;
   /** Share of outings that walk the Sunwalk with the bright stretch, for hours (0 … 1). */

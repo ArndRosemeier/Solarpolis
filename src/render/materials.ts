@@ -10,7 +10,7 @@
  * world position is the `view.eye` uniform, for whatever needs the true place (the axis, ground patterns).
  */
 import { MeshBasicNodeMaterial, MeshPhysicalNodeMaterial, MeshStandardNodeMaterial, DoubleSide, BackSide, FrontSide, AdditiveBlending, type Material } from 'three/webgpu';
-import { abs, atan, attribute, mod, screenCoordinate, cross, dFdx, dFdy, floor, fwidth, length, fract, inverseSqrt, log2, mx_noise_float, uv, cameraPosition, hash, normalLocal, step, time, varying, clamp, color, cos, log, select, sign, sqrt, dot, exp, float, max, mix, normalize, min, modelWorldMatrix, normalWorld, positionLocal, positionWorld, pow, sin, smoothstep, texture, uniform, vec2, vec3, vec4, vertexColor } from 'three/tsl';
+import { Fn, If, abs, atan, attribute, mod, screenCoordinate, cross, dFdx, dFdy, floor, fwidth, length, fract, inverseSqrt, log2, mx_noise_float, uv, cameraPosition, hash, normalLocal, step, time, varying, clamp, color, cos, log, select, sign, sqrt, dot, exp, float, max, mix, normalize, min, modelWorldMatrix, normalWorld, positionLocal, positionWorld, pow, sin, smoothstep, texture, uniform, vec2, vec3, vec4, vertexColor } from 'three/tsl';
 import { DataTexture, Uint8BufferAttribute, RGBAFormat, UnsignedByteType, Vector4, DataUtils, Float32BufferAttribute, HalfFloatType, InstancedBufferAttribute, InstancedInterleavedBuffer, InterleavedBufferAttribute, RedFormat, Vector2, Vector3, type BufferGeometry } from 'three/webgpu';
 import { PLANT_STRIDE } from '../gen/scatter';
 import { BARK_STRIPS } from '../gen/trees';
@@ -32,6 +32,8 @@ import { RISE_RANGE } from '../gen/tiles';
 import { filtered } from './textures';
 import { cloudMarch, cloudShade } from './cloudShaders';
 import { builtAlbedo, roofHorizons } from './builtShaders';
+import { hamletSky } from './hamletSkies';
+import { FINISH } from '../gen/pavilion';
 import { LAMPLIGHT } from '../gen/underMesh';
 import { speckLook, standInHorizon, standInPose, unpack } from './crowdShaders';
 import { SPECK_ATTRIBUTES, SPECK_SHOWN, SPECK_STRIDE, STAND_IN_ATTRIBUTES, STAND_IN_STRIDE } from '../gen/standIn';
@@ -717,6 +719,8 @@ export const below = {
   lamp: uniform(0.1),
   /** The day's light on the land above (1: the mid floor at midday in the open), which comes down the light wells. */
   day: uniform(0),
+  /** The habitat's clock (s), for the hamlets' skies' moving parts. */
+  clock: uniform(0),
   tint: uniform(color(...LAMPLIGHT)),
   extinction: uniform(Math.log(4) / 150),
 };
@@ -732,6 +736,13 @@ export function setBelow(lamp: number, mist: number): void {
 const LAMP_FACE = 6;
 /** A light well's glass seen from below (finish `sky`), in the day's light on the land: the bright sky past the court. */
 const SKY_FACE = 1.5;
+/**
+ * A hamlet's sky screen (finish `screen` and on, render/hamletSkies.ts) at its brightest, in the lamps' floor light: a
+ * sky, so brighter than the stone it is set in, but a screen the eyes adapted to lamplight can look at. Its day is the
+ * land's: full once the day overhead is `SCREEN_DAY` of midday's.
+ */
+const SCREEN_GLOW = 2.2;
+const SCREEN_DAY = 0.5;
 export const MIST_GLOW = 0.25;
 
 /**
@@ -746,8 +757,19 @@ export const VAULT = kind('vault', ['position', 'normal', 'color', 'uv', 'finish
   const albedo = builtAlbedo(vertexColor().rgb, uv(), finish);
   const lit = albedo.mul(light.mul(glow.x).add(below.day.mul(glow.y)));
   const face = mix(light.mul(LAMP_FACE), vec3(below.day.mul(SKY_FACE)), step(4.5, finish));
-  const surface = mix(lit, face, step(3.5, finish));
-  const kept = exp(below.extinction.negate().mul(positionWorld.sub(cameraPosition).length()));
+  const toward = positionWorld.sub(cameraPosition), up = normalize(vec3(view.eye.x.negate(), view.eye.y.negate(), 0));
+  const surface = Fn(() => {
+    const out = mix(lit, face, step(3.5, finish)).toVar();
+    // A hamlet's sky (only there: the skies are the heaviest part of the kind); its arguments set before the branch
+    // (hamletSkies.ts `skyFunction` says why).
+    const look = normalize(toward).toVar(), index = finish.sub(FINISH.screen).toVar();
+    If(finish.greaterThan(FINISH.screen - 0.5), () => {
+      const sky = hamletSky(look, up, index, below.day.div(SCREEN_DAY), below.clock);
+      out.assign(sky.mul(below.lamp.mul(SCREEN_GLOW)));
+    });
+    return out;
+  })();
+  const kept = exp(below.extinction.negate().mul(toward.length()));
   m.colorNode = surface.mul(kept).add(light.mul(MIST_GLOW).mul(float(1).sub(kept))).mul(view.exposure);
   return m;
 });
