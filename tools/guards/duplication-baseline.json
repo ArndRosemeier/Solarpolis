@@ -478,5 +478,17 @@
   {
     "key": "same name: solarpolis/gen/grownHall.ts#at + solarpolis/gen/terrain.ts#at",
     "reason": "Different things that share a short name: a SiteKind member (gen/siteTiles.ts) and an unrelated local helper."
+  },
+  {
+    "key": "same name: solarpolis/app/title.ts#show + solarpolis/lab/lifeView.ts#show",
+    "reason": "The Blueprint Lab's map views (PlanView, LifeView) share one shape: show(habitat | null) from the Lab, then a private draw once the parameters settle. The title card's show is the app's own panel call. Same verbs, different things shown."
+  },
+  {
+    "key": "same name: solarpolis/lab/lifeView.ts#draw + solarpolis/lab/planView.ts#draw",
+    "reason": "The Blueprint Lab's map views (PlanView, LifeView) share one shape: show(habitat | null) from the Lab, then a private draw once the parameters settle. The title card's show is the app's own panel call. Same verbs, different things shown."
+  },
+  {
+    "key": "same name: solarpolis/lab/lifeView.ts#show + solarpolis/lab/planView.ts#show",
+    "reason": "The Blueprint Lab's map views (PlanView, LifeView) share one shape: show(habitat | null) from the Lab, then a private draw once the parameters settle. The title card's show is the app's own panel call. Same verbs, different things shown."
   }
 ]

@@ -9,7 +9,7 @@ import { CULTURES, cultureOf } from './cultures';
 export type Severity = 'invalid' | 'unusual';
 
 export interface Finding {
-  id: 'spin' | 'hull' | 'hull-thick' | 'axis-air' | 'haze' | 'heat' | 'light' | 'layers' | 'population' | 'sunline' | 'relief' | 'day' | 'brims' | 'collectors' | 'climate' | 'clouds' | 'landmarks' | 'culture' | 'plan';
+  id: 'spin' | 'hull' | 'hull-thick' | 'axis-air' | 'haze' | 'heat' | 'light' | 'layers' | 'population' | 'sunline' | 'relief' | 'day' | 'brims' | 'collectors' | 'climate' | 'clouds' | 'landmarks' | 'culture' | 'plan' | 'life';
   severity: Severity;
   message: string;
 }
@@ -77,6 +77,10 @@ export function validate(h: Habitat): Finding[] {
   const pp = pl.places;
   if (!(pp.orchard > 0 && pp.orchard < pl.entranceSpacing / 2 && pp.parcel > 0 && pp.hall > 0 && pp.hall < pl.entranceSpacing / 2))
     out.push({ id: 'plan', severity: 'invalid', message: 'planted places need sizes > 0, an orchard and a grown hall each under half the entrance spacing' });
+  const lf = p.life;
+  const share = (v: number): boolean => v >= 0 && v <= 1;
+  if (!([lf.outings, lf.regulars, lf.sunwalk, lf.night, lf.shells, lf.minds].every(share) && lf.sunwalk + lf.night <= 1 && lf.stay > 0 && lf.stay < p.day.length / 2 && lf.walk > 0 && lf.reach > 0))
+    out.push({ id: 'life', severity: 'invalid', message: 'life needs shares from 0 to 1 (Sunwalk and night outings together at most all of them), a stay > 0 under half a day, a walking speed and a reach > 0' });
   if (!(p.population >= 0)) out.push({ id: 'population', severity: 'invalid', message: 'the population must not be negative' });
   return out;
 }

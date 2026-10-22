@@ -81,6 +81,9 @@ button { font: inherit; color: inherit; }
 .plan-chip { display: inline-flex; align-items: center; gap: 5px; }
 .plan-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
 .plan-swatch.plan-line { height: 3px; width: 16px; border-radius: 2px; }
+.life-row { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; color: var(--quiet); font-size: 13px; }
+.life-hour { flex: 1; max-width: 360px; }
+.life-hour-text { min-width: 4em; color: var(--text, inherit); }
 
 .sec-shell { fill: #6b5a48; }
 .sec-ground { fill: var(--ground); }

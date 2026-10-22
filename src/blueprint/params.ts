@@ -191,6 +191,34 @@ export interface LandPlan {
   places: { orchard: number; parcel: number; hall: number };
 }
 
+/**
+ * Who goes up on the land, and how (src/sim; design "Who is out on the land", 2026-10-22). Nobody is simulated: each
+ * resident's outings are derived from the seed and the clock. People come up from the living layer at the entrance
+ * nearest where they want to be (the city below has its own transit), walk the paths, stay a while and go back down.
+ * Shares are of the residents or of their outings; the walking speed and how far people go from their court are human
+ * sizes and do not grow with the habitat.
+ */
+export interface Life {
+  /** How often a resident goes up on the land: the chance on any one day (0 … 1). */
+  outings: number;
+  /** How long an outing lasts on average, from the court back down (s). */
+  stay: number;
+  /** Share of residents who keep a rhythm: the same weekdays, the same hour, the same place near home (0 … 1). */
+  regulars: number;
+  /** Share of outings that walk the Sunwalk with the bright stretch, for hours (0 … 1). */
+  sunwalk: number;
+  /** Share of outings made at night (stargazers, a late hearth) (0 … 1). */
+  night: number;
+  /** Share of bodies that are shells: plated humanoid bodies, worn by minds or by people from elsewhere (0 … 1). */
+  shells: number;
+  /** Share of beings who are minds. Never shown by their bodies (0 … 1). */
+  minds: number;
+  /** How fast people walk (m/s). */
+  walk: number;
+  /** How far from the court they came up at people usually go (m). */
+  reach: number;
+}
+
 export interface HabitatParams {
   /** Floor radius R: from the axis to the mean ground surface (m). */
   radius: number;
@@ -248,6 +276,8 @@ export interface HabitatParams {
   /** The climate and biome profile, by name (`CLIMATES` in climates.ts; laid out by the ecology stage). */
   climate: string;
   population: number;
+  /** Who goes up on the land, how often and for how long (src/sim). */
+  life: Life;
   /** Years since the habitat was finished: drives history (rebuilds, abandoned chambers, overgrowth). */
   age: number;
   /** The plan for the land: valleys, the reserve, districts and their entrances (gen/plan.ts). */

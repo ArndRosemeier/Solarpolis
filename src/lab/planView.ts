@@ -12,7 +12,7 @@ const FLOOR_WIDTH = 520, ENDCAP_SIZE = 300;
 /** How long the parameters must rest before the maps are redrawn (ms). */
 const SETTLE = 250;
 
-const rgb = (c: readonly number[]): string => `rgb(${c.map((v) => Math.round(v * 255)).join(',')})`;
+export const rgb = (c: readonly number[]): string => `rgb(${c.map((v) => Math.round(v * 255)).join(',')})`;
 
 const LANDMARK_NAMES: Partial<Record<Site['kind'], string>> = {
   'lift-stair': 'Lift Stair',
@@ -21,7 +21,7 @@ const LANDMARK_NAMES: Partial<Record<Site['kind'], string>> = {
   'founders-grove': "founders' grove",
 };
 
-function canvasOf(img: PlanImage): HTMLCanvasElement {
+export function canvasOf(img: PlanImage): HTMLCanvasElement {
   const c = el('canvas', 'plan-map');
   c.width = img.width;
   c.height = img.height;
@@ -46,6 +46,22 @@ function label(c: HTMLCanvasElement, text: string, x: number, y: number, align: 
   g.fillText(text, tx, ty);
 }
 
+/** A key entry: a swatch (a line for paths) and its name. */
+export function chip(color: string, name: string, line = false): HTMLElement {
+  const c = el('span', 'plan-chip');
+  const sw = el('i', line ? 'plan-swatch plan-line' : 'plan-swatch');
+  sw.style.background = color;
+  c.append(sw, name);
+  return c;
+}
+
+/** A map with its caption. */
+export function figure(c: HTMLCanvasElement, caption: string): HTMLElement {
+  const f = el('figure', 'plan-figure');
+  f.append(c, el('figcaption', '', caption));
+  return f;
+}
+
 export class PlanView {
   readonly root = el('div', 'plan');
   private readonly maps = el('div', 'plan-maps');
@@ -54,18 +70,10 @@ export class PlanView {
 
   constructor() {
     const key = el('div', 'plan-key');
-    for (const s of DISTRICT_STYLES) key.append(this.chip(rgb(STYLE_COLORS[s]), s));
-    key.append(this.chip('rgb(56,92,51)', 'reserve'), this.chip(rgb(FACE_COLORS.stair), 'Stair face'), this.chip(rgb(FACE_COLORS.vine), 'Vine face'), this.chip(rgb(FACE_COLORS.water), 'Water face'));
-    key.append(this.chip('rgb(255,219,89)', 'Sunwalk', true), this.chip('rgb(247,242,224)', 'ways', true), this.chip('rgb(77,140,204)', 'rivers', true), this.chip('rgb(46,36,26)', 'entrances'), this.chip('rgb(191,31,26)', 'landmarks'));
+    for (const s of DISTRICT_STYLES) key.append(chip(rgb(STYLE_COLORS[s]), s));
+    key.append(chip('rgb(56,92,51)', 'reserve'), chip(rgb(FACE_COLORS.stair), 'Stair face'), chip(rgb(FACE_COLORS.vine), 'Vine face'), chip(rgb(FACE_COLORS.water), 'Water face'));
+    key.append(chip('rgb(255,219,89)', 'Sunwalk', true), chip('rgb(247,242,224)', 'ways', true), chip('rgb(77,140,204)', 'rivers', true), chip('rgb(46,36,26)', 'entrances'), chip('rgb(191,31,26)', 'landmarks'));
     this.root.append(this.summary, this.maps, key);
-  }
-
-  private chip(color: string, name: string, line = false): HTMLElement {
-    const c = el('span', 'plan-chip');
-    const sw = el('i', line ? 'plan-swatch plan-line' : 'plan-swatch');
-    sw.style.background = color;
-    c.append(sw, name);
-    return c;
   }
 
   /** Redraws the maps for a habitat (null: none to draw), once the parameters have settled. */
@@ -114,13 +122,8 @@ export class PlanView {
     const hut = lm('summit-hut');
     if (hut) label(wild, 'summit hut', half + Math.cos(hut.theta) * ring(hut.s) + 8, half - Math.sin(hut.theta) * ring(hut.s));
 
-    const fig = (c: HTMLCanvasElement, caption: string): HTMLElement => {
-      const f = el('figure', 'plan-figure');
-      f.append(c, el('figcaption', '', caption));
-      return f;
-    };
     const ends = el('div', 'plan-ends');
-    ends.append(fig(wild, 'The Mountain (wild end), seen from the floor: rings are gravity bands'), fig(port, 'The Gate (port end), seen from the floor'));
-    this.maps.replaceChildren(fig(floor, 'The floor unrolled: wild end left, port end right, once round the axis top to bottom'), ends);
+    ends.append(figure(wild, 'The Mountain (wild end), seen from the floor: rings are gravity bands'), figure(port, 'The Gate (port end), seen from the floor'));
+    this.maps.replaceChildren(figure(floor, 'The floor unrolled: wild end left, port end right, once round the axis top to bottom'), ends);
   }
 }
