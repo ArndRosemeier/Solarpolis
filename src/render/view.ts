@@ -346,7 +346,7 @@ export class InteriorView {
     const d = this.drop;
     const last = !d ? '' : d.landed === null ? `, ball falling from ${d.height} m`
       : `, last ball from ${d.height} m landed ${d.landed.toFixed(2)} m antispinward (blueprint: ${this.habitat.dropOffset(d.height).toFixed(2)} m)`;
-    return `physics: ${this.physics.count} bodies${last}`;
+    return `physics: ${this.physics.count} bodies, ${this.physics.trunkCount} trunk pieces${last}`;
   }
 
   private physicsReady(): Promise<PhysicsWorld> {

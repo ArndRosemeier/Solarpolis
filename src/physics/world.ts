@@ -12,7 +12,8 @@ import type RAPIER_NS from '@dimforge/rapier3d-compat';
 import type { Habitat, Vec3 } from '../blueprint';
 import type { GroundPatch } from '../gen/patch';
 import { apparentAcceleration } from '../world/motion';
-import { Character, type WaterDepth } from './character';
+import { TRUNK_PIECE } from '../gen/trunks';
+import { Character, uprightRotation, type WaterDepth } from './character';
 
 type Rapier = typeof RAPIER_NS;
 
@@ -22,6 +23,9 @@ const MAX_STEPS = 8;
 /** Rolling resistance of grass and soil, as angular damping (1/s), and air drag on a ball, as linear damping (1/s). */
 const ROLLING_DAMPING = 1.5;
 const AIR_DAMPING = 0.01;
+/** Bark: how it grips and how much a ball bounces off it. */
+const BARK_FRICTION = 0.7;
+const BARK_BOUNCE = 0.2;
 
 export interface BodyState {
   id: number;
@@ -36,6 +40,8 @@ export interface BodyState {
 export class PhysicsWorld {
   private readonly world: RAPIER_NS.World;
   private ground: RAPIER_NS.Collider | null = null;
+  /** The trunks on the ground patch: one fixed body holding a capsule per piece. */
+  private trunks: RAPIER_NS.RigidBody | null = null;
   private patch: GroundPatch | null = null;
   /** The bubble's origin in the habitat (float64). */
   private origin: Vec3 = [0, 0, 0];
@@ -79,7 +85,29 @@ export class PhysicsWorld {
     this.origin = [...patch.origin];
     this.patch = patch;
     this.ground = this.world.createCollider(this.R.ColliderDesc.trimesh(patch.positions, patch.index).setFriction(0.8).setRestitution(0.3));
+    this.standTrunks(patch.trunks);
     this.dropStrays();
+  }
+
+  /** Trunk pieces in the bubble (debug menu). */
+  get trunkCount(): number { return this.trunks?.numColliders() ?? 0; }
+
+  /** Stand the patch's trunks (capsules relative to its origin, gen/trunks.ts) in the bubble, in place of the last patch's. */
+  private standTrunks(pieces: Float32Array): void {
+    if (this.trunks) this.world.removeRigidBody(this.trunks);
+    this.trunks = null;
+    if (!pieces.length) return;
+    const R = this.R, body = this.world.createRigidBody(R.RigidBodyDesc.fixed());
+    for (let i = 0; i < pieces.length; i += TRUNK_PIECE) {
+      const ax = pieces[i], ay = pieces[i + 1], az = pieces[i + 2], dx = pieces[i + 3] - ax, dy = pieces[i + 4] - ay, dz = pieces[i + 5] - az;
+      const length = Math.hypot(dx, dy, dz), radius = pieces[i + 6];
+      // A capsule's own axis is +y: turned onto the piece, its middle between the ends.
+      const q = length > 1e-6 ? uprightRotation([dx / length, dy / length, dz / length]) : [0, 0, 0, 1];
+      const desc = R.ColliderDesc.capsule(length / 2, radius).setTranslation(ax + dx / 2, ay + dy / 2, az + dz / 2)
+        .setRotation({ x: q[0], y: q[1], z: q[2], w: q[3] }).setFriction(BARK_FRICTION).setRestitution(BARK_BOUNCE);
+      this.world.createCollider(desc, body);
+    }
+    this.trunks = body;
   }
 
   /** A ball at a world position and velocity; returns its id. */

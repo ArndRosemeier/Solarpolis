@@ -988,30 +988,83 @@ const HULL_SPREAD = 0.95;
 export const LITE_DETAIL = 0.25;
 
 /**
- * A plant of a form, one unit high. `detail` thins the leaf cards (and enlarges them to keep the crown as full): 1 is
- * the full tree.
+ * A plant of a form grown in its own metres: its skeleton, wood and leaf cards, and `k`, the scale that makes it one
+ * unit high (the tallest of its wood and leaves). What `buildTree` and `trunkOf` share.
  */
-export function buildTree(form: PlantForm, seed: number, variant: number, detail = 1): TreeModel {
+function grow(form: PlantForm, seed: number, variant: number, detail: number) {
   const cfg = formCfg(form, variant);
   const rng = new Rng(deriveSeed(seed, 'tree', form, variant));
   const woodNoise = new Noise(deriveSeed(seed, 'tree', 'wood'));
-  // The forms are sized in metres (their own heights); the model is scaled to one unit high at the end.
-  const scaled = cfg;
-  const sk = buildSkeleton(scaled, rng.fork('skeleton'));
+  const sk = buildSkeleton(cfg, rng.fork('skeleton'));
   const wood = new VegBuilder();
   // The lighter tree leaves out the finest twigs, which its larger leaf cards hide anyway.
   const finest = Math.max(...sk.branches.map((b) => b.level));
   sk.branches.forEach((b, i) => {
     if (detail < 1 && finest >= 2 && b.level === finest) return;
-    const radial = b.level === 0 ? (scaled.trunkR > 0.1 ? 10 : 6) : scaled.levels[b.level - 1].radial;
-    tube(wood, b, Math.max(3, Math.round(radial * Math.min(1, detail * 1.5))), scaled.bark, sk.maxPath, b.level === 0 ? null : sk.env, b.level === 0 ? scaled : null, variant * 131 + 7 + i * 7, woodNoise);
+    const radial = b.level === 0 ? (cfg.trunkR > 0.1 ? 10 : 6) : cfg.levels[b.level - 1].radial;
+    tube(wood, b, Math.max(3, Math.round(radial * Math.min(1, detail * 1.5))), cfg.bark, sk.maxPath, b.level === 0 ? null : sk.env, b.level === 0 ? cfg : null, variant * 131 + 7 + i * 7, woodNoise);
   });
-  const leaves = buildLeaves(scaled, sk, rng.fork('leaves'), 1 / Math.sqrt(Math.max(0.05, detail)));
-  const hull = buildHull(scaled, sk, woodNoise, leaves.pos);
-  // One unit high: the tallest of the wood and the leaves.
+  const leaves = buildLeaves(cfg, sk, rng.fork('leaves'), 1 / Math.sqrt(Math.max(0.05, detail)));
   let top = 0;
   for (const b of [wood, leaves]) for (let i = 1; i < b.pos.length; i += 3) top = Math.max(top, b.pos[i]);
-  const k = 1 / top;
+  return { cfg, sk, wood, leaves, woodNoise, k: 1 / top };
+}
+
+/** Floats per point of a trunk line (`trunkOf`, `fallenLine`): x, y, z and the radius there. */
+export const TRUNK_POINT = 4;
+/** A trunk line keeps no more points than it needs to stay within this of the trunk (m, in the form's own metres). */
+const TRUNK_TOLERANCE = 0.02;
+/** A trunk line ends where the trunk is thinner than this (m, the form's own metres): up in the crown, where twigs take over. */
+const TRUNK_THIN = 0.04;
+
+/**
+ * The full tree's trunk as the physics meets it (gen/trunks.ts): its centreline and radius from the foot (sunk a little
+ * below the ground) up to where it thins into the crown, in the tree's one-unit-high space, `TRUNK_POINT` floats a
+ * point. The same skeleton and scale as `buildTree` at full detail, the radius as its bark is drawn (the flare at the
+ * foot; the lobes are the bark's wander about it), few points: between two the trunk is straight within
+ * `TRUNK_TOLERANCE`. No mesh or crown is kept.
+ */
+export function trunkOf(form: PlantForm, seed: number, variant: number): Float32Array {
+  const { cfg, sk, k } = grow(form, seed, variant, 1);
+  const b = sk.branches[0], line: number[][] = [];
+  for (let i = 0; i < b.pts.length; i++) {
+    const p = b.pts[i], r = b.rad[i] * (1 + cfg.flare * Math.exp(-Math.max(0, p.y) / 0.45));
+    if (r < TRUNK_THIN && i > 0) {
+      // Where it thins: the end, between this point and the last.
+      const q = line[line.length - 1], f = (q[3] - TRUNK_THIN) / Math.max(q[3] - r, 1e-9);
+      line.push([q[0] + (p.x - q[0]) * f, q[1] + (p.y - q[1]) * f, q[2] + (p.z - q[2]) * f, TRUNK_THIN]);
+      break;
+    }
+    line.push([p.x, p.y, p.z, r]);
+  }
+  return Float32Array.from(simplifyLine(line, TRUNK_TOLERANCE).flat(), (v) => v * k);
+}
+
+/**
+ * The fewest points of a line of (x, y, z, r) points that keep it within `tol` of every point left out (in place and in
+ * radius): Douglas–Peucker. The ends stay.
+ */
+function simplifyLine(line: readonly number[][], tol: number): number[][] {
+  if (line.length < 3) return [...line];
+  const a = line[0], b = line[line.length - 1];
+  let worst = 0, at = 0;
+  for (let i = 1; i < line.length - 1; i++) {
+    const p = line[i], d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], len2 = d[0] ** 2 + d[1] ** 2 + d[2] ** 2;
+    const t = len2 > 0 ? Math.min(1, Math.max(0, ((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1] + (p[2] - a[2]) * d[2]) / len2)) : 0;
+    const off = Math.hypot(p[0] - a[0] - d[0] * t, p[1] - a[1] - d[1] * t, p[2] - a[2] - d[2] * t) + Math.abs(p[3] - a[3] - (b[3] - a[3]) * t);
+    if (off > worst) { worst = off; at = i; }
+  }
+  if (worst <= tol) return [a, b];
+  return [...simplifyLine(line.slice(0, at + 1), tol).slice(0, -1), ...simplifyLine(line.slice(at), tol)];
+}
+
+/**
+ * A plant of a form, one unit high. `detail` thins the leaf cards (and enlarges them to keep the crown as full): 1 is
+ * the full tree.
+ */
+export function buildTree(form: PlantForm, seed: number, variant: number, detail = 1): TreeModel {
+  const { cfg, sk, wood, leaves, woodNoise, k } = grow(form, seed, variant, detail);
+  const hull = buildHull(cfg, sk, woodNoise, leaves.pos);
   const { tint: _t, ...woodMesh } = wood.mesh(k);
   return {
     form, wood: woodMesh, leaves: leaves.mesh(k), hull: hull.mesh(k),
@@ -1069,6 +1122,44 @@ export interface FallenWood {
 /** Per level: rings along the main limb, points around it, and whether the side limbs and stubs are kept. */
 const FALLEN_DETAIL = [{ segs: 12, radial: 10, sides: true }, { segs: 5, radial: 6, sides: true }, { segs: 2, radial: 4, sides: false }] as const;
 
+/** A limb from `from` along `dir`, `len` long, its radius from `ra` to `rb`, bowed by `curve` at its middle; `segs` rings. */
+function limb(from: V, dir: V, len: number, ra: number, rb: number, segs: number, curve: V, d0: number): Branch {
+  const pts: V[] = [], rad: number[] = [], arc: number[] = [];
+  for (let i = 0; i <= segs; i++) {
+    const t = i / segs;
+    pts.push(from.clone().addScaledVector(dir, len * t).addScaledVector(curve, 4 * t * (1 - t)));
+    rad.push(ra + (rb - ra) * t);
+    arc.push(i ? arc[i - 1] + pts[i].distanceTo(pts[i - 1]) : 0);
+  }
+  return { pts, rad, arc, level: 0, d0, children: [] };
+}
+
+/**
+ * Where fallen wood's numbers start: its form, its own random stream (`rng`, carried on by `buildFallenWood`), its
+ * length in metres `L` (it is built in metres, the bark's texel size being in metres, then scaled to one unit long),
+ * its radius from end to end, and its main limb at a number of rings: its middle at the origin, resting on the ground,
+ * its axis a radius up less what is sunk.
+ */
+function fallenStart(form: PlantForm, kind: 'log' | 'branch', seed: number, variant: number) {
+  const cfg = formCfg(form, variant);
+  const rng = new Rng(deriveSeed(seed, 'fallen', form, kind, variant));
+  const L = kind === 'log' ? 8 : 2.5;
+  const r0 = kind === 'log' ? cfg.trunkR * rng.range(0.75, 0.95) : 0.05 * rng.range(0.8, 1.2), r1 = r0 * (kind === 'log' ? 0.6 : 0.2);
+  const bend = v3(0, 0, rng.range(-0.12, 0.12) * L), sink = 0.2;
+  const main = (segs: number): Branch => limb(v3(-L / 2, r0 * (1 - sink), 0), v3(1, (r1 - r0) * (1 - sink) / L, 0).normalize(), L, r0, r1, segs, bend, 0);
+  return { cfg, rng, L, r0, r1, main };
+}
+
+/**
+ * Fallen wood's main limb as the physics meets it (gen/trunks.ts): its centreline and radius, `TRUNK_POINT` floats a
+ * point, in its own one-unit-long space (as `buildFallenWood` lays it along +x), straight between points within
+ * `TRUNK_TOLERANCE`. The stubs of its limbs are left out.
+ */
+export function fallenLine(form: PlantForm, kind: 'log' | 'branch', seed: number, variant: number): Float32Array {
+  const { L, main } = fallenStart(form, kind, seed, variant), b = main(FALLEN_DETAIL[0].segs);
+  return Float32Array.from(simplifyLine(b.pts.map((p, i) => [p.x, p.y, p.z, b.rad[i]]), TRUNK_TOLERANCE).flat(), (v) => v / L);
+}
+
 /**
  * A fallen trunk (`log`) or branch of a form, lying along +x on the ground, one unit long: the form's bark and girth,
  * gently bent, sunk a little into the ground. A trunk keeps the stubs of its broken limbs and shows its cut ends; a
@@ -1076,13 +1167,8 @@ const FALLEN_DETAIL = [{ segs: 12, radial: 10, sides: true }, { segs: 5, radial:
  * underside is dark where it meets the ground (occlusion).
  */
 export function buildFallenWood(form: PlantForm, kind: 'log' | 'branch', seed: number, variant: number): FallenWood {
-  const cfg = formCfg(form, variant);
-  const rng = new Rng(deriveSeed(seed, 'fallen', form, kind, variant));
+  const { cfg, rng, L, r0, r1, main: mainLimb } = fallenStart(form, kind, seed, variant);
   const woodNoise = new Noise(deriveSeed(seed, 'tree', 'wood'));
-  // Built in metres (the bark's texel size is in metres), then scaled to one unit long.
-  const L = kind === 'log' ? 8 : 2.5;
-  const r0 = kind === 'log' ? cfg.trunkR * rng.range(0.75, 0.95) : 0.05 * rng.range(0.8, 1.2), r1 = r0 * (kind === 'log' ? 0.6 : 0.2);
-  const bend = v3(0, 0, rng.range(-0.12, 0.12) * L), sink = 0.2;
   const sides = Array.from({ length: kind === 'log' ? rng.int(2, 4) : rng.int(2, 3) }, () => ({
     t: rng.range(kind === 'log' ? 0.35 : 0.2, 0.9),
     // Around the limb: never into the ground; a branch's side limbs lie flat beside it.
@@ -1092,21 +1178,9 @@ export function buildFallenWood(form: PlantForm, kind: 'log' | 'branch', seed: n
     rr: kind === 'log' ? rng.range(0.22, 0.38) : rng.range(0.45, 0.65),
   }));
 
-  const limb = (from: V, dir: V, len: number, ra: number, rb: number, segs: number, curve: V, d0: number): Branch => {
-    const pts: V[] = [], rad: number[] = [], arc: number[] = [];
-    for (let i = 0; i <= segs; i++) {
-      const t = i / segs;
-      pts.push(from.clone().addScaledVector(dir, len * t).addScaledVector(curve, 4 * t * (1 - t)));
-      rad.push(ra + (rb - ra) * t);
-      arc.push(i ? arc[i - 1] + pts[i].distanceTo(pts[i - 1]) : 0);
-    }
-    return { pts, rad, arc, level: 0, d0, children: [] };
-  };
-
   const meshes = FALLEN_DETAIL.map((lv) => {
     const bld = new VegBuilder();
-    // The main limb, its middle at the origin, resting on the ground: its axis a radius up, less what is sunk.
-    const main = limb(v3(-L / 2, r0 * (1 - sink), 0), v3(1, (r1 - r0) * (1 - sink) / L, 0).normalize(), L, r0, r1, lv.segs, bend, 0);
+    const main = mainLimb(lv.segs);
     const first = bld.verts;
     tube(bld, main, lv.radial, cfg.bark, L, null, null, variant * 131 + 7, woodNoise);
     if (kind === 'log') { cap(bld, first, lv.radial, 0, -1, cfg.bark); cap(bld, first, lv.radial, lv.segs, 1, cfg.bark); }
