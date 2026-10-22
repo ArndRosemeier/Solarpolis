@@ -2,6 +2,13 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.087 — People turn detailed sooner, and come in every skin tone
+
+- Walking up to someone, their detailed figure is there in moments instead of about ten seconds. Shader builds may now use a third of the time, spread evenly, so quick builds no longer wait a fifth of a second each.
+- Figures start getting ready from 50 m away, and the nearest people always get theirs first.
+- Teeth, tongue, eyes, lashes and brows no longer cast shadows of their own.
+- Residents' skin spans the whole range from dark to light. Before, the detailed figures' skin came out nearly white (Actors' photo skins don't reach the screen with its new shared materials), so figures wear a plain skin in their own tone until Actors fixes that.
+
 ## v0.086 — The plan of the city below
 
 - The Blueprint tab's "Under the floor" now maps the Understorey, the living layer under the land: a grid of stone pillars carrying the land, a hamlet of about 800 people under every entrance court (wellhead, halls, homes in lanes), galleries under the land's ways, rings of cisterns that balance the spin, and the open, dim pillar forest between them.
