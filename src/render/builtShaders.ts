@@ -7,7 +7,7 @@
  * And the shelter a round roof gives what stands under it (`roofHorizons`): the sunline is a line along the axis, so
  * under the roof its light comes in only past the eaves (toward either end) and down through the oculus.
  */
-import { Fn, If, atan, float, floor, hash, max, mix, mx_noise_float, select, sqrt, vec2, vec3 } from 'three/tsl';
+import { Fn, If, abs, atan, float, floor, hash, max, mix, mx_noise_float, select, smoothstep, sqrt, vec2, vec3 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { OPEN_SKY } from '../gen/horizon';
 import { keepMean, lineAt, shows } from './shaderMath';
@@ -60,21 +60,34 @@ function courses(st: V2, long: number, high: number, shift: (row: F) => F, joint
 
 const halfBond = (row: F): F => row.mul(0.5);
 
-function ashlar(albedo: V3, st: V2): V3 {
-  const c = courses(st, BLOCK, COURSE, halfBond, [0.01, 0.02], 0.03, 0.4, 0.14);
-  // Rain never falls here, but cleaning and two centuries leave streaks down the walls.
-  const streak = mx_noise_float(vec3(st.x.mul(1.2), st.y.mul(0.08), 4.7)).mul(0.08).mul(shows(st.x.mul(1.2)));
-  return albedo.mul(float(1).add(c.tint).add(streak).add(grain(st, [[0.15, 0.06], [4, 0.07], [20, 0.05], [90, 0.035]], 1.3))).mul(c.joints);
-}
+/** How cells are laid in courses: `courses`' arguments after the surface's place. */
+type Lay = [long: number, high: number, shift: (row: F) => F, joint: readonly [number, number], mean: number, dark: number, tint: number];
 
-function timber(albedo: V3, st: V2): V3 {
-  // Boards of a plank's width, butted end to end at random along their row.
-  const c = courses(st, PLANK_LENGTH, PLANK, (row) => cellHash(row, float(3)), [0.002, 0.03], 0.035, 0.35, 0.24);
-  // The grain runs along the board: stretched noise.
+/**
+ * A finish of cells laid in courses (`lay`), over the vertex colour: each cell's own tint, the grain's layers (`grain`,
+ * from `seed`) and whatever more it shows (`more`, given the place and the course), darkened at the joints.
+ */
+const coursed = (lay: Lay, layers: readonly (readonly [number, number])[], seed: number, more?: (st: V2, row: F) => F) => (albedo: V3, st: V2): V3 => {
+  const c = courses(st, ...lay);
+  return albedo.mul(float(1).add(c.tint).add(more ? more(st, c.row) : float(0)).add(grain(st, layers, seed))).mul(c.joints);
+};
+
+/** Bricks with their mortar: a brick's length and course (m). */
+const BRICK = { long: 0.24, high: 0.075 };
+/** Rammed earth: the height of one lift of the formwork (m). */
+const LIFT_HIGH = 0.6;
+/** The screen era's panels, stripped of their screens: width and height (m). */
+const PANEL = { wide: 1.2, high: 2.4 };
+
+// Rain never falls here, but cleaning and two centuries leave streaks down the walls.
+const ashlar = coursed([BLOCK, COURSE, halfBond, [0.01, 0.02], 0.03, 0.4, 0.14], [[0.15, 0.06], [4, 0.07], [20, 0.05], [90, 0.035]], 1.3,
+  (st) => mx_noise_float(vec3(st.x.mul(1.2), st.y.mul(0.08), 4.7)).mul(0.08).mul(shows(st.x.mul(1.2))));
+
+// Boards of a plank's width, butted end to end at random along their row; the grain runs along the board (stretched noise).
+const timber = coursed([PLANK_LENGTH, PLANK, (row) => cellHash(row, float(3)), [0.002, 0.03], 0.035, 0.35, 0.24], [[0.2, 0.08], [30, 0.04]], 2.9, (st, row) => {
   const along = vec2(st.x.mul(2), st.y.mul(60));
-  const figure = mx_noise_float(vec3(along, c.row.mul(0.37))).mul(0.12).mul(shows(along.y));
-  return albedo.mul(float(1).add(c.tint).add(figure).add(grain(st, [[0.2, 0.08], [30, 0.04]], 2.9))).mul(c.joints);
-}
+  return mx_noise_float(vec3(along, row.mul(0.37))).mul(0.12).mul(shows(along.y));
+});
 
 function bronze(albedo: V3, st: V2): V3 {
   const at = st.mul(1.7);
@@ -83,20 +96,44 @@ function bronze(albedo: V3, st: V2): V3 {
   return weathered.mul(float(1).add(grain(st, [[12, 0.08], [60, 0.05]], 6.1)));
 }
 
-function ceramic(albedo: V3, st: V2): V3 {
-  const c = courses(st, TILE.across, TILE.along, halfBond, [0.015, 0.03], 0.04, 0.55, 0.1);
-  // Broad patches of weathering read from afar; pitting up close.
-  return albedo.mul(float(1).add(c.tint).add(grain(st, [[0.04, 0.07], [0.3, 0.05], [40, 0.04]], 8.3))).mul(c.joints);
+// Broad patches of weathering read from afar; pitting up close.
+const ceramic = coursed([TILE.across, TILE.along, halfBond, [0.015, 0.03], 0.04, 0.55, 0.1], [[0.04, 0.07], [0.3, 0.05], [40, 0.04]], 8.3);
+
+const brick = coursed([BRICK.long, BRICK.high, halfBond, [0.04, 0.13], 0.14, 0.75, 0.3], [[0.3, 0.05], [30, 0.06], [120, 0.04]], 3.7);
+
+function plaster(albedo: V3, st: V2): V3 {
+  // Broad mottling where it was patched over the years, the trowel's sweeps, and its grit.
+  const sweep = mx_noise_float(vec3(st.mul(vec2(2.2, 1.1)), 7.9)).mul(0.04).mul(shows(st.mul(2.2)));
+  return albedo.mul(float(1).add(sweep).add(grain(st, [[0.12, 0.09], [0.7, 0.04], [60, 0.04]], 4.3)));
 }
 
-/** A built surface's albedo: its finish (0 stone, 1 timber, 2 bronze, 3 ceramic: `FINISH` in gen/pavilion.ts) over the vertex colour. */
+// Rammed in lifts: each a band of its own tint, the formwork's line between, the layers rammed into it fine and wavy.
+const earth = coursed([1e3, LIFT_HIGH, halfBond, [0, 0.012], 0.012, 0.6, 0.12], [[0.25, 0.05], [50, 0.06]], 5.9,
+  (st) => mx_noise_float(vec3(st.x.mul(0.6), st.y.mul(14), 2.3)).mul(0.09).mul(shows(st.y.mul(14))));
+
+// Smooth panels a screen once covered: fine seams, and the paler ghost of the screen's frame where it hung.
+const panel = coursed([PANEL.wide, PANEL.high, (row) => row.mul(0), [0.006, 0.003], 0.006, 0.45, 0.05], [[0.5, 0.03], [80, 0.02]], 9.1, (st) => {
+  const u = st.x.div(PANEL.wide).fract(), v = st.y.div(PANEL.high).fract();
+  const ghost = smoothstep(0.05, 0.07, u).mul(smoothstep(0.95, 0.93, u)).mul(smoothstep(0.05, 0.07, v)).mul(smoothstep(0.95, 0.93, v));
+  return ghost.mul(0.05).mul(shows(st.div(PANEL.wide)));
+});
+
+/**
+ * A built surface's albedo: its finish over the vertex colour (`FINISH` in gen/pavilion.ts: 0 stone, 1 timber, 2
+ * bronze, 3 ceramic, 6 brick, 7 plaster, 8 earth, 9 panel; anything else plain). One plain If each.
+ */
 export function builtAlbedo(albedo: V3, st: V2, finish: F): V3 {
   return Fn(() => {
     const out = vec3(albedo).toVar();
-    If(finish.lessThan(0.5), () => { out.assign(ashlar(albedo, st)); })
-      .ElseIf(finish.lessThan(1.5), () => { out.assign(timber(albedo, st)); })
-      .ElseIf(finish.lessThan(2.5), () => { out.assign(bronze(albedo, st)); })
-      .Else(() => { out.assign(ceramic(albedo, st)); });
+    const is = (k: number): Node<'bool'> => abs(finish.sub(k)).lessThan(0.5);
+    If(is(0), () => { out.assign(ashlar(albedo, st)); });
+    If(is(1), () => { out.assign(timber(albedo, st)); });
+    If(is(2), () => { out.assign(bronze(albedo, st)); });
+    If(is(3), () => { out.assign(ceramic(albedo, st)); });
+    If(is(6), () => { out.assign(brick(albedo, st)); });
+    If(is(7), () => { out.assign(plaster(albedo, st)); });
+    If(is(8), () => { out.assign(earth(albedo, st)); });
+    If(is(9), () => { out.assign(panel(albedo, st)); });
     return out;
   })() as unknown as V3;
 }

@@ -36,7 +36,7 @@ import { cloudClearings, cloudSpan, cloudsAt } from '../world/clouds';
 import { setCloudClearings, setCloudSpan, setCloudState } from './cloudShaders';
 import { LandmarkView } from './landmarks';
 import { TiledView, courtSource, crossingSource, hallSource, stairSource, underSource } from './tiled';
-import { underFloorAt } from '../gen/underMesh';
+import { underFloorAt, underHousesIn } from '../gen/underMesh';
 import { landmarkTopAt, landmarksOf } from '../gen/landmarks';
 import { speckBands } from '../gen/standIn';
 import { snowFieldOf } from '../gen/snow';
@@ -290,10 +290,13 @@ export class InteriorView {
     ].join('\n');
   }
 
-  /** Below the land, which hamlet's sky is over (θ, s) (gen/skies.ts), for the debug menu. */
+  /** Below the land, the bay at (θ, s): its use, its houses (gen/homes.ts) and which hamlet's sky is over it (gen/skies.ts), for the debug menu. */
   private skyLine(theta: number, s: number): string {
-    const bay = underOf(this.habitat).bayAt(theta, s), sky = bay ? skyOverBay(this.habitat, bay.i, bay.j) : -1;
-    return sky < 0 ? ' (no sky over this bay)' : ` (under a hamlet's ${SKIES[sky].name} sky)`;
+    const u = underOf(this.habitat), bay = u.bayAt(theta, s), sky = bay ? skyOverBay(this.habitat, bay.i, bay.j) : -1;
+    const houses = bay ? underHousesIn(this.terrain, bay.i, bay.j).houses : [];
+    const built = houses.map((x) => `${x.era} ${x.build}, ${x.storeys} storeys${x.lived ? '' : ', empty'}`).join('; ');
+    const use = bay ? `${u.useAt(bay.i, bay.j)} bay${built ? `: ${built}` : ''}; ` : '';
+    return sky < 0 ? ` (${use}no sky over this bay)` : ` (${use}under a hamlet's ${SKIES[sky].name} sky)`;
   }
 
   /** The sunline's light and the clouds at the clock's hour. */

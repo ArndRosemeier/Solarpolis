@@ -738,9 +738,13 @@ goBelow('Below: the pillar forest under here', (h, theta, s) => {
   const u = underOf(h);
   return u.bayAt(theta, Math.min(u.s0 + (u.along - 0.5) * u.bay, Math.max(u.s0 + u.bay / 2, s)));
 });
-goBelow("Below: under the nearest entrance court (its hamlet's wellhead)", (h, theta, s) => {
+/** The hamlets nearest (θ, s) first (over the unrolled floor). */
+const hamletsNear = (h: Habitat, theta: number, s: number): Hamlet[] => {
   const R = h.radius, away = (m: Hamlet): number => Math.hypot(Math.atan2(Math.sin(m.site.theta - theta), Math.cos(m.site.theta - theta)) * R, m.site.s - s);
-  const m = [...underOf(h).hamlets].sort((a, b) => away(a) - away(b))[0];
+  return [...underOf(h).hamlets].sort((a, b) => away(a) - away(b));
+};
+goBelow("Below: under the nearest entrance court (its hamlet's wellhead)", (h, theta, s) => {
+  const m = hamletsNear(h, theta, s)[0];
   return m ? { i: m.i, j: m.j } : null;
 });
 /** Below, in the middle of a bay under sky `want` (gen/skies.ts), off the wellhead and its lanes. */
@@ -758,6 +762,23 @@ function underSky(want: number): void {
     }
   }
 }
+/** Below, in a hamlet's street: on the walk between two of its home bays, looking along the axis down it. */
+debug.add({
+  label: "Below: in a street among a hamlet's homes", group: 'Go', run: () => {
+    const h = lab.habitat, v = view();
+    if (!h || !v) return;
+    const u = underOf(h);
+    for (const m of hamletsNear(h, v.walker.at.theta, v.walker.at.s).slice(0, 8)) {
+      for (let r = 1; r < 8; r++) for (let di = -r; di <= r; di++) for (const dj of [-r, r]) {
+        const i = m.i + di, j = m.j + dj;
+        if (j < 0 || j >= u.along || u.hamletOf(i, j) !== m || u.useAt(i, j) !== 'home' || u.useAt(i - 1, j) !== 'home') continue;
+        const c = u.centreOf(i, j);
+        v.goBelow(c.theta - u.dTheta / 2, c.s, 0);
+        return;
+      }
+    }
+  },
+});
 let nextSky = 0;
 debug.add({ label: 'Below: under the next kind of hamlet sky', group: 'Go', run: () => underSky(nextSky++ % SKIES.length) });
 debug.add({ label: 'Below: under a glass deck (the real sky above)', group: 'Go', run: () => underSky(GLASS) });
