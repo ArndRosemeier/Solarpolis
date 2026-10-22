@@ -81,6 +81,9 @@ export function validate(h: Habitat): Finding[] {
   const share = (v: number): boolean => v >= 0 && v <= 1;
   if (!([lf.outings, lf.regulars, lf.sunwalk, lf.night, lf.shells, lf.minds].every(share) && lf.sunwalk + lf.night <= 1 && lf.stay > 0 && lf.stay < p.day.length / 2 && lf.walk > 0 && lf.reach > 0))
     out.push({ id: 'life', severity: 'invalid', message: 'life needs shares from 0 to 1 (Sunwalk and night outings together at most all of them), a stay > 0 under half a day, a walking speed and a reach > 0' });
+  const dr = lf.drones, counts = [dr.couriers, dr.tenders, dr.surveyors, dr.lifters, dr.gliders, dr.guardians];
+  if (!(counts.every((c) => c >= 0) && dr.cruise > 0 && dr.lane > 0 && dr.lane < p.radius / 4 && dr.round > 0 && dr.round < p.day.length && Number.isInteger(dr.designs) && dr.designs >= 1))
+    out.push({ id: 'life', severity: 'invalid', message: 'drones need counts ≥ 0, a cruise speed > 0, a lane > 0 under a quarter of the radius, a round > 0 under a day and a whole number of designs (at least 1)' });
   if (!(p.population >= 0)) out.push({ id: 'population', severity: 'invalid', message: 'the population must not be negative' });
   return out;
 }

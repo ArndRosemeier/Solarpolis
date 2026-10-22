@@ -2,7 +2,7 @@
  * The one way to turn arrays into an indexed mesh geometry. Every kind's meshes are indexed (the index is part of the
  * shader's cache key, @futuremagic/stage), and each attribute is named as its kind lists it (materials.ts).
  */
-import { BufferAttribute, BufferGeometry, InstancedBufferGeometry, InterleavedBufferAttribute, Matrix4, Mesh, type Material } from 'three/webgpu';
+import { BufferAttribute, BufferGeometry, InstancedBufferGeometry, InterleavedBufferAttribute, Matrix4, Mesh, type InstancedInterleavedBuffer, type Material } from 'three/webgpu';
 import type { Stage } from '@futuremagic/stage';
 import type { Vec3 } from '@futuremagic/core';
 import type { Mat3 } from '../space';
@@ -42,6 +42,13 @@ export function drawnAnywhere(geometry: BufferGeometry, material: Material, name
   mesh.name = name;
   mesh.frustumCulled = false;
   return mesh;
+}
+
+/** Send the first `n` instances (`stride` floats each) of an instance buffer to the GPU this frame: only those. */
+export function sendInstances(buffer: InstancedInterleavedBuffer, n: number, stride: number): void {
+  buffer.needsUpdate = true;
+  buffer.clearUpdateRanges();
+  buffer.addUpdateRange(0, Math.max(1, n) * stride);
 }
 
 /** One quad drawn once per instance (the SPECK kind): its corners (±1), placed by the shader; positions all zero. */

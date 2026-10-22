@@ -4,3 +4,4 @@ export { venuesOf, ACTIVITIES, STYLE_ACTIVITY, LANDMARK_SHARE, type Activity, ty
 export { walksOf, pointAlong, floorGap, sunwalkOf, type Route, type WalkNet } from './walks';
 export { shuffleOf, type Shuffle } from './permute';
 export { footingOf, postureOf, SWIM_DEPTH, SWIM_WATER, type Footing } from './footing';
+export { fleetOf, flierAt, fliersAt, airBytes, ROLES, type Role, type Job, type Flier, type Doing } from './air';

@@ -41,7 +41,8 @@ export const REFERENCE: HabitatParams = {
   plan: { valleys: 3, reserve: 0.22, districtPeople: 10000, entranceSpacing: 1200, spiral: 0.6, pathWidth: { sunwalk: 12, way: 3, trail: 1.2 }, places: { orchard: 120, parcel: 150, hall: 72 } },
   population: 300000,
   // About one in ten residents up on the land on a fine afternoon, for two and a half hours; most keep a rhythm.
-  life: { outings: 0.35, stay: 9000, regulars: 0.6, sunwalk: 0.03, night: 0.04, shells: 0.15, minds: 0.3, walk: 1.3, reach: 1500 },
+  life: { outings: 0.35, stay: 9000, regulars: 0.6, sunwalk: 0.03, night: 0.04, shells: 0.15, minds: 0.3, walk: 1.3, reach: 1500,
+    drones: { couriers: 1, tenders: 1, surveyors: 2, lifters: 6, gliders: 0.4, guardians: 0.2, cruise: 12, lane: 35, round: 1200, designs: 2 } },
   age: 200,
   culture: 'reference',
   seed: 1,

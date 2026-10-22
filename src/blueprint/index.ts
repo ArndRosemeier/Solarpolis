@@ -1,5 +1,6 @@
 /** The habitat blueprint: parameters in, a derived habitat out. Pure; the root every other layer builds on. */
-export type { HabitatParams, LandPlan, LayerDepths, HullMaterial, EndcapShape, AxisOrientation, Relief, CloudLayer, Landmarks, DayCycle, ExteriorShape, Life } from './params';
+export type { HabitatParams, LandPlan, LayerDepths, HullMaterial, EndcapShape, AxisOrientation, Relief, CloudLayer, Landmarks, DayCycle, ExteriorShape, Life, Drones, DroneRole } from './params';
+export { DRONE_ROLES } from './params';
 export { derive, SOLAR_CONSTANT, SUNLIGHT_VISIBLE, STEFAN_BOLTZMANN, type Habitat, type LayerRadii } from './derive';
 export { makeExterior, exteriorDistance, berthArmAt, type Exterior, type Bore, type Brim, type Piece } from './exterior';
 export { makeProfile, type Profile, type ProfilePoint } from './profile';

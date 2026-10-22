@@ -39,6 +39,7 @@ import { landmarkTopAt, landmarksOf } from '../gen/landmarks';
 import { snowFieldOf } from '../gen/snow';
 import { PeopleView } from './people';
 import { SpeckView } from './specks';
+import { FlierView } from './fliers';
 
 /** Running is this many times the walking speed. */
 const RUN = 8;
@@ -96,6 +97,8 @@ export class InteriorView {
   private people: PeopleView | null = null;
   /** Everyone up on the land beyond them, as specks. */
   private specks: SpeckView | null = null;
+  /** The drones that work the land. */
+  private drones: FlierView | null = null;
   /** In the air, or null on foot. */
   private flyer: Flyer | null = null;
   private readonly loop = new FrameLoop((dt) => this.frame(dt), (e) => {
@@ -189,6 +192,11 @@ export class InteriorView {
     return (this.people?.bytes() ?? 0) + (this.specks?.bytes() ?? 0);
   }
 
+  /** Bytes the drones hold: their designs on the GPU, their instances (memory watchdog). */
+  droneBytes(): number {
+    return this.drones?.bytes() ?? 0;
+  }
+
   /** Bytes of geometry this view holds (memory watchdog). */
   bytes(): number {
     return (this.tiles?.bytes() ?? 0) + (this.plants?.bytes() ?? 0) + (this.landmarks?.bytes() ?? 0) + (this.stair?.bytes() ?? 0) + (this.courts?.bytes() ?? 0) + (this.crossings?.bytes() ?? 0) + (this.halls?.bytes() ?? 0);
@@ -224,6 +232,7 @@ export class InteriorView {
       this.halls?.info() ?? 'grown halls: none',
       this.people?.info() ?? 'people: none',
       this.specks?.info() ?? 'specks: none',
+      this.drones?.info() ?? 'drones: none',
       `θ ${(a.theta * 180 / Math.PI).toFixed(1)}°, s ${(a.s / 1000).toFixed(2)} of ${(this.habitat.profile.length / 1000).toFixed(2)} km, ground ${this.standOn(a.theta, a.s).toFixed(1)} m, ${mode}, eyes ×${this.exposure.toFixed(2)}`,
     ].join('\n');
   }
@@ -387,6 +396,7 @@ export class InteriorView {
     if (this.halls) { this.scene.remove(this.halls.group); this.halls.dispose(); }
     this.people?.dispose();
     this.specks?.dispose();
+    this.drones?.dispose();
     if (this.sunline) { this.stage.remove(this.sunline); freeMesh(this.sunline); }
     if (this.clouds) { this.stage.remove(this.clouds); [...this.clouds.children].forEach((m, i) => freeMesh(m as Mesh, i === 0 ? 'all' : 'none')); }
     const h = this.habitat;
@@ -427,6 +437,8 @@ export class InteriorView {
     this.scene.add(this.people.group);
     this.specks = new SpeckView(h, this.stage, this.pool);
     this.scene.add(this.specks.group);
+    this.drones = new FlierView(h, this.terrain, this.stage, this.camera, this.pool);
+    this.scene.add(this.drones.group);
     this.place();
     // While loading, nothing draws, but the compile cap still counts frames (one new shader per frame): keep its
     // frames ticking, or a second build here (a shadow pass's own shader) would wait for a frame that never comes.
@@ -487,6 +499,7 @@ export class InteriorView {
     this.halls?.follow(v.eye);
     this.people?.follow(v.eye, this.time, this.frameDt);
     this.specks?.follow(this.time, this.frameDt, this.people?.near ?? [], this.people?.residentsLoaded() ?? null);
+    this.drones?.follow(v.eye, this.time, this.frameDt);
   }
 
   private current(): View {

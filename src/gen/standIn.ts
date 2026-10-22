@@ -37,7 +37,7 @@ export const MEAN_HEIGHT = 1.7;
 export const POSE = { upright: 0, kneel: 1, lie: 2 } as const;
 
 /**
- * Floats per instance, in five vec4 attributes (materials.ts, `peopleInstances`):
+ * Floats per instance, in five vec4 attributes (materials.ts, `layInstances`):
  *   stand  foot (x, y, z relative to the mesh), height (m)
  *   gait   turn (rad, as plants), stride phase (rad), stride rate (rad/s; 0 standing), pose
  *   light  width (× the mean body's), horizon port, horizon wild (rad), skin colour
@@ -76,7 +76,7 @@ export function unpackColor(v: number): [number, number, number] {
 
 /**
  * A speck (render/specks.ts): someone further off than the stand-ins, drawn as the few pixels they cover. Floats per
- * instance, in four vec4 attributes (materials.ts, `peopleInstances`):
+ * instance, in four vec4 attributes (materials.ts, `layInstances`):
  *   speckFoot   feet (world, m), height (m)
  *   speckDrift  their way over the floor (world, m/s), pose
  *   speckTint   head, top, bottom colours (packed, as the stand-in's), and one spare

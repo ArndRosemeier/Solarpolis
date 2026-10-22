@@ -89,8 +89,8 @@ interface Census {
   readonly going: number;
 }
 
-/** A float in [0, 1) from the habitat's seed and three numbers. */
-const unit = (seed: number, a: number, b: number, c: number): number => hashToFloat(hash3i(seed, a, b, c));
+/** A float in [0, 1) from a seed and three numbers (the population's and the drones'). */
+export const unit = (seed: number, a: number, b: number, c: number): number => hashToFloat(hash3i(seed, a, b, c));
 /** A standard normal from the same. */
 function normal(seed: number, a: number, b: number, c: number): number {
   const u = Math.max(1e-9, unit(seed, a, b, c)), v = unit(seed, a, b, c + 7919);
@@ -254,10 +254,10 @@ export function lifeBytes(h: Habitat): number {
   return n;
 }
 
-/** Routes kept per habitat, a bounded number. */
+/** Routes kept per habitat, a bounded number (the one way to a route between two points of the walk net: people and couriers). */
 const KEEP_ROUTES = 4096;
 const routeCache = new WeakMap<Habitat, Map<number, Route>>();
-function routeOf(h: Habitat, from: number, to: number): Route {
+export function routeOf(h: Habitat, from: number, to: number): Route {
   let m = routeCache.get(h);
   if (!m) { m = new Map(); routeCache.set(h, m); }
   const net = walksOf(h), key = from * net.size + to;

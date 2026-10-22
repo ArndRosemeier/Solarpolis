@@ -570,5 +570,73 @@
   {
     "key": "same name: solarpolis/space/flyer.ts#turn + solarpolis/world/walker.ts#turn",
     "reason": "Each camera turns by pointer movement in its own frame (walker: heading on the curved floor; flyer outside: yaw around the ecliptic pole)."
+  },
+  {
+    "key": "clone: solarpolis/render/crowdShaders.ts#swing + solarpolis/render/droneShaders.ts#spun",
+    "reason": "Turns about different axes of a frame, three lines each: a stand-in's limb about the body's left axis (crowdShaders.ts), a drone's rotor about its up (droneShaders.ts)."
+  },
+  {
+    "key": "idiom: [.group .name] in solarpolis/render/fliers.ts + solarpolis/render/landmarks.ts + solarpolis/render/specks.ts",
+    "reason": "Each view names its own scene group (the debug menu and heap snapshots list them by name)."
+  },
+  {
+    "key": "same name: solarpolis/render/fliers.ts#bytes + solarpolis/render/people.ts#bytes",
+    "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/fliers.ts#bytes + solarpolis/render/specks.ts#bytes",
+    "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/fliers.ts#dispose + solarpolis/render/hullDetail.ts#dispose",
+    "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/fliers.ts#dispose + solarpolis/render/landmarks.ts#dispose",
+    "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/fliers.ts#dispose + solarpolis/render/people.ts#dispose",
+    "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/fliers.ts#dispose + solarpolis/render/specks.ts#dispose",
+    "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/fliers.ts#dispose + solarpolis/render/traffic.ts#dispose",
+    "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/fliers.ts#follow + solarpolis/render/hullDetail.ts#follow",
+    "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/fliers.ts#follow + solarpolis/render/necklace.ts#follow",
+    "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/fliers.ts#follow + solarpolis/render/people.ts#follow",
+    "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/fliers.ts#follow + solarpolis/render/plants.ts#follow",
+    "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/fliers.ts#follow + solarpolis/render/terrain.ts#follow",
+    "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/fliers.ts#follow + solarpolis/render/tiled.ts#follow",
+    "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/fliers.ts#follow + solarpolis/render/traffic.ts#follow",
+    "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/fliers.ts#info + solarpolis/render/specks.ts#info",
+    "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
   }
 ]

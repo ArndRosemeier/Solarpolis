@@ -24,8 +24,8 @@ import type { Terrain } from '../gen/terrain';
 import { horizonAt } from '../gen/horizon';
 import { MEAN_HEIGHT, SPECK_SHOWN, SPECK_STRIDE, STAND_IN_STRIDE, speckBands, standInArrays, writeSpeck } from '../gen/standIn';
 import { floorGap, footingOf, personKey, lifeBytes, peopleAt, residentOf, whereIs, type Activity, type Footing, type Person, type Resident } from '../sim';
-import { CROWD, SPECK, SPECK_LAYOUT, STAND_IN_LAYOUT, peopleInstances } from './materials';
-import { arraysGeometry, drawnAnywhere, freeMesh, instancedOf, quadInstances } from './geometry';
+import { CROWD, SPECK, SPECK_LAYOUT, STAND_IN_LAYOUT, layInstances } from './materials';
+import { arraysGeometry, drawnAnywhere, freeMesh, instancedOf, quadInstances, sendInstances } from './geometry';
 import { Figure, castAsWorn, type AnimState } from './actors/figure';
 import { humanCatalog } from './actors/pack';
 import { Residents, type Dress } from './actors/residents';
@@ -155,7 +155,7 @@ export class PeopleView {
     if (!human.usesWorker) await human.useWorker(new HumanWorker());
     const a = standInArrays(), g = instancedOf(arraysGeometry(a, { part: [a.parts, 2] }));
     this.data = new Float32Array(64 * STAND_IN_STRIDE);
-    this.buffer = peopleInstances(g, this.data, STAND_IN_LAYOUT);
+    this.buffer = layInstances(g, this.data, STAND_IN_LAYOUT);
     g.instanceCount = 0;
     const mesh = drawnAnywhere(g, CROWD.material, 'stand-ins');
     mesh.castShadow = true;
@@ -244,10 +244,7 @@ export class PeopleView {
     const doing = doingOf(p, one.resident, foot);
     const feet = toWorld(profile, { theta: p.theta, s: p.s, h: foot.h });
     const r = Math.hypot(feet[0], feet[1]) || 1, up: Vec3 = [-feet[0] / r, -feet[1] / r, 0];
-    // Facing: the heading is over the floor (0 toward +s, +π/2 toward +θ); where the profile is steep, along it.
-    const ds = 0.5, a = profile.at(Math.max(0, p.s - ds)), b = profile.at(Math.min(profile.length, p.s + ds));
-    const lean = Math.max(LEAN, Math.abs(b.z - a.z) / Math.max(1e-6, Math.min(profile.length, p.s + ds) - Math.max(0, p.s - ds)));
-    one.turn = -Math.atan2(Math.sin(p.heading), Math.cos(p.heading) * lean);
+    one.turn = turnFor(profile, p.s, p.heading);
     const side: Vec3 = [up[1], -up[0], 0], c = Math.cos(one.turn), sn = Math.sin(one.turn);
     one.front = [-side[0] * sn, -side[1] * sn, c];
     one.feet = feet;
@@ -386,7 +383,7 @@ export class PeopleView {
   private grow(need: number): void {
     this.data = new Float32Array(Math.max(need, this.data.length * 2));
     // The instance attributes are set again on the new buffer (the old one is let go with them).
-    this.buffer = peopleInstances(this.mesh!.geometry, this.data, STAND_IN_LAYOUT);
+    this.buffer = layInstances(this.mesh!.geometry, this.data, STAND_IN_LAYOUT);
   }
 
   /** Room for `need` specks: their instances, and their shown flags (all on: these are drawn just as written). */
@@ -394,7 +391,7 @@ export class PeopleView {
     const count = Math.max(need, (this.speckData.length / SPECK_STRIDE) * 2);
     this.speckData = new Float32Array(count * SPECK_STRIDE);
     const g = this.speckMesh!.geometry;
-    this.speckBuffer = peopleInstances(g, this.speckData, SPECK_LAYOUT);
+    this.speckBuffer = layInstances(g, this.speckData, SPECK_LAYOUT);
     g.setAttribute(SPECK_SHOWN, new InstancedBufferAttribute(new Float32Array(count).fill(1), 1));
   }
 
@@ -443,11 +440,19 @@ function doingOf(p: Person, who: Resident, foot: Footing): Doing {
 const dist = (a: Vec3, b: Vec3): number => v3len(v3sub(a, b));
 
 /** Draw the first n instances of a mesh, uploading only those. */
+/**
+ * The turn about its up (the CROWD and DRONE kinds' `turn`) of something at s heading `heading` over the floor (0 toward
+ * +s, +π/2 toward +θ); where the profile is steep (an endcap), the way along it counts for less.
+ */
+export function turnFor(profile: Habitat['profile'], s: number, heading: number): number {
+  const ds = 0.5, a = profile.at(Math.max(0, s - ds)), b = profile.at(Math.min(profile.length, s + ds));
+  const lean = Math.max(LEAN, Math.abs(b.z - a.z) / Math.max(1e-6, Math.min(profile.length, s + ds) - Math.max(0, s - ds)));
+  return -Math.atan2(Math.sin(heading), Math.cos(heading) * lean);
+}
+
 function upload(mesh: Mesh, buffer: InstancedInterleavedBuffer, n: number, stride: number): void {
   (mesh.geometry as InstancedBufferGeometry).instanceCount = n;
-  buffer.needsUpdate = true;
-  buffer.clearUpdateRanges();
-  buffer.addUpdateRange(0, n * stride);
+  sendInstances(buffer, n, stride);
 }
 
 /** The levels of detail a figure is drawn at: Actors' levels that draw its parts separately (not merged), finest first. */
