@@ -72,12 +72,17 @@ function makeLevels(terrain: Terrain): UnderLevels {
       return v;
     };
   };
+  // The ground the deck lies under. A landform the plan built (a Ring, a Height: `landformAt`) is hollow: the deck
+  // keeps to the land under it, and the landform's height is a great hall over the layer. (Its designed surface: the
+  // rock and terraces the terrain cuts into it stay in the soil over the hall.)
+  const form = terrain.form;
+  const deckLand = (theta: number, s: number): number => terrain.heightAt(theta, s) - (form.landformAt(theta, s)?.top ?? 0);
   // A bay's lowest ground; past the floor's ends, the end row's.
   const lowest = cached((i, j) => {
     const jj = Math.min(along - 1, Math.max(0, j));
     let low = Infinity;
     for (let b = 0; b <= SAMPLES; b++) for (let a = 0; a <= SAMPLES; a++) {
-      low = Math.min(low, terrain.heightAt((i + a / SAMPLES) * dTheta, s0 + (jj + b / SAMPLES) * bay));
+      low = Math.min(low, deckLand((i + a / SAMPLES) * dTheta, s0 + (jj + b / SAMPLES) * bay));
     }
     return low;
   });
@@ -95,7 +100,7 @@ function makeLevels(terrain: Terrain): UnderLevels {
       const j0 = bj * BLOCK, j1 = Math.min(along, j0 + BLOCK);
       for (let b = 0, k = 0; b < n; b++) for (let a = 0; a < n; a++, k += 3) {
         const x = bi * BLOCK + (a / BLOCK_SAMPLES) * BLOCK, y = j0 + (b / BLOCK_SAMPLES) * (j1 - j0);
-        out[k] = x; out[k + 1] = y; out[k + 2] = terrain.heightAt(x * dTheta, s0 + y * bay) - under0;
+        out[k] = x; out[k + 1] = y; out[k + 2] = deckLand(x * dTheta, s0 + y * bay) - under0;
       }
       v = out;
       blocks.set(key, v);

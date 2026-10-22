@@ -28,7 +28,7 @@ import { daisOf } from './gen/grownHall';
 import type { Terrain } from './gen/terrain';
 import { floorAt, floorPoint, outOfPlace, placeAt, type FloorFrame } from './gen/shapes';
 import { crossingsOf, type Crossing, type CrossingKind } from './gen/crossings';
-import { landformOf, planOf } from './gen/plan';
+import { landformOf, planOf, type GroundForm } from './gen/plan';
 import { underOf, type Hamlet } from './gen/under';
 import { underLiftOf } from './gen/underMesh';
 import { GLASS, SKIES, hamletSkiesOf, skyOverBay } from './gen/skies';
@@ -608,6 +608,49 @@ const byHall = (label: string, x: number, y: number, z: number): void => debug.a
 // Beside: in the clearing the woods keep round it, at eye height, outside the lattice.
 byHall('Fly: beside a grown hall', -1.1, 1.15, 0.1);
 byHall('Fly: a grown hall from afar', -5, 12, 2.5);
+/**
+ * The landforms the plan built (gen/plan.ts `grounds`): float off a Ring's terraced front over the ridge nearest the
+ * eye, or off the tallest Height, `out` of the form's heights away (toward the port end) and `up` of them above the
+ * land, looking at it a third of the way up.
+ */
+const nearRing = (t: Terrain, theta: number, s: number): { ring: GroundForm; ridge: number } | undefined => {
+  const plan = planOf(t.habitat), rings = plan.grounds.filter((g) => g.kind === 'ring');
+  const ring = rings.reduce<GroundForm | undefined>((a, g) => (!a || Math.abs(g.s - s) < Math.abs(a.s - s) ? g : a), undefined);
+  if (!ring) return undefined;
+  // The ridge between the valleys nearest the eye, where the front is terraced.
+  const gap = (2 * Math.PI) / plan.valleys, first = plan.valleyAt(0, ring.s);
+  const k = Math.round((theta - first - gap / 2) / gap), ridge = first + gap / 2 + k * gap;
+  return { ring, ridge };
+};
+const offForm = (label: string, kind: 'ring' | 'height', out: number, up: number): void => debug.add({
+  label, group: 'Go', run: () => {
+    const v = view(), t = v?.ecology?.terrain, h = lab.habitat;
+    if (!v || !t || !h) return;
+    let theta: number, s: number, H: number;
+    if (kind === 'ring') {
+      const f = nearRing(t, v.walker.at.theta, v.walker.at.s);
+      if (!f) return;
+      theta = f.ridge; s = planOf(h).ringLine(f.ring, f.ridge); H = f.ring.height;
+    } else {
+      const g = planOf(h).grounds.find((x) => x.kind === 'height');
+      if (!g) return;
+      theta = g.theta; s = g.s; H = g.height;
+    }
+    const es = s + H * out, eye = toWorld(h.profile, { theta, s: es, h: t.heightAt(theta, es) + H * up });
+    const at = toWorld(h.profile, { theta, s, h: H * 0.35 + t.heightAt(theta, s) - t.builtAt(theta, s) });
+    const d = Math.hypot(at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]);
+    v.floatAt(eye, [(at[0] - eye[0]) / d, (at[1] - eye[1]) / d, (at[2] - eye[2]) / d]);
+  },
+});
+offForm('Fly: before the nearest Ring\'s terraced front', 'ring', 2.5, 0.25);
+offForm('Fly: the nearest Ring from far off', 'ring', 12, 1.5);
+offForm('Fly: the tallest Height from far off', 'height', 4, 0.3);
+debug.add({
+  label: 'To the top of the tallest Height', group: 'Go', run: () => {
+    const v = view(), h = lab.habitat, g = h && planOf(h).grounds.find((x) => x.kind === 'height');
+    if (v && g) v.goTo(g.theta, g.s, 0);
+  },
+});
 /** The founders' grove (gen/planted.ts). */
 const grove = (): { v: InteriorView; g: Grove } | null => {
   const f = inView((t) => plantingsOf(t).groves[0]);

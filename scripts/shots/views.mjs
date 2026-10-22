@@ -170,6 +170,11 @@ export const views = {
   'hall-dais': { query: 'view=inside', about: 'on a grown hall\'s dais, looking down the nave', settle: 6000, steps: [{ debug: 'To a grown hall: on its dais' }, { wait: 12000 }] },
   'hall-beside': { query: 'view=inside', about: 'floating beside a grown hall: the two rows of trained lindens, the lattice screen, the roof of crowns', settle: 6000, steps: [{ debug: 'Fly: beside a grown hall' }, { wait: 12000 }] },
   'hall-far': { query: 'view=inside', about: 'a grown hall from a few hundred metres off', settle: 6000, steps: [{ debug: 'Fly: a grown hall from afar' }, { wait: 12000 }] },
+  // The landforms (gen/plan.ts `grounds`, gen/terrain.ts): a Ring's terraced front, the Rings and the tallest Height from afar, its top.
+  'ring-front': { query: 'view=inside', about: 'floating before the nearest Ring\'s terraced front over a ridge, looking up at it', settle: 6000, steps: [{ debug: 'Fly: before the nearest Ring' }, { wait: 14000 }] },
+  'ring-far': { query: 'view=inside', about: 'the nearest Ring from far off toward the port: a ridge across the floor and up round the curve', settle: 6000, steps: [{ debug: 'Fly: the nearest Ring from far off' }, { wait: 14000 }] },
+  'height-far': { query: 'view=inside', about: 'the tallest Height from a few kilometres off: sheer rock flanks, its plateau', settle: 6000, steps: [{ debug: 'Fly: the tallest Height from far off' }, { wait: 14000 }] },
+  'height-top': { query: 'view=inside', about: 'standing on the tallest Height\'s top, looking out along the cylinder, then down its flank', settle: 6000, steps: [{ debug: 'To the top of the tallest Height' }, { wait: 12000 }, { shot: 'out' }, { look: [900, 260] }, { wait: 1500 }] },
   'far-meadow-up': { query: 'view=inside', about: 'standing in a meadow, looking up at the far side', settle: 6000, steps: [{ debug: 'Into the nearest meadow' }, { wait: 5000 }, { look: [0, -260] }, { wait: 3000 }] },
   outside: { query: 'view=outside', about: 'the home habitat from outside', default: true },
   'outside-earth': { query: 'view=outside', about: 'looking at Earth (key 2)', steps: [{ key: 'Digit2' }, { wait: 3000 }] },

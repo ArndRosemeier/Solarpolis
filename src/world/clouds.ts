@@ -7,7 +7,8 @@
  * Everything follows from `HabitatParams.clouds` and the clock. Pure.
  */
 import { Noise, deriveSeed } from '@futuremagic/core';
-import type { Habitat } from '../blueprint';
+import { toWorld, type Habitat } from '../blueprint';
+import { planOf } from '../gen/plan';
 import { dayPhase } from './sunline';
 
 /** Where the cloud layer is: radii of its top and its flat base, and the stretch of the axis clear of the endcaps (m). */
@@ -72,6 +73,46 @@ export function cloudSpan(h: Habitat): CloudSpan | null {
   };
   const z0 = edge(0, profile.floorStart), z1 = edge(profile.length, profile.floorEnd);
   return { top, base, z0, z1, fade: Math.min(c.size, (z1 - z0) / 4) };
+}
+
+/**
+ * Where the clouds part round a Height that stands into the layer (gen/plan.ts `grounds`): its axis in world space
+ * (`dir`, the unit direction from the cylinder's axis, and `z`), no cloud within `inner` m of it (out to where its
+ * flank falls below the layer's base), the clouds back in full `outer` m from it (a cloud's width further). The air
+ * that meets the mount flows up and round it, and from its top one looks down on the clouds.
+ */
+export interface CloudClearing {
+  dir: readonly [number, number];
+  z: number;
+  inner: number;
+  outer: number;
+}
+
+/** The share of the cloud base the land under a Height may make up (`cloudClearings`). */
+const CLEAR_LAND = 0.1;
+
+/** How many clearings the clouds' shader takes. */
+export const MAX_CLEARINGS = 4;
+
+/** The clearings in a habitat's cloud layer, the tallest Heights first (at most `MAX_CLEARINGS`). */
+export function cloudClearings(h: Habitat): CloudClearing[] {
+  const c = h.params.clouds;
+  if (!c) return [];
+  const plan = planOf(h), out: CloudClearing[] = [];
+  for (const g of plan.grounds) {
+    // A tenth of the base spared for the land it stands on (the ridges between the valleys rise a little).
+    const low = c.base * (1 - CLEAR_LAND);
+    if (g.kind !== 'height' || g.height <= low || out.length >= MAX_CLEARINGS) continue;
+    // Out from its middle along the axis until its surface is below the base.
+    let inner = g.radius;
+    for (let i = 0; i <= 128; i++) {
+      const d = (g.radius * i) / 128, on = plan.landformAt(g.theta, g.s + d);
+      if (!on || on.form !== g || on.top < low) { inner = d; break; }
+    }
+    const w = toWorld(h.profile, { theta: g.theta, s: g.s, h: 0 }), l = Math.hypot(w[0], w[1]) || 1;
+    out.push({ dir: [w[0] / l, w[1] / l], z: w[2], inner, outer: inner + c.size });
+  }
+  return out;
 }
 
 /** The cloud layer at clock time `t` (s), or null if the habitat has none. */

@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MATRIX, derive, validate, withParams } from '../src/blueprint';
-import { GROUND, courtCap, entrancesOf, fromLake, planOf } from '../src/gen/plan';
+import { terrainOf } from './worlds';
+import { COURT, GROUND, WAY_CLEAR, courtCap, entrancesOf, fromLake, planOf } from '../src/gen/plan';
 
 const TURN = 2 * Math.PI;
 const wrap = (a: number): number => a - TURN * Math.round(a / TURN);
@@ -33,6 +34,10 @@ for (const { name, params } of MATRIX) {
       const on = plan.landformAt(g.theta, g.s)!;
       assert.ok(on && Math.abs(on.top - g.height) < 1e-6 && on.share === 1, 'its plateau');
       assert.equal(plan.landformAt(g.theta, g.s + g.radius * 1.01)?.form === g ? 'on' : 'off', 'off', 'nothing past its foot');
+      // Its slope, as the terrain cuts its rock by it: the rise of its surface.
+      const s1 = g.s + g.radius * 0.5, e = g.radius * 1e-4, at = plan.landformAt(g.theta, s1)!;
+      const rise = ((plan.landformAt(g.theta, s1 + e)?.top ?? 0) - (plan.landformAt(g.theta, s1 - e)?.top ?? 0)) / (2 * e);
+      if (at.form === g) assert.ok(Math.abs(at.slope - Math.abs(rise)) < Math.abs(rise) * 0.02, `slope ${at.slope.toFixed(3)} for ${rise.toFixed(3)}`);
     }
     for (const r of rings) {
       // Over a ridge between two valleys (where no river runs): the crest, at its full height.
@@ -43,6 +48,10 @@ for (const { name, params } of MATRIX) {
       assert.ok(!saddle || saddle.top < r.height * 0.7, 'a saddle where the Sunwalk crosses');
       // Steep toward the port, long toward the wild end.
       const fall = (d: number): number => plan.landformAt(ridge, s + d)?.top ?? 0;
+      for (const d of [r.height * 0.5, -r.height * 2]) {
+        const e = r.height * 1e-4, rise = (fall(d + e) - fall(d - e)) / (2 * e), at = plan.landformAt(ridge, s + d)!;
+        assert.ok(Math.abs(at.slope - Math.abs(rise)) < Math.abs(rise) * 0.1 + 1e-3, `slope ${at.slope.toFixed(3)} for ${rise.toFixed(3)}`);
+      }
       assert.ok(fall(r.height * 0.6) < fall(-r.height * 0.6), 'its steep face looks to the port');
       assert.notEqual(plan.landformAt(ridge, s - r.radius)?.form, r, 'nothing of it past its long slope');
       // Where a river runs through, the land is open.
@@ -53,11 +62,93 @@ for (const { name, params } of MATRIX) {
     }
   });
 
+  test(`landforms (${name}): a way keeps to its room between the Rings and goes round the Heights; the Sunwalk crosses each Ring`, () => {
+    const ways = plan.paths.filter((p) => p.kind === 'way');
+    for (const w of ways) {
+      const q = w.points, last = q.length - 2;
+      for (const r of rings) {
+        const a = q[1] - plan.ringLine(r, q[0]), b = q[last + 1] - plan.ringLine(r, q[last]);
+        assert.ok(a * b > 0, `a way from s ${q[1].toFixed(0)} to ${q[last + 1].toFixed(0)} over the Ring at ${r.s.toFixed(0)}`);
+      }
+      // Its line keeps clear; the way swings off its line by a tenth of its length at most.
+      const swing = Math.hypot(wrap(q[last] - q[0]) * R, q[last + 1] - q[1]) * 0.1;
+      for (const g of heights) {
+        // No nearer than its clearance, or than its own ends (an entrance at a Height's foot).
+        const from = (i: number): number => Math.hypot(wrap(q[i] - g.theta) * R, q[i + 1] - g.s);
+        const keep = Math.min(g.radius * WAY_CLEAR, from(0), from(last)) - swing - 1e-6;
+        for (let i = 0; i < q.length; i += 2) assert.ok(from(i) >= keep, `a way ${from(i).toFixed(0)} m from a Height reaching ${g.radius.toFixed(0)} m`);
+      }
+    }
+    const walk = plan.paths.find((p) => p.kind === 'sunwalk')!.points;
+    for (const r of rings) assert.ok(walk[1] < r.s && walk[walk.length - 1] > r.s, 'the Sunwalk runs over every Ring');
+    // Each way joins the net where it starts (a point of the Sunwalk or of another way, clear of that way's court) and
+    // ends at an entrance.
+    const key = (theta: number, s: number): string => `${Math.round(wrap(theta) * R * 100)}:${Math.round(s * 100)}`;
+    const entrances = new Set(entrancesOf(plan).map((e) => key(e.theta, e.s))), joins = new Set<string>();
+    for (let i = 0; i < walk.length; i += 2) joins.add(key(walk[i], walk[i + 1]));
+    for (const w of ways) for (let i = 0; i < w.points.length; i += 2) joins.add(key(w.points[i], w.points[i + 1]));
+    for (const w of ways) {
+      const q = w.points;
+      assert.ok(entrances.has(key(q[q.length - 2], q[q.length - 1])), 'a way that ends at no entrance');
+      assert.ok(joins.has(key(q[0], q[1])) && (!params.landmarks || !entrances.has(key(q[0], q[1]))), 'a way that joins nothing, or starts in a court');
+    }
+    // And it goes round every court but its ends' (nobody walks down into another court, over its well).
+    if (!params.landmarks) return;
+    const cell = params.plan.entranceSpacing, rows = new Map<number, ReturnType<typeof entrancesOf>>();
+    for (const e of entrancesOf(plan)) { const r = Math.floor(e.s / cell); rows.set(r, [...(rows.get(r) ?? []), e]); }
+    const clear = (e: { size: number }): number => e.size + COURT.clear * params.landmarks!.handrail + params.plan.pathWidth.way;
+    for (const w of ways) {
+      const q = w.points, ends = [key(q[0], q[1]), key(q[q.length - 2], q[q.length - 1])];
+      for (let i = 0; i + 3 < q.length; i += 2) {
+        const r = Math.floor(q[i + 1] / cell);
+        for (const e of [-1, 0, 1].flatMap((d) => rows.get(r + d) ?? [])) {
+          if (ends.includes(key(e.theta, e.s))) continue;
+          const pu = wrap(q[i + 2] - q[i]) * R, pv = q[i + 3] - q[i + 1], eu = wrap(e.theta - q[i]) * R, ev = e.s - q[i + 1];
+          const k = Math.min(1, Math.max(0, (eu * pu + ev * pv) / Math.max(pu * pu + pv * pv, 1e-9)));
+          assert.ok(Math.hypot(eu - pu * k, ev - pv * k) >= clear(e) - 1e-6, 'a way through another court');
+        }
+      }
+    }
+  });
+
+  test(`landforms (${name}): the terrain raises them, a Ring's front in terraces, and the Sunwalk crosses each at a gentle saddle`, () => {
+    const t = terrainOf(name);
+    for (const g of heights) assert.ok(Math.abs(t.builtAt(g.theta, g.s) - g.height) < g.height * 0.01, 'a Height\'s top as high as planned');
+    const walk = plan.paths.find((p) => p.kind === 'sunwalk')!.points;
+    for (const r of rings) {
+      const ridge = wrap(plan.valleyAt(0, r.s) + Math.PI / plan.valleys), s0 = plan.ringLine(r, ridge);
+      assert.ok(t.builtAt(ridge, s0) >= r.height * 0.99, 'its crest as high as planned');
+      // Down its front over a ridge: ledges and walls, not one even slope.
+      const n = 160, run = r.height * (GROUND.face + GROUND.crest), angles: number[] = [];
+      let prev = t.heightAt(ridge, s0);
+      for (let i = 1; i <= n; i++) {
+        const g = t.heightAt(ridge, s0 + (run * i) / n);
+        angles.push(Math.atan(Math.abs(g - prev) / (run / n)));
+        prev = g;
+      }
+      const ledges = angles.filter((a) => a < 0.2).length, walls = angles.filter((a) => a > 0.9).length;
+      assert.ok(ledges > n * 0.15 && walls > n * 0.25, `${ledges} ledges and ${walls} walls of ${n} steps down its front`);
+      // The Sunwalk over its saddle: no steeper than an eighth.
+      let most = 0;
+      for (let i = 2; i < walk.length; i += 2) {
+        if (Math.abs(walk[i + 1] - r.s) > r.radius || (t.builtAt(walk[i - 2], walk[i - 1]) <= 0 && t.builtAt(walk[i], walk[i + 1]) <= 0)) continue;
+        const a = t.heightAt(walk[i - 2], walk[i - 1]), b = t.heightAt(walk[i], walk[i + 1]);
+        most = Math.max(most, Math.abs(b - a) / Math.hypot(wrap(walk[i] - walk[i - 2]) * R, walk[i + 1] - walk[i - 1]));
+      }
+      assert.ok(most < 0.13, `the Sunwalk climbs ${most.toFixed(3)} over a Ring`);
+    }
+  });
+
   test(`landforms (${name}): entrances keep to the landforms' feet, never their tops or faces`, () => {
-    const cap = courtCap(h);
+    const cap = courtCap(h), walk = plan.paths.find((p) => p.kind === 'sunwalk')!.points;
     for (const e of entrancesOf(plan)) {
       const on = plan.landformAt(e.theta, e.s);
       assert.ok(!on || on.top <= cap + 1e-9, `an entrance ${on?.top.toFixed(0)} m up a ${on?.form.kind}`);
+      // And its court clear of the Sunwalk (its line between the two points either side along the axis).
+      let i = 0;
+      while (i + 3 < walk.length && walk[i + 3] < e.s) i += 2;
+      const f = (e.s - walk[i + 1]) / Math.max(walk[i + 3] - walk[i + 1], 1e-9), line = walk[i] + wrap(walk[i + 2] - walk[i]) * f;
+      if (params.landmarks) assert.ok(Math.abs(wrap(e.theta - line)) * R >= e.size + params.plan.pathWidth.sunwalk / 2, 'a court on the Sunwalk');
     }
   });
 }

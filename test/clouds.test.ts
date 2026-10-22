@@ -1,7 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MATRIX, derive, validate, withParams } from '../src/blueprint';
-import { cloudSpan, cloudsAt, coverThreshold } from '../src/world/clouds';
+import { MAX_CLEARINGS, cloudClearings, cloudSpan, cloudsAt, coverThreshold } from '../src/world/clouds';
+import { planOf } from '../src/gen/plan';
+import { terrainOf } from './worlds';
+import { toWorld } from '../src/blueprint';
 
 for (const { name, params } of MATRIX) {
   test(`clouds (${name}): a layer over the whole floor, clear of the endcap slopes and the axis`, () => {
@@ -20,6 +23,19 @@ for (const { name, params } of MATRIX) {
         if (p.z >= span.z0 && p.z <= span.z1) assert.ok(p.r > span.base, `the slope at z ${p.z} stays under the layer`);
       }
     }
+  });
+
+  test(`clouds (${name}): they part round a Height that stands into the layer, out to where its flank falls below it`, () => {
+    const h = derive(params), c = params.clouds, list = cloudClearings(h);
+    if (!c) { assert.equal(list.length, 0); return; }
+    const tall = planOf(h).grounds.filter((g) => g.kind === 'height' && g.height > c.base * 0.9);
+    assert.equal(list.length, Math.min(MAX_CLEARINGS, tall.length));
+    if (!list.length) return;
+    // The tallest: its summit above the base, inside the clearing; where its ground is back below the base, at its edge.
+    const g = tall[0], k = list[0], t = terrainOf(name), w = toWorld(h.profile, { theta: g.theta, s: g.s, h: 0 });
+    assert.ok(Math.abs(Math.hypot(w[0], w[1]) * k.dir[0] - w[0]) < 1e-6 && Math.abs(k.z - w[2]) < 1e-6, 'on its axis');
+    assert.ok(t.heightAt(g.theta, g.s) > c.base && k.inner > 0 && k.outer - k.inner === c.size, 'its top above the clouds, cleared');
+    assert.ok(t.heightAt(g.theta, g.s + k.inner * 1.3) < c.base, 'its flank below them past the inner reach');
   });
 
   test(`cloud schedule (${name}): cover in range, changing over days, building in the afternoon, carried by the wind`, () => {
