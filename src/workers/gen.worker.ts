@@ -28,6 +28,8 @@ import { crossingSites } from '../gen/crossings';
 import { hallSites } from '../gen/grownHall';
 import type { SiteTile } from '../gen/siteTiles';
 import { specksAt, type Specks } from '../sim/specks';
+import type { Role } from '../sim/air';
+import { droneDesign, type DroneDesign } from '../gen/drone';
 
 /** The built things that stream in tiles. */
 export type TiledPart = 'stair' | 'courts' | 'crossings' | 'halls';
@@ -47,7 +49,9 @@ export type GenRequest =
   /** A tile of a built thing that streams in tiles (render/tiled.ts): the Lift Stair, the entrance courts, the river crossings, the grown halls. */
   | { kind: 'tiled'; part: TiledPart; params: HabitatParams; key: DetailKey }
   /** Everyone up on the land at clock time t, for the far view (render/specks.ts). */
-  | { kind: 'specks'; params: HabitatParams; t: number };
+  | { kind: 'specks'; params: HabitatParams; t: number }
+  /** One of a role's drone designs (gen/drone.ts), both levels. */
+  | { kind: 'drone'; params: HabitatParams; role: Role; index: number };
 export type GenAnswer =
   | { kind: 'tile'; tile: TileMesh }
   | { kind: 'patch'; patch: GroundPatch }
@@ -62,6 +66,7 @@ export type GenAnswer =
   | { kind: 'landmark'; index: number; level: LandmarkLevel; mesh: MappedArrays }
   | { kind: 'tiled'; part: TiledPart; built: StairTile | SiteTile }
   | { kind: 'specks'; specks: Specks }
+  | { kind: 'drone'; design: DroneDesign }
   | { error: string };
 
 /** Every typed array's buffer in an answer, to transfer rather than copy. */
@@ -122,6 +127,10 @@ self.onmessage = (e: MessageEvent<GenRequest>) => {
     }
     if (req.kind === 'fallen') {
       post({ kind: 'fallen', fallen: buildFallenWood(req.form, req.piece, derive(req.params).seed, req.variant) });
+      return;
+    }
+    if (req.kind === 'drone') {
+      post({ kind: 'drone', design: droneDesign(derive(req.params), req.role, req.index) });
       return;
     }
     if (req.kind === 'hull') {
