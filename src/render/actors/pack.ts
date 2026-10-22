@@ -50,10 +50,10 @@ export function humanCatalog(): Promise<{ catalog: CharacterCatalog; base: Chara
 }
 
 /**
- * Actors' WebGPU material kit as the game uses it, for people and animals alike. Its face morphs stay three's morph
- * targets (`attributeMorphs` off): as plain vertex attributes (Actors 0.6.5) a face mesh needs more than WebGPU's 8
- * vertex buffers, and its pipelines fail. Every other material kind still builds one shader for all characters.
+ * Actors' WebGPU material kit as the game uses it, for people and animals alike: one shader per material kind for all
+ * characters. Its face morphs are vertex attributes in one interleaved buffer (Actors 0.6.6; a face peaks at 7 of
+ * WebGPU's 8 vertex buffers), so a face's morphs do not make its shader its own.
  */
-export const actorKit: ActorMaterialKit = { ...nodeMaterials, attributeMorphs: false };
+export const actorKit: ActorMaterialKit = nodeMaterials;
 
 export { Character };
