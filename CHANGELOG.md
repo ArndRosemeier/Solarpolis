@@ -2,6 +2,22 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.100 — The plan lays out Rings and Heights
+
+- The habitat mind's plan now holds the first big landforms for the floor (design "Shaped ground"): Rings, ridges running all the way round the cylinder that part the floor into landscape rooms, and Heights, lone mounts on the ridges between the valleys, the tallest a third of the radius high.
+- They show on the Blueprint tab's land map, lighter the higher they stand, with contour lines. The ground itself rises in the next step.
+- Entrances now keep to the landforms' feet, never their tops or steep faces.
+
+## v0.099 — Glass decks show the real land above
+
+- Some hamlets below now have a glass deck instead of a painted sky. Their ceilings show the real view from the land straight above: the far side of the habitat overhead, the sunline and the clouds, as they are at that moment, by day and by night.
+- Orchards, water districts, groves, herding land and wild land choose it now and then. Stone and maker districts keep to painted skies.
+- Debug menu: "Below: under a glass deck (the real sky above)". The debug info shows a "glass deck" line.
+
+## v0.098 — People come up out of the lifts
+
+- People no longer appear in the middle of a court. They step out of the lift's bronze doors, walk round the court and climb its stair to the land, and come back the same way. Those meeting in the court walk round its edge to their spot instead of across the light well.
+
 ## v0.097 — People come up together and stand together
 
 - Most people now go up on the land with others: friends in pairs, small groups of up to six. They walk two abreast and stay together.

@@ -63,7 +63,7 @@ const stills = new WeakMap<Terrain, Still>();
 
 /** Everyone up on the land at clock time t (s). */
 export function specksAt(terrain: Terrain, t: number): Specks {
-  const h = terrain.habitat, { profile } = h, people = peopleAt(h, t), n = people.length;
+  const h = terrain.habitat, { profile } = h, people = peopleAt(h, t, undefined, terrain), n = people.length;
   const keys = people.map(personKey), order = Array.from(people.keys()).sort((a, b) => keys[a] - keys[b]);
   const out: Specks = { t, count: n, data: new Float32Array(n * SPECK_STRIDE), key: new Float64Array(n), resident: new Int32Array(n) };
   const before = stills.get(terrain), still = order.filter((at) => !people[at].moving).length;

@@ -33,7 +33,8 @@ import type { Habitat } from '../blueprint';
 import { shuffleOf, type Shuffle } from './permute';
 import { floorGap, pointAlong, sunwalkOf, walksOf, type Route } from './walks';
 import { besideLake, venuesOf, type Activity, type Venue, type Venues } from './venues';
-import { courtFloorOf } from '../gen/courts';
+import { courtFloorOf, courtPassageOf, courtWayIn, courtWayOut } from '../gen/courts';
+import type { Terrain } from '../gen/terrain';
 
 const TURN = 2 * Math.PI;
 const WEEK = 7;
@@ -316,9 +317,10 @@ function outingsOf(h: Habitat, day: number, court: number): Outings {
   return o;
 }
 
-/** Bytes the population keeps for a habitat (its outings and routes), for the memory watchdog. */
-export function lifeBytes(h: Habitat): number {
+/** Bytes the population keeps for a habitat (its outings and routes, and those through the courts of `ground`), for the memory watchdog. */
+export function lifeBytes(h: Habitat, ground?: Terrain): number {
   let n = outingCache.get(h)?.bytes ?? 0;
+  for (const r of (ground && passages.get(ground)?.values()) || []) n += r.points.byteLength + r.along.byteLength;
   for (const w of walkerCache.get(h)?.values() ?? []) n += w.resident.byteLength * 9;
   for (const r of routeCache.get(h)?.values() ?? []) n += r.points.byteLength + r.along.byteLength;
   return n;
@@ -397,8 +399,62 @@ function memberSpot(h: Habitat, place: Venue, form: Form, activity: Activity, le
   return [ct + dy / ring, cs + ds, heading];
 }
 
+/** The ways into a court toward spots on its floor: one per sector round its middle. */
+const SECTORS = 12;
+
+/**
+ * The way from a court to a point of the walk net. On built ground (`ground`: the courts' stairs are the terrain's) it
+ * starts at the lift's portal and goes up the court's stair and out over its walk, then on along the paths from where
+ * they leave the court; to a spot in the court itself (`inside`: the angle of the spot round its middle), out of the
+ * portal and round the aisle to the spot's sector. Without, it starts at the court's middle, where its way begins.
+ */
+function wayOf(h: Habitat, ground: Terrain | undefined, court: number, to: number, inside: number | null): Route {
+  const v = venuesOf(h), paths = routeOf(h, v.courtVertex[court], to);
+  const pass = ground && courtPassageOf(ground, court);
+  if (!pass) return paths;
+  let m = passages.get(ground);
+  if (!m) { m = new Map(); passages.set(ground, m); }
+  const sector = inside === null ? -1 : (((Math.round((inside / TURN) * SECTORS) % SECTORS) + SECTORS) % SECTORS);
+  const key = (court * walksOf(h).size + to) * (SECTORS + 1) + sector + 1;
+  let r = m.get(key);
+  if (!r) {
+    if (m.size >= KEEP_ROUTES) m.clear();
+    r = sector < 0 ? joined(h, ground, court, paths) : routeThrough(h, courtWayIn(ground, court, (sector * TURN) / SECTORS)!);
+    m.set(key, r);
+  }
+  return r;
+}
+
+/**
+ * The way out of a court and round its rim to where the paths leave it, then the paths on from the first of their
+ * points beyond its walk (θ kept unwrapped).
+ */
+function joined(h: Habitat, ground: Terrain, court: number, paths: Route): Route {
+  const site = venuesOf(h).courts[court], R = h.radius, out = (courtFloorOf(h, site.size)?.walk ?? site.size) + 1, p = paths.points;
+  let k = 0;
+  while (k < p.length && floorGap(R, site.theta, site.s, p[k], p[k + 1]) <= out) k += 2;
+  // The paths' first point outside, by its angle round the court in the court's frame (x along the axis, y around).
+  const ring = Math.max(1, h.profile.at(site.s).r), dth = k < p.length ? p[k] - site.theta - TURN * Math.round((p[k] - site.theta) / TURN) : 0;
+  const pass = k < p.length ? courtWayOut(ground, court, Math.atan2(dth * ring, p[k + 1] - site.s))! : courtPassageOf(ground, court)!;
+  const last = pass[pass.length - 2], shift = k < p.length ? TURN * Math.round((last - p[k]) / TURN) : 0;
+  const all = new Float64Array(pass.length + p.length - k);
+  all.set(pass);
+  for (let i = k; i < p.length; i += 2) { all[pass.length + i - k] = p[i] + shift; all[pass.length + i - k + 1] = p[i + 1]; }
+  return routeThrough(h, all);
+}
+
+/** A route through points (θ, s, …). */
+function routeThrough(h: Habitat, points: Float64Array): Route {
+  const n = points.length / 2, along = new Float64Array(n);
+  for (let i = 1; i < n; i++) along[i] = along[i - 1] + Math.hypot((points[i * 2] - points[i * 2 - 2]) * h.radius, points[i * 2 + 1] - points[i * 2 - 1]);
+  return { points, along, length: n ? along[n - 1] : 0 };
+}
+
+/** Routes through the courts, kept per terrain (a bounded number). */
+const passages = new WeakMap<Terrain, Map<number, Route>>();
+
 /** Where outing n of a court's day is at clock time t, or null if it is not up on the land then. */
-function placeOf(h: Habitat, o: Outings, n: number, court: number, day: number, t: number): Person | null {
+function placeOf(h: Habitat, o: Outings, n: number, court: number, day: number, t: number, ground?: Terrain): Person | null {
   const u = t - o.start[n], stay = o.stay[n];
   if (u < 0 || u > stay) return null;
   const v = venuesOf(h), place = v.venues[o.venue[n]], i = o.resident[n], R = h.radius;
@@ -406,8 +462,11 @@ function placeOf(h: Habitat, o: Outings, n: number, court: number, day: number, 
   const night = o.night[n] === 1, bench = FORMS[o.form[n]] === 'bench';
   const activity: Activity = bench ? 'bench' : night && place.activity !== 'watch' ? 'stargaze' : place.activity;
   const form: Form = night && !bench ? 'row' : FORMS[o.form[n]];
-  const route = routeOf(h, v.courtVertex[court], place.vertex);
   const [st, ss, facing] = memberSpot(h, place, form, activity, lead, member, size, day);
+  // A spot in a court is reached round its aisle (by its angle in the court's frame: x along the axis, y around).
+  const site = v.courts[court], ring = Math.max(1, h.profile.at(site.s).r), dth = st - site.theta - TURN * Math.round((st - site.theta) / TURN);
+  const inside = place.kind === 'court' && floorGap(R, site.theta, site.s, st, ss) < site.size ? Math.atan2(dth * ring, ss - site.s) : null;
+  const route = wayOf(h, ground, court, place.vertex, inside);
   // Two abreast along the paths (each keeps their side of the way they walk), then each to their spot over the land.
   const back = u > stay / 2, [across, behind] = walkSlot(member, size), side = back ? -across : across;
   const end = pointAlong(route, R, route.length);
@@ -536,9 +595,11 @@ export function talkerAt(p: Pick<Person, 'court' | 'outing' | 'member' | 'size'>
 
 /**
  * Everyone up on the land at clock time t (s), or only those within an area. Each court's day is made once and kept
- * (a bounded number), routes too; asking for an area looks only at the courts whose people can reach it.
+ * (a bounded number), routes too; asking for an area looks only at the courts whose people can reach it. `ground`: the
+ * terrain, so people come up out of the courts' lifts and climb their stairs (`wayOf`); every level that draws people
+ * passes it, so they agree on where everyone is.
  */
-export function peopleAt(h: Habitat, t: number, near?: Near): Person[] {
+export function peopleAt(h: Habitat, t: number, near?: Near, ground?: Terrain): Person[] {
   const out: Person[] = [], v = venuesOf(h), c = censusOf(h), R = h.radius;
   if (!v.courts.length || !c.residents) return out;
   const day = Math.floor(t / h.params.day.length);
@@ -548,7 +609,7 @@ export function peopleAt(h: Habitat, t: number, near?: Near): Person[] {
     if (!inArea(site.theta, site.s, v.reach[court])) continue;
     const o = outingsOf(h, day, court);
     for (let n = 0; n < o.resident.length; n++) {
-      const p = placeOf(h, o, n, court, day, t);
+      const p = placeOf(h, o, n, court, day, t, ground);
       if (p && inArea(p.theta, p.s, 0)) out.push(p);
     }
   }
@@ -564,11 +625,11 @@ export function peopleAt(h: Habitat, t: number, near?: Near): Person[] {
  * Someone found by `peopleAt` (their court and outing), at another clock time of the same day: where they are now, or
  * null once they have gone below. Cheap enough to ask for everyone in view every frame.
  */
-export function whereIs(h: Habitat, t: number, who: Pick<Person, 'court' | 'outing'>): Person | null {
+export function whereIs(h: Habitat, t: number, who: Pick<Person, 'court' | 'outing'>, ground?: Terrain): Person | null {
   const day = Math.floor(t / h.params.day.length);
   if (who.court < 0) return who.outing < censusOf(h).sunwalk ? sunwalkerAt(h, sunwalkersOf(h, day), who.outing, t) : null;
   const o = outingsOf(h, day, who.court);
-  return who.outing < o.resident.length ? placeOf(h, o, who.outing, who.court, day, t) : null;
+  return who.outing < o.resident.length ? placeOf(h, o, who.outing, who.court, day, t, ground) : null;
 }
 
 /** The busiest spot within an area at clock time t: the middle of the `cell`-metre square of floor with the most people. */

@@ -24,7 +24,7 @@ import { planOf } from './plan';
 import { kept, keptEach } from './kept';
 import { FLIGHT, REST, TREAD, riserAt } from './liftStair';
 import { FINISH, polar, railing, topRail } from './pavilion';
-import { Shape, floorPoint, shade, type FloorFrame, type RGB } from './shapes';
+import { Shape, floorAt, floorPoint, shade, type FloorFrame, type RGB } from './shapes';
 import { siteParts, type Site, type SiteDetail } from './siteTiles';
 
 /** A court's parts, in handrails. */
@@ -213,6 +213,79 @@ function layCourt(t: Terrain, index: number): CourtLayout | null {
     if (!within(a, used[0] - benchArc, used[1] + benchArc)) l.benches.push(a);
   }
   return l;
+}
+
+/** A walk's arcs round a court are sampled this finely (rad). */
+const ARC_STEP = 0.1;
+
+/** Walking a court's floor: points (θ, s) put at a radius and angle of its frame, and arcs round it. */
+function courtWalk(l: CourtLayout): { pts: number[]; put: (r: number, a: number) => void; arc: (r: number, a0: number, a1: number) => void; aisle: number } {
+  const frame = frameOf(l.court), pts: number[] = [];
+  const put = (r: number, a: number): void => { const p = floorAt(l.habitat, frame, r * Math.cos(a), r * Math.sin(a)); pts.push(p.theta, p.s); };
+  const arc = (r: number, a0: number, a1: number): void => {
+    const n = Math.max(1, Math.ceil(Math.abs(a1 - a0) / ARC_STEP));
+    for (let i = 1; i <= n; i++) put(r, a0 + ((a1 - a0) * i) / n);
+  };
+  // The aisle: round the paving inside the stairs and the benches.
+  const aisle = l.inner - 0.8 * l.handrail;
+  // Out of the portal's doors and a step in.
+  put(l.face - (PART.project + 0.5) * l.handrail, l.portal.angle);
+  put(aisle, l.portal.angle);
+  return { pts, put, arc, aisle };
+}
+
+const short = (d: number): number => Math.atan2(Math.sin(d), Math.cos(d));
+
+/** Out of the portal, round the aisle, up the nearer stair and out over the walk: the walk so far and the angle it left at. */
+function passage(l: CourtLayout): { w: ReturnType<typeof courtWalk>; out: number } {
+  const hr = l.handrail, mid = (l.inner + l.face) / 2, P = l.portal.angle, w = courtWalk(l);
+  const foot = (st: CourtLayout['stairs'][number]): number => st.steps.at(-1)?.a1 ?? (st.dir > 0 ? l.landing.a1 : l.landing.a0);
+  const stair = l.stairs.reduce((best, st) => (Math.abs(short(foot(st) - P)) < Math.abs(short(foot(best) - P)) ? st : best));
+  // Its foot on the paving just past the last step; the stair's angles run on from the landing, so `beyond − middle`
+  // is how far round it climbs.
+  const beyond = foot(stair) + (stair.dir * 0.6 * hr) / mid, middle = (l.landing.a0 + l.landing.a1) / 2;
+  const B = P + short(beyond - P), E = B - (beyond - middle);
+  w.arc(w.aisle, P, B);
+  w.put(mid, B);
+  w.arc(mid, B, E);
+  w.put(l.outer + hr, E);
+  return { w, out: E };
+}
+
+/**
+ * The way people take through a court (its index in `terrain.courts`), as (θ, s) points over the floor: out of the
+ * lift's portal, round the aisle to the foot of the stair nearer it (clear of the stairs and the benches), up the stair
+ * along the wall to the landing, and out over the walk onto the land beyond the rim. Its first point is before the
+ * portal's doors. Null for a court too small to stair. Made once per court.
+ */
+export const courtPassageOf: (t: Terrain, index: number) => Float64Array | null = keptEach((t: Terrain, index: number) => {
+  const l = courtLayoutOf(t, index);
+  return l && l.stairs.length ? Float64Array.from(passage(l).w.pts) : null;
+});
+
+/**
+ * The way through a court (as `courtPassageOf`) on round the outside of its rim to `angle` (round its middle, in its
+ * frame: x along the axis, y around), where a way leaves it: nobody cuts back across the court.
+ */
+export function courtWayOut(t: Terrain, index: number, angle: number): Float64Array | null {
+  const l = courtLayoutOf(t, index);
+  if (!l || !l.stairs.length) return null;
+  const { w, out } = passage(l);
+  w.arc(l.outer + l.handrail, out, out + short(angle - out));
+  return Float64Array.from(w.pts);
+}
+
+/**
+ * The way into a court from its lift (its index in `terrain.courts`) toward a spot at `angle` round its middle: out
+ * of the portal and round the aisle to that angle, from where the spot is reached straight across the paving without
+ * passing the well. Null for a court too small to stair.
+ */
+export function courtWayIn(t: Terrain, index: number, angle: number): Float64Array | null {
+  const l = courtLayoutOf(t, index);
+  if (!l || !l.stairs.length) return null;
+  const w = courtWalk(l), P = l.portal.angle;
+  w.arc(w.aisle, P, P + short(angle - P));
+  return Float64Array.from(w.pts);
 }
 
 /** Detail a court is built at; `solid` is what the physics touches. */

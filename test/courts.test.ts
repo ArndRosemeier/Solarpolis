@@ -2,7 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MATRIX, fromWorld } from '../src/blueprint';
 import type { Terrain } from '../src/gen/terrain';
-import { buildCourt, courtLayoutOf, courtSites, courtWorld, rimAt, type CourtLayout } from '../src/gen/courts';
+import { buildCourt, courtLayoutOf, courtPassageOf, courtSites, courtWorld, rimAt, type CourtLayout } from '../src/gen/courts';
+import { floorAt } from '../src/gen/shapes';
+import { floorGap, peopleAt, venuesOf } from '../src/sim';
 import { childrenOf, rootTiles, type TileKey } from '../src/gen/detailTree';
 import { keptClear, landmarkTopAt } from '../src/gen/landmarks';
 import { buildPatch } from '../src/gen/patch';
@@ -103,5 +105,35 @@ for (const { name, params } of MATRIX) {
     // A patch at the portal holds the court's walls and doors besides its ground.
     const plain = Math.pow(Math.round(20 / 2), 2) * 2, p = at(l.face, l.portal.angle), patch = buildPatch(t, p.theta, p.s, 20, 2);
     assert.ok(patch.index.length / 3 > plain + 50, `${patch.index.length / 3} triangles in the patch`);
+  });
+}
+
+for (const { name, params } of MATRIX) {
+  test(`courts (${name}): people come up out of the lift, climb a stair and leave over the walk, never over the well`, () => {
+    const t = terrainOf(name, params), h = t.habitat, R = h.radius, v = venuesOf(h);
+    if (!params.landmarks) { assert.equal(courtPassageOf(t, 0), null); return; }
+    assert.deepEqual(t.courts.map((c) => [c.theta, c.s]), v.courts.map((c) => [c.theta, c.s]), 'the terrain digs the venues\' courts, in their order');
+    const step = Math.max(1, Math.floor(t.courts.length / 12));
+    for (let i = 0; i < t.courts.length; i += step) {
+      const l = courtLayoutOf(t, i)!, c = l.court, pass = courtPassageOf(t, i)!, n = pass.length / 2;
+      const gap = (k: number): number => floorGap(R, c.theta, c.s, pass[k * 2], pass[k * 2 + 1]);
+      // Out of the portal's doors; out past the walk; never on the seat round the well.
+      const door = floorAt(h, { theta: c.theta, s: c.s, height: c.floor, heading: 0 }, l.face * Math.cos(l.portal.angle), l.face * Math.sin(l.portal.angle));
+      assert.ok(floorGap(R, door.theta, door.s, pass[0], pass[1]) < 2 * l.handrail, 'the way starts at the portal');
+      assert.ok(gap(n - 1) > l.outer, 'the way ends past the walk');
+      for (let k = 0; k < n; k++) assert.ok(gap(k) > l.well + l.kerb && gap(k) <= l.outer + l.handrail + 1e-6, 'the way keeps off the well and in the court');
+      // It climbs to the landing: the highest top along it is the landing's.
+      let top = -Infinity;
+      for (let k = 0; k < n - 1; k++) top = Math.max(top, (landmarkTopAt(t, pass[k * 2], pass[k * 2 + 1]) ?? -Infinity) - c.floor);
+      assert.ok(Math.abs(top - l.landing.top) < 0.05 * l.handrail, `up to the landing (${top.toFixed(2)} of ${l.landing.top.toFixed(2)} m)`);
+    }
+    // Nobody up on the land walks over a court's well: walkers in a court are on its way through (round a few courts).
+    const day = params.day.length;
+    for (let i = 0; i < t.courts.length; i += step * 4) {
+      const c = v.courts[i], well = courtLayoutOf(t, i)!.well;
+      for (const p of peopleAt(h, 3 * day + 7 * 3600, { theta: c.theta, s: c.s, radius: c.size }, t)) {
+        if (p.moving) assert.ok(floorGap(R, c.theta, c.s, p.theta, p.s) > well, 'someone walks over a light well');
+      }
+    }
   });
 }
