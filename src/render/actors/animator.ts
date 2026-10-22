@@ -94,6 +94,7 @@ const ACTION_CLIPS: Record<string, string> = {
   cast_forward: 'spell cast',
   cheer: 'spell raise',
   talk: 'talk',
+  eat: 'eat or drink',
   throw: 'throw',
   pickup: 'pick up',
   harvest: 'harvest',

@@ -35,6 +35,8 @@ import { floorGap, pointAlong, sunwalkOf, walksOf, type Route } from './walks';
 import { besideLake, venuesOf, type Activity, type Venue, type Venues } from './venues';
 import { courtFloorOf, courtPassageOf, courtWayIn, courtWayOut } from '../gen/courts';
 import type { Terrain } from '../gen/terrain';
+import { POSE } from '../gen/standIn';
+import { beatAt, type Act } from './beats';
 
 const TURN = 2 * Math.PI;
 const WEEK = 7;
@@ -76,7 +78,16 @@ export interface Person {
   /** Their place in their party (0 is the one who chose where to go: `outing − member` is theirs), and its size. */
   member: number;
   size: number;
+  /** What they do in the beat they are in (sim/beats.ts; `walk` on their way). */
+  act: Act;
+  /** How they hold themselves (`POSE`), how they did before it last changed, and how long ago that was (s). */
+  posture: number;
+  from: number;
+  since: number;
 }
+
+/** Someone on their way: upright, as they have been for long. */
+const ON_THE_WAY = { act: 'walk', posture: POSE.upright, from: POSE.upright, since: 1e6 } as const;
 
 /**
  * How a party stands at its place: loosely near each other, in a ring facing in (to talk, to dance, round a workbench),
@@ -103,6 +114,8 @@ const BEHIND = 1.2;
 /** Of the parties that meet at a court, the share that sits on the seat round its light well; of those standing, the share down on its floor. */
 const ON_SEAT = 0.4;
 const ON_FLOOR = 0.6;
+/** How far a party strolls off its spot at most: this share of its place's spread, within these bounds (m). */
+const STROLL = { share: 0.5, least: 8, most: 60 };
 
 /** A party's size from a draw in [0, 1) by the habitat's shares. */
 function partySize(shares: readonly number[], pick: number): number {
@@ -157,7 +170,7 @@ function normal(seed: number, a: number, b: number, c: number): number {
 /** The population's seeds, derived once per habitat (hashing their names each time would cost more than the rest). */
 const seedsOf = kept((h: Habitat) => {
   const of = (name: string): number => deriveSeed(h.seed, 'life', name);
-  return { resident: of('resident'), outing: of('outing'), rhythm: of('rhythm'), spot: of('spot'), face: of('face'), sunwalk: of('sunwalk') };
+  return { resident: of('resident'), outing: of('outing'), rhythm: of('rhythm'), spot: of('spot'), face: of('face'), sunwalk: of('sunwalk'), beat: of('beat') };
 });
 
 function makeCensus(h: Habitat): Census {
@@ -480,14 +493,30 @@ function placeOf(h: Habitat, o: Outings, n: number, court: number, day: number, 
   let d: number;
   if (u < legs) d = u * pace - behind;
   else if (u > stay - legs) d = (stay - u) * pace - behind;
-  else return { resident: i, theta: st, s: ss, heading: facing, moving: false, speed: 0, activity, court, outing: n, member, size };
+  else {
+    // At their place: the party's beat, now (a stroll takes them off their spot and back).
+    const reach = Math.min(STROLL.most, Math.max(STROLL.least, place.spread * STROLL.share));
+    const b = beatAt(seedsOf(h).beat, activity, lead, day, u, legs, stay - legs, pace, reach);
+    let toward = b.toward, off = b.away > 0;
+    // Nobody strolls into the lake who did not come to swim: the other way, or not at all.
+    const lake = planOf(h).lake, wet = (a: number): boolean => !!lake && activity !== 'swim' && fromLake(lake, ss + Math.cos(a) * reach) < 0;
+    if (off && wet(toward)) { toward += Math.PI; if (wet(toward)) off = false; }
+    const away = off ? b.away : 0, moving = off && b.moving, act: Act = b.act === 'stroll' && !off ? 'quiet' : b.act;
+    // Looking about where they stand faces away from the ring; at the end of a stroll, on the way they went.
+    const heading = moving ? toward + (b.back ? Math.PI : 0) : off ? toward : act === 'look' && form === 'ring' ? facing + Math.PI : facing;
+    const ring = Math.max(1, h.profile.at(ss).r);
+    return {
+      resident: i, theta: st + (away * Math.sin(toward)) / ring, s: ss + away * Math.cos(toward), heading, moving, speed: moving ? pace : 0,
+      activity, court, outing: n, member, size, act, posture: b.posture, from: b.from, since: b.since,
+    };
+  }
   d = Math.min(whole, Math.max(0, d));
   if (d <= route.length) {
     const p = pointAlong(route, R, d);
-    return { resident: i, theta: p.theta + (side * Math.cos(p.heading)) / R, s: p.s - side * Math.sin(p.heading), heading: back ? p.heading + Math.PI : p.heading, moving: true, speed: pace, activity: 'walk', court, outing: n, member, size };
+    return { resident: i, theta: p.theta + (side * Math.cos(p.heading)) / R, s: p.s - side * Math.sin(p.heading), heading: back ? p.heading + Math.PI : p.heading, moving: true, speed: pace, activity: 'walk', court, outing: n, member, size, ...ON_THE_WAY };
   }
   const f = (d - route.length) / Math.max(off, 1e-9), heading = Math.atan2(dt * R, ss - ls);
-  return { resident: i, theta: lt + dt * f, s: ls + (ss - ls) * f, heading: back ? heading + Math.PI : heading, moving: true, speed: pace, activity: 'walk', court, outing: n, member, size };
+  return { resident: i, theta: lt + dt * f, s: ls + (ss - ls) * f, heading: back ? heading + Math.PI : heading, moving: true, speed: pace, activity: 'walk', court, outing: n, member, size, ...ON_THE_WAY };
 }
 
 function sunwalkThetaAt(p: Float64Array, s: number): number {
@@ -564,7 +593,7 @@ function sunwalkerAt(h: Habitat, w: Sunwalkers, j: number, t: number, near?: Nea
   // They keep pace along the axis; where the Sunwalk winds, their way over the floor is longer and they walk faster.
   const theta = sunwalkThetaAt(walk, s), turn = (sunwalkThetaAt(walk, s + 1) - sunwalkThetaAt(walk, s - 1)) / 2;
   const across = h.radius * (turn - TURN * Math.round(turn / TURN));
-  return { resident: w.resident[j], theta: theta + w.side[j], s, heading: Math.atan2(across, 1), moving: true, speed: w.speed[j] * Math.hypot(1, across), activity: 'sunwalk', court: -1, outing: j, member: w.member[j], size: w.size[j] };
+  return { resident: w.resident[j], theta: theta + w.side[j], s, heading: Math.atan2(across, 1), moving: true, speed: w.speed[j] * Math.hypot(1, across), activity: 'sunwalk', court: -1, outing: j, member: w.member[j], size: w.size[j], ...ON_THE_WAY };
 }
 
 /** An area to look in: around (θ, s) out to `radius` m over the floor. */

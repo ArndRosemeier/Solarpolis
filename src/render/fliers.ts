@@ -199,7 +199,7 @@ export class FlierView {
         id: -1, role: 'person', design: a.resident.design, theta: p.theta, s: p.s, h: foot.h, heading: p.heading,
         speed: p.moving ? p.speed : 0, climb: 0, doing: p.moving ? 'fly' : 'work',
       }, one.flier ? dt : 0);
-      const talking = !p.moving && talkerAt(p, t) === p.member;
+      const talking = !p.moving && p.act === 'talk' && talkerAt(p, t) === p.member;
       this.write(one, d, frame, talking ? NOD * Math.sin((2 * Math.PI * (t + one.phase)) / NOD_EVERY) : 0);
       this.near.push(a.key);
       here.add(a.key);
