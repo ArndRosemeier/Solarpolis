@@ -2,6 +2,15 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.095 — Eyes and real skin on people; the shader monitor names repeated shaders
+
+- The debug menu's shader line now says how many shaders were built again with exactly the same code after the loading screen, and `shaders.repeats()` lists them, the costliest first. Each one is a thing that builds its shader per copy instead of once, the usual reason stutters come back.
+- Eyes and photo skins show on every person again: the shared renderer now swaps in each figure's own textures (they stayed on a white placeholder).
+
+## v0.094 — Actors 0.6.6: one shader for everybody
+
+- Actors 0.6.6 fits face morphs into WebGPU's vertex buffer limit, so every person shares one shader per material kind again: new people near you need far fewer shader builds.
+
 ## v0.093 — A finer lift cabin, and a shaft you can't see out of
 
 - The lift shaft now rises above the cabin waiting at the top, so you no longer see out over the backs of the vaults before you ride down.
