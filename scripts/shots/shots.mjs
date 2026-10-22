@@ -24,6 +24,8 @@ const REPO = resolve(HERE, '../..');
 const WORK = join(REPO, '.render');
 /** How many result sets the `renders` branch keeps. */
 const KEEP = 20;
+/** After this many sets on top of each other the `renders` history starts again from one commit. */
+const SQUASH = 15;
 const BRANCH = 'renders';
 
 // ---- arguments -------------------------------------------------------------------------------------
@@ -300,7 +302,7 @@ async function capture(browser, url, name, view, out, opts) {
 }
 
 // ---- publishing --------------------------------------------------------------------------------------------
-/** Put `out` at `<id>/` on the `renders` branch as one parentless commit (the latest KEEP sets), and push it. */
+/** Put `out` at `<id>/` on the `renders` branch (the latest KEEP sets) on top of the last one, and push it. */
 function publish(out, id, summary) {
   const index = join(WORK, 'publish.index');
   rmSync(index, { force: true });
@@ -323,9 +325,18 @@ function publish(out, id, summary) {
   writeFileSync(indexFile, JSON.stringify(keep, null, 2) + '\n');
   add(indexFile, 'index.json');
   const tree = git(['write-tree'], REPO, env);
-  const commit = git(['commit-tree', tree, '-m', `renders: ${id}`], REPO);
-  // PNGs do not delta: without this, packing searched deltas against the whole branch (hundreds of MB) for minutes.
-  git(['-c', 'pack.window=0', '-c', 'core.bigFileThreshold=256k', 'push', '--quiet', '--force', 'origin', `${commit}:refs/heads/${BRANCH}`]);
+  // On top of the last set, so the push sends only the new files: a commit without a parent makes git send the whole
+  // tree (hundreds of MB, minutes of upload). Every SQUASH sets the history starts again from one commit, so the branch
+  // stays the latest KEEP sets plus a short history.
+  let parent = null;
+  try { parent = git(['rev-parse', '--verify', `refs/shots/${BRANCH}^{commit}`]); } catch { /* the first set */ }
+  const depth = parent ? Number(git(['rev-list', '--count', parent])) : 0;
+  const args = parent && depth < SQUASH ? ['-p', parent] : [];
+  const commit = git(['commit-tree', tree, ...args, '-m', `renders: ${id}`], REPO);
+  if (!args.length) log(`publishing ${BRANCH} as one fresh commit (history reset): this push carries every kept set`);
+  // PNGs do not delta: searching for deltas only costs time.
+  execFileSync('git', ['-c', 'pack.window=0', '-c', 'core.bigFileThreshold=256k', 'push', '--quiet', '--force', 'origin', `${commit}:refs/heads/${BRANCH}`],
+    { cwd: REPO, stdio: ['ignore', 'pipe', 'pipe'], timeout: 1_800_000 });
   rmSync(index, { force: true });
   return commit;
 }
