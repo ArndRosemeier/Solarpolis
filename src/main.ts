@@ -31,6 +31,8 @@ import type { Terrain } from './gen/terrain';
 import { floorAt, floorPoint, outOfPlace, placeAt, type FloorFrame } from './gen/shapes';
 import { crossingsOf, type Crossing, type CrossingKind } from './gen/crossings';
 import { landformOf, planOf, type GroundForm } from './gen/plan';
+import { WORK_KINDS, isDug, type Work, type WorkKind } from './gen/works';
+import { angleDiff } from '@futuremagic/core';
 import { baysOfHamlet, underOf, type Hamlet } from './gen/under';
 import { HALL_KINDS, hallAt } from './gen/halls';
 import { doorToward } from './gen/homes';
@@ -669,6 +671,38 @@ debug.add({
     if (v && g) v.goTo(g.theta, g.s, 0);
   },
 });
+/**
+ * The districts' works (gen/works.ts): each press floats by the work of the next kind (in `WORK_KINDS` order) nearest
+ * the eye, two of its radii off and half of one up, looking at its middle; a work that faces along the axis is seen
+ * from its face's side. The line names what it is and who made it.
+ */
+let workTurn = -1, workSeen = '';
+debug.add({
+  label: 'Fly: the next district work', group: 'Go', run: () => {
+    const v = view(), t = v?.ecology?.terrain, h = lab.habitat;
+    if (!v || !t || !h) return;
+    const plan = planOf(h), kinds = Object.keys(WORK_KINDS) as WorkKind[], R = h.radius, at = v.walker.at;
+    for (let k = 1; k <= kinds.length; k++) {
+      const kind = kinds[(workTurn + k) % kinds.length];
+      const w = plan.works.filter((x) => x.kind === kind).reduce<Work | undefined>((a, x) => {
+        const d = (y: Work): number => Math.hypot(angleDiff(at.theta, y.theta) * R, y.s - at.s);
+        return !a || d(x) < d(a) ? x : a;
+      }, undefined);
+      if (!w) continue;
+      workTurn = (workTurn + k) % kinds.length;
+      const style = w.district >= 0 ? `the ${plan.districts[w.district].style} district ${w.district}` : 'the wild reserve';
+      workSeen = `${w.kind}, ${w.height.toFixed(0)} m ${isDug(w) ? 'deep' : 'high'}, ${(w.radius * 2).toFixed(0)} m across, made by ${style}`;
+      const dir = WORK_KINDS[kind].axial ? -1 : 1, du = Math.sin(w.facing) * dir, dv = Math.cos(w.facing) * dir;
+      const et = w.theta + (du * w.radius * 2) / R, es = w.s + dv * w.radius * 2;
+      const eye = toWorld(h.profile, { theta: et, s: es, h: t.heightAt(et, es) + w.radius * 0.5 });
+      const { theta, s } = w, mid = toWorld(h.profile, { theta, s, h: t.heightAt(theta, s) });
+      const d = Math.hypot(mid[0] - eye[0], mid[1] - eye[1], mid[2] - eye[2]);
+      v.floatAt(eye, [(mid[0] - eye[0]) / d, (mid[1] - eye[1]) / d, (mid[2] - eye[2]) / d]);
+      return;
+    }
+  },
+});
+debug.addInfo(() => (workSeen ? `work: ${workSeen}` : ''));
 /** The founders' grove (gen/planted.ts). */
 const grove = (): { v: InteriorView; g: Grove } | null => {
   const f = inView((t) => plantingsOf(t).groves[0]);

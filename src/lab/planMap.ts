@@ -2,7 +2,8 @@
  * The habitat plan drawn as maps from above (the Blueprint tab's "Land plan"): the floor unrolled (the wild end left,
  * the port end right, once round the axis top to bottom) and each endcap face-on, as seen from the floor. Colours say
  * what the plan made of the land: the reserve, each district's style, the Gate's faces, the Mountain's gravity bands
- * and its snow; lines are the planned rivers, the Sunwalk, the ways and the trail; dots the entrances and landmarks.
+ * and its snow, the landforms and the districts' works shaded by height; lines are the planned rivers, the Sunwalk,
+ * the ways and the trail; dots the entrances and landmarks.
  *
  * Plain arrays, no DOM: the Lab puts them on a canvas, and a script can write them out as pictures.
  */
@@ -83,6 +84,12 @@ function colorAt(plan: Plan, theta: number, s: number, out: number[]): number {
   // The landforms (the Rings, the Heights) lighter the higher they stand, with a contour every fifth of their height.
   const on = c === LAKE || s < profile.floorStart || s > profile.floorEnd ? null : plan.landformAt(theta, s);
   if (on) k *= (1 + 0.35 * on.share) * (on.share * 5 - Math.floor(on.share * 5) < 0.08 ? 0.7 : 1);
+  // The districts' works (gen/works.ts): lighter where raised, darker where dug, a contour every quarter of their height.
+  const w = c === LAKE || s < profile.floorStart || s > profile.floorEnd ? null : plan.workOf(theta, s);
+  if (w) {
+    const u = plan.worksAt(theta, s) / w.height, q = Math.abs(u) * 4;
+    k *= (1 + 0.3 * u) * (Math.abs(u) > 0.03 && q - Math.floor(q) < 0.12 ? 0.75 : 1);
+  }
   out[0] = c[0] * k; out[1] = c[1] * k; out[2] = c[2] * k;
   return id * 8 + (valley & 7);
 }

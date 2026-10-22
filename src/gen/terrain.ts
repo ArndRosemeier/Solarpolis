@@ -49,10 +49,15 @@ export interface Terrain {
   /** Which of a Gate face's terraces a point of the port endcap lies on, or null off the faces (the buttresses, the floor). */
   terraceAt(theta: number, s: number): GateTerrace | null;
   /**
-   * How high a landform the plan built (a Ring, a Height: `Landform.landformAt`) raises the land at a point, its
-   * terraces and rock included (m; 0 off them). It is hollow: the Understorey's deck keeps to the land under it.
+   * How high a landform the plan built (a Ring, a Height: `Landform.landformAt`) and a district's work (gen/works.ts)
+   * raise the land at a point, a Ring's terraces and a Height's rock included (m; 0 off them; a dug work lowers it).
    */
   builtAt(theta: number, s: number): number;
+  /**
+   * How much of the land at a point is built volume the living layer keeps under (m): a landform's designed top and a
+   * raised work's; hollow, so the Understorey's deck keeps to the land under them (a dug work it follows down).
+   */
+  hollowAt(theta: number, s: number): number;
 }
 
 /**
@@ -95,6 +100,12 @@ export const GATE_TERRACES: Readonly<Record<FaceKind, { step: number; wander: nu
  * valley is a long room with a broad meadow floor, its river down the middle, and rolling woods up its sides.
  */
 export const FLOOR_VALLEYS = { ridge: 1.2, floor: 0.45 };
+/**
+ * The wild's bolder relief (`relief.landforms.wild`): up a valley's sides the hills grow that many times higher again
+ * where the land is let be, fading in from `care` (`Landform.careAt`) down to the reserve's 0. The valleys' floors, where
+ * the rivers and the Sunwalk run, stay as gentle as they were.
+ */
+export const WILD_RELIEF = { care: 0.4 };
 
 /**
  * The Rings' fronts (gen/plan.ts), cut in terraces like the Gate's Vine face at the floor's scale: the step as a share
@@ -163,7 +174,7 @@ export function makeTerrain(h: Habitat): Terrain {
   const hillWave = Math.max(hills * 40, 1);
   const step = relief.terraceStep;
 
-  const form = landformOf(h), lake = form.lake;
+  const form = landformOf(h), lake = form.lake, plan = planOf(h), wildBoost = relief.landforms?.wild ?? 0;
   const massif = relief.massif, R = h.radius;
   const cragNoise = new Noise(deriveSeed(h.seed, 'terrain', 'crags'));
   const hornS = form.endcapAt(true, HORN.gravity), hornRadius = Math.max(massif * HORN.radius, 1e-6);
@@ -316,7 +327,9 @@ export function makeTerrain(h: Habitat): Terrain {
       const n = noise.fbm3(x / hillWave, y / hillWave, z / hillWave, 5);
       // Up a valley's sides to the ridge: the land rises, and the hills roll more than on the valley's floor.
       const side = form.valleys > 1 ? smoothstep(0.15, 0.95, form.ridgeAt(theta, s)) : 0;
-      let hill = hills * Math.pow(smoothstep(-0.25, 0.85, n), 1.6) * (FLOOR_VALLEYS.floor + (1 - FLOOR_VALLEYS.floor) * side);
+      // In the wild the valleys' sides rise bolder (the reserve, and land let go toward it).
+      const wild = wildBoost > 0 ? 1 + wildBoost * (1 - smoothstep(0, WILD_RELIEF.care, form.careAt(s))) : 1;
+      let hill = hills * Math.pow(smoothstep(-0.25, 0.85, n), 1.6) * (FLOOR_VALLEYS.floor + (1 - FLOOR_VALLEYS.floor) * side * wild);
       // A Height's top is a garden, kept level: the hills die away on it.
       if (on && on.form.kind === 'height') hill *= 1 - smoothstep(0.85, 1, on.share);
       hill += hills * FLOOR_VALLEYS.ridge * side;
@@ -325,6 +338,8 @@ export function makeTerrain(h: Habitat): Terrain {
       height += f * hill;
     }
     raised = on ? f * formAt(on, x, y, z, height) : 0;
+    // The districts' works (gen/works.ts), raised or dug.
+    if (f > 0 && plan.works.length) raised += f * plan.worksAt(theta, s);
     height += raised;
     const k = inLake(s);
     if (k !== null && k > 0 && lake) height -= lake.depth * Math.sqrt(smoothstep(0, 0.6, k));
@@ -471,6 +486,10 @@ export function makeTerrain(h: Habitat): Terrain {
     landAt(theta, s);
     return raised;
   };
+  const hollowAt = (theta: number, s: number): number => {
+    const f = onFloor(s);
+    return f > 0 ? f * ((form.landformAt(theta, s)?.top ?? 0) + Math.max(0, plan.worksAt(theta, s))) : 0;
+  };
 
-  return { habitat: h, form, lake, rivers, riverAt: inRiver, heightAt, standAt, waterDepth, courtAt, courts: courts.map((c) => c.court), terraceAt, builtAt };
+  return { habitat: h, form, lake, rivers, riverAt: inRiver, heightAt, standAt, waterDepth, courtAt, courts: courts.map((c) => c.court), terraceAt, builtAt, hollowAt };
 }

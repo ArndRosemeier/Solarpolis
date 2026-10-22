@@ -72,11 +72,11 @@ function makeLevels(terrain: Terrain): UnderLevels {
       return v;
     };
   };
-  // The ground the deck lies under. A landform the plan built (a Ring, a Height: `landformAt`) is hollow: the deck
-  // keeps to the land under it, and the landform's height is a great hall over the layer. (Its designed surface: the
-  // rock and terraces the terrain cuts into it stay in the soil over the hall.)
-  const form = terrain.form;
-  const deckLand = (theta: number, s: number): number => terrain.heightAt(theta, s) - (form.landformAt(theta, s)?.top ?? 0);
+  // The ground the deck lies under. A landform the plan built (a Ring, a Height: `landformAt`) and a district's raised
+  // work are hollow (`Terrain.hollowAt`): the deck keeps to the land under them, and their height is a great hall over
+  // the layer. (Their designed surface: the rock and terraces the terrain cuts into a landform stay in the soil over the
+  // hall.) A dug work the deck follows down.
+  const deckLand = (theta: number, s: number): number => terrain.heightAt(theta, s) - terrain.hollowAt(theta, s);
   // A bay's lowest ground; past the floor's ends, the end row's.
   const lowest = cached((i, j) => {
     const jj = Math.min(along - 1, Math.max(0, j));

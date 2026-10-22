@@ -181,6 +181,10 @@ export const views = {
   'ring-far': { query: 'view=inside', about: 'the nearest Ring from far off toward the port: a ridge across the floor and up round the curve', settle: 6000, steps: [{ debug: 'Fly: the nearest Ring from far off' }, { wait: 14000 }] },
   'height-far': { query: 'view=inside', about: 'the tallest Height from a few kilometres off: sheer rock flanks, its plateau', settle: 6000, steps: [{ debug: 'Fly: the tallest Height from far off' }, { wait: 14000 }] },
   'height-top': { query: 'view=inside', about: 'standing on the tallest Height\'s top, looking out along the cylinder, then down its flank', settle: 6000, steps: [{ debug: 'To the top of the tallest Height' }, { wait: 12000 }, { shot: 'out' }, { look: [900, 260] }, { wait: 1500 }] },
+  // The districts' works (gen/works.ts): each press of the Go entry moves to the next kind, nearest the eye.
+  works: { query: 'view=inside', about: 'the districts\' works, one kind after another, each from two of its radii off: pyramid, cone, sunken court, mesa, fold, dome, down, scarp, vale, bowl, stepwell, half-pipe, amphitheatre, ramp, drumlin, tor', settle: 6000, steps: [
+    ...['pyramid', 'cone', 'sunken', 'mesa', 'fold', 'dome', 'down', 'scarp', 'vale', 'bowl', 'stepwell', 'halfpipe', 'amphitheatre', 'ramp', 'drumlin', 'tor'].flatMap((kind) => [{ debug: 'Fly: the next district work' }, { wait: 9000 }, { shot: kind }]),
+  ] },
   'far-meadow-up': { query: 'view=inside', about: 'standing in a meadow, looking up at the far side', settle: 6000, steps: [{ debug: 'Into the nearest meadow' }, { wait: 5000 }, { look: [0, -260] }, { wait: 3000 }] },
   outside: { query: 'view=outside', about: 'the home habitat from outside', default: true },
   'outside-earth': { query: 'view=outside', about: 'looking at Earth (key 2)', steps: [{ key: 'Digit2' }, { wait: 3000 }] },

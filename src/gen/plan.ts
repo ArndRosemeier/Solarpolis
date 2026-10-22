@@ -16,6 +16,8 @@
  *             whole cylinder across its axis that part the floor into landscape rooms, and the Heights, lone mounts on
  *             the ridges between the valleys (`GroundForm`, `landformAt`);
  *   sites     the entrances down to the living layer and the landmarks (`Site`);
+ *   works     the ground each district shaped in its style inside that frame (gen/works.ts: stone pyramids, makers'
+ *             mesas, orchard domes, herd downs, grove vales, water bowls, play half-pipes, let-go drumlins …);
  *   paths     the Sunwalk (the long path along the main valley, walked with the travelling sun), the ways between the
  *             entrances, the trail up the Mountain.
  *
@@ -28,6 +30,7 @@ import { cultureOf, type Culture, type DistrictStyle, type FaceKind, type Habita
 import { kept } from './kept';
 import { fileUnder, floorGrid } from './floorGrid';
 import { baysOf } from './bays';
+import { STYLE_WORKS, WORKS, WORK_KINDS, workAt, type Work, type WorkKind } from './works';
 
 const TURN = 2 * Math.PI;
 
@@ -220,6 +223,22 @@ export interface Plan extends Landform {
    * and the district across that border; null where `districtAt` is.
    */
   borderAt(theta: number, s: number): { district: District; other: District; edge: number } | null;
+  /** Whether a point lies in district `d`, at least `margin` metres inside its borders. */
+  inside(d: District, theta: number, s: number, margin: number): boolean;
+  /** The districts' works (gen/works.ts): the ground each district shaped in its style, the ways bent round them. */
+  readonly works: readonly Work[];
+  /** The works' designed surface over the land at a point (m: up where one raises it, down where one is dug; else 0). */
+  worksAt(theta: number, s: number): number;
+  /** The work whose footprint holds a point, or null. */
+  workOf(theta: number, s: number): Work | null;
+}
+
+/** Something a way goes round: a court or a district's work, kept `keep` metres off its middle. */
+interface Obstacle {
+  theta: number;
+  s: number;
+  keep: number;
+  work: boolean;
 }
 
 /** Brings an angle into [−π, π] (the shortest turn to it). */
@@ -624,6 +643,10 @@ export function makePlan(h: Habitat): Plan {
     }
     return { district: own, other, edge };
   };
+  const inside = (d: District, theta: number, s: number, margin: number): boolean => {
+    const at = borderAt(theta, s);
+    return !!at && at.district === d && at.edge >= margin;
+  };
   // Neighbours: the grid's eight around (wrapping around the axis), when there is more than one column.
   for (const k of districts) {
     const r = Math.floor(k.id / columns), c = k.id % columns, seen = new Set<number>();
@@ -739,6 +762,110 @@ export function makePlan(h: Habitat): Plan {
   }
   paths.push({ kind: 'trail', width: widths.trail, points: Float64Array.from(trail) });
 
+  // The things a way goes round, filed by cell over the floor unrolled (a spacing wide): every court but its own ends'
+  // (nobody walks down into another hamlet's court and over its light well), and the districts' works. Each keeps a way
+  // `keep` metres from its middle.
+  const courtCell = Math.max(spacing, 1), courtColumns = Math.max(1, Math.floor((TURN * R) / courtCell));
+  const courtKey = (column: number, row: number): number => row * courtColumns + (((column % courtColumns) + courtColumns) % courtColumns);
+  const courtFiles = new Map<number, Obstacle[]>();
+  const columnOf = (theta: number): number => Math.floor((((theta % TURN) + TURN) % TURN) * R / courtCell);
+  const keepOff = (e: Site): number => e.size + COURT.clear * (h.params.landmarks?.handrail ?? 0) + widths.way;
+  const fileObstacle = (o: Obstacle): void => fileUnder(courtFiles, courtKey(columnOf(o.theta), Math.floor(o.s / courtCell)), o);
+  for (const e of placed) fileObstacle({ theta: e.theta, s: e.s, keep: keepOff(e), work: false });
+  /** The obstacles near a point, but the courts at `a` and `b`. */
+  const obstaclesNear = (theta: number, s: number, a?: { theta: number; s: number }, b?: { theta: number; s: number }): Obstacle[] => {
+    const out: Obstacle[] = [], column = columnOf(theta), row = Math.floor(s / courtCell);
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) for (const e of courtFiles.get(courtKey(column + dc, row + dr)) ?? []) {
+      if (a && b && ((e.theta === a.theta && e.s === a.s) || (e.theta === b.theta && e.s === b.s))) continue;
+      out.push(e);
+    }
+    return out;
+  };
+
+  // The districts' works (gen/works.ts): each district shapes up to `WORKS.perDistrict` pieces of its ground in the
+  // kinds of its style, in turn, thrown inside it: wholly in the district, clear of the courts, the Sunwalk, the rivers'
+  // lines, the lake, the founders' grove, each other, the Heights and the Rings' fronts and crests (a work may stand on
+  // a Ring's long slope). Sizes are shares of the tallest (`landforms.works` radii), the footprint at most `WORKS.reach`
+  // of the entrance spacing; how crisply each is kept follows its district's care. Those that face along the axis do,
+  // one way or the other.
+  const works: Work[] = [];
+  const workScale = (params.relief.landforms?.works ?? 0) * R, workReach = spacing * WORKS.reach;
+  const grove = landmarks.find((l) => l.kind === 'founders-grove');
+  const onLand = (theta: number, s: number): boolean => {
+    const on = landformAt(theta, s);
+    return !on || (on.form.kind === 'ring' && on.face <= 0 && on.share < 0.5);
+  };
+  /** Whether a work fits at a point: in district `k` (or the reserve, for null), clear of everything above. */
+  const workFits = (k: District | null, theta: number, s: number, radius: number): boolean => {
+    if (k ? s - radius < reserveEnd || s + radius > lastEntrance : s - radius < floorStart + spacing * 0.15 || s + radius > reserveEnd) return false;
+    if (fromLake(lake, s) < radius + spacing * 0.2) return false;
+    if (k && !inside(k, theta, s, radius * 0.7)) return false;
+    for (const ds of [-radius, 0, radius]) {
+      if (Math.abs(wrap(theta - walkTheta(s + ds))) * R < radius + widths.sunwalk * WORKS.walk) return false;
+      for (const r of rivers) {
+        if (lake && (r.from === 'wild') !== (s + ds < lake.s)) continue;
+        if (Math.abs(wrap(theta - routeOf(r, s + ds))) * R < radius + riverWidth * (WORKS.river + r.meander)) return false;
+      }
+    }
+    if (grove && dist(grove.theta, grove.s, theta, s) < radius + grove.size * 1.2) return false;
+    for (const o of obstaclesNear(theta, s)) if (dist(o.theta, o.s, theta, s) < (o.work ? (o.keep + radius) * WORKS.apart : radius + spacing * WORKS.court)) return false;
+    // Off the Rings' lines by more than a way bent round it swings out, so no way is bent over a Ring.
+    for (const g of form.grounds) if (g.kind === 'ring' && Math.abs(s - form.ringLine(g, theta)) < (radius + widths.way * 2) * 1.3 + radius * 0.1 + widths.way) return false;
+    if (!onLand(theta, s)) return false;
+    for (let q = 0; q < 8; q++) {
+      const a = (q / 8) * TURN;
+      if (!onLand(theta + (radius * Math.cos(a)) / R, s + radius * Math.sin(a))) return false;
+    }
+    return true;
+  };
+  if (workScale > 0) {
+    const krng = new Rng(deriveSeed(h.seed, 'plan', 'works'));
+    /** Up to `count` works in the kinds given, in turn, thrown round (θ, s) within `around` and `along` (m) each way. */
+    const throwWorks = (k: District | null, kinds: readonly WorkKind[], count: number, theta0: number, s0: number, around: number, along: number): void => {
+      for (let n = 0, tries = 0; n < count && tries < count * WORKS.tries; tries++) {
+        const kind = kinds[(n + (k?.id ?? 0)) % kinds.length], spec = WORK_KINDS[kind];
+        let height = workScale * krng.range(spec.height[0], spec.height[1]), radius = height * spec.spread;
+        if (radius > workReach) { height *= workReach / radius; radius = workReach; }
+        const theta = wrap(theta0 + (krng.range(-1, 1) * around) / R), s = s0 + krng.range(-1, 1) * along;
+        const facing = spec.axial ? (krng.chance(0.5) ? 0 : Math.PI) : krng.range(0, TURN), vary = krng.float();
+        if (!workFits(k, theta, s, radius)) continue;
+        // Kept as crisply as its district is cared for; the reserve's are nature's own.
+        works.push({ id: works.length, kind, district: k?.id ?? -1, theta, s, height, radius, facing, crisp: k ? smoothstep(WORKS.care[0], WORKS.care[1], k.care) : 0, vary });
+        // Its keep counts the way's own width too: the way's edge, not its middle, stays off the work.
+        fileObstacle({ theta, s, keep: radius + widths.way * 2, work: true });
+        n++;
+      }
+    };
+    for (const k of districts) throwWorks(k, STYLE_WORKS[k.style], WORKS.perDistrict, k.theta, k.s, side / 2, side / 2);
+    // The wild reserve: nature's own drumlins and tors, about as many as the districts' works over the same ground.
+    const wild = reserveEnd - floorStart;
+    if (wild > 0) throwWorks(null, STYLE_WORKS['let-go'], Math.round((WORKS.perDistrict * circumference * wild) / (side * side)), 0, floorStart + wild / 2, Math.PI * R, wild / 2);
+  }
+  // The works filed by every cell of a grid their footprint touches, so a point looks in one cell.
+  const workGrid = floorGrid(R, Math.max(1, ...works.map((w) => w.radius * 2))), workFiles = new Map<number, Work[]>();
+  for (const w of works) {
+    const reach = w.radius / workGrid.size, c = workGrid.column(w.theta);
+    for (let j = Math.floor((w.s - w.radius) / workGrid.cell); j <= Math.floor((w.s + w.radius) / workGrid.cell); j++) {
+      for (let i = c - Math.ceil(reach) - 1; i <= c + Math.ceil(reach) + 1; i++) fileUnder(workFiles, workGrid.key(i, j), w);
+    }
+  }
+  const workOf = (theta: number, s: number): Work | null => {
+    for (const w of workFiles.get(workGrid.key(workGrid.column(theta), workGrid.row(s))) ?? []) {
+      if (dist(w.theta, w.s, theta, s) < w.radius) return w;
+    }
+    return null;
+  };
+  const worksAt = (theta: number, s: number): number => {
+    const list = workFiles.get(workGrid.key(workGrid.column(theta), workGrid.row(s)));
+    if (!list) return 0;
+    let sum = 0;
+    for (const w of list) {
+      const a = theta - w.theta, du = (a - TURN * Math.round(a / TURN)) * R, dv = s - w.s;
+      if (du * du + dv * dv < w.radius * w.radius) sum += workAt(w, du, dv);
+    }
+    return sum;
+  };
+
   // The ways: the shortest net joining every entrance to the Sunwalk (a spanning tree, Prim's), never across the
   // lake: water is crossed only by the Sunwalk, through the pavilion. Nor over a Ring or a Height: a way keeps to its
   // room between two Rings and meets the Sunwalk there, which crosses each Ring at its saddle. Each way swings gently
@@ -746,34 +873,14 @@ export function makePlan(h: Habitat): Plan {
   // lake.
   const wrng = new Rng(deriveSeed(h.seed, 'plan', 'ways'));
   const wayStep = Math.max(spacing / 12, widths.way * 4);
-  // The courts a way passes, filed by cell over the floor unrolled: a way goes round every court but its own ends', so
-  // nobody walks down into another hamlet's court and over its light well.
-  const courtCell = Math.max(spacing, 1), courtColumns = Math.max(1, Math.floor((TURN * R) / courtCell));
-  const courtKey = (column: number, row: number): number => row * courtColumns + (((column % courtColumns) + courtColumns) % courtColumns);
-  const courtFiles = new Map<number, Site[]>();
-  const columnOf = (theta: number): number => Math.floor((((theta % TURN) + TURN) % TURN) * R / courtCell);
-  for (const e of placed) {
-    const key = courtKey(columnOf(e.theta), Math.floor(e.s / courtCell)), list = courtFiles.get(key);
-    if (list) list.push(e); else courtFiles.set(key, [e]);
-  }
-  const keepOff = (e: Site): number => e.size + COURT.clear * (h.params.landmarks?.handrail ?? 0) + widths.way;
-  /** The courts near a point, but those at `a` and `b`. */
-  const courtsNear = (theta: number, s: number, a: { theta: number; s: number }, b: { theta: number; s: number }): Site[] => {
-    const out: Site[] = [], column = columnOf(theta), row = Math.floor(s / courtCell);
-    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) for (const e of courtFiles.get(courtKey(column + dc, row + dr)) ?? []) {
-      if ((e.theta === a.theta && e.s === a.s) || (e.theta === b.theta && e.s === b.s)) continue;
-      out.push(e);
-    }
-    return out;
-  };
-  /** A way's points (θ unwrapped from `a`, s) bent round the courts they pass: points pushed out, pieces split round. */
+  /** A way's points (θ unwrapped from `a`, s) bent round the courts and works they pass: points pushed out, pieces split round. */
   const roundCourts = (way: Float64Array, a: { theta: number; s: number }, b: { theta: number; s: number }): Float64Array => {
-    if (!placed.length || !h.params.landmarks) return way;
+    if (!courtFiles.size) return way;
     const pts = Array.from(way);
     /** Push point i out of every court it is in (not the ends). */
     const pushOut = (i: number): void => {
-      for (const e of courtsNear(pts[i * 2], pts[i * 2 + 1], a, b)) {
-        const keep = keepOff(e) * 1.2, du = wrap(pts[i * 2] - e.theta) * R, dv = pts[i * 2 + 1] - e.s, d = Math.hypot(du, dv);
+      for (const e of obstaclesNear(pts[i * 2], pts[i * 2 + 1], a, b)) {
+        const keep = e.keep * 1.2, du = wrap(pts[i * 2] - e.theta) * R, dv = pts[i * 2 + 1] - e.s, d = Math.hypot(du, dv);
         if (d >= keep) continue;
         const ux = d > 1e-6 ? du / d : 1, vx = d > 1e-6 ? dv / d : 0;
         pts[i * 2] += (ux * keep - du) / R;
@@ -781,15 +888,15 @@ export function makePlan(h: Habitat): Plan {
       }
     };
     for (let i = 1; i < pts.length / 2 - 1; i++) pushOut(i);
-    // Each piece that still cuts a court: split at its middle, pushed out; a few times over.
-    for (let round = 0; round < 4; round++) {
+    // Each piece that still cuts one: split at its middle, pushed out; a few times over (a work's rim takes more).
+    for (let round = 0; round < 6; round++) {
       let split = false;
       for (let i = 0; i + 3 < pts.length; i += 2) {
         const mt = (pts[i] + pts[i + 2]) / 2, ms = (pts[i + 1] + pts[i + 3]) / 2;
         const pu = (pts[i + 2] - pts[i]) * R, pv = pts[i + 3] - pts[i + 1], l2 = Math.max(pu * pu + pv * pv, 1e-9);
-        const cuts = courtsNear(mt, ms, a, b).some((e) => {
+        const cuts = obstaclesNear(mt, ms, a, b).some((e) => {
           const eu = wrap(e.theta - pts[i]) * R, ev = e.s - pts[i + 1], k = Math.min(1, Math.max(0, (eu * pu + ev * pv) / l2));
-          return Math.hypot(eu - pu * k, ev - pv * k) < keepOff(e);
+          return Math.hypot(eu - pu * k, ev - pv * k) < e.keep;
         });
         if (!cuts) continue;
         pts.splice(i + 2, 0, mt, ms);
@@ -801,6 +908,7 @@ export function makePlan(h: Habitat): Plan {
     }
     return Float64Array.from(pts);
   };
+  const wayRings = form.grounds.filter((g) => g.kind === 'ring');
   const wayPoints = (a: { theta: number; s: number }, b: { theta: number; s: number }): Float64Array => {
     const du = wrap(b.theta - a.theta) * R, dv = b.s - a.s, length = Math.hypot(du, dv);
     const n = Math.max(1, Math.ceil(length / wayStep)), out = new Float64Array((n + 1) * 2);
@@ -817,7 +925,14 @@ export function makePlan(h: Habitat): Plan {
         const shore = lake.halfWidth + spacing * 0.1, d = ps - lake.s;
         if (Math.abs(d) < shore) ps = lake.s + Math.sign(a.s - lake.s) * shore;
       }
-      out[i * 2] = a.theta + (du * t + nu * off) / R;
+      const pt = a.theta + (du * t + nu * off) / R;
+      // Nor over a Ring's crest (or up its steep front), on whichever side the way starts: it keeps to its room.
+      if (i > 0 && i < n) for (const g of wayRings) {
+        const line = form.ringLine(g, pt), side = a.s > form.ringLine(g, a.theta) ? 1 : -1;
+        const keep = g.height * (GROUND.crest / 2 + (side === g.facing ? GROUND.face : 0)) + widths.way;
+        if ((ps - line) * side < keep && Math.abs(ps - line) < g.radius) ps = line + side * keep;
+      }
+      out[i * 2] = pt;
       out[i * 2 + 1] = Math.min(floorEnd, Math.max(reserveEnd, ps));
     }
     return roundCourts(out, a, b);
@@ -837,6 +952,13 @@ export function makePlan(h: Habitat): Plan {
   const sides = rings.map((r) => Int8Array.from(nodes, (k) => (k.s > form.ringLine(r, k.theta) ? 1 : -1)));
   const overLand = (i: number, j: number, u: number, v: number): boolean => {
     for (const side of sides) if (side[i] !== side[j]) return true;
+    // Through a district's work (those by its middle; a longer way is bent round the rest).
+    if (works.length) for (const o of obstaclesNear(nt[i] + u / (2 * R), ns[i] + v / 2)) {
+      if (!o.work) continue;
+      const a = o.theta - nt[i], ou = (a - TURN * Math.round(a / TURN)) * R, ov = o.s - ns[i];
+      const t = Math.min(1, Math.max(0, (ou * u + ov * v) / Math.max(u * u + v * v, 1e-9)));
+      if (Math.hypot(ou - u * t, ov - v * t) < o.keep) return true;
+    }
     for (const g of mounts) {
       const a = g.theta - nt[i], gu = (a - TURN * Math.round(a / TURN)) * R, gv = g.s - ns[i];
       // Nearer than its clearance, and nearer than the way's own ends (an entrance at a Height's foot is left its way).
@@ -871,9 +993,10 @@ export function makePlan(h: Habitat): Plan {
     const before = wayTo.get(from[pick]);
     if (before) {
       const e = nodes[from[pick]] as Site, keep = keepOff(e) * 1.2;
-      // (Its first point beyond the court, or where it starts if it is all that short.)
+      // (Its first point beyond the court and in the entrance's own room, or where it starts if it is all that short.)
       let k = before.length - 4;
-      while (k > 0 && Math.hypot(wrap(before[k] - e.theta) * R, before[k + 1] - e.s) < keep) k -= 2;
+      const room = (j: number): boolean => wayRings.every((g) => (before[j + 1] > form.ringLine(g, before[j])) === (e.s > form.ringLine(g, e.theta)));
+      while (k > 0 && (Math.hypot(wrap(before[k] - e.theta) * R, before[k + 1] - e.s) < keep || !room(k))) k -= 2;
       a = { theta: before[Math.max(0, k)], s: before[Math.max(0, k) + 1] };
     }
     const points = wayPoints(a, b);
@@ -882,5 +1005,5 @@ export function makePlan(h: Habitat): Plan {
     relax(pick);
   }
 
-  return { ...form, culture, districts, sites: [...landmarks, ...placed], paths, districtAt, borderAt };
+  return { ...form, culture, districts, sites: [...landmarks, ...placed], paths, districtAt, borderAt, inside, works, worksAt, workOf };
 }

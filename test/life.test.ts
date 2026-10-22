@@ -4,6 +4,7 @@ import { MATRIX, derive, validate, withParams, REFERENCE } from '../src/blueprin
 import { fromLake, planOf } from '../src/gen/plan';
 import { pathsOf } from '../src/gen/paths';
 import { floorGap, peopleAt, personKey, residentOf, shuffleOf, talkerAt, venuesOf, walksOf, whereIs, type Person } from '../src/sim';
+import { habitatOf } from './worlds';
 
 const HOUR = 3600;
 
@@ -27,7 +28,7 @@ test('life: a habitat without sensible life parameters is invalid', () => {
 });
 
 for (const { name, params } of MATRIX) {
-  const h = derive(params), day = params.day.length, R = h.radius;
+  const h = habitatOf(name), day = params.day.length, R = h.radius;
   /** Clock times on day 3, hours after dawn. */
   const at = (hours: number): number => 3 * day + hours * HOUR;
   const whole = name === 'small' || name === 'long';
