@@ -1,0 +1,124 @@
+/**
+ * The skies on the Understorey's ceilings (gen/skies.ts: which hamlet shows which). Each is drawn as one seen
+ * infinitely far off: from the direction one looks alone, in the frame of the eye (up toward the axis, along it, and
+ * across), so a sky stays put as one walks under it and reads as sky, not as a picture on the ceiling. Clouds, leaves
+ * and the sea's surface lie on a plane far overhead (`overhead`), so they foreshorten toward the horizon as real ones do.
+ *
+ * Colours are the sky's own at full day (about 1 for its brightest), before the screen's brightness (materials.ts,
+ * VAULT): the day (`day`, 0 night … 1 full day) dims the skies that keep their day in step with the land's; the
+ * others keep their own night. Moving parts move with the habitat's clock (`clock`, s).
+ */
+import { Fn, If, abs, clamp, cos, dot, exp, float, floor, hash, max, mix, mx_fractal_noise_float, mx_noise_float, normalize, pow, sin, smoothstep, vec2, vec3 } from 'three/tsl';
+import type { Node } from 'three/webgpu';
+
+type F = Node<'float'>;
+type V2 = Node<'vec2'>;
+type V3 = Node<'vec3'>;
+
+/** The skies in the order drawn: must be the catalogue's (gen/skies.ts; a test checks). */
+export const SKY_DRAWN = ['open', 'aurora', 'moon', 'mars', 'canopy', 'deep'] as const;
+
+/** Stars: cells round the sky (per radian) and the share of cells holding one. */
+const STAR_CELLS = 260;
+const STAR_SHARE = 0.004;
+
+/** Where a direction meets a plane one unit overhead (its along and across), and how far up the direction looks. */
+function overhead(d: V3, up: V3, along: V3, across: V3): { at: V2; rise: F } {
+  const rise = dot(d, up), k = float(1).div(max(rise, 0.04));
+  return { at: vec2(dot(d, along).mul(k), dot(d, across).mul(k)), rise };
+}
+
+/** A field of stars over the directions (in the eye's frame, so they keep still), `share` of cells lit. */
+function stars(d: V3, share: number): F {
+  const c = floor(d.mul(STAR_CELLS)), h = hash(c.x.add(c.y.mul(157)).add(c.z.mul(9133)).add(1e5));
+  const lit = smoothstep(1 - share, 1, h);
+  return lit.mul(lit).mul(4);
+}
+
+/** A night sky: deep blue at the zenith, a little lighter low down, and stars. */
+const night = (d: V3, rise: F): V3 => mix(vec3(0.012, 0.016, 0.03), vec3(0.004, 0.006, 0.014), smoothstep(0, 0.7, rise)).add(vec3(0.8, 0.85, 1).mul(stars(d, STAR_SHARE)));
+
+/** An old Earth summer sky: pale low down, deep blue overhead, cumulus drifting along. */
+function open(d: V3, o: { at: V2; rise: F }, day: F, clock: F): V3 {
+  const blue = mix(vec3(0.62, 0.74, 0.9), vec3(0.16, 0.34, 0.78), smoothstep(0, 0.65, o.rise));
+  const n = mx_fractal_noise_float(vec3(o.at.mul(0.45).add(vec2(clock.mul(0.0015), 0)), 3.1), 4, 2, 0.5);
+  const cover = smoothstep(0.05, 0.42, n).mul(smoothstep(0.02, 0.25, o.rise));
+  const cloud = mix(vec3(0.62, 0.64, 0.7), vec3(1, 1, 0.98), smoothstep(0.2, 0.7, n));
+  return mix(night(d, o.rise), mix(blue, cloud, cover), day);
+}
+
+/** A polar night: curtains of aurora swaying slowly across the stars. */
+function aurora(d: V3, o: { at: V2; rise: F }, clock: F): V3 {
+  const sway = mx_noise_float(vec3(o.at.x.mul(0.25), clock.mul(0.004), 1.7)).mul(3);
+  const fold = sin(o.at.y.mul(0.9).add(sway)), band = exp(fold.mul(fold).mul(-5));
+  const rays = mx_noise_float(vec3(o.at.x.mul(4), o.at.y.mul(0.4), clock.mul(0.01))).mul(0.5).add(0.5);
+  const glow = band.mul(rays).mul(smoothstep(0.05, 0.4, o.rise));
+  const hue = mix(vec3(0.15, 0.95, 0.45), vec3(0.55, 0.25, 0.85), smoothstep(0.4, 1, rays));
+  return night(d, o.rise).add(hue.mul(glow).mul(0.6));
+}
+
+/** The sky from the Moon: black, dense with stars, Earth hanging low over the across side, lit from one side. */
+function moon(d: V3, up: V3, along: V3, across: V3, clock: F): V3 {
+  const toward = normalize(up.mul(0.55).add(across.mul(0.75)).add(along.mul(0.35)));
+  const c = dot(d, toward), r = float(1).sub(c).mul(2).sqrt().div(0.034);
+  const disc = smoothstep(1, 0.96, r);
+  // Earth's face: blue sea, white weather, its lit half toward `along`.
+  const local = d.sub(toward.mul(c)).div(0.034);
+  const weather = mx_fractal_noise_float(vec3(local.mul(2.2).add(vec3(clock.mul(0.0004), 0, 0))), 3, 2, 0.5);
+  const face = mix(vec3(0.05, 0.16, 0.42), vec3(0.95, 0.96, 1), smoothstep(0.1, 0.5, weather));
+  const lit = smoothstep(-0.3, 0.4, dot(local, along).add(float(1).sub(r).mul(0.3)));
+  const halo = exp(r.sub(1).max(0).mul(-6)).mul(0.08).mul(float(1).sub(disc));
+  return vec3(0.002, 0.002, 0.003).add(vec3(1).mul(stars(d, STAR_SHARE * 3))).mul(float(1).sub(disc)).add(face.mul(lit).mul(disc)).add(vec3(0.4, 0.6, 1).mul(halo));
+}
+
+/** A Martian day: butterscotch dust, bluer near a small pale sun, dimming to a dusky rose at night. */
+function mars(d: V3, o: { at: V2; rise: F }, up: V3, along: V3, day: F): V3 {
+  const sun = normalize(up.mul(0.8).add(along.mul(0.6))), c = dot(d, sun);
+  const dust = mix(vec3(0.8, 0.58, 0.38), vec3(0.6, 0.42, 0.3), smoothstep(0, 0.7, o.rise));
+  const halo = mix(dust, vec3(0.55, 0.65, 0.8), smoothstep(0.93, 0.995, c));
+  const disc = smoothstep(0.9993, 0.9996, c);
+  const sky = halo.add(vec3(1, 1, 0.95).mul(disc));
+  return mix(night(d, o.rise).add(vec3(0.02, 0.01, 0.01)), sky, day);
+}
+
+/** Up through a forest canopy: leaves in layers, each swaying a little, the sky bright in their gaps. */
+function canopy(d: V3, o: { at: V2; rise: F }, day: F, clock: F): V3 {
+  const sky = mix(vec3(0.75, 0.85, 0.95), vec3(0.45, 0.62, 0.9), smoothstep(0, 0.7, o.rise));
+  const out = vec3(sky).toVar();
+  for (const [scale, depth, k] of [[0.6, 0.55, 1], [1.4, 0.35, 2], [3.2, 0.2, 3]] as const) {
+    const sway = vec2(sin(clock.mul(0.4 + k * 0.13)).mul(0.03), cos(clock.mul(0.3 + k * 0.17)).mul(0.03));
+    const n = mx_fractal_noise_float(vec3(o.at.add(sway).mul(scale), k * 4.1), 3, 2, 0.5);
+    const leaf = smoothstep(-0.05, 0.15, n);
+    // Leaves against the light glow green; deeper layers darker.
+    out.assign(mix(out, vec3(0.16, 0.32, 0.07).mul(1 - depth * 0.8), leaf));
+  }
+  return mix(night(d, o.rise).mul(0.4), out, day);
+}
+
+/** Up from under the sea: blue going green, the surface's waves and the light running in bright threads under it. */
+function deep(o: { at: V2; rise: F }, day: F, clock: F): V3 {
+  const water = mix(vec3(0.04, 0.22, 0.26), vec3(0.18, 0.48, 0.62), smoothstep(0.1, 0.9, o.rise));
+  const wave = mx_noise_float(vec3(o.at.mul(1.6), clock.mul(0.15)));
+  const threads = pow(float(1).sub(abs(wave)), 12).mul(smoothstep(0.2, 0.6, o.rise));
+  const window = smoothstep(0.82, 0.97, o.rise).mul(0.5);
+  const sea = water.add(vec3(0.7, 0.95, 1).mul(threads.mul(0.7).add(window)));
+  return mix(vec3(0.004, 0.012, 0.02), sea, day);
+}
+
+/**
+ * Sky `index` (gen/skies.ts) seen along `d` (unit, world) from an eye whose up (toward the axis) is `up`, at `day` of
+ * the land's day (the skies that keep their own night ignore it), at the habitat's `clock`.
+ */
+export function hamletSky(d: V3, up: V3, index: F, day: F, clock: F): V3 {
+  return Fn(() => {
+    const along = vec3(0, 0, 1), across = normalize(vec3(up.y, up.x.negate(), 0)), o = overhead(d, up, along, across);
+    const out = vec3(0).toVar(), k = floor(index.add(0.5)), lit = clamp(day, 0, 1);
+    If(k.lessThan(0.5), () => { out.assign(open(d, o, lit, clock)); })
+      .ElseIf(k.lessThan(1.5), () => { out.assign(aurora(d, o, clock)); })
+      .ElseIf(k.lessThan(2.5), () => { out.assign(moon(d, up, along, across, clock)); })
+      .ElseIf(k.lessThan(3.5), () => { out.assign(mars(d, o, up, along, lit)); })
+      .ElseIf(k.lessThan(4.5), () => { out.assign(canopy(d, o, lit, clock)); })
+      .Else(() => { out.assign(deep(o, lit, clock)); });
+    return out;
+  })() as unknown as V3;
+}

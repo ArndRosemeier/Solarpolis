@@ -29,6 +29,7 @@ import type { Terrain } from './terrain';
 import { levelsOf, type Levels, type UnderLevels } from './underLevels';
 import { courtLayoutOf, lightWellOf } from './courts';
 import { underOf, type Under } from './under';
+import { skyOverBay } from './skies';
 
 export type UnderDetail = 'far' | 'mid' | 'near';
 
@@ -367,6 +368,9 @@ function buildBay(sh: Shape, lv: UnderLevels, s: Sizes, i: number, j: number, d:
     const x = mx + dx * f, y = my + dy * f;
     return [x, y, bay.at(x, y).ceiling];
   };
+  // A hamlet's bays show its sky there (gen/skies.ts); the wellhead and the bays outside a hamlet keep their stone.
+  const sky = skyOverBay(lv.terrain.habitat, i, j);
+  sh.finish = sky < 0 ? FINISH.stone : FINISH.screen + sky;
   sh.smoothGrid(d.rings, ring.length - 1, (a, b) => {
     const p = onRay(b, a / d.rings), e = 0.01, x = p[0], y = p[1];
     const dzx = (bay.at(x + e, y).ceiling - bay.at(x - e, y).ceiling) / (2 * e), dzy = (bay.at(x, y + e).ceiling - bay.at(x, y - e).ceiling) / (2 * e);

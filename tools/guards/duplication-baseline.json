@@ -834,5 +834,9 @@
   {
     "key": "same name: solarpolis/render/outside.ts#frame + solarpolis/render/view.ts#frame",
     "reason": "Each view's own frame step under FrameLoop (render/surface.ts): moving by the keys, the clock, then placing and drawing. The two views move different things (a flyer and walker inside, a ship or camera outside) and share the loop itself already."
+  },
+  {
+    "key": "idiom: [.add .mul .sub] in solarpolis/render/crowdShaders.ts + solarpolis/render/hamletSkies.ts + solarpolis/render/hullShaders.ts",
+    "reason": "TSL arithmetic (add, mul, sub on nodes) is how every shader writes a formula; the formulas are each shader's own (a hamlet sky's halo, a crowd's pose, the hull's panels)."
   }
 ]
