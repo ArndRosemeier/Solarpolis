@@ -5,7 +5,7 @@
  */
 import { nearestFloor, nearestWood, type Ecology, type Found } from './gen/ecology';
 import { nearestOnPath } from './gen/paths';
-import { busiestNear } from './sim';
+import { busiestNear, fleetOf, flierAt } from './sim';
 import { nearestPlace, vineFaceFoot } from './gen/places';
 import { besideRiver, nearestSample, type River } from './gen/rivers';
 import './app/style.css';
@@ -113,6 +113,7 @@ const insideSlot = new ViewSlot('Hold the right mouse button to look around · W
   const v = await InteriorView.create(h);
   memory.track('player body', () => v.bodyBytes());
   memory.track('people', () => v.peopleBytes());
+  memory.track('drones', () => v.droneBytes());
   return v;
 });
 const outsideSlot = new ViewSlot('Hold the right mouse button to swing around · wheel to come closer · 1 habitat, 2 Earth, 3 Moon, 4 nearest neighbour · F to fly (W A S D, E up, Q down, Shift faster)', 'Building the sky…', 'sky maps, stars and skin detail', (h) => OutsideView.create(h));
@@ -230,6 +231,32 @@ toPlace('Before the nearest crowd', 12, (eco, t, s) => {
   const d = b.theta - t, dx = (d - 2 * Math.PI * Math.round(d / (2 * Math.PI))) * h.radius, dy = b.s - s, l = Math.hypot(dx, dy) || 1;
   return { theta: b.theta, s: b.s, way: [dx / l, dy / l] };
 });
+/**
+ * Floating `back` m from the nearest drone at work (hovering at a spot it is still at half a minute on), a little
+ * above it, looking at it: a tender over its orchard, a lifter at the Gate, a courier at its stop.
+ */
+const toDrone = (label: string, back: number): void => debug.add({
+  label, group: 'Go', run: () => {
+    const v = view(), t = v?.ecology?.terrain, at = v?.walker.at;
+    if (!v || !t || !at) return;
+    const P = t.habitat.profile, me = toWorld(P, { theta: at.theta, s: at.s, h: 0 });
+    let best: { theta: number; s: number; h: number } | null = null, gap = Infinity;
+    fleetOf(t).forEach((_, id) => {
+      const f = flierAt(t, id, v.time), later = flierAt(t, id, v.time + 30);
+      if (f.doing !== 'work' || later.theta !== f.theta || later.s !== f.s) return;
+      const w = toWorld(P, f), d = Math.hypot(w[0] - me[0], w[1] - me[1], w[2] - me[2]);
+      if (d < gap) { gap = d; best = f; }
+    });
+    const f = best as { theta: number; s: number; h: number } | null;
+    if (!f) return;
+    const r = Math.max(P.at(f.s).r, 1), drone = toWorld(P, { theta: f.theta, s: f.s, h: f.h + 0.5 });
+    const eye = toWorld(P, { theta: f.theta + (back * 0.6) / r, s: f.s - back * 0.8, h: f.h + 0.5 + back * 0.25 });
+    const d = Math.hypot(drone[0] - eye[0], drone[1] - eye[1], drone[2] - eye[2]);
+    v.floatAt(eye, [(drone[0] - eye[0]) / d, (drone[1] - eye[1]) / d, (drone[2] - eye[2]) / d]);
+  },
+});
+toDrone('Fly: beside the nearest drone at work', 4);
+toDrone('Fly: the nearest drone at work from 60 m', 60);
 /** Ground one can stand on (a terrace's ledge, not its wall). */
 const ledge = (eco: Ecology) => (pt: number, ps: number): boolean => slopeAt(eco, pt, ps, eco.terrain.heightAt(pt, ps), 2) < 0.2;
 toPlace('Into the nearest orchard', -10, (eco, t, s) => nearestPlace(eco.terrain, 'orchard', t, s, ledge(eco)));

@@ -15,7 +15,7 @@ import type { Habitat } from '../blueprint';
 import { SPECK_SHOWN, SPECK_STRIDE, speckBands } from '../gen/standIn';
 import type { Specks } from '../sim/specks';
 import type { WorkerPool } from '../workers/pool';
-import { SPECK, SPECK_LAYOUT, peopleInstances } from './materials';
+import { SPECK, SPECK_LAYOUT, layInstances } from './materials';
 import { speckClock } from './crowdShaders';
 import { drawnAnywhere, dropUploaded, freeMesh, quadInstances } from './geometry';
 import type { Residents } from './actors/residents';
@@ -104,7 +104,7 @@ export class SpeckView {
       }
     }
     const g = quadInstances();
-    peopleInstances(g, data, SPECK_LAYOUT);
+    layInstances(g, data, SPECK_LAYOUT);
     const shown = new InstancedBufferAttribute(new Float32Array(s.count).fill(1), 1);
     g.setAttribute(SPECK_SHOWN, shown);
     g.instanceCount = s.count;

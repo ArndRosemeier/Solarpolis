@@ -33,6 +33,8 @@ import { cloudMarch, cloudShade } from './cloudShaders';
 import { builtAlbedo, roofHorizons } from './builtShaders';
 import { speckLook, standInHorizon, standInPose } from './crowdShaders';
 import { SPECK_ATTRIBUTES, SPECK_SHOWN, SPECK_STRIDE, STAND_IN_ATTRIBUTES, STAND_IN_STRIDE } from '../gen/standIn';
+import { FLIER_ATTRIBUTES, FLIER_STRIDE, flierPose } from './droneShaders';
+import { LIGHT_SCALE, VEIL_LIGHT } from '../gen/drone';
 import { boreColor, flameColor, hardwareColor, lampColor, radiatorColor, skinColor, skinDetailColor, skinShown } from './hullShaders';
 
 /** The air's look, shared by every kind (uniforms: changing them never builds a shader). */
@@ -141,6 +143,15 @@ function sunlit(horizon: Node<'vec2'> = vec2(OPEN_SKY, OPEN_SKY), normal: Node<'
 
 /** The look of distant things: mix towards the haze by the length of air between the eye and the point. */
 function throughAir(c: Node<'vec3'>): Node<'vec3'> {
+  const { kept, glow } = airBetween();
+  return c.mul(kept).add(glow).mul(view.exposure);
+}
+
+/**
+ * The air between the eye and this point: the share of the point's light it lets through (`kept`), and the light it
+ * adds on the way (`glow`, the haze's), before exposure.
+ */
+function airBetween(): { kept: Node<'float'>; glow: Node<'vec3'> } {
   // The line of sight from the eye (world) to this point, in HAZE_STEPS pieces (world/air.ts, `hazeAlong`).
   const ray = positionWorld.sub(cameraPosition);
   const D = max(ray.length(), 1e-3);
@@ -170,7 +181,7 @@ function throughAir(c: Node<'vec3'>): Node<'vec3'> {
     glow = glow.add(T.mul(sigma).mul(source).mul(inside));
     T = T.mul(exp(tau.negate()));
   }
-  return c.mul(T).add(air.haze.mul(glow)).mul(view.exposure);
+  return { kept: T, glow: air.haze.mul(glow) };
 }
 
 /** asinh, without cancellation for large negative arguments. */
@@ -642,9 +653,12 @@ export function standInAttribute(g: BufferGeometry, name: string): boolean {
   else if (name === 'corner') g.setAttribute('corner', new Float32BufferAttribute([-1, -1, 1, -1, 1, 1], 2));
   else if (name === 'horizon') g.setAttribute('horizon', new Float32BufferAttribute([OPEN_SKY, OPEN_SKY, 0, 0, OPEN_SKY, OPEN_SKY, 0, 0, OPEN_SKY, OPEN_SKY, 0, 0], 4));
   else if (name === 'plant') plantInstances(g, new Float32Array([0, 0, 0, 1, 0, 0, 0]));
-  else if ((STAND_IN_ATTRIBUTES as readonly string[]).includes(name)) { if (name === STAND_IN_ATTRIBUTES[0]) peopleInstances(g, new Float32Array(STAND_IN_STRIDE), STAND_IN_LAYOUT); }
-  else if ((SPECK_ATTRIBUTES as readonly string[]).includes(name)) { if (name === SPECK_ATTRIBUTES[0]) peopleInstances(g, new Float32Array(SPECK_STRIDE), SPECK_LAYOUT); }
+  else if ((STAND_IN_ATTRIBUTES as readonly string[]).includes(name)) { if (name === STAND_IN_ATTRIBUTES[0]) layInstances(g, new Float32Array(STAND_IN_STRIDE), STAND_IN_LAYOUT); }
+  else if ((SPECK_ATTRIBUTES as readonly string[]).includes(name)) { if (name === SPECK_ATTRIBUTES[0]) layInstances(g, new Float32Array(SPECK_STRIDE), SPECK_LAYOUT); }
   else if (name === SPECK_SHOWN) g.setAttribute(SPECK_SHOWN, new InstancedBufferAttribute(new Float32Array(1), 1));
+  else if ((FLIER_ATTRIBUTES as readonly string[]).includes(name)) { if (name === FLIER_ATTRIBUTES[0]) layInstances(g, new Float32Array(FLIER_STRIDE), FLIER_LAYOUT); }
+  else if (name === 'paint') g.setAttribute('paint', new Uint8BufferAttribute(new Array(12).fill(0), 4, true));
+  else if (name === 'spin') g.setAttribute('spin', new Float32BufferAttribute(new Array(12).fill(0), 4));
   else if (name === 'part') g.setAttribute('part', new Float32BufferAttribute(new Array(6).fill(0), 2));
   else if (name === 'uv') g.setAttribute('uv', new Float32BufferAttribute(new Array(6).fill(0), 2));
   else if (name === 'floorA' || name === 'floorB') g.setAttribute(name, new Uint8BufferAttribute(new Array(12).fill(name === 'floorA' ? 255 : 0), 4, true));
@@ -700,6 +714,19 @@ export const BALL = kind('ball', ['position', 'normal'], { cast: true, receive: 
 });
 
 /**
+ * A thing standing at `at` (the mesh's frame, relative to the eye) along its up (toward the axis), turned by `turn`
+ * about it: its own frame's x, y (up) and z (turn 0: toward the port end) as the world's. People and drones.
+ */
+function uprightAt(at: Node<'vec3'>, turn: Node<'float'>): (v: Node<'vec3'>) => Node<'vec3'> {
+  const world = modelWorldMatrix.mul(vec4(at, 1)).xyz.add(view.eye);
+  const up = normalize(vec3(world.x.negate(), world.y.negate(), 0));
+  const side = vec3(up.y, up.x.negate(), 0), axis = vec3(0, 0, 1);
+  const c = cos(turn), sn = sin(turn);
+  const ax = side.mul(c).add(axis.mul(sn)), az = side.mul(sn.negate()).add(axis.mul(c));
+  return (v) => ax.mul(v.x).add(up.mul(v.y)).add(az.mul(v.z));
+}
+
+/**
  * People beyond the near figures (render/people.ts): one small body (gen/standIn.ts) per person, instanced, posed and
  * coloured per instance (crowdShaders.ts) from the look their figure is built from, lit by the sunline past the
  * terrain's horizons where they stand, as the figures are by the key and sky lights. They cast shadows, as figures do.
@@ -707,14 +734,7 @@ export const BALL = kind('ball', ['position', 'normal'], { cast: true, receive: 
 export const CROWD = kind('crowd', ['position', 'normal', 'part', ...STAND_IN_ATTRIBUTES], { cast: true, receive: false }, () => {
   const m = new MeshBasicNodeMaterial({ side: DoubleSide });
   const pose = standInPose(time);
-  const stand = attribute<'vec4'>('stand', 'vec4'), turn = attribute<'vec4'>('gait', 'vec4').x;
-  const foot = modelWorldMatrix.mul(vec4(stand.xyz, 1)).xyz;
-  const world = foot.add(view.eye);
-  const up = normalize(vec3(world.x.negate(), world.y.negate(), 0));
-  const side = vec3(up.y, up.x.negate(), 0), axis = vec3(0, 0, 1);
-  const c = cos(turn), sn = sin(turn);
-  const ax = side.mul(c).add(axis.mul(sn)), az = side.mul(sn.negate()).add(axis.mul(c));
-  const turned = (v: Node<'vec3'>): Node<'vec3'> => ax.mul(v.x).add(up.mul(v.y)).add(az.mul(v.z));
+  const stand = attribute<'vec4'>('stand', 'vec4'), turned = uprightAt(stand.xyz, attribute<'vec4'>('gait', 'vec4').x);
   const scale = vec3(pose.width, 1, pose.width).mul(pose.height);
   m.positionNode = stand.xyz.add(turned(pose.local.mul(scale)));
   const n = varying(normalize(turned(pose.normal.div(scale))));
@@ -738,15 +758,62 @@ export const SPECK = kind('speck', ['position', 'corner', ...SPECK_ATTRIBUTES, S
   return m;
 });
 
-/** How people are laid out as instances (gen/standIn.ts): the stand-ins' floats and attributes, and the specks'. */
-export const STAND_IN_LAYOUT = { stride: STAND_IN_STRIDE, attributes: STAND_IN_ATTRIBUTES } as const;
-export const SPECK_LAYOUT = { stride: SPECK_STRIDE, attributes: SPECK_ATTRIBUTES } as const;
+/**
+ * Drones (render/fliers.ts; their designs gen/drone.ts), near and at the coarse level: one instanced mesh per design and
+ * level, each drone posed by `flierPose` (droneShaders.ts: rotors spinning, strobes flashing, the body bobbing and
+ * tilting into its way) and stood along its up as people are. Paint (4 bytes): an albedo lit by the sunline past the
+ * horizons where the drone is, hazard stripes over it, or a light of its own. They cast shadows.
+ */
+export const DRONE = kind('drone', ['position', 'normal', 'paint', 'spin', ...FLIER_ATTRIBUTES], { cast: true, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial();
+  const pose = flierPose(true), turned = uprightAt(pose.at, pose.turn);
+  m.positionNode = pose.at.add(turned(pose.local));
+  const n = varying(normalize(turned(pose.normal)));
+  const paint = attribute<'vec4'>('paint', 'vec4'), code = paint.w;
+  // Hazard stripes: diagonal bands a few centimetres wide on the drone's own frame, the kit's colour and near black.
+  const own = varying(positionLocal);
+  const band = fract(own.x.add(own.y).add(own.z).div(HAZARD_STRIPE)).lessThan(0.5);
+  const albedo = select(code.greaterThan(0.99).and(band.not()), vec3(0.004, 0.004, 0.004), paint.rgb);
+  const light = select(code.greaterThan(0).and(code.lessThan(0.99)), code.mul(LIGHT_SCALE), float(0));
+  const lit = albedo.mul(sunlit(pose.horizon, normalize(n), 0, float(1), true, true));
+  m.colorNode = throughAir(select(light.greaterThan(0), paint.rgb.mul(light), lit));
+  return m;
+});
 
 /**
- * Put people on a geometry as its instances, `layout.stride` floats each in vec4 attributes (gen/standIn.ts): the
- * stand-ins (CROWD) or the specks (SPECK). The one way.
+ * What is seen through on a drone (gen/drone.ts, the veil): its rotors' blur, lit, letting most light through; and
+ * plumes and beams, light added. Premultiplied, so one pass blends both: the blur over what is behind, the light onto it.
  */
-export function peopleInstances(g: BufferGeometry, data: Float32Array | InstancedInterleavedBuffer, layout: typeof STAND_IN_LAYOUT | typeof SPECK_LAYOUT): InstancedInterleavedBuffer {
+export const DRONE_VEIL = kind('drone veil', ['position', 'normal', 'paint', ...FLIER_ATTRIBUTES], { cast: false, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial({ side: DoubleSide, transparent: true, depthWrite: false, premultipliedAlpha: true, forceSinglePass: true });
+  const pose = flierPose(false), turned = uprightAt(pose.at, pose.turn);
+  m.positionNode = pose.at.add(turned(pose.local));
+  const n = varying(normalize(turned(pose.normal)));
+  const paint = attribute<'vec4'>('paint', 'vec4'), a = paint.w;
+  const { kept, glow } = airBetween();
+  const lit = paint.rgb.mul(sunlit(pose.horizon, normalize(n), 0, float(1), true, true));
+  // Seen through the air: the blur as any surface is (with the haze before it, as much as it covers); light only dimmed.
+  const blur = lit.mul(kept).add(glow).mul(a), added = paint.rgb.mul(VEIL_LIGHT).mul(kept);
+  m.colorNode = select(a.greaterThan(0), blur, added).mul(view.exposure);
+  m.opacityNode = a;
+  return m;
+});
+
+/** How wide a hazard stripe is (m, along the drone's x + y + z): a pair is twice this. */
+const HAZARD_STRIPE = 0.05;
+
+/** How instances are laid out (gen/standIn.ts, droneShaders.ts): the stand-ins' floats and attributes, the specks', the drones'. */
+export const STAND_IN_LAYOUT = { stride: STAND_IN_STRIDE, attributes: STAND_IN_ATTRIBUTES } as const;
+export const SPECK_LAYOUT = { stride: SPECK_STRIDE, attributes: SPECK_ATTRIBUTES } as const;
+export const FLIER_LAYOUT = { stride: FLIER_STRIDE, attributes: FLIER_ATTRIBUTES } as const;
+export type Layout = typeof STAND_IN_LAYOUT | typeof SPECK_LAYOUT | typeof FLIER_LAYOUT;
+
+/**
+ * Put instances on a geometry, `layout.stride` floats each in vec4 attributes: the stand-ins (CROWD), the specks
+ * (SPECK) or the drones (DRONE, DRONE_VEIL). Pass the buffer of another mesh to share it (a drone's body and veil).
+ * The one way.
+ */
+export function layInstances(g: BufferGeometry, data: Float32Array | InstancedInterleavedBuffer, layout: Layout): InstancedInterleavedBuffer {
   const buffer = data instanceof InstancedInterleavedBuffer ? data : new InstancedInterleavedBuffer(data, layout.stride);
   layout.attributes.forEach((name, k) => g.setAttribute(name, new InterleavedBufferAttribute(buffer, 4, k * 4)));
   return buffer;
@@ -754,5 +821,5 @@ export function peopleInstances(g: BufferGeometry, data: Float32Array | Instance
 
 /** Every kind, for the Stage's warm-up. */
 export function allKinds(): readonly Kind[] {
-  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS, STONE, BUILT, CROWD, SPECK, CLOUDS_FAR, CLOUDS_NEAR];
+  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS, STONE, BUILT, CROWD, SPECK, DRONE, DRONE_VEIL, CLOUDS_FAR, CLOUDS_NEAR];
 }
