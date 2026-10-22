@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MATRIX, derive, validate, withParams, REFERENCE } from '../src/blueprint';
-import { GRAVITY_BANDS, lakeOf, makePlan, type Plan } from '../src/gen/plan';
-import { makeTerrain } from '../src/gen/terrain';
+import { GRAVITY_BANDS, lakeOf, makePlan, planOf, type Plan } from '../src/gen/plan';
 import { baysOf } from '../src/gen/bays';
+import { habitatOf, terrainOf } from './worlds';
 
 const TURN = 2 * Math.PI;
 const wrap = (a: number): number => a - TURN * Math.round(a / TURN);
@@ -13,7 +13,7 @@ function apart(plan: Plan, a: { theta: number; s: number }, b: { theta: number; 
   return Math.hypot(wrap(a.theta - b.theta) * plan.habitat.radius, a.s - b.s);
 }
 
-const plans = MATRIX.map(({ name, params }) => ({ name, plan: makePlan(derive(params)) }));
+const plans = MATRIX.map(({ name }) => ({ name, plan: planOf(habitatOf(name)) }));
 
 for (const { name, plan } of plans) {
   const h = plan.habitat, { profile } = h;
@@ -163,8 +163,8 @@ test('plan: an unknown culture or a plan without valleys is invalid', () => {
 });
 
 test('plan: the terrain keeps the plan\'s lake', () => {
-  for (const { params } of MATRIX) {
-    const h = derive(params);
-    assert.deepEqual(makeTerrain(h).lake, lakeOf(h));
+  for (const { name } of MATRIX) {
+    const t = terrainOf(name);
+    assert.deepEqual(t.lake, lakeOf(t.habitat));
   }
 });
