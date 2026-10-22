@@ -43,7 +43,8 @@ import { SpeckView } from './specks';
 import { FlierView } from './fliers';
 import { AnimalView, DEER, SQUIRRELS } from './animals';
 import { CabinView } from './lift';
-import { SKIES, skyOverBay } from '../gen/skies';
+import { GLASS, SKIES, skyOverBay } from '../gen/skies';
+import { GlassDeck, type GlassStage, type GlassWant } from './glassDeck';
 import { underOf } from '../gen/under';
 import { calledFrom, doorsAbove, doorsBelow, doorsHit, eyeInCabin, liftDoorsNear, outside, type LiftDoors } from '../gen/lifts';
 
@@ -110,6 +111,8 @@ export class InteriorView {
   private below = false;
   /** The cabin of the lift last used (gen/lifts.ts), and whether one is being made (a click then waits). */
   private cabin: CabinView | null = null;
+  /** The glass deck's views of the land above, while a hamlet with it is near (render/glassDeck.ts). */
+  private glass: GlassDeck | null = null;
   private cabinMaking = false;
   /** The people up on the land around the player. */
   private people: PeopleView | null = null;
@@ -225,7 +228,7 @@ export class InteriorView {
 
   /** Bytes of geometry this view holds (memory watchdog). */
   bytes(): number {
-    return (this.tiles?.bytes() ?? 0) + (this.plants?.bytes() ?? 0) + (this.landmarks?.bytes() ?? 0) + (this.stair?.bytes() ?? 0) + (this.courts?.bytes() ?? 0) + (this.crossings?.bytes() ?? 0) + (this.halls?.bytes() ?? 0) + (this.under?.bytes() ?? 0) + (this.cabin?.bytes() ?? 0);
+    return (this.tiles?.bytes() ?? 0) + (this.plants?.bytes() ?? 0) + (this.landmarks?.bytes() ?? 0) + (this.stair?.bytes() ?? 0) + (this.courts?.bytes() ?? 0) + (this.crossings?.bytes() ?? 0) + (this.halls?.bytes() ?? 0) + (this.under?.bytes() ?? 0) + (this.cabin?.bytes() ?? 0) + (this.glass?.bytes() ?? 0);
   }
 
   /** Give memory back (memory watchdog): drop every cached tile and plant cell not on screen. */
@@ -239,6 +242,7 @@ export class InteriorView {
     this.halls?.shed();
     this.under?.shed();
     this.people?.shed();
+    this.glass?.release();
   }
 
   /** Lines for the debug menu. */
@@ -434,6 +438,7 @@ export class InteriorView {
     if (this.halls) { this.scene.remove(this.halls.group); this.halls.dispose(); }
     if (this.under) { this.scene.remove(this.under.group); this.under.dispose(); }
     if (this.cabin) { this.scene.remove(this.cabin.group); this.cabin.dispose(); }
+    this.glass?.dispose();
     this.people?.dispose();
     this.specks?.dispose();
     this.drones?.dispose();
@@ -480,6 +485,7 @@ export class InteriorView {
     this.scene.add(this.under.group);
     this.cabin = new CabinView(this.terrain, this.stage);
     this.scene.add(this.cabin.group);
+    this.glass = new GlassDeck(this.renderer, this.scene, this.camera);
     this.people = new PeopleView(h, this.terrain, this.stage, this.camera, (theta, s) => landmarkTopAt(this.terrain, theta, s));
     this.scene.add(this.people.group);
     this.specks = new SpeckView(h, this.stage, this.pool);
@@ -530,6 +536,7 @@ export class InteriorView {
   /** Put the camera at the origin looking the walker's way, and the world around it relative to the eye. */
   private place(): void {
     const v = this.current();
+    this.posedAt = v.eye;
     view.eye.value.set(...v.eye);
     setFloorEye(v.eye);
     this.camera.position.set(0, 0, 0);
@@ -868,5 +875,43 @@ export class InteriorView {
     this.simulate(dt, this.current().eye);
     this.place();
     draw(this.stage);
+    this.glass?.step(dt, this.posedAt, this.glassWanted(), this.glassStage);
   }
+
+  /** Where the scene is posed about this frame (world): the eye `place` put it round. */
+  private posedAt: Vec3 = [0, 0, 0];
+
+  /**
+   * The glass deck wanted below: a hamlet's with it over the eye's bay or one beside it, its views taken on the land
+   * straight over the eye (gen/skies.ts).
+   */
+  private glassWanted(): GlassWant | null {
+    if (!this.below) return null;
+    const h = this.habitat, at = fromWorld(h.profile, ...this.posedAt), u = underOf(h), bay = u.bayAt(at.theta, at.s);
+    if (!bay) return null;
+    for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) {
+      const sky = skyOverBay(h, bay.i + di, bay.j + dj), m = sky === GLASS ? u.hamletOf(bay.i + di, bay.j + dj) : null;
+      if (m) return { court: m.court, at: toWorld(h.profile, { theta: at.theta, s: at.s, h: this.terrain.heightAt(at.theta, at.s) + EYE_HEIGHT }) };
+    }
+    return null;
+  }
+
+  /** The land shown, lit and seen as from a point on it, for the glass deck's views, and put back after. */
+  private readonly glassStage: GlassStage = {
+    onLand: (at) => {
+      this.showLand(!!at || !this.below);
+      if (at) {
+        shineOn(this.habitat, this.terrain, this.emission, emissionMean(this.emission), air.skyLight.value, this.norm, at, this.posedAt);
+        this.landExposure = view.exposure.value as number;
+        view.exposure.value = 1;
+        this.landBack.copy(this.scene.background as Color);
+        (this.scene.background as Color).copy(air.haze.value as Color);
+      } else {
+        view.exposure.value = this.landExposure;
+        (this.scene.background as Color).copy(this.landBack);
+      }
+    },
+  };
+  private landExposure = 1;
+  private readonly landBack = new Color();
 }

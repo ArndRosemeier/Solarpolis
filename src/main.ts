@@ -31,7 +31,7 @@ import { crossingsOf, type Crossing, type CrossingKind } from './gen/crossings';
 import { landformOf, planOf } from './gen/plan';
 import { underOf, type Hamlet } from './gen/under';
 import { underLiftOf } from './gen/underMesh';
-import { SKIES, hamletSkiesOf, skyOverBay } from './gen/skies';
+import { GLASS, SKIES, hamletSkiesOf, skyOverBay } from './gen/skies';
 import { pavilionPlan } from './gen/pavilion';
 import { hutPlan } from './gen/summitHut';
 import { courtLayoutOf, courtWorld, type CourtLayout } from './gen/courts';
@@ -653,24 +653,24 @@ goBelow("Below: under the nearest entrance court (its hamlet's wellhead)", (h, t
   const m = [...underOf(h).hamlets].sort((a, b) => away(a) - away(b))[0];
   return m ? { i: m.i, j: m.j } : null;
 });
-/** Below, in the middle of a bay under each kind of hamlet sky in turn (gen/skies.ts), off the wellhead and its lanes. */
-let nextSky = 0;
-debug.add({
-  label: 'Below: under the next kind of hamlet sky', group: 'Go', run: () => {
-    const h = lab.habitat, v = view();
-    if (!h || !v) return;
-    const u = underOf(h), skies = hamletSkiesOf(h), want = nextSky++ % SKIES.length;
-    for (const m of u.hamlets.filter((x) => skies[x.court] === want)) {
-      for (let r = 1; r < 6; r++) for (let di = -r; di <= r; di++) for (const dj of [-r, r]) {
-        const i = m.i + di, j = m.j + dj;
-        if (j < 0 || j >= u.along || u.hamletOf(i, j) !== m || skyOverBay(h, i, j) !== want || u.useAt(i, j) === 'lane') continue;
-        const c = u.centreOf(i, j);
-        v.goBelow(c.theta, c.s, 0);
-        return;
-      }
+/** Below, in the middle of a bay under sky `want` (gen/skies.ts), off the wellhead and its lanes. */
+function underSky(want: number): void {
+  const h = lab.habitat, v = view();
+  if (!h || !v) return;
+  const u = underOf(h), skies = hamletSkiesOf(h);
+  for (const m of u.hamlets.filter((x) => skies[x.court] === want)) {
+    for (let r = 1; r < 6; r++) for (let di = -r; di <= r; di++) for (const dj of [-r, r]) {
+      const i = m.i + di, j = m.j + dj;
+      if (j < 0 || j >= u.along || u.hamletOf(i, j) !== m || skyOverBay(h, i, j) !== want || u.useAt(i, j) === 'lane') continue;
+      const c = u.centreOf(i, j);
+      v.goBelow(c.theta, c.s, 0);
+      return;
     }
-  },
-});
+  }
+}
+let nextSky = 0;
+debug.add({ label: 'Below: under the next kind of hamlet sky', group: 'Go', run: () => underSky(nextSky++ % SKIES.length) });
+debug.add({ label: 'Below: under a glass deck (the real sky above)', group: 'Go', run: () => underSky(GLASS) });
 debug.add({ label: 'Up onto the land (from below)', group: 'Go', run: () => { const v = view(); if (v) v.goTo(v.walker.at.theta, v.walker.at.s); } });
 debug.add({ label: 'Travel 10× faster (toggle)', group: 'Go', run: () => { const v = view(); if (v) v.boost = v.boost === 1 ? 10 : 1; } });
 debug.addInfo(() => view()?.clockLine() ?? '');

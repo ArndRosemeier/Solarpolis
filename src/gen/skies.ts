@@ -6,8 +6,9 @@
  * direction one looks, render/hamletSkies.ts), so it reads as sky and not as a lid 20 m up.
  *
  * Skies are authored, walls are honest: the wellhead keeps its stone round the light well, the one real sky in a
- * hamlet, and the bays outside the hamlets (galleries, cisterns, the Dim) have no sky. The glass deck (the real sky
- * of the land above, Arnd 17:40: "still true in some places") joins the catalogue with its own capture of the land.
+ * hamlet, and the bays outside the hamlets (galleries, cisterns, the Dim) have no sky. The glass deck is in the
+ * catalogue too (Arnd 17:40: "it was a good idea but too uniform", so some hamlets, not all): the real sky over the land
+ * above, as one standing there would see it (render/glassDeck.ts captures it).
  * Pure.
  */
 import { deriveSeed, Rng } from '@futuremagic/core';
@@ -27,19 +28,22 @@ export const SKIES = [
   { name: 'mars', about: 'a Martian day, butterscotch dust, a small pale sun in a blue halo', followsDay: true },
   { name: 'canopy', about: 'up through a forest canopy, leaves in layers, the bright sky in their gaps', followsDay: true },
   { name: 'deep', about: 'up from under the sea, its surface moving and the light in it', followsDay: true },
+  { name: 'glass', about: 'the glass deck: the real sky over the land above, the far side of the habitat overhead', followsDay: true },
 ] as const;
 export type SkyName = (typeof SKIES)[number]['name'];
+/** The glass deck's place in the catalogue (render/glassDeck.ts takes its views). */
+export const GLASS = SKIES.findIndex((s) => s.name === 'glass');
 
 /** How much each district style favours each sky (its hamlets' picks, weighted). */
 const FAVOURED: Readonly<Record<DistrictStyle, Partial<Record<SkyName, number>>>> = {
-  orchard: { open: 3, canopy: 2, mars: 0.5 },
-  water: { deep: 3, aurora: 1.5, open: 1 },
+  orchard: { open: 3, canopy: 2, glass: 1, mars: 0.5 },
+  water: { deep: 3, aurora: 1.5, glass: 1, open: 1 },
   stone: { moon: 2, aurora: 2, open: 1 },
-  grove: { canopy: 3, open: 1 },
-  herd: { open: 3, canopy: 1 },
+  grove: { canopy: 3, glass: 1, open: 1 },
+  herd: { open: 3, glass: 1.5, canopy: 1 },
   play: { open: 2, mars: 2, aurora: 1 },
   makers: { moon: 2, mars: 2, aurora: 1 },
-  'let-go': { canopy: 2, open: 1, aurora: 1 },
+  'let-go': { canopy: 2, glass: 1.5, open: 1, aurora: 1 },
 };
 
 /** Each hamlet's sky (an index into `SKIES`), by its court (the hamlets' order): made once and kept. */
