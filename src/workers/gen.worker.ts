@@ -27,6 +27,7 @@ import { courtSites } from '../gen/courts';
 import { crossingSites } from '../gen/crossings';
 import { hallSites } from '../gen/grownHall';
 import type { SiteTile } from '../gen/siteTiles';
+import { specksAt, type Specks } from '../sim/specks';
 
 /** The built things that stream in tiles. */
 export type TiledPart = 'stair' | 'courts' | 'crossings' | 'halls';
@@ -44,7 +45,9 @@ export type GenRequest =
   | { kind: 'hull'; params: HabitatParams; part: string; key: DetailKey }
   | { kind: 'landmark'; params: HabitatParams; index: number; level: LandmarkLevel }
   /** A tile of a built thing that streams in tiles (render/tiled.ts): the Lift Stair, the entrance courts, the river crossings, the grown halls. */
-  | { kind: 'tiled'; part: TiledPart; params: HabitatParams; key: DetailKey };
+  | { kind: 'tiled'; part: TiledPart; params: HabitatParams; key: DetailKey }
+  /** Everyone up on the land at clock time t, for the far view (render/specks.ts). */
+  | { kind: 'specks'; params: HabitatParams; t: number };
 export type GenAnswer =
   | { kind: 'tile'; tile: TileMesh }
   | { kind: 'patch'; patch: GroundPatch }
@@ -58,6 +61,7 @@ export type GenAnswer =
   | { kind: 'hull'; partTile: PartTile }
   | { kind: 'landmark'; index: number; level: LandmarkLevel; mesh: MappedArrays }
   | { kind: 'tiled'; part: TiledPart; built: StairTile | SiteTile }
+  | { kind: 'specks'; specks: Specks }
   | { error: string };
 
 /** Every typed array's buffer in an answer, to transfer rather than copy. */
@@ -139,6 +143,10 @@ self.onmessage = (e: MessageEvent<GenRequest>) => {
     }
     if (req.kind === 'tiled') {
       post({ kind: 'tiled', part: req.part, built: req.part === 'stair' ? buildStairTile(terrain.habitat, req.key) : { courts: courtSites, crossings: crossingSites, halls: hallSites }[req.part].buildTile(terrain, req.key) });
+      return;
+    }
+    if (req.kind === 'specks') {
+      post({ kind: 'specks', specks: specksAt(terrain, req.t) });
       return;
     }
     if (req.kind === 'plants') {

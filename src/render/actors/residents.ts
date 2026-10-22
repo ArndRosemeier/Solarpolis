@@ -15,13 +15,11 @@ import { outfitGarments, randomConfig, seededRandom, type CharacterCatalog, type
 import { Human, sanitizeRace } from '@actors/human';
 import { decodeTarget, type Fetcher, type MorphTarget } from '@actors/core';
 import type { Resident } from '../../sim';
-import { SLOT, hexColor, packColor } from '../../gen/standIn';
+import { DYES, SLOT, hexColor, packColor, skinTone } from '../../gen/standIn';
 import { packFetch } from './pack';
 
 /** Outfits (Actors' presets) made of separate plain garments, each in one colour of its own. */
 const OUTFITS = ['casual', 'sporty', 'layers', 'long-skirt', 'polo', 'cargo', 'summer', 'sport', 'kimono', 'shift-dress', 'halter-dress'] as const;
-/** Garment colours (sRGB): light, quiet, natural dyes, and a few strong ones. */
-const DYES = ['#e6e1d6', '#d2bd98', '#8b8e93', '#5b6470', '#3566a8', '#2f6b45', '#a8b8c0', '#c9a27e', '#f1efe9', '#5f6838', '#8a4b2a', '#b9504a', '#d8b04a', '#1f7a7a', '#3b3f46'];
 /** Tops whose sleeves reach the wrist; bottoms that leave the shins bare. */
 const LONG_SLEEVES = new Set(['longsleeve', 'fisherman-sweater', 'kimono']);
 const BARE_SHINS = new Set(['shorts', 'denim-shorts', 'shift-dress']);
@@ -101,6 +99,11 @@ export class Residents {
     const dress = { height: height + (look.robot ? SHELL_EXTRA : 0), width: widthOf(look), colors: this.colorsOf(look) };
     this.dresses.set(r.id, dress);
     return dress;
+  }
+
+  /** A resident's dress if it is measured already (by id), without measuring it: the far specks' colours and size. */
+  measured(id: number): Dress | undefined {
+    return this.dresses.get(id);
   }
 
   /** Bytes the residents' stand-in data holds (memory watchdog). */
@@ -183,7 +186,7 @@ export class Residents {
       set('shoes', trim);
       return out;
     }
-    const skin = look.skinColor ? hexColor(look.skinColor) : look.skin === 'photo' ? (this.human.skinTextureTone(look.body) ?? toneOf(look.skinTone)) : toneOf(look.skinTone);
+    const skin = look.skinColor ? hexColor(look.skinColor) : look.skin === 'photo' ? (this.human.skinTextureTone(look.body) ?? skinTone(look.skinTone)) : skinTone(look.skinTone);
     const worn = (layer: string): string | undefined => [...look.outfit].reverse().find((g) => this.garments.get(g)?.includes(layer));
     const color = (g: string | undefined, or: readonly [number, number, number]): readonly [number, number, number] => (g && look.garmentColors[g] ? hexColor(look.garmentColors[g]) : or);
     const top = worn('top'), bottom = worn('bottom'), legs = worn('legwear');
@@ -198,11 +201,6 @@ export class Residents {
   }
 }
 
-/** A procedural skin's colour from its tone (0 light … 1 dark), sRGB. */
-function toneOf(t: number): [number, number, number] {
-  const light = [0.87, 0.72, 0.62], dark = [0.3, 0.2, 0.15];
-  return [0, 1, 2].map((k) => light[k] + (dark[k] - light[k]) * t) as [number, number, number];
-}
 
 /** How broad a body is against the mean: weight, muscle and build. */
 function widthOf(look: CharacterConfig): number {

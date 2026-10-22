@@ -28,8 +28,20 @@
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) each drive their own StreamCache (render/streamed.ts) the one way it is driven: frame, want, mark, bytes, shed, clear; their requests are told apart by kind and key."
   },
   {
+    "key": "idiom: [.castShadow .material] in solarpolis/render/landmarks.ts + solarpolis/render/people.ts + solarpolis/render/tiled.ts",
+    "reason": "Each view makes its own meshes from its own kind's material and says whether they cast shadows; the shared part (a mesh drawn anywhere) is drawnAnywhere in geometry.ts."
+  },
+  {
+    "key": "idiom: [.habitat .job .params .pool] in solarpolis/render/landmarks.ts + solarpolis/render/specks.ts + solarpolis/render/view.ts",
+    "reason": "pool.job({ kind, params: habitat.params, ... }) is the one way to ask the worker pool for a job (workers/pool.ts); each view asks for its own kind of job."
+  },
+  {
     "key": "idiom: [.mul .sub] in solarpolis/render/cloudShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
     "reason": "TSL has no operators: every shader file does its arithmetic with .mul and .sub. Shared shader steps already live in one place each (sunlit, throughAir, the hull and sky pieces); this pair is the language, not a copied procedure."
+  },
+  {
+    "key": "idiom: [.mul .sub] in solarpolis/render/crowdShaders.ts + solarpolis/render/groundShaders.ts + solarpolis/render/materials.ts",
+    "reason": "TSL arithmetic (a.mul(b).sub(c)) is how every shader is written; the formulas differ."
   },
   {
     "key": "idiom: [.mul .sub] in solarpolis/render/crowdShaders.ts + solarpolis/render/hullShaders.ts + solarpolis/render/skyShaders.ts",
@@ -188,12 +200,12 @@
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
-    "key": "same name: solarpolis/render/hullDetail.ts#dispose + solarpolis/render/people.ts#dispose",
-    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
-  },
-  {
     "key": "same name: solarpolis/render/hullDetail.ts#dispose + solarpolis/render/plants.ts#dispose",
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/hullDetail.ts#dispose + solarpolis/render/specks.ts#dispose",
+    "reason": "dispose() frees what an object holds and bytes() reports it to the memory watchdog: the views' common lifecycle names, with bodies of their own."
   },
   {
     "key": "same name: solarpolis/render/hullDetail.ts#dispose + solarpolis/render/terrain.ts#dispose",
@@ -296,6 +308,10 @@
     "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
   },
   {
+    "key": "same name: solarpolis/render/landmarks.ts#dispose + solarpolis/render/specks.ts#dispose",
+    "reason": "dispose() frees what an object holds and bytes() reports it to the memory watchdog: the views' common lifecycle names, with bodies of their own."
+  },
+  {
     "key": "same name: solarpolis/render/landmarks.ts#follow + solarpolis/render/necklace.ts#follow",
     "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
   },
@@ -322,10 +338,6 @@
   {
     "key": "same name: solarpolis/render/landmarks.ts#shed + solarpolis/render/streamed.ts#shed",
     "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
-  },
-  {
-    "key": "same name: solarpolis/render/necklace.ts#dispose + solarpolis/render/people.ts#dispose",
-    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
   },
   {
     "key": "same name: solarpolis/render/necklace.ts#dispose + solarpolis/render/tiled.ts#dispose",
@@ -384,8 +396,16 @@
     "reason": "Both 3D views implement the page's view interface (PageView in main.ts: create, setHabitat, setRunning, bytes, shed, info, skip); their shared machinery is in render/surface.ts."
   },
   {
+    "key": "same name: solarpolis/render/people.ts#bytes + solarpolis/render/specks.ts#bytes",
+    "reason": "dispose() frees what an object holds and bytes() reports it to the memory watchdog: the views' common lifecycle names, with bodies of their own."
+  },
+  {
     "key": "same name: solarpolis/render/people.ts#bytes + solarpolis/render/view.ts#bytes",
     "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
+  },
+  {
+    "key": "same name: solarpolis/render/people.ts#dispose + solarpolis/render/specks.ts#dispose",
+    "reason": "dispose() frees what an object holds and bytes() reports it to the memory watchdog: the views' common lifecycle names, with bodies of their own."
   },
   {
     "key": "same name: solarpolis/render/people.ts#follow + solarpolis/render/plants.ts#follow",

@@ -6,6 +6,7 @@
  * instance (`STAND_IN_STRIDE` floats), from the same look their Actors figure is built from, so the two match in size,
  * colour and silhouette when they hand over (CLAUDE.md, rule 16). Pure.
  */
+import { hash3i } from '@futuremagic/core';
 import type { Vec3 } from '../blueprint';
 
 /** What a part wears: skin, hair, the top, the forearms (sleeve or skin), the bottom, the shins, the shoes. */
@@ -29,11 +30,14 @@ export const JOINT = {
   wrist: { x: 0.155, y: 0.48 },
 } as const;
 
+/** A person's height before their look is measured (m): about Actors' grown bodies' middle. */
+export const MEAN_HEIGHT = 1.7;
+
 /** How a stand-in stands (`pose` per instance): upright (walking or standing; swimmers too, sunk), kneeling, lying on its back. */
 export const POSE = { upright: 0, kneel: 1, lie: 2 } as const;
 
 /**
- * Floats per instance, in five vec4 attributes (materials.ts, `crowdInstances`):
+ * Floats per instance, in five vec4 attributes (materials.ts, `peopleInstances`):
  *   stand  foot (x, y, z relative to the mesh), height (m)
  *   gait   turn (rad, as plants), stride phase (rad), stride rate (rad/s; 0 standing), pose
  *   light  width (× the mean body's), horizon port, horizon wild (rad), skin colour
@@ -54,6 +58,75 @@ export function packColor(c: readonly [number, number, number]): number {
 export function hexColor(hex: string): [number, number, number] {
   const n = parseInt(hex.replace('#', '').slice(0, 6), 16);
   return Number.isFinite(n) ? [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255] : [0.5, 0.5, 0.5];
+}
+
+/** Garment colours (sRGB) the residents dress in (render/actors/residents.ts): light, quiet, natural dyes, and a few strong ones. */
+export const DYES = ['#e6e1d6', '#d2bd98', '#8b8e93', '#5b6470', '#3566a8', '#2f6b45', '#a8b8c0', '#c9a27e', '#f1efe9', '#5f6838', '#8a4b2a', '#b9504a', '#d8b04a', '#1f7a7a', '#3b3f46'];
+
+/** A procedural skin's colour from its tone (0 light … 1 dark), sRGB. */
+export function skinTone(t: number): [number, number, number] {
+  const light = [0.87, 0.72, 0.62], dark = [0.3, 0.2, 0.15];
+  return [0, 1, 2].map((k) => light[k] + (dark[k] - light[k]) * t) as [number, number, number];
+}
+
+/** A packed colour (`packColor`) back as 0..1 channels. */
+export function unpackColor(v: number): [number, number, number] {
+  return [(v % 256) / 255, (Math.floor(v / 256) % 256) / 255, Math.floor(v / 65536) / 255];
+}
+
+/**
+ * A speck (render/specks.ts): someone further off than the stand-ins, drawn as the few pixels they cover. Floats per
+ * instance, in four vec4 attributes (materials.ts, `peopleInstances`):
+ *   speckFoot   feet (world, m), height (m)
+ *   speckDrift  their way over the floor (world, m/s), pose
+ *   speckTint   head, top, bottom colours (packed, as the stand-in's), and one spare
+ *   speckSky    horizon port, horizon wild (rad), width (× the mean), and one spare
+ * Whether a speck is drawn at all is its own attribute (`SPECK_SHOWN`, one float): 0 where a nearer level draws them.
+ */
+export const SPECK_STRIDE = 16;
+export const SPECK_ATTRIBUTES = ['speckFoot', 'speckDrift', 'speckTint', 'speckSky'] as const;
+export const SPECK_SHOWN = 'speckShown';
+/** Where a body's bands meet, as shares of its height: the bottom below the waist, the head above the neck. */
+export const WAIST = 0.55;
+export const NECK = 0.87;
+/** How deep a body is, and how much of its outline (height by width) it fills, at height 1 (from the stand-in's body). */
+export const BODY_DEPTH = 0.2;
+export const BODY_WIDTH = 0.3;
+export const BODY_FILL = 0.55;
+
+/**
+ * A speck's three bands (packed) from a stand-in's colours by slot: the head (hair and face), the top (with the
+ * forearms) and the legs (the bottom, the shins and the shoes), each as the stand-in shows it from a little way off.
+ */
+export function speckBands(colors: readonly number[]): [number, number, number] {
+  const mixed = (...parts: [Slot, number][]): number => {
+    const c = [0, 0, 0];
+    for (const [slot, w] of parts) unpackColor(colors[SLOT[slot]]).forEach((v, k) => { c[k] += v * w; });
+    return packColor(c as [number, number, number]);
+  };
+  return [mixed(['hair', 0.6], ['skin', 0.4]), mixed(['top', 0.8], ['sleeve', 0.2]), mixed(['bottom', 0.6], ['shin', 0.3], ['shoes', 0.1])];
+}
+
+/**
+ * A speck's bands for someone whose look is not measured yet: drawn from the same dyes and skin tones their look is
+ * (by their look's seed), so a far crowd has the colours of the crowd it will be close up; any one of them is under a
+ * pixel there. A shell is plated in one paint.
+ */
+export function guessBands(look: number, shell: boolean): [number, number, number] {
+  const pick = (k: number): number => hash3i(look, k, 41, 0) >>> 0;
+  const dye = (k: number): number => packColor(hexColor(DYES[pick(k) % DYES.length]));
+  if (shell) return [dye(1), dye(1), dye(2)];
+  const skin = skinTone((pick(3) % 1000) / 1000), hair = hexColor(DYES[[14, 10, 7, 3][pick(4) % 4]]);
+  const head = packColor([0, 1, 2].map((k) => hair[k] * 0.6 + skin[k] * 0.4) as [number, number, number]);
+  return [head, dye(5), dye(6)];
+}
+
+/** A person's speck instance (`SPECK_STRIDE` floats at `o`): feet (world), height, drift (world, m/s), pose, bands, horizons, width. */
+export function writeSpeck(d: Float32Array, o: number, feet: Vec3, height: number, drift: Vec3, pose: number, bands: readonly number[], horizon: readonly [number, number], width: number): void {
+  d[o] = feet[0]; d[o + 1] = feet[1]; d[o + 2] = feet[2]; d[o + 3] = height;
+  d[o + 4] = drift[0]; d[o + 5] = drift[1]; d[o + 6] = drift[2]; d[o + 7] = pose;
+  d[o + 8] = bands[0]; d[o + 9] = bands[1]; d[o + 10] = bands[2]; d[o + 11] = 0;
+  d[o + 12] = horizon[0]; d[o + 13] = horizon[1]; d[o + 14] = width; d[o + 15] = 0;
 }
 
 export interface StandInArrays {

@@ -11,7 +11,7 @@
  */
 import { MeshBasicNodeMaterial, DoubleSide, BackSide, FrontSide, AdditiveBlending, type Material } from 'three/webgpu';
 import { abs, atan, attribute, screenCoordinate, cross, dFdx, dFdy, floor, fract, inverseSqrt, log2, mx_noise_float, uv, cameraPosition, hash, normalLocal, step, time, varying, clamp, color, cos, log, select, sign, sqrt, dot, exp, float, max, mix, normalize, min, modelWorldMatrix, normalWorld, positionLocal, positionWorld, pow, sin, smoothstep, texture, uniform, vec2, vec3, vec4, vertexColor } from 'three/tsl';
-import { DataTexture, Uint8BufferAttribute, RGBAFormat, UnsignedByteType, Vector4, DataUtils, Float32BufferAttribute, HalfFloatType, InstancedInterleavedBuffer, InterleavedBufferAttribute, RedFormat, Vector2, Vector3, type BufferGeometry } from 'three/webgpu';
+import { DataTexture, Uint8BufferAttribute, RGBAFormat, UnsignedByteType, Vector4, DataUtils, Float32BufferAttribute, HalfFloatType, InstancedBufferAttribute, InstancedInterleavedBuffer, InterleavedBufferAttribute, RedFormat, Vector2, Vector3, type BufferGeometry } from 'three/webgpu';
 import { PLANT_STRIDE } from '../gen/scatter';
 import { BARK_STRIPS } from '../gen/trees';
 import { BARK_TEXELS } from '../gen/foliage';
@@ -31,8 +31,8 @@ import { RISE_RANGE } from '../gen/tiles';
 import { filtered } from './textures';
 import { cloudMarch, cloudShade } from './cloudShaders';
 import { builtAlbedo, roofHorizons } from './builtShaders';
-import { standInHorizon, standInPose } from './crowdShaders';
-import { STAND_IN_ATTRIBUTES, STAND_IN_STRIDE } from '../gen/standIn';
+import { speckLook, standInHorizon, standInPose } from './crowdShaders';
+import { SPECK_ATTRIBUTES, SPECK_SHOWN, SPECK_STRIDE, STAND_IN_ATTRIBUTES, STAND_IN_STRIDE } from '../gen/standIn';
 import { boreColor, flameColor, hardwareColor, lampColor, radiatorColor, skinColor, skinDetailColor, skinShown } from './hullShaders';
 
 /** The air's look, shared by every kind (uniforms: changing them never builds a shader). */
@@ -642,7 +642,9 @@ export function standInAttribute(g: BufferGeometry, name: string): boolean {
   else if (name === 'corner') g.setAttribute('corner', new Float32BufferAttribute([-1, -1, 1, -1, 1, 1], 2));
   else if (name === 'horizon') g.setAttribute('horizon', new Float32BufferAttribute([OPEN_SKY, OPEN_SKY, 0, 0, OPEN_SKY, OPEN_SKY, 0, 0, OPEN_SKY, OPEN_SKY, 0, 0], 4));
   else if (name === 'plant') plantInstances(g, new Float32Array([0, 0, 0, 1, 0, 0, 0]));
-  else if ((STAND_IN_ATTRIBUTES as readonly string[]).includes(name)) { if (name === STAND_IN_ATTRIBUTES[0]) crowdInstances(g, new Float32Array(STAND_IN_STRIDE)); }
+  else if ((STAND_IN_ATTRIBUTES as readonly string[]).includes(name)) { if (name === STAND_IN_ATTRIBUTES[0]) peopleInstances(g, new Float32Array(STAND_IN_STRIDE), STAND_IN_LAYOUT); }
+  else if ((SPECK_ATTRIBUTES as readonly string[]).includes(name)) { if (name === SPECK_ATTRIBUTES[0]) peopleInstances(g, new Float32Array(SPECK_STRIDE), SPECK_LAYOUT); }
+  else if (name === SPECK_SHOWN) g.setAttribute(SPECK_SHOWN, new InstancedBufferAttribute(new Float32Array(1), 1));
   else if (name === 'part') g.setAttribute('part', new Float32BufferAttribute(new Array(6).fill(0), 2));
   else if (name === 'uv') g.setAttribute('uv', new Float32BufferAttribute(new Array(6).fill(0), 2));
   else if (name === 'floorA' || name === 'floorB') g.setAttribute(name, new Uint8BufferAttribute(new Array(12).fill(name === 'floorA' ? 255 : 0), 4, true));
@@ -720,14 +722,37 @@ export const CROWD = kind('crowd', ['position', 'normal', 'part', ...STAND_IN_AT
   return m;
 });
 
-/** Put people on a stand-in geometry as its instances: `STAND_IN_STRIDE` floats each (gen/standIn.ts). The one way. */
-export function crowdInstances(g: BufferGeometry, data: Float32Array | InstancedInterleavedBuffer): InstancedInterleavedBuffer {
-  const buffer = data instanceof InstancedInterleavedBuffer ? data : new InstancedInterleavedBuffer(data, STAND_IN_STRIDE);
-  STAND_IN_ATTRIBUTES.forEach((name, k) => g.setAttribute(name, new InterleavedBufferAttribute(buffer, 4, k * 4)));
+/**
+ * People further off than the stand-ins (render/specks.ts): each the patch of screen their body covers, as faint as it
+ * is small (`speckLook`, crowdShaders.ts), lit as the stand-ins are, through the air. Drawn over what is behind
+ * them without writing depth, before the clouds (render order 0; the clouds' meshes come after), so a cloud covers
+ * those under it. Corner (the quad's) and the `SPECK_ATTRIBUTES` per person.
+ */
+export const SPECK = kind('speck', ['position', 'corner', ...SPECK_ATTRIBUTES, SPECK_SHOWN], { cast: false, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false });
+  const look = speckLook(view.eye);
+  m.positionNode = look.position;
+  m.vertexNode = look.clip;
+  m.colorNode = throughAir(look.color.mul(sunlit(look.horizon, normalize(look.normal), 0, float(1), true, true)));
+  m.opacityNode = look.opacity;
+  return m;
+});
+
+/** How people are laid out as instances (gen/standIn.ts): the stand-ins' floats and attributes, and the specks'. */
+export const STAND_IN_LAYOUT = { stride: STAND_IN_STRIDE, attributes: STAND_IN_ATTRIBUTES } as const;
+export const SPECK_LAYOUT = { stride: SPECK_STRIDE, attributes: SPECK_ATTRIBUTES } as const;
+
+/**
+ * Put people on a geometry as its instances, `layout.stride` floats each in vec4 attributes (gen/standIn.ts): the
+ * stand-ins (CROWD) or the specks (SPECK). The one way.
+ */
+export function peopleInstances(g: BufferGeometry, data: Float32Array | InstancedInterleavedBuffer, layout: typeof STAND_IN_LAYOUT | typeof SPECK_LAYOUT): InstancedInterleavedBuffer {
+  const buffer = data instanceof InstancedInterleavedBuffer ? data : new InstancedInterleavedBuffer(data, layout.stride);
+  layout.attributes.forEach((name, k) => g.setAttribute(name, new InterleavedBufferAttribute(buffer, 4, k * 4)));
   return buffer;
 }
 
 /** Every kind, for the Stage's warm-up. */
 export function allKinds(): readonly Kind[] {
-  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS, STONE, BUILT, CROWD, CLOUDS_FAR, CLOUDS_NEAR];
+  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS, STONE, BUILT, CROWD, SPECK, CLOUDS_FAR, CLOUDS_NEAR];
 }
