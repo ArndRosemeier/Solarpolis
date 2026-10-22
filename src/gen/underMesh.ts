@@ -88,9 +88,10 @@ const LIP = { width: 0.5, deep: 0.2 };
 /**
  * A court's lift below, in handrails: an open bronze cage from floor to vault, its side, its corner posts, the bands
  * round it at every `every` up, the lattice's bars, the panels below the first band (`door` high, the doorway's
- * height on the side toward the court), and the clearance round it in the vault's opening.
+ * height on the side toward the court), the clearance round it in the vault's opening, and how far its shaft rises
+ * over the court's level (over the cabin's roof waiting there: from the top of the shaft one sees no vault from above).
  */
-export const LIFT = { side: 3, post: 0.16, band: 0.09, every: 2.8, bar: 0.05, door: 2.6, clear: 0.35 };
+export const LIFT = { side: 3, post: 0.16, band: 0.09, every: 2.8, bar: 0.05, door: 2.6, clear: 0.35, head: 3 };
 /** Facets across a rib's rounded section; how far its normals lean out of the surface even where it meets it. */
 const RIB_SECTION = 4;
 const RIB_LEAN = 0.6;
@@ -221,8 +222,8 @@ function openingOver(t: Terrain, i: number, j: number): Opening | null {
   if (well) return { shaft: well.shaft, lift: null };
   const lift = underLiftIn(t, i, j)?.lift;
   if (!lift) return null;
-  const radius = (lift.side / 2) * Math.SQRT2 + LIFT.clear * t.habitat.params.landmarks!.handrail;
-  return { shaft: { radius, topRadius: radius, top: lift.above, cap: 'stone' }, lift };
+  const hr = t.habitat.params.landmarks!.handrail, radius = (lift.side / 2) * Math.SQRT2 + LIFT.clear * hr;
+  return { shaft: { radius, topRadius: radius, top: lift.above + LIFT.head * hr, cap: 'stone' }, lift };
 }
 
 /** The lamp ring's middle height over a pillar's floor. */

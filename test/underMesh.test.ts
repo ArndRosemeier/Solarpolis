@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MATRIX, fromWorld, toWorld, type Vec3 } from '../src/blueprint';
 import { levelsOf } from '../src/gen/underLevels';
-import { buildUnderTile, isBelow, underLiftOf, underSolid, underTilesFor, type UnderDetail } from '../src/gen/underMesh';
+import { LIFT, buildUnderTile, isBelow, underLiftOf, underSolid, underTilesFor, type UnderDetail } from '../src/gen/underMesh';
 import { buildPatch } from '../src/gen/patch';
 import { courtLayoutOf, lightWellOf } from '../src/gen/courts';
 import { angleDiff } from '@futuremagic/core';
@@ -96,7 +96,7 @@ for (const { name } of MATRIX) {
       const w = outOfPlace(tile.origin, [mesh.positions[v * 3], mesh.positions[v * 3 + 1], mesh.positions[v * 3 + 2]]), p = fromWorld(h.profile, w[0], w[1], w[2]), l = lv.levelAt(p.theta, p.s);
       if (p.h <= l.ceiling + 0.25) continue;
       up++;
-      assert.ok(Math.hypot(angleDiff(p.theta, mid.theta) * h.radius, p.s - mid.s) <= lift.side + 1e-6 && p.h <= lift.above + 1e-6, 'only its shaft rises over the vault, up to the court');
+      assert.ok(Math.hypot(angleDiff(p.theta, mid.theta) * h.radius, p.s - mid.s) <= lift.side + 1e-6 && p.h <= lift.above + LIFT.head * h.params.landmarks!.handrail + 1e-6, 'only its shaft rises over the vault, up over the court\'s level');
     }
     assert.ok(up > 0, 'its shaft goes up to the court');
   });

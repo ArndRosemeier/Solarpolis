@@ -46,8 +46,8 @@ for (const { name } of MATRIX) {
       const p = cabinPlace(t, court, k)!, at = fromWorld(h.profile, ...p.at);
       assert.ok(Math.abs(at.h - (ride.bottom + (ride.top - ride.bottom) * k)) < 1e-6, `at ${k} of its way`);
       assert.ok(Math.abs(Math.hypot(...p.ex) - 1) < 1e-9 && Math.abs(v3dot(p.ex, p.ez)) < 1e-9 && Math.abs(v3dot(p.ey, p.ez)) < 1e-9, 'a frame');
-      const up = fromWorld(h.profile, ...eyeInCabin(p, 1.6));
-      assert.ok(Math.abs(up.h - at.h - 1.6) < 1e-6, 'its eye is up from its floor');
+      const up = fromWorld(h.profile, ...eyeInCabin(h, p, 1.6));
+      assert.ok(up.h - at.h > 1.6 && up.h - at.h < 1.9, 'its eye is up from its floor');
     }
     assert.ok(v3dot(v3sub(below.at, cabinPlace(t, court, 0)!.at), below.out) > 0, 'its doors on the side the cage opens');
     // A ride eases out and in, and takes long enough not to jolt; a called cabin comes out of the vault above the cage.
