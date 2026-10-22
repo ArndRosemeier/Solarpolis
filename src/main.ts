@@ -10,6 +10,7 @@ import { nearestPlace, vineFaceFoot } from './gen/places';
 import { besideRiver, nearestSample, type River } from './gen/rivers';
 import './app/style.css';
 import { el } from './app/dom';
+import { GravityMeter } from './app/gravityMeter';
 import { TitleCard } from './app/title';
 import { DebugMenu } from './app/debug';
 import { MemoryWatchdog, browserHeap, thisDeviceBudget, type PressureLevel } from './app/memory';
@@ -114,6 +115,10 @@ class ViewSlot<V extends PageView> {
 
 const insideSlot = new ViewSlot('Hold the right mouse button to look around · W A S D to move · Shift to run · Space to jump · wheel to see yourself · F to fly (E up, Q down)', 'Building the interior…', 'terrain tiles', async (h) => {
   const v = await InteriorView.create(h);
+  // The gravity the player feels, and why (with the spin, against it, higher up): Arnd, 2026-10-22.
+  const meter = new GravityMeter(() => (lab.habitat ? { habitat: lab.habitat, ...v.paces } : null));
+  insideSlot.box.append(meter.box);
+  v.onGravity = (r) => meter.showReading(r);
   memory.track('player body', () => v.bodyBytes());
   memory.track('people', () => v.peopleBytes());
   memory.track('drones', () => v.droneBytes());

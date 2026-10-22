@@ -36,6 +36,56 @@ export function coast(h: Habitat, p: Vec3, v: Vec3, seconds: number, dt = 1 / 24
   return { p: P, v: V, t };
 }
 
+/** Spinward at `p`: the way the floor itself moves around the axis (+θ, since the habitat turns about +z). */
+export function spinwardAt(p: Vec3): Vec3 | null {
+  const up = upAt(p);
+  return up && [up[1], -up[0], 0];
+}
+
+/**
+ * The weight a body at `p` moving at `v` (habitat frame) feels per kilogram on the ground under it (m/s²): what the
+ * floor must push to bend its path around the axis. Seen from outside, the body goes round at ωr plus its own speed
+ * spinward, so it weighs (ωr + v·spinward)² / r: with the spin heavier, against it lighter, along the axis the same.
+ * At rest it is `habitat.gravityAt(r)`. It is also the gravity a jump feels: in the turning frame the centrifugal
+ * ω²r, the Coriolis 2ωv and the floor curving away under a body moving across it (v²/r) add up to the same.
+ */
+export function feltGravity(h: Habitat, p: Vec3, v: Vec3): number {
+  const r = Math.hypot(p[0], p[1]);
+  if (r < 1e-6) return 0;
+  const round = h.spin * r + (-p[1] * v[0] + p[0] * v[1]) / r;
+  return (round * round) / r;
+}
+
+/** How a body moves, for the gravity it feels: on its feet, in the air, swimming, flying, or riding a lift. */
+export type Moving = 'foot' | 'air' | 'swim' | 'fly' | 'lift';
+
+/** What the gravity meter shows (app/gravityMeter.ts). */
+export interface GravityReading {
+  /** Felt gravity now, and what it would be standing still here, and on the floor (m/s²). */
+  felt: number;
+  rest: number;
+  floor: number;
+  /** Speed spinward (m/s; negative: against the spin). */
+  spinward: number;
+  /** Where spinward lies seen from the eye: radians clockwise from straight ahead (along the ground). */
+  arrow: number;
+  moving: Moving;
+}
+
+/** The meter's reading for a body at `p` moving at `v`, seen from an eye looking along `look` with `up` up. */
+export function gravityReading(h: Habitat, p: Vec3, v: Vec3, look: Vec3, up: Vec3, moving: Moving): GravityReading {
+  const r = Math.hypot(p[0], p[1]), spin = spinwardAt(p) ?? [0, 0, 0];
+  const ahead: Vec3 = [look[0] - up[0] * dot(look, up), look[1] - up[1] * dot(look, up), look[2] - up[2] * dot(look, up)];
+  // Right of the eye: look × up.
+  const right: Vec3 = [look[1] * up[2] - look[2] * up[1], look[2] * up[0] - look[0] * up[2], look[0] * up[1] - look[1] * up[0]];
+  return {
+    felt: feltGravity(h, p, v), rest: h.gravityAt(r), floor: h.gravityAt(h.radius),
+    spinward: dot(v, spin), arrow: Math.atan2(dot(spin, right), dot(spin, ahead)), moving,
+  };
+}
+
+const dot = (a: Vec3, b: Vec3): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
 /**
  * Which way is up at `p`: straight toward the axis, against the spin's apparent gravity (its strength there is
  * `habitat.gravityAt(r)`). On the axis itself there is no up, and this returns null.
