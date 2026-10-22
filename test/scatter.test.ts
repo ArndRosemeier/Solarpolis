@@ -8,7 +8,7 @@ import { ecologyOf } from './worlds';
 
 /** A cell of a plant near a point of the floor, and the plant. */
 function cellAt(name: string, params = MATRIX[0].params, at?: (lake: number, floor: [number, number]) => number) {
-  const h = derive(params), eco = makeEcology(makeTerrain(h)), plants = plantsOf(eco);
+  const eco = params === MATRIX[0].params ? ecologyOf(MATRIX[0].name) : makeEcology(makeTerrain(derive(params))), h = eco.terrain.habitat, plants = plantsOf(eco);
   const sp = plants.find((p) => p.spec.name === name)!;
   const s = at ? at(eco.terrain.lake?.s ?? 0, [h.profile.floorStart, h.profile.floorEnd]) : (h.profile.floorStart + h.profile.floorEnd) / 2;
   const eye = toWorld(h.profile, { theta: 0.3, s, h: eco.terrain.heightAt(0.3, s) + 1.7 });
@@ -132,7 +132,7 @@ test('scatter: a plant is the same whichever level\'s cell plants it', () => {
 });
 
 test('ecology: woods have a canopy layer as high as their trees, open land none', () => {
-  const eco = makeEcology(makeTerrain(derive(MATRIX[0].params)));
+  const eco = ecologyOf(MATRIX[0].name);
   for (const b of eco.climate.biomes) {
     const c = canopyOf(b), trees = b.plants.filter((p) => p.height[1] >= TREE_HEIGHT);
     if (!trees.length) { assert.equal(c.cover, 0, b.name); continue; }

@@ -1,12 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MATRIX, derive, fromWorld, toWorld, FLOOR_LAYERS } from '../src/blueprint';
-import { makeTerrain } from '../src/gen/terrain';
+import { MATRIX, fromWorld, toWorld, FLOOR_LAYERS } from '../src/blueprint';
 import { makeEcology } from '../src/gen/ecology';
 import { landformOf } from '../src/gen/plan';
 import { cellsNear, normalAt, plantCell, plantsOf, slopeAt, PLANT_STRIDE } from '../src/gen/scatter';
 import { LAND_ALBEDO, landAlbedo } from '../src/render/exposure';
 import { COHESION, TAN_FRICTION, snowCover, snowFieldOf, snowHolds, snowLies, tanHolds } from '../src/gen/snow';
+import { ecologyOf } from './worlds';
 
 /** Ground points of the wild endcap's top, where gravity is `g` of the floor's: (θ, s, height, world, level). */
 function ring(eco: ReturnType<typeof makeEcology>, g: number, n = 96) {
@@ -18,9 +18,9 @@ function ring(eco: ReturnType<typeof makeEcology>, g: number, n = 96) {
   });
 }
 
-for (const { name, params } of MATRIX) {
+for (const { name } of MATRIX) {
   test(`snow (${name}): above the Mountain's snow line only, holding steeper as gravity falls, a field near the axis`, () => {
-    const h = derive(params), eco = makeEcology(makeTerrain(h)), f = snowFieldOf(h), { profile } = h, R = h.radius;
+    const eco = ecologyOf(name), h = eco.terrain.habitat, f = snowFieldOf(h), { profile } = h, R = h.radius;
     assert.ok(Math.abs(f.line - landformOf(h).mountain.snowLine * R) < 1e-6, 'the plan\'s snow line');
     // Gravity: all of it near the wild end's axis, none on the floor, none on the Gate however near its hub.
     const wildTip = toWorld(profile, { theta: 0, s: landformOf(h).endcapAt(true, 0.02), h: 0 });
@@ -47,7 +47,7 @@ for (const { name, params } of MATRIX) {
   });
 
   test(`snow (${name}): above the line the ground is bare rock, and nothing grows on it`, () => {
-    const h = derive(params), eco = makeEcology(makeTerrain(h));
+    const eco = ecologyOf(name), h = eco.terrain.habitat;
     const rgb = new Float32Array(3), canopy = new Float32Array(4), floor = new Uint8Array(FLOOR_LAYERS.length), wood = new Float32Array(2);
     const grass = FLOOR_LAYERS.indexOf('grass'), dry = FLOOR_LAYERS.indexOf('dry grass'), rock = FLOOR_LAYERS.indexOf('rock');
     for (const q of ring(eco, landformOf(h).mountain.snowLine * 0.6, 24)) {

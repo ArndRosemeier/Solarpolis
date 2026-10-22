@@ -6,6 +6,7 @@ import { makeEcology } from '../src/gen/ecology';
 import { buildStone, type StoneMesh } from '../src/gen/stones';
 import { buildFallenWood, BARK_STRIPS } from '../src/gen/trees';
 import { LEVELS, cellsNear, plantCell, plantsOf, PLANT_STRIDE, type Level } from '../src/gen/scatter';
+import { ecologyOf } from './worlds';
 
 const tris = (m: { index: Uint32Array }) => m.index.length / 3;
 
@@ -63,9 +64,9 @@ for (const piece of ['log', 'branch'] as const) {
   });
 }
 
-for (const { name, params } of MATRIX) {
+for (const { name } of MATRIX) {
   test(`debris (${name}): lies on its floor layer along the slope under it, seen as far as its size allows`, () => {
-    const h = derive(params), eco = makeEcology(makeTerrain(h)), plants = plantsOf(eco), { profile } = h;
+    const eco = ecologyOf(name), h = eco.terrain.habitat, plants = plantsOf(eco), { profile } = h;
     const debris = plants.filter((p) => p.what === 'debris');
     assert.equal(debris.length, eco.climate.debris.length);
     const by = (n: string) => debris.find((p) => p.spec.name === n)!;
@@ -107,5 +108,5 @@ test('debris: the mediterranean has stones and fallen pine; every fallen piece n
   const med = makeEcology(makeTerrain(derive(withParams({ climate: 'mediterranean' }))));
   const d = med.climate.debris as readonly DebrisSpec[];
   assert.ok(d.some((x) => x.form === 'stone') && d.some((x) => x.form === 'log'));
-  for (const eco of [med, makeEcology(makeTerrain(derive(MATRIX[0].params)))]) for (const x of eco.climate.debris) if (x.form !== 'stone') assert.ok(x.wood, `${x.name} names its tree`);
+  for (const eco of [med, ecologyOf(MATRIX[0].name)]) for (const x of eco.climate.debris) if (x.form !== 'stone') assert.ok(x.wood, `${x.name} names its tree`);
 });

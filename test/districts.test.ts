@@ -1,14 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Rng } from '@futuremagic/core';
-import { FLOOR_LAYERS, MATRIX, STYLE_LAND, derive } from '../src/blueprint';
-import { makeTerrain } from '../src/gen/terrain';
-import { makeEcology } from '../src/gen/ecology';
+import { FLOOR_LAYERS, MATRIX, STYLE_LAND } from '../src/blueprint';
 import { COURT, courtOf, planOf } from '../src/gen/plan';
+import { ecologyOf } from './worlds';
 
-for (const { name, params } of MATRIX) {
+for (const { name } of MATRIX) {
   test(`districts (${name}): each district grows its land in its style, and belts of trees mark the borders`, () => {
-    const h = derive(params), eco = makeEcology(makeTerrain(h)), plan = planOf(h), t = eco.terrain;
+    const eco = ecologyOf(name), h = eco.terrain.habitat, plan = planOf(h), t = eco.terrain;
     const patch = eco.climate.patch * h.radius, out = new Float32Array(3), wood = new Float32Array(2);
     const coverAt = (theta: number, s: number): number => {
       eco.colorAt(theta, s, t.heightAt(theta, s), 0.05, out, 0, undefined, undefined, wood);
@@ -45,7 +44,7 @@ for (const { name, params } of MATRIX) {
 for (const { name, params } of MATRIX) {
   test(`districts (${name}): an entrance's court is paved, with no crowns over it or its clear ring`, () => {
     if (!params.landmarks) return;
-    const h = derive(params), eco = makeEcology(makeTerrain(h)), t = eco.terrain, plan = planOf(h), R = h.radius;
+    const eco = ecologyOf(name), h = eco.terrain.habitat, t = eco.terrain, plan = planOf(h), R = h.radius;
     const out = new Float32Array(3), wood = new Float32Array(2), floor = new Uint8Array(FLOOR_LAYERS.length);
     const gravel = FLOOR_LAYERS.indexOf('gravel');
     for (const site of plan.sites.filter((k) => k.kind === 'entrance').slice(0, 10)) {
