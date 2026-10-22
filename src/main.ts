@@ -19,6 +19,7 @@ import { VERSION, whatsNewButton } from './app/whatsNew';
 import { BlueprintLab } from './lab/blueprintLab';
 import { GraphicsUnavailable } from '@futuremagic/stage';
 import { InteriorView } from './render/view';
+import { talksWithHands } from './render/people';
 import { speckMark } from './render/crowdShaders';
 import { OutsideView } from './render/outside';
 import { hubView } from './space';
@@ -283,16 +284,23 @@ toPlace('Beside the nearest person in a drone body', 4, (eco, t, s) => {
   const d = best.theta - t, dx = (d - 2 * Math.PI * Math.round(d / (2 * Math.PI))) * r, dy = best.s - s, l = Math.hypot(dx, dy) || 1;
   return { theta: best.theta, s: best.s, way: [dx / l, dy / l] };
 });
-/** 6 m from the nearest party of two or more down on the grass (sitting or lying, not on a seat) within 6 km, facing it. */
-toPlace('Beside the nearest party on the grass', 6, (eco, t, s) => {
+/** 6 m from the nearest party out on the land that `keep` picks (within `within` m), facing it. */
+const besideParty = (label: string, within: number, keep: (p: Person) => boolean): void => toPlace(label, 6, (eco, t, s) => {
   const h = eco.terrain.habitat, r = h.radius, v = view();
   if (!v) return null;
-  const down = peopleAt(h, v.time, { theta: t, s, radius: 6000 }, eco.terrain).filter((p) => !p.moving && p.size > 1 && p.posture !== POSE.upright && p.activity !== 'bench');
-  const best = down.sort((a, b) => floorGap(r, t, s, a.theta, a.s) - floorGap(r, t, s, b.theta, b.s))[0];
+  const some = peopleAt(h, v.time, { theta: t, s, radius: within }, eco.terrain).filter((p) => !p.moving && keep(p));
+  const best = some.sort((a, b) => floorGap(r, t, s, a.theta, a.s) - floorGap(r, t, s, b.theta, b.s))[0];
   if (!best) return null;
   const d = best.theta - t, dx = (d - 2 * Math.PI * Math.round(d / (2 * Math.PI))) * r, dy = best.s - s, l = Math.hypot(dx, dy) || 1;
   return { theta: best.theta, s: best.s, way: [dx / l, dy / l] };
 });
+// Down on the grass (sitting or lying, not on a seat); then the beats the places offer.
+besideParty('Beside the nearest party on the grass', 6000, (p) => p.size > 1 && p.posture !== POSE.upright && p.activity !== 'bench');
+besideParty('Beside the nearest game of catch', 20000, (p) => p.act === 'catch' && p.size > 1);
+besideParty('Beside the nearest dancers', 20000, (p) => p.act === 'dance');
+besideParty('Beside the nearest pair talking with their hands', 20000, talksWithHands);
+besideParty('Beside the nearest one stretching', 20000, (p) => p.act === 'stretch');
+besideParty('Beside the nearest one at standing work', 20000, (p) => p.act === 'work' && p.posture === POSE.upright);
 /** Before the nearest herd of deer (within a few km, or else in the wild reserve), approached from where the player stands. */
 toPlace('Before the nearest herd', 60, (eco, t, s) => {
   const h = eco.terrain.habitat, v = view(), r = h.radius;

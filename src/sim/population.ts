@@ -496,17 +496,22 @@ function placeOf(h: Habitat, o: Outings, n: number, court: number, day: number, 
   else {
     // At their place: the party's beat, now (a stroll takes them off their spot and back).
     const reach = Math.min(STROLL.most, Math.max(STROLL.least, place.spread * STROLL.share));
-    const b = beatAt(seedsOf(h).beat, activity, lead, day, u, legs, stay - legs, pace, reach);
-    let toward = b.toward, off = b.away > 0;
+    const b = beatAt(seedsOf(h).beat, activity, lead, size, day, u, legs, stay - legs, pace, reach);
+    // A game of catch: every other one goes out the other way, so they face each other over twice its length.
+    const across = b.act === 'catch' && member % 2 === 1 ? Math.PI : 0;
+    let toward = b.toward + across, off = b.away > 0;
     // Nobody strolls into the lake who did not come to swim: the other way, or not at all.
     const lake = off && activity !== 'swim' ? planOf(h).lake : null;
     if (lake && fromLake(lake, ss + Math.cos(toward) * reach) < 0) {
       toward += Math.PI;
-      if (fromLake(lake, ss + Math.cos(toward) * reach) < 0) off = false;
-    }
-    const away = off ? b.away : 0, moving = off && b.moving, act: Act = b.act === 'stroll' && !off ? 'quiet' : b.act;
-    // Looking about where they stand faces away from the ring; at the end of a stroll, on the way they went.
-    const heading = moving ? toward + (b.back ? Math.PI : 0) : off ? toward : act === 'look' && form === 'ring' ? facing + Math.PI : facing;
+      // A game of catch needs both ways dry (each goes out its own way).
+      if (across || b.act === 'catch' || fromLake(lake, ss + Math.cos(toward) * reach) < 0) off = false;
+    } else if (lake && b.act === 'catch' && fromLake(lake, ss - Math.cos(toward) * reach) < 0) off = false;
+    const away = off ? b.away : 0, moving = off && b.moving;
+    const act: Act = !off && (b.act === 'stroll' || b.act === 'catch') ? 'quiet' : b.act;
+    // Looking about where they stand faces away from the ring; at the end of a stroll, on the way they went; at catch,
+    // back toward the one they throw to.
+    const heading = moving ? toward + (b.back ? Math.PI : 0) : off ? (act === 'catch' ? toward + Math.PI : toward) : act === 'look' && form === 'ring' ? facing + Math.PI : facing;
     const dTheta = away > 0 ? (away * Math.sin(toward)) / Math.max(1, h.profile.at(ss).r) : 0;
     return {
       resident: i, theta: st + dTheta, s: ss + away * Math.cos(toward), heading, moving, speed: moving ? pace : 0,
