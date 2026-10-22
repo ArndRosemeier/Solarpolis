@@ -69,6 +69,18 @@ export interface Under extends Bays {
   hamletOf(i: number, j: number): Hamlet | null;
 }
 
+/**
+ * A hamlet's bays, ring by ring out from its middle to `most` bays away (nearest first), with their offsets from its
+ * middle: the one way to look round a hamlet.
+ */
+export function* baysOfHamlet(u: Under, m: Hamlet, most: number): Generator<{ i: number; j: number; di: number; dj: number }> {
+  for (let r = 0; r <= most; r++) for (let di = -r; di <= r; di++) for (let dj = -r; dj <= r; dj++) {
+    if (Math.max(Math.abs(di), Math.abs(dj)) !== r) continue;
+    const i = m.i + di, j = m.j + dj;
+    if (u.hamletOf(i, j) === m) yield { i, j, di, dj };
+  }
+}
+
 /** The share of each use over a habitat's bays, counted on every `step`-th bay round and along. */
 export function sharesOf(under: Under, step = 1): Record<BayUse, number> {
   const out = Object.fromEntries(BAY_USES.map((u) => [u, 0])) as Record<BayUse, number>;
