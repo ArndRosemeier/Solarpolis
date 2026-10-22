@@ -1,9 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MATRIX, derive } from '../src/blueprint';
+import { MATRIX } from '../src/blueprint';
 import { POSE } from '../src/gen/standIn';
 import { OFFERED, RISE, beatAt } from '../src/sim/beats';
 import { peopleAt, personKey, type Person } from '../src/sim';
+import { habitatOf } from './worlds';
 
 test('beats: a stay is a chain of beats: down on arriving, up before leaving, strolls come back, the same for the same party', () => {
   const STEP = 5, seed = 77, arrive = 40, leave = 9000, pace = 1.2, reach = 30, acts = new Set<string>();
@@ -33,7 +34,7 @@ test('beats: a stay is a chain of beats: down on arriving, up before leaving, st
 
 for (const { name, params } of MATRIX.filter((m) => m.name === 'small' || m.name === 'reference')) {
   test(`beats (${name}): parties do one thing together; those out do many things, standing, sitting and lying`, () => {
-    const h = derive(params), t = 3 * params.day.length + 8 * 3600, court = h.params.life.reach;
+    const h = habitatOf(name), t = 3 * params.day.length + 8 * 3600, court = h.params.life.reach;
     const out = name === 'small' ? peopleAt(h, t) : peopleAt(h, t, { theta: 0, s: h.profile.floorStart + 0.4 * (h.profile.floorEnd - h.profile.floorStart), radius: 4 * court });
     const still = out.filter((p) => !p.moving && p.act !== 'walk');
     const parties = new Map<number, Person[]>();
