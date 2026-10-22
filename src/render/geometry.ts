@@ -2,7 +2,7 @@
  * The one way to turn arrays into an indexed mesh geometry. Every kind's meshes are indexed (the index is part of the
  * shader's cache key, @futuremagic/stage), and each attribute is named as its kind lists it (materials.ts).
  */
-import { BufferAttribute, BufferGeometry, Matrix4, Mesh, type Material } from 'three/webgpu';
+import { BufferAttribute, BufferGeometry, InstancedBufferGeometry, Matrix4, Mesh, type Material } from 'three/webgpu';
 import type { Stage } from '@futuremagic/stage';
 import type { Vec3 } from '@futuremagic/core';
 import type { Mat3 } from '../space';
@@ -24,6 +24,14 @@ export function meshGeometry(index: Uint32Array, attributes: Record<string, read
  */
 export function arraysGeometry(a: { positions: Float32Array; normals: Float32Array; colors?: Float32Array | null; index: Uint32Array }, more: Record<string, readonly [Float32Array | Uint8Array, number]> = {}): BufferGeometry {
   return meshGeometry(a.index, { position: [a.positions, 3], normal: [a.normals, 3], color: a.colors ? [a.colors, 3] : undefined, ...more });
+}
+
+/** A shape's geometry as the one shape of an instanced geometry (its instances' attributes are the kind's to add). */
+export function instancedOf(shape: BufferGeometry): InstancedBufferGeometry {
+  const g = new InstancedBufferGeometry();
+  for (const [name, a] of Object.entries(shape.attributes)) g.setAttribute(name, a);
+  g.setIndex(shape.index);
+  return g;
 }
 
 export type { RGB } from '../gen/shapes';

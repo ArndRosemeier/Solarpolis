@@ -5,6 +5,7 @@
  */
 import { nearestFloor, nearestWood, type Ecology, type Found } from './gen/ecology';
 import { nearestOnPath } from './gen/paths';
+import { busiestNear } from './sim';
 import { nearestPlace, vineFaceFoot } from './gen/places';
 import { besideRiver, nearestSample, type River } from './gen/rivers';
 import './app/style.css';
@@ -220,6 +221,13 @@ toPlace('Into the nearest meadow', -30, (eco, t, s) => nearestFloor(eco, t, s, e
 toPlace('Onto the Sunwalk', 0, (eco, t, s) => nearestOnPath(eco.terrain.habitat, 'sunwalk', t, s));
 toPlace('Onto the nearest way', 0, (eco, t, s) => nearestOnPath(eco.terrain.habitat, 'way', t, s));
 toPlace('Onto the Mountain trail', 0, (eco, t, s) => nearestOnPath(eco.terrain.habitat, 'trail', t, s));
+/** The busiest spot within 2 km now (the people up on the land), approached from where the player stands. */
+toPlace('Before the nearest crowd', 12, (eco, t, s) => {
+  const h = eco.terrain.habitat, v = view(), b = v && busiestNear(h, v.time, { theta: t, s, radius: 2000 });
+  if (!b) return null;
+  const d = b.theta - t, dx = (d - 2 * Math.PI * Math.round(d / (2 * Math.PI))) * h.radius, dy = b.s - s, l = Math.hypot(dx, dy) || 1;
+  return { theta: b.theta, s: b.s, way: [dx / l, dy / l] };
+});
 /** Ground one can stand on (a terrace's ledge, not its wall). */
 const ledge = (eco: Ecology) => (pt: number, ps: number): boolean => slopeAt(eco, pt, ps, eco.terrain.heightAt(pt, ps), 2) < 0.2;
 toPlace('Into the nearest orchard', -10, (eco, t, s) => nearestPlace(eco.terrain, 'orchard', t, s, ledge(eco)));

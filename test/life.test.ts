@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { MATRIX, derive, validate, withParams, REFERENCE } from '../src/blueprint';
 import { fromLake, planOf } from '../src/gen/plan';
 import { pathsOf } from '../src/gen/paths';
-import { floorGap, peopleAt, residentOf, shuffleOf, venuesOf, walksOf, type Person } from '../src/sim';
+import { floorGap, peopleAt, residentOf, shuffleOf, venuesOf, walksOf, whereIs, type Person } from '../src/sim';
 
 const HOUR = 3600;
 
@@ -42,6 +42,12 @@ for (const { name, params } of MATRIX) {
     assert.equal(new Set(a.map((p) => p.resident)).size, a.length, 'someone is in two places at once');
     assert.deepEqual(residentOf(h, 17), residentOf(again, 17));
     for (const p of a) assert.ok(Number.isFinite(p.theta) && Number.isFinite(p.s) && Number.isFinite(p.heading));
+    // Anyone found is found again on their own, now and a minute on, walking as fast as they said.
+    for (const p of a) assert.deepEqual(whereIs(h, at(6), p), p);
+    for (const p of a.filter((q) => q.moving).slice(0, 50)) {
+      const q = whereIs(h, at(6) + 60, p);
+      if (q?.moving) assert.ok(near(p, q) <= p.speed * 60 + 1, `${p.activity} moved ${near(p, q).toFixed(0)} m in a minute at ${p.speed.toFixed(2)} m/s`);
+    }
   });
 
   if (name !== 'large') test(`life (${name}): asking for an area finds everyone the whole habitat has there`, () => {

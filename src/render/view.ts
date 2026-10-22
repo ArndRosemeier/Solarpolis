@@ -6,7 +6,7 @@
  * Q or C sinks. On foot the physics carries the player (`physics/character.ts`): up is toward the axis, and gravity
  * is the spin's. The player is an Actors human (`render/actors`); V looks at them from behind, V again from their eyes.
  */
-import { Color, CylinderGeometry, DoubleSide, FrontSide, Group, Mesh, type Material, PerspectiveCamera, Scene, SphereGeometry, type WebGPURenderer } from 'three/webgpu';
+import { Color, CylinderGeometry, Group, Mesh, PerspectiveCamera, Scene, SphereGeometry, type WebGPURenderer } from 'three/webgpu';
 import { Stage, createRenderer } from '@futuremagic/stage';
 import { deriveSeed, smoothstep, v3dot, v3madd, v3norm } from '@futuremagic/core';
 import { fromWorld, toView, toWorld, type Habitat, type Vec3 } from '../blueprint';
@@ -15,7 +15,7 @@ import { Walker, type View } from '../world/walker';
 import { Flyer } from '../world/flyer';
 import { PhysicsWorld } from '../physics/world';
 import { HUMAN, type Character } from '../physics/character';
-import { Figure, type MoveState } from './actors/figure';
+import { Figure, castAsWorn, type MoveState } from './actors/figure';
 import { playerLook } from './actors/looks';
 import { addLights, key, shineOn, sky } from './lights';
 import { adapt, glareOf, insideExposure, insideRayLuminance, landAlbedo, meterRays, underCrowns, type InsideMeterable } from './exposure';
@@ -37,6 +37,7 @@ import { LandmarkView } from './landmarks';
 import { TiledView, courtSource, crossingSource, hallSource, stairSource } from './tiled';
 import { landmarkTopAt, landmarksOf } from '../gen/landmarks';
 import { snowFieldOf } from '../gen/snow';
+import { PeopleView } from './people';
 
 /** Running is this many times the walking speed. */
 const RUN = 8;
@@ -90,6 +91,8 @@ export class InteriorView {
   private courts: TiledView | null = null;
   private crossings: TiledView | null = null;
   private halls: TiledView | null = null;
+  /** The people up on the land around the player. */
+  private people: PeopleView | null = null;
   /** In the air, or null on foot. */
   private flyer: Flyer | null = null;
   private readonly loop = new FrameLoop((dt) => this.frame(dt), (e) => {
@@ -164,15 +167,8 @@ export class InteriorView {
   private async loadPlayer(): Promise<void> {
     const figure = await Figure.load(await playerLook(deriveSeed(this.habitat.params.seed, 'player')));
     figure.object.visible = false;
-    figure.object.traverse((o) => {
-      o.layers.set(BODY_LAYER);
-      o.receiveShadow = true;
-      // The parts worn cast (the pack's other garments stay hidden; a change of clothes would prepare the figure again).
-      o.castShadow = o.visible;
-      // A see-through two-sided part (lashes, brows) is drawn in two passes, one shader each; its shadow needs one side.
-      const m = (o as Mesh).material as Material | undefined;
-      if (m && !Array.isArray(m) && m.transparent && m.side === DoubleSide) m.shadowSide = FrontSide;
-    });
+    figure.object.traverse((o) => o.layers.set(BODY_LAYER));
+    castAsWorn(figure.object);
     key.shadow.camera.layers.enable(BODY_LAYER);
     // Every part's shadow is warmed, not one per kind of part: a figure's shadow shaders are its own (Stage.prepare).
     await this.stage.prepare(figure.object, { everyCaster: true });
@@ -187,7 +183,7 @@ export class InteriorView {
 
   /** Bytes of geometry this view holds (memory watchdog). */
   bytes(): number {
-    return (this.tiles?.bytes() ?? 0) + (this.plants?.bytes() ?? 0) + (this.landmarks?.bytes() ?? 0) + (this.stair?.bytes() ?? 0) + (this.courts?.bytes() ?? 0) + (this.crossings?.bytes() ?? 0) + (this.halls?.bytes() ?? 0);
+    return (this.tiles?.bytes() ?? 0) + (this.plants?.bytes() ?? 0) + (this.landmarks?.bytes() ?? 0) + (this.stair?.bytes() ?? 0) + (this.courts?.bytes() ?? 0) + (this.crossings?.bytes() ?? 0) + (this.halls?.bytes() ?? 0) + (this.people?.bytes() ?? 0);
   }
 
   /** Give memory back (memory watchdog): drop every cached tile and plant cell not on screen. */
@@ -199,6 +195,7 @@ export class InteriorView {
     this.courts?.shed();
     this.crossings?.shed();
     this.halls?.shed();
+    this.people?.shed();
   }
 
   /** Lines for the debug menu. */
@@ -217,6 +214,7 @@ export class InteriorView {
       this.courts?.info() ?? 'entrance courts: none',
       this.crossings?.info() ?? 'river crossings: none',
       this.halls?.info() ?? 'grown halls: none',
+      this.people?.info() ?? 'people: none',
       `θ ${(a.theta * 180 / Math.PI).toFixed(1)}°, s ${(a.s / 1000).toFixed(2)} of ${(this.habitat.profile.length / 1000).toFixed(2)} km, ground ${this.standOn(a.theta, a.s).toFixed(1)} m, ${mode}, eyes ×${this.exposure.toFixed(2)}`,
     ].join('\n');
   }
@@ -378,6 +376,7 @@ export class InteriorView {
     if (this.courts) { this.scene.remove(this.courts.group); this.courts.dispose(); }
     if (this.crossings) { this.scene.remove(this.crossings.group); this.crossings.dispose(); }
     if (this.halls) { this.scene.remove(this.halls.group); this.halls.dispose(); }
+    this.people?.dispose();
     if (this.sunline) { this.stage.remove(this.sunline); freeMesh(this.sunline); }
     if (this.clouds) { this.stage.remove(this.clouds); [...this.clouds.children].forEach((m, i) => freeMesh(m as Mesh, i === 0 ? 'all' : 'none')); }
     const h = this.habitat;
@@ -414,6 +413,8 @@ export class InteriorView {
     this.scene.add(this.crossings.group);
     this.halls = new TiledView(hallSource(this.terrain), h, this.stage, this.pool);
     this.scene.add(this.halls.group);
+    this.people = new PeopleView(h, this.terrain, this.stage, this.camera, this.standOn);
+    this.scene.add(this.people.group);
     this.place();
     // While loading, nothing draws, but the compile cap still counts frames (one new shader per frame): keep its
     // frames ticking, or a second build here (a shadow pass's own shader) would wait for a frame that never comes.
@@ -472,6 +473,7 @@ export class InteriorView {
     this.courts?.follow(v.eye);
     this.crossings?.follow(v.eye);
     this.halls?.follow(v.eye);
+    this.people?.follow(v.eye, this.time, this.frameDt);
   }
 
   private current(): View {

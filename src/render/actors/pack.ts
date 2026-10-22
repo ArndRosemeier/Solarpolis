@@ -11,7 +11,7 @@ import { Human } from '@actors/human';
 import { IRIS_PRESETS } from '@actors/three';
 
 /** The human pack's manifest. */
-export const HUMAN_PACK = `${import.meta.env.BASE_URL}actors/human/manifest.json`;
+export const HUMAN_PACK = `${import.meta.env?.BASE_URL ?? "/"}actors/human/manifest.json`;
 
 const files = new Map<string, Promise<ArrayBuffer>>();
 
@@ -29,17 +29,18 @@ export const packFetch: Fetcher = async (url) => {
   return (await job).slice(0);
 };
 
-let catalog: Promise<{ catalog: CharacterCatalog; base: CharacterConfig }> | undefined;
+let catalog: Promise<{ catalog: CharacterCatalog; base: CharacterConfig; human: Human }> | undefined;
 
 /**
- * What the pack offers (races, garments, hair, clips...) and the default look, loaded once. Only
- * what is free to ship without a credit line: garments and hair under CC-BY are left out.
+ * What the pack offers (races, garments, hair, clips...) and the default look, loaded once, with the loaded human
+ * (residents' figures share it: `Figure.load`'s `share`). Only what is free to ship without a credit line: garments
+ * and hair under CC-BY are left out.
  */
-export function humanCatalog(): Promise<{ catalog: CharacterCatalog; base: CharacterConfig }> {
+export function humanCatalog(): Promise<{ catalog: CharacterCatalog; base: CharacterConfig; human: Human }> {
   catalog ??= Human.load(HUMAN_PACK, packFetch).then((human) => {
     const all = buildCatalog(human, Object.keys(IRIS_PRESETS));
     const c: CharacterCatalog = { ...all, garments: all.garments.filter((g) => !g.credit), hair: all.hair.filter((h) => !h.credit) };
-    return { catalog: c, base: defaultConfig(c) };
+    return { catalog: c, base: defaultConfig(c), human };
   });
   return catalog;
 }
