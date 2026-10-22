@@ -19,6 +19,7 @@ import type { DistrictStyle, Habitat } from '../blueprint';
 import { planOf } from './plan';
 import { underOf, type Hamlet } from './under';
 import type { Levels } from './underLevels';
+import { PARAPET } from './building';
 
 export const ERAS = ['founders', 'screen', 'return'] as const;
 export type Era = (typeof ERAS)[number];
@@ -56,8 +57,7 @@ export interface House {
 const STOREY = 4;
 /** Head room left under the vaults' springing over the roof's parapet, in handrails. */
 const HEADROOM = 2;
-/** The parapet round a roof terrace and the yard wall (chest high: the house shows over it), in handrails. */
-export const PARAPET = 1;
+/** The yard wall (chest high: the house shows over it), in handrails. */
 export const YARD_WALL = 1.2;
 /** The walk left round each plot (beside the pillars' plinths), in handrails. */
 const WALK = 2;
