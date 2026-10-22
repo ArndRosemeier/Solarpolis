@@ -664,10 +664,6 @@
     "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; the squirrels' view (render/animals.ts) and an animal's figure (render/actors/animal.ts) do their own work in each."
   },
   {
-    "key": "same name: solarpolis/render/actors/animal.ts#bytes + solarpolis/render/people.ts#bytes",
-    "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; the squirrels' view (render/animals.ts) and an animal's figure (render/actors/animal.ts) do their own work in each."
-  },
-  {
     "key": "same name: solarpolis/render/actors/animal.ts#dispose + solarpolis/render/actors/slots.ts#dispose",
     "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; the squirrels' view (render/animals.ts) and an animal's figure (render/actors/animal.ts) do their own work in each."
   },

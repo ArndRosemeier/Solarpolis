@@ -203,7 +203,7 @@ export class PeopleView {
       const d = fresh ? 0 : dist(one.feet, eye);
       const due = fresh || one.figure || d < EVERY_FRAME || (d < HALF_FRAMES ? (k + this.frameNo) % 2 === 0 : (k + this.frameNo) % FAR_SHARE === 0);
       if (due) {
-        const p = whereIs(h, t, one.person);
+        const p = whereIs(h, t, one.person, this.terrain);
         if (!p) { gone.push(key); continue; }
         const still = !fresh && !p.moving && !one.person.moving && p.theta === one.person.theta && p.s === one.person.s && p.activity === one.person.activity;
         one.person = p;
@@ -225,7 +225,7 @@ export class PeopleView {
     this.lastScan = this.clock;
     this.scannedAt = eye;
     // Newcomers nearest first: their looks are measured in this order, a few each frame.
-    const R = this.habitat.radius, found = peopleAt(this.habitat, t, { theta: at.theta, s: at.s, radius: CROWD_RANGE });
+    const R = this.habitat.radius, found = peopleAt(this.habitat, t, { theta: at.theta, s: at.s, radius: CROWD_RANGE }, this.terrain);
     const away = (p: Person): number => floorGap(R, at.theta, at.s, p.theta, p.s);
     for (const p of found.filter((q) => !this.people.has(personKey(q))).sort((a, b) => away(a) - away(b))) {
       const key = personKey(p);
@@ -401,7 +401,7 @@ export class PeopleView {
 
   /** Bytes held: the stand-ins' instances, the residents' measures, the figures and the population's caches (memory watchdog). */
   bytes(): number {
-    let n = this.data.byteLength + (this.specks?.data.byteLength ?? 0) * 1.25 + (this.residents?.heldBytes() ?? 0) + this.people.size * 400 + lifeBytes(this.habitat);
+    let n = this.data.byteLength + (this.specks?.data.byteLength ?? 0) * 1.25 + (this.residents?.heldBytes() ?? 0) + this.people.size * 400 + lifeBytes(this.habitat, this.terrain);
     for (const one of this.people.values()) n += one.figure?.figure?.bytes() ?? 0;
     return n;
   }
