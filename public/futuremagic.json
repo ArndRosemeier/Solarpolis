@@ -1,0 +1,19 @@
+{
+  "title": "Solarpolis",
+  "tagline": "A procedural 3D future, a thousand years out — starting inside a mature O'Neill cylinder in Earth orbit.",
+  "tags": [
+    "3D",
+    "WebGPU",
+    "simulation",
+    "procedural",
+    "space"
+  ],
+  "description": "A detailed 3D simulation set about 1000 years from now, starting inside a mature O'Neill cylinder in Earth orbit. Everything is procedural: the cylinder is a parametric blueprint, not a fixed model — its Rings, rivers, waterfalls and lakes are generated from the blueprint.\n\nWork in progress, built on WebGPU; open it in a recent Chrome or Edge.",
+  "links": [
+    {
+      "label": "Source",
+      "url": "https://github.com/ArndRosemeier/Solarpolis"
+    }
+  ],
+  "cta": "Enter the cylinder"
+}
