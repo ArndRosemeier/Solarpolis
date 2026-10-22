@@ -11,7 +11,9 @@
  *
  * A figure takes over from its stand-in only once it is loaded, compiled and drawn, in the same frame its stand-in goes,
  * and gives it back the same way; a stand-in and its speck swap in one frame, both written here (CLAUDE.md, rule 16):
- * nobody is ever drawn by neither. `near` lists whom these levels drew, so the far specks leave them out. Nobody is simulated: every
+ * nobody is ever drawn by neither. `near` lists whom these levels drew, so the far specks leave them out. Those whose
+ * body is a drone are found and followed here like anyone, then handed to the drones' view to draw (`aloft`,
+ * render/fliers.ts), which lists whom it drew in turn. Nobody is simulated: every
  * frame asks the population where each person is now (`whereIs`); the whole area is asked again (`peopleAt`) every
  * second or after a long move, which brings new people in and lets go of those who went below.
  */
@@ -98,6 +100,14 @@ const TALK = { clip: 'talk' }, LISTEN = [{ clip: 'nod' }, { clip: 'idle' }, { cl
 /** A listener's way of listening changes this often (s), at most. */
 const LISTEN_FOR = 9;
 
+/** Someone in a drone body, followed here and drawn by the drones' view: who, where now, and what is built under them. */
+export interface Aloft {
+  key: number;
+  person: Person;
+  resident: Resident;
+  deck: number | null;
+}
+
 interface Someone {
   person: Person;
   resident: Resident;
@@ -140,6 +150,8 @@ export class PeopleView {
   private specksDrawn = 0;
   /** Everyone these levels drew this frame (`personKey`): the far specks leave them out. */
   readonly near: number[] = [];
+  /** Those in drone bodies placed here, for the drones' view to draw this frame. */
+  readonly aloft: Aloft[] = [];
   private readonly screen = new Vector2();
   private scan = 0;
   private lastScan = -Infinity;
@@ -211,7 +223,7 @@ export class PeopleView {
         // A figure in a talking party: the turn to speak moves on while they stand still.
         else if (one.figure && !one.doing.swim) one.doing.anim = animOf(p, one.resident, t);
       }
-      if (!one.dress && spent <= NEW_BUDGET) timed(() => { one.dress = r.dressOf(one.resident); if (one.dress) one.bands = speckBands(one.dress.colors); });
+      if (!one.dress && one.resident.body !== 'drone' && spent <= NEW_BUDGET) timed(() => { one.dress = r.dressOf(one.resident); if (one.dress) one.bands = speckBands(one.dress.colors); });
     }
     for (const key of gone) this.letGo(key);
     this.figures(eye);
@@ -255,6 +267,8 @@ export class PeopleView {
       one.deck = this.deckOf(p.theta, p.s);
       one.deckAt = [p.theta, p.s];
     }
+    // A drone body is placed by the drones' view (render/fliers.ts), from the same footing.
+    if (one.resident.body === 'drone') { one.placed = true; return; }
     const foot = footingOf(this.terrain, p, one.deck, one.dress?.height ?? MEAN_HEIGHT);
     const doing = doingOf(p, one.resident, foot, this.time);
     const feet = toWorld(profile, { theta: p.theta, s: p.s, h: foot.h });
@@ -338,12 +352,14 @@ export class PeopleView {
     const need = this.people.size;
     if (this.data.length < need * STAND_IN_STRIDE) this.grow(need * STAND_IN_STRIDE);
     roomForSpecks(this.specks!, need);
-    const d = this.data, sd = this.specks!.data, near = this.near;
+    const d = this.data, sd = this.specks!.data, near = this.near, aloft = this.aloft;
     near.length = 0;
+    aloft.length = 0;
     // A body's height on screen at distance d is its height times this over d (px).
     const perMetre = pxPerMetre(this.stage, this.camera, this.screen);
     for (const one of this.people.values()) {
       if (!one.placed) continue;
+      if (one.resident.body === 'drone') { aloft.push({ key: personKey(one.person), person: one.person, resident: one.resident, deck: one.deck }); continue; }
       if (one.dress) dressed++;
       const slot = one.figure, f = slot?.figure;
       if (f) {

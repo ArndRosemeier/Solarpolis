@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ARCHETYPES } from '@actors/drone';
 import { MATRIX, derive } from '../src/blueprint';
-import { KIT, LIGHT_SCALE, STROBE_CODE, droneDesign, type DesignMesh } from '../src/gen/drone';
+import { KIT, LIGHT_SCALE, STROBE_CODE, designGuess, designsOf, droneDesign, type DesignMesh } from '../src/gen/drone';
 import { simplify, type Shape } from '../src/gen/simplify';
 import { ROLES } from '../src/sim';
 
@@ -54,7 +54,7 @@ MATRIX.forEach(({ name, params }, i) => {
   test(`drone (${name}): a ${role}'s design: its kit, moving rotors and strobes, its lights, and a coarse level that matches it`, () => {
     const d = droneDesign(derive(params), role, 0);
     assert.equal(d.role, role);
-    assert.ok(d.name.includes(ARCHETYPES[KIT[role].archetype].name), d.name);
+    assert.ok(KIT[role].archetypes.some((a) => d.name.includes(ARCHETYPES[a].name)), d.name);
     for (const m of [d.body, d.veil, d.coarse.body, d.coarse.veil]) {
       const n = m.positions.length / 3;
       assert.equal(m.normals.length, n * 3);
@@ -79,4 +79,17 @@ MATRIX.forEach(({ name, params }, i) => {
     assert.ok(d.min[1] >= -1e-6 && d.max[1] > d.hover * 0.5, 'stands on its own ground point');
     assert.ok(d.albedo.every((v) => v > 0 && v < 1));
   });
+});
+
+test('drone bodies people wear: their own designs, small, and their far look guessed near what they are', () => {
+  const h = derive(MATRIX.find((m) => m.name === 'small')!.params);
+  assert.equal(designsOf(h, 'person'), h.params.life.drones.bodies);
+  const d = droneDesign(h, 'person', 0), g = designGuess(h, 'person', 0);
+  assert.ok(KIT.person.archetypes.some((a) => d.name.includes(ARCHETYPES[a].name)), d.name);
+  const ext = d.max.map((v, k) => v - d.min[k]), across = Math.hypot(ext[0], ext[2]) / Math.SQRT2;
+  assert.ok(Math.max(...ext) < 1.6, `no bigger than a person is wide: ${ext.map((v) => v.toFixed(2))}`);
+  // The guess stands in for about a pixel, until the built design's measure replaces it.
+  assert.ok(g.height > ext[1] / 2.5 && g.height < ext[1] * 2.5, `height ${g.height.toFixed(2)} for ${ext[1].toFixed(2)}`);
+  assert.ok(g.across > across / 2.5 && g.across < across * 2.5, `across ${g.across.toFixed(2)} for ${across.toFixed(2)}`);
+  assert.ok(g.albedo.every((v) => v >= 0 && v <= 1));
 });

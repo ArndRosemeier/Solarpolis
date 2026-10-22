@@ -47,8 +47,10 @@ export interface Resident {
   home: number;
   /** Never shown by the body: only what they choose to share. */
   being: 'human' | 'mind';
-  /** A grown body, or a shell (a plated humanoid body). */
-  body: 'grown' | 'shell';
+  /** A grown body, a shell (a plated humanoid body), or a drone (one of the `person` kit's designs, `design`). */
+  body: 'grown' | 'shell' | 'drone';
+  /** Which of the drone bodies they wear (0 … `drones.bodies` − 1), or −1. */
+  design: number;
   /** The seed of their look (body, face, hair, clothes). */
   look: number;
   /** How fast they walk (m/s). */
@@ -206,12 +208,13 @@ function shuffleFor(h: Habitat, day: number): Shuffle {
 /** Resident i: the same person every time. */
 export function residentOf(h: Habitat, i: number): Resident {
   const c = censusOf(h), life = h.params.life, courts = venuesOf(h).courts.length, seed = seedsOf(h).resident;
-  const regular = i < c.regulars;
+  const regular = i < c.regulars, worn = unit(seed, i, 2, 0);
   const home = courts ? Math.min(courts - 1, Math.floor(regular ? (i * courts) / Math.max(1, c.regulars) : ((i - c.regulars) * courts) / Math.max(1, c.residents - c.regulars))) : 0;
   return {
     id: i, regular, home,
     being: unit(seed, i, 1, 0) < life.minds ? 'mind' : 'human',
-    body: unit(seed, i, 2, 0) < life.shells ? 'shell' : 'grown',
+    body: worn < life.shells ? 'shell' : worn < life.shells + life.drones.persons ? 'drone' : 'grown',
+    design: worn < life.shells || worn >= life.shells + life.drones.persons ? -1 : Math.min(life.drones.bodies - 1, Math.floor(unit(seed, i, 5, 0) * life.drones.bodies)),
     look: hash3i(seed, i, 3, 0),
     walk: life.walk * (0.85 + 0.3 * unit(seed, i, 4, 0)),
   };
