@@ -238,11 +238,11 @@ function stage(sh: Shape, g: Ground): void {
 function minds(sh: Shape, g: Ground): void {
   const hr = g.hr, r = g.r, cx = (r.x0 + r.x1) / 2, cy = (r.y0 + r.y1) / 2, R = Math.min(r.x1 - r.x0, r.y1 - r.y0) * 0.32;
   const n = H.rooms, high = Math.min(H.storey * hr, g.room), z = g.base + high;
-  sh.finish = g.build.finish;
   // Its posts round, and between them its walls: panels of light over a low base.
   for (let k = 0; k < n; k++) {
     const a = (k / n) * 2 * Math.PI, b = ((k + 1) / n) * 2 * Math.PI;
-    post(sh, g, cx + R * Math.cos(a), cy + R * Math.sin(a), z, g.build.col);
+    sh.finish = FINISH.timber;
+    post(sh, g, cx + R * Math.cos(a), cy + R * Math.sin(a), z, TIMBER);
     const rimAt = (t: number, zz: number): [number, number, number] => [cx + R * Math.cos(t), cy + R * Math.sin(t), zz];
     const out: [number, number, number] = [Math.cos((a + b) / 2), Math.sin((a + b) / 2), 0], f = g.base;
     sh.finish = g.build.finish;

@@ -147,21 +147,19 @@ export const stillWater = Fn(([st, col, light, clock]: [V2, V3, V3, F]) => {
  * A built surface's albedo: its finish over the vertex colour (`FINISH` in gen/pavilion.ts: 0 stone, 1 timber, 2
  * bronze, 3 ceramic, 6 brick, 7 plaster, 8 earth, 9 panel; anything else plain). One plain If each.
  */
-export function builtAlbedo(albedo: V3, st: V2, finish: F): V3 {
-  return Fn(() => {
-    const out = vec3(albedo).toVar();
-    const is = (k: number): Node<'bool'> => abs(finish.sub(k)).lessThan(0.5);
-    If(is(0), () => { out.assign(ashlar(albedo, st)); });
-    If(is(1), () => { out.assign(timber(albedo, st)); });
-    If(is(2), () => { out.assign(bronze(albedo, st)); });
-    If(is(3), () => { out.assign(ceramic(albedo, st)); });
-    If(is(6), () => { out.assign(brick(albedo, st)); });
-    If(is(7), () => { out.assign(plaster(albedo, st)); });
-    If(is(8), () => { out.assign(earth(albedo, st)); });
-    If(is(9), () => { out.assign(panel(albedo, st)); });
-    return out;
-  })() as unknown as V3;
-}
+export const builtAlbedo = Fn(([albedo, st, finish]: [V3, V2, F]) => {
+  const out = vec3(albedo).toVar();
+  const is = (k: number): Node<'bool'> => abs(finish.sub(k)).lessThan(0.5);
+  If(is(0), () => { out.assign(ashlar(albedo, st)); });
+  If(is(1), () => { out.assign(timber(albedo, st)); });
+  If(is(2), () => { out.assign(bronze(albedo, st)); });
+  If(is(3), () => { out.assign(ceramic(albedo, st)); });
+  If(is(6), () => { out.assign(brick(albedo, st)); });
+  If(is(7), () => { out.assign(plaster(albedo, st)); });
+  If(is(8), () => { out.assign(earth(albedo, st)); });
+  If(is(9), () => { out.assign(panel(albedo, st)); });
+  return out;
+}).setLayout({ name: 'builtAlbedo', type: 'vec3', inputs: [{ name: 'albedo', type: 'vec3' }, { name: 'st', type: 'vec2' }, { name: 'finish', type: 'float' }] }) as unknown as (albedo: V3, st: V2, finish: F) => V3;
 
 /**
  * The horizons (for `sunlit`, materials.ts) of the three openings a point under a round roof sees the sunline

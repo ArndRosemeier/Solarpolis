@@ -33,6 +33,7 @@ import { crossingsOf, type Crossing, type CrossingKind } from './gen/crossings';
 import { landformOf, planOf, type GroundForm } from './gen/plan';
 import { baysOfHamlet, underOf, type Hamlet } from './gen/under';
 import { HALL_KINDS, hallAt } from './gen/halls';
+import { doorToward } from './gen/homes';
 import { underLiftOf } from './gen/underMesh';
 import { GLASS, SKIES, hamletSkiesOf, skyOverBay } from './gen/skies';
 import { pavilionPlan } from './gen/pavilion';
@@ -789,7 +790,7 @@ debug.add({
     }
   },
 });
-/** Below, at a hamlet's hall of the next kind (gen/halls.ts): on the walk at the hall bay's edge, looking into it along the axis. */
+/** Below, at a hamlet's hall of the next kind (gen/halls.ts): on the walk on its wellhead side, looking at its front. */
 let nextHall = 0;
 debug.add({
   label: "Below: at the next kind of hall (kitchen, bath, shop, stage, minds' room, commons)", group: 'Go', run: () => {
@@ -799,8 +800,9 @@ debug.add({
     for (const m of hamletsNear(h, v.walker.at.theta, v.walker.at.s).slice(0, 8)) {
       for (const { i, j } of baysOfHamlet(u, m, Math.ceil(m.hall) + 1)) {
         if (hallAt(h, i, j) !== want) continue;
-        const c = u.centreOf(i, j);
-        v.goBelow(c.theta, c.s - u.bay / 2, 0);
+        // On the walk on its wellhead side, a few steps back, facing it (a positive heading turns toward −θ).
+        const c = u.centreOf(i, j), toward = doorToward(u, m, i);
+        v.goBelow(c.theta + toward * 0.65 * u.dTheta, c.s, (toward * Math.PI) / 2);
         return;
       }
     }
