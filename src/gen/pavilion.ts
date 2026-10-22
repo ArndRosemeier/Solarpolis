@@ -28,11 +28,11 @@ import { Shape, type RGB } from './shapes';
 import type { Pavilion } from './landmarks';
 
 /**
- * What the surfaces are made of (the BUILT kind reads it, render/materials.ts). `lamp` is a lamp's glowing face and
- * `sky` a light well's glass seen from below, bright with the day above; only the Understorey's VAULT kind draws those
- * (gen/underMesh.ts).
+ * What the surfaces are made of (the BUILT kind reads it, render/materials.ts). `lamp` is a lamp's glowing face,
+ * `sky` a light well's glass seen from below, bright with the day above, and `screen` the first of a hamlet's sky
+ * screens (`screen + k` shows sky k of gen/skies.ts); only the Understorey's VAULT kind draws those (gen/underMesh.ts).
  */
-export const FINISH = { stone: 0, timber: 1, bronze: 2, ceramic: 3, lamp: 4, sky: 5 } as const;
+export const FINISH = { stone: 0, timber: 1, bronze: 2, ceramic: 3, lamp: 4, sky: 5, screen: 6 } as const;
 
 /** The levels every landmark is drawn at (the summit hut's too, gen/summitHut.ts), and `solid` for the physics. */
 export const LANDMARK_LEVELS = ['far', 'mid', 'near'] as const;
