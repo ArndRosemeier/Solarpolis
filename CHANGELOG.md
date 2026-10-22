@@ -2,6 +2,15 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.083 — Deer on the wild land
+
+- Herds of deer live on the wild reserve and in the districts kept for herds or let go wild: fallow, red, roe, sika, white-tailed and chital deer, each herd one kind, from Actors 0.6.3.
+- Their day follows the light where they live: they come out of the woods to graze as the light comes up, drift slowly over their meadow, walk back under the trees to lie up round the brightest hours, come out again for the afternoon and evening, and go back into cover after dark. They walk in file from place to place, and ford a stream but never cross a lake.
+- Fallow, sika and chital deer have their spots, drawn sharp up close; every deer has its rump patch, dorsal stripe and markings from Actors.
+- Near ones are full animals, further off each is a speck in its coat's colours out to about 2 km, handed over in one frame so a deer never vanishes.
+- Every deer is somewhere at every moment, worked out from the seed and the clock. How many per km², how big a herd and how far it roams are habitat settings.
+- Debug menu: "Before the nearest herd", "Fly: beside the nearest deer" and "…from 60 m"; a deer line counts them by level and any handover holes.
+
 ## v0.082 — Squirrels in the woods
 
 - Squirrels from Actors live in the woods and orchards: each has its own home tree, and by day comes down to forage round it, hopping a short way or running a long one, eating, sitting up alert, flicking its tail, and going back to its tree. At night they are up in their trees.
