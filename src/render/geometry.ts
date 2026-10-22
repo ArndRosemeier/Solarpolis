@@ -2,7 +2,7 @@
  * The one way to turn arrays into an indexed mesh geometry. Every kind's meshes are indexed (the index is part of the
  * shader's cache key, @futuremagic/stage), and each attribute is named as its kind lists it (materials.ts).
  */
-import { BufferAttribute, BufferGeometry, InstancedBufferGeometry, Matrix4, Mesh, type Material } from 'three/webgpu';
+import { BufferAttribute, BufferGeometry, InstancedBufferGeometry, InterleavedBufferAttribute, Matrix4, Mesh, type Material } from 'three/webgpu';
 import type { Stage } from '@futuremagic/stage';
 import type { Vec3 } from '@futuremagic/core';
 import type { Mat3 } from '../space';
@@ -35,6 +35,19 @@ export function instancedOf(shape: BufferGeometry): InstancedBufferGeometry {
 }
 
 export type { RGB } from '../gen/shapes';
+
+/** A mesh drawn wherever it is: instanced or placed by its shader, so its geometry's bounds say nothing of where it shows. */
+export function drawnAnywhere(geometry: BufferGeometry, material: Material, name: string): Mesh {
+  const mesh = new Mesh(geometry, material);
+  mesh.name = name;
+  mesh.frustumCulled = false;
+  return mesh;
+}
+
+/** One quad drawn once per instance (the SPECK kind): its corners (±1), placed by the shader; positions all zero. */
+export function quadInstances(): InstancedBufferGeometry {
+  return instancedOf(meshGeometry(new Uint32Array([0, 1, 2, 0, 2, 3]), { position: [new Float32Array(12), 3], corner: [new Float32Array([-1, -1, 1, -1, 1, 1, -1, 1]), 2] }));
+}
 
 /**
  * Points of light drawn as stars are (the STARS kind): `n` quads, each a direction (position), a flux (color) and its
@@ -104,18 +117,26 @@ export function freeMesh(mesh: Mesh, owned: Owned = 'all'): void {
 /**
  * Let go of the arrays of a mesh's geometry the GPU already holds its own copy of (the renderer uploads an attribute the
  * first time it draws or compiles the mesh, and never reads the array again unless the attribute changes). Only for
- * geometry that never changes and is never read on the CPU: streamed tiles. The counts stay, so drawing is unchanged.
- * An attribute not uploaded yet (one no shader of the mesh reads) is kept. Returns the bytes let go.
+ * geometry that never changes and is never read on the CPU: streamed tiles, the far specks' instances. The counts stay,
+ * so drawing is unchanged. An attribute not uploaded yet (one no shader of the mesh reads), and those named in `keep`
+ * (ones that still change), are kept. Interleaved attributes let go of their shared buffer once. Returns the bytes let go.
  *
- * Whether an attribute is uploaded is read from the renderer's own bookkeeping (`info.memoryMap`, three r186); if that
- * is not there, nothing is let go.
+ * Whether an attribute is uploaded is read from the renderer's own bookkeeping (`info.memoryMap`, three r186; an
+ * interleaved buffer is booked under the first of its attributes uploaded); if that is not there, nothing is let go.
  */
-export function dropUploaded(mesh: Mesh, renderer: Stage['renderer']): number {
+export function dropUploaded(mesh: Mesh, renderer: Stage['renderer'], keep: readonly string[] = []): number {
   const uploaded = (renderer.info as unknown as { memoryMap?: WeakMap<object, unknown> }).memoryMap;
   if (!uploaded) return 0;
-  const g = mesh.geometry;
+  const g = mesh.geometry, named = Object.entries(g.attributes).filter(([name]) => !keep.includes(name)).map(([, a]) => a);
   let bytes = 0;
-  for (const a of [...Object.values(g.attributes), g.index]) {
+  for (const a of [...named, g.index]) {
+    if (a instanceof InterleavedBufferAttribute) {
+      const shared = a.data;
+      if (!shared.array.length || !named.some((b) => b instanceof InterleavedBufferAttribute && b.data === shared && uploaded.has(b))) continue;
+      bytes += shared.array.byteLength;
+      shared.array = new (shared.array.constructor as new (n: number) => typeof shared.array)(0);
+      continue;
+    }
     if (!(a instanceof BufferAttribute) || !uploaded.has(a) || !a.array.length) continue;
     bytes += a.array.byteLength;
     const Typed = a.array.constructor as new (n: number) => BufferAttribute['array'];

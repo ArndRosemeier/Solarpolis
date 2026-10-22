@@ -12,29 +12,33 @@ import { toWorld, type Habitat, type Vec3 } from '../blueprint';
  * (> 0 inside, ≤ 0 over it), or null where it is off the thing. Walked in `step`s, then halved to a millimetre or so.
  *
  * `clear(a, b)`, if given, says that no part of the thing comes near the stretch of the line from a to b: the walk then
- * goes `COARSE` steps at a time and walks step by step only where it might meet the thing (a long line past a big
- * thing, like the Lift Stair, is mostly far from it).
+ * skips what is clear, a half at a time (the whole line, its halves, their halves… down to `COARSE` steps), and walks
+ * step by step only where it might meet the thing. A long line past a big thing, like the Lift Stair, is mostly far
+ * from it; the steps walked, and so the answer, are the same as without `clear`.
  */
 export function standThrough(h: Habitat, theta: number, s: number, from: number, to: number, step: number, under: (p: Vec3) => number | null, clear?: (a: Vec3, b: Vec3) => boolean): number | null {
   const lineAt = (k: number): Vec3 => toWorld(h.profile, { theta, s, h: k });
   const depthAt = (k: number): number | null => under(lineAt(k));
   let inside = (depthAt(from) ?? -1) > 0;
-  const long = step * COARSE;
-  for (let k0 = from; k0 < to; k0 += long) {
-    const k1 = Math.min(to, k0 + long);
-    // Nothing of the thing along this stretch: off it all the way.
-    if (clear && clear(lineAt(k0), lineAt(k1))) { inside = false; continue; }
+  const long = step * COARSE, stretches = Math.ceil((to - from) / long - 1e-9);
+  const edge = (i: number): number => Math.min(to, from + i * long);
+  // Stretches i … j-1, in order: skipped where clear, else halved, and walked step by step one stretch at a time.
+  const walk = (i: number, j: number): number | null => {
+    const k0 = edge(i), k1 = edge(j);
+    if (clear && clear(lineAt(k0), lineAt(k1))) { inside = false; return null; }
+    if (j - i > 1) { const m = (i + j) >> 1; return walk(i, m) ?? walk(m, j); }
     for (let k = k0 + step; k <= k1 + 1e-9; k += step) {
       const u = depthAt(k);
       if (u !== null && u <= 0 && inside) {
         let lo = k - step, hi = k;
-        for (let i = 0; i < 12; i++) { const m = (lo + hi) / 2; if ((depthAt(m) ?? -1) > 0) lo = m; else hi = m; }
+        for (let n = 0; n < 12; n++) { const m = (lo + hi) / 2; if ((depthAt(m) ?? -1) > 0) lo = m; else hi = m; }
         return hi;
       }
       inside = u !== null && u > 0;
     }
-  }
-  return null;
+    return null;
+  };
+  return stretches > 0 ? walk(0, stretches) : null;
 }
 
 /** Steps in one stretch of a walk with `clear`. */

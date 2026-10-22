@@ -378,6 +378,11 @@ export interface Near {
   radius: number;
 }
 
+/** One number for someone up on the land today, the same for every level that draws them (court and outing, or the Sunwalker). */
+export function personKey(p: Pick<Person, 'court' | 'outing'>): number {
+  return p.court < 0 ? -1 - p.outing : p.court * 2 ** 22 + p.outing;
+}
+
 /**
  * Everyone up on the land at clock time t (s), or only those within an area. Each court's day is made once and kept
  * (a bounded number), routes too; asking for an area looks only at the courts whose people can reach it.

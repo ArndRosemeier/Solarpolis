@@ -1,35 +1,44 @@
 /**
- * The people up on the land around the player (design "Who is out on the land"; who and where: src/sim). Two levels:
+ * The people up on the land around the player (design "Who is out on the land"; who and where: src/sim). Three levels:
  *
  *   figures     the nearest few, Actors humans and shells (render/actors), loaded one at a time in the background
- *               and posed every frame from the simulation, with Actors' own levels of detail (full, medium, crowd);
- *   stand-ins   everyone else out to `CROWD_RANGE`, where a person is about a pixel: one instanced mesh (the CROWD
- *               kind, gen/standIn.ts), each built from the same look as their figure (residents.ts: their exact
- *               height, their colours), walking, standing, kneeling or lying as their figure does.
+ *               and posed every frame from the simulation, with Actors' levels of detail that draw their parts apart;
+ *   stand-ins   everyone else out to where a body is `HANDOVER_PX` tall: one instanced mesh (the CROWD kind,
+ *               gen/standIn.ts), each built from the same look as their figure (residents.ts: their exact height,
+ *               their colours), walking, standing, kneeling or lying as their figure does;
+ *   specks      from there out to `CROWD_RANGE`: the patch of screen their body covers (the SPECK kind), at their
+ *               exact place, in their stand-in's colours. Beyond, the far specks (render/specks.ts) draw everyone.
  *
  * A figure takes over from its stand-in only once it is loaded, compiled and drawn, in the same frame its stand-in goes,
- * and gives it back the same way (CLAUDE.md, rule 16): nobody is ever drawn by neither. Nobody is simulated: every
+ * and gives it back the same way; a stand-in and its speck swap in one frame, both written here (CLAUDE.md, rule 16):
+ * nobody is ever drawn by neither. `near` lists whom these levels drew, so the far specks leave them out. Nobody is simulated: every
  * frame asks the population where each person is now (`whereIs`); the whole area is asked again (`peopleAt`) every
  * second or after a long move, which brings new people in and lets go of those who went below.
  */
-import { Group, MathUtils, Mesh, type InstancedBufferGeometry, type Camera, type InstancedInterleavedBuffer, type PerspectiveCamera } from 'three/webgpu';
+import { Group, InstancedBufferAttribute, MathUtils, Mesh, Vector2, type InstancedBufferGeometry, type Camera, type InstancedInterleavedBuffer, type PerspectiveCamera } from 'three/webgpu';
 import { lodForDistance, type LodDef } from '@actors/core';
 import type { Stage } from '@futuremagic/stage';
 import { hash3i, hashToFloat, v3len, v3sub } from '@futuremagic/core';
 import { fromWorld, toView, toWorld, type Habitat, type Vec3 } from '../blueprint';
 import type { Terrain } from '../gen/terrain';
 import { horizonAt } from '../gen/horizon';
-import { POSE, STAND_IN_STRIDE, standInArrays } from '../gen/standIn';
-import { floorGap, lifeBytes, peopleAt, residentOf, whereIs, type Activity, type Person, type Resident } from '../sim';
-import { CROWD, crowdInstances } from './materials';
-import { arraysGeometry, freeMesh, instancedOf } from './geometry';
+import { MEAN_HEIGHT, SPECK_SHOWN, SPECK_STRIDE, STAND_IN_STRIDE, speckBands, standInArrays, writeSpeck } from '../gen/standIn';
+import { floorGap, footingOf, personKey, lifeBytes, peopleAt, residentOf, whereIs, type Activity, type Footing, type Person, type Resident } from '../sim';
+import { CROWD, SPECK, SPECK_LAYOUT, STAND_IN_LAYOUT, peopleInstances } from './materials';
+import { arraysGeometry, drawnAnywhere, freeMesh, instancedOf, quadInstances } from './geometry';
 import { Figure, castAsWorn, type AnimState } from './actors/figure';
 import { humanCatalog } from './actors/pack';
 import { Residents, type Dress } from './actors/residents';
 import HumanWorker from '@actors/human/worker?worker';
 
-/** Stand-ins are drawn out to here (m): beyond it a person is under a pixel. */
+/** People are placed out to here (m), each by their exact whereabouts; beyond, the far specks draw them. */
 const CROWD_RANGE = 1500;
+/**
+ * A stand-in hands over to its speck where the body is this tall on screen (px), and comes back from it where the body is
+ * `HANDOVER_BACK` times that (so nobody flickers between the two at the line).
+ */
+const HANDOVER_PX = 3;
+const HANDOVER_BACK = 1.2;
 /** The area is asked again this often (s, real time), or once the eye has moved this far (m). */
 const SCAN_EVERY = 1;
 const SCAN_MOVE = 100;
@@ -53,10 +62,6 @@ const HORIZON_MOVE = 10;
 const DECK_MOVE = 0.2;
 /** A walking stride: one cycle (two steps) covers this many body heights. */
 const STRIDE_LENGTH = 0.85;
-/** A swimmer treads water with the head out: the feet this share of the height under the surface. */
-const SWIM_DEPTH = 0.85;
-/** Deeper water than this (m) is swum in. */
-const SWIM_WATER = 0.6;
 /** Where the slope of the floor along s is steeper than this, facing comes from the way along it (endcap walls). */
 const LEAN = 0.3;
 
@@ -67,16 +72,16 @@ interface Doing {
   anim: AnimState;
 }
 
-/** What people do at their places, as poses (the pack's clips; a held share for a still pose). */
-const STILL: Partial<Record<Activity, { pose: number; clips: { clip: string; hold?: number }[] }>> = {
-  meet: { pose: POSE.upright, clips: [{ clip: 'talk' }, { clip: 'nod' }, { clip: 'idle' }, { clip: 'arms folded' }] },
-  gather: { pose: POSE.upright, clips: [{ clip: 'talk' }, { clip: 'idle' }, { clip: 'nod' }] },
-  watch: { pose: POSE.upright, clips: [{ clip: 'idle' }, { clip: 'arms folded' }] },
-  play: { pose: POSE.upright, clips: [{ clip: 'dance' }, { clip: 'idle' }] },
-  make: { pose: POSE.kneel, clips: [{ clip: 'repair (kneeling)' }] },
-  sit: { pose: POSE.kneel, clips: [{ clip: 'repair (kneeling)', hold: 0.1 }] },
-  picnic: { pose: POSE.lie, clips: [{ clip: 'get up from lying', hold: 0 }] },
-  stargaze: { pose: POSE.lie, clips: [{ clip: 'get up from lying', hold: 0 }] },
+/** What people do at their places, as the figures' clips (a held share for a still pose; the pose is `postureOf`'s). */
+const STILL: Partial<Record<Activity, { clip: string; hold?: number }[]>> = {
+  meet: [{ clip: 'talk' }, { clip: 'nod' }, { clip: 'idle' }, { clip: 'arms folded' }],
+  gather: [{ clip: 'talk' }, { clip: 'idle' }, { clip: 'nod' }],
+  watch: [{ clip: 'idle' }, { clip: 'arms folded' }],
+  play: [{ clip: 'dance' }, { clip: 'idle' }],
+  make: [{ clip: 'repair (kneeling)' }],
+  sit: [{ clip: 'repair (kneeling)', hold: 0.1 }],
+  picnic: [{ clip: 'get up from lying', hold: 0 }],
+  stargaze: [{ clip: 'get up from lying', hold: 0 }],
 };
 
 interface Someone {
@@ -97,6 +102,9 @@ interface Someone {
   deck: number | null;
   deckAt: [number, number];
   doing: Doing;
+  /** Drawn as a speck (too small for the stand-in), and the speck's colour bands (from their dress). */
+  speck: boolean;
+  bands: [number, number, number] | null;
   /** Their figure: loading, or drawn in place of the stand-in. */
   figure: { figure: Figure | null; shown: boolean; dropped: boolean } | null;
   /** The last scan that found them. */
@@ -105,7 +113,6 @@ interface Someone {
   placed: boolean;
 }
 
-const keyOf = (p: Pick<Person, 'court' | 'outing'>): number => (p.court < 0 ? -1 - p.outing : p.court * 2 ** 22 + p.outing);
 
 export class PeopleView {
   readonly group = new Group();
@@ -114,6 +121,14 @@ export class PeopleView {
   private mesh: Mesh | null = null;
   private buffer: InstancedInterleavedBuffer | null = null;
   private data = new Float32Array(0);
+  /** The specks of those placed here but too small for a stand-in: their mesh, instances and shown flags (all on). */
+  private speckMesh: Mesh | null = null;
+  private speckData = new Float32Array(0);
+  private speckBuffer: InstancedInterleavedBuffer | null = null;
+  private specksDrawn = 0;
+  /** Everyone these levels drew this frame (`personKey`): the far specks leave them out. */
+  readonly near: number[] = [];
+  private readonly screen = new Vector2();
   private scan = 0;
   private lastScan = -Infinity;
   private scannedAt: Vec3 | null = null;
@@ -140,15 +155,18 @@ export class PeopleView {
     if (!human.usesWorker) await human.useWorker(new HumanWorker());
     const a = standInArrays(), g = instancedOf(arraysGeometry(a, { part: [a.parts, 2] }));
     this.data = new Float32Array(64 * STAND_IN_STRIDE);
-    this.buffer = crowdInstances(g, this.data);
+    this.buffer = peopleInstances(g, this.data, STAND_IN_LAYOUT);
     g.instanceCount = 0;
-    const mesh = new Mesh(g, CROWD.material);
-    mesh.name = 'stand-ins';
-    mesh.frustumCulled = false;
+    const mesh = drawnAnywhere(g, CROWD.material, 'stand-ins');
     mesh.castShadow = true;
-    await this.stage.prepare(mesh);
-    if (this.disposed) { freeMesh(mesh); return; }
-    this.group.add(mesh);
+    const specks = drawnAnywhere(quadInstances(), SPECK.material, 'near specks');
+    specks.renderOrder = 1;
+    this.speckMesh = specks;
+    this.growSpecks(64);
+    (specks.geometry as InstancedBufferGeometry).instanceCount = 0;
+    await Promise.all([this.stage.prepare(mesh), this.stage.prepare(specks)]);
+    if (this.disposed) { freeMesh(mesh); freeMesh(specks); return; }
+    this.group.add(mesh, specks);
     this.mesh = mesh;
     this.residents = new Residents(catalog, base, human);
   }
@@ -179,7 +197,7 @@ export class PeopleView {
         one.person = p;
         if (fresh) timed(() => this.stand(one)); else if (!still) this.stand(one);
       }
-      if (!one.dress && spent <= NEW_BUDGET) timed(() => { one.dress = r.dressOf(one.resident); });
+      if (!one.dress && spent <= NEW_BUDGET) timed(() => { one.dress = r.dressOf(one.resident); if (one.dress) one.bands = speckBands(one.dress.colors); });
     }
     for (const key of gone) this.letGo(key);
     this.figures(eye);
@@ -195,16 +213,16 @@ export class PeopleView {
     // Newcomers nearest first: their looks are measured in this order, a few each frame.
     const R = this.habitat.radius, found = peopleAt(this.habitat, t, { theta: at.theta, s: at.s, radius: CROWD_RANGE });
     const away = (p: Person): number => floorGap(R, at.theta, at.s, p.theta, p.s);
-    for (const p of found.filter((q) => !this.people.has(keyOf(q))).sort((a, b) => away(a) - away(b))) {
-      const key = keyOf(p);
+    for (const p of found.filter((q) => !this.people.has(personKey(q))).sort((a, b) => away(a) - away(b))) {
+      const key = personKey(p);
       const resident = residentOf(this.habitat, p.resident);
       this.people.set(key, {
         person: p, resident, dress: null, feet: [0, 0, 0], up: [0, 0, 1], front: [1, 0, 0], turn: 0,
         phase: 2 * Math.PI * hashToFloat(hash3i(p.resident, 17, 3, 0)), horizon: [0, 0], litAt: [0, 0, 0], deck: null, deckAt: [0, 0], doing: { pose: 0, swim: false, anim: { move: 'idle' } },
-        figure: null, seen: this.scan, placed: false,
+        speck: false, bands: null, figure: null, seen: this.scan, placed: false,
       });
     }
-    for (const p of found) { const known = this.people.get(keyOf(p)); if (known) known.seen = this.scan; }
+    for (const p of found) { const known = this.people.get(personKey(p)); if (known) known.seen = this.scan; }
     for (const [key, one] of this.people) if (one.seen !== this.scan) this.letGo(key);
   }
 
@@ -223,11 +241,9 @@ export class PeopleView {
       one.deck = this.deckOf(p.theta, p.s);
       one.deckAt = [p.theta, p.s];
     }
-    const ground = this.terrain.heightAt(p.theta, p.s), surface = this.terrain.standAt(p.theta, p.s);
-    const top = one.deck !== null && one.deck > surface ? one.deck : surface;
-    const doing = doingOf(p, one.resident, top - ground > SWIM_WATER);
-    const height = one.dress?.height ?? 1.7;
-    const feet = toWorld(profile, { theta: p.theta, s: p.s, h: doing.swim ? top - SWIM_DEPTH * height : top });
+    const foot = footingOf(this.terrain, p, one.deck, one.dress?.height ?? MEAN_HEIGHT);
+    const doing = doingOf(p, one.resident, foot);
+    const feet = toWorld(profile, { theta: p.theta, s: p.s, h: foot.h });
     const r = Math.hypot(feet[0], feet[1]) || 1, up: Vec3 = [-feet[0] / r, -feet[1] / r, 0];
     // Facing: the heading is over the floor (0 toward +s, +π/2 toward +θ); where the profile is steep, along it.
     const ds = 0.5, a = profile.at(Math.max(0, p.s - ds)), b = profile.at(Math.min(profile.length, p.s + ds));
@@ -308,18 +324,27 @@ export class PeopleView {
     one.figure = null;
   }
 
-  /** Pose the figures and write every stand-in not drawn by a figure; count anyone drawn by neither (must stay 0). */
+  /**
+   * Pose the figures, write every stand-in not drawn by a figure and every speck of those too small for a stand-in;
+   * count anyone drawn by none (must stay 0).
+   */
   private show(eye: Vec3, t: number, dt: number): void {
-    let n = 0, waiting = 0, figures = 0, dressed = 0;
-    const need = this.people.size * STAND_IN_STRIDE;
-    if (this.data.length < need) this.grow(need);
-    const d = this.data;
+    let n = 0, m = 0, waiting = 0, figures = 0, dressed = 0;
+    const need = this.people.size;
+    if (this.data.length < need * STAND_IN_STRIDE) this.grow(need * STAND_IN_STRIDE);
+    if (this.speckData.length < need * SPECK_STRIDE) this.growSpecks(need);
+    const d = this.data, sd = this.speckData, near = this.near;
+    near.length = 0;
+    // A body's height on screen at distance d is its height times this over d (px).
+    const fov = (this.camera as PerspectiveCamera).isPerspectiveCamera ? (this.camera as PerspectiveCamera).getEffectiveFOV() : 50;
+    const pxPerMetre = this.stage.renderer.getDrawingBufferSize(this.screen).y / 2 / Math.tan(MathUtils.degToRad(fov / 2));
     for (const one of this.people.values()) {
       if (!one.placed) continue;
       if (one.dress) dressed++;
       const slot = one.figure, f = slot?.figure;
       if (f) {
         figures++;
+        near.push(personKey(one.person));
         // Hand over in this frame: the figure is in and posed, its stand-in is not written.
         if (!slot!.shown) { this.group.add(f.object); slot!.shown = true; }
         this.detailFor(f, dist(one.feet, eye));
@@ -328,6 +353,15 @@ export class PeopleView {
       }
       const dress = one.dress;
       if (!dress) { waiting++; continue; }
+      near.push(personKey(one.person));
+      // Stand-in or speck, by the body's height on screen; both are written from the same place, size and colours.
+      const px = (dress.height * pxPerMetre) / Math.max(1e-3, dist(one.feet, eye));
+      one.speck = one.speck ? px < HANDOVER_PX * HANDOVER_BACK : px < HANDOVER_PX;
+      if (one.speck) {
+        writeSpeck(sd, m * SPECK_STRIDE, one.feet, dress.height, [0, 0, 0], one.doing.pose, one.bands ?? speckBands(dress.colors), one.horizon, dress.width);
+        m++;
+        continue;
+      }
       const o = n * STAND_IN_STRIDE, v = toView(eye, one.feet), p = one.person;
       d[o] = v[0]; d[o + 1] = v[1]; d[o + 2] = v[2]; d[o + 3] = dress.height;
       d[o + 4] = one.turn; d[o + 5] = one.phase;
@@ -339,28 +373,40 @@ export class PeopleView {
       n++;
     }
     this.drawn = n;
+    this.specksDrawn = m;
     this.figuresDrawn = figures;
     this.waiting = waiting;
-    // Anyone whose look is known is drawn by one level or the other. (People whose look is still being measured are
-    // new to the area, nearest first, at the start or after a jump: not a hole in a handover.)
-    this.holes = dressed - figures - n;
+    // Anyone whose look is known is drawn by one level or another. (People whose look is still being measured are
+    // new to the area, nearest first, at the start or after a jump; the far specks still draw them.)
+    this.holes = dressed - figures - n - m;
     if (this.holes > 0) this.holeFrames++;
-    const g = this.mesh!.geometry as InstancedBufferGeometry;
-    g.instanceCount = n;
-    this.buffer!.needsUpdate = true;
-    this.buffer!.clearUpdateRanges();
-    this.buffer!.addUpdateRange(0, n * STAND_IN_STRIDE);
+    upload(this.mesh!, this.buffer!, n, STAND_IN_STRIDE);
+    upload(this.speckMesh!, this.speckBuffer!, m, SPECK_STRIDE);
   }
 
   private grow(need: number): void {
     this.data = new Float32Array(Math.max(need, this.data.length * 2));
     // The instance attributes are set again on the new buffer (the old one is let go with them).
-    this.buffer = crowdInstances(this.mesh!.geometry, this.data);
+    this.buffer = peopleInstances(this.mesh!.geometry, this.data, STAND_IN_LAYOUT);
+  }
+
+  /** Room for `need` specks: their instances, and their shown flags (all on: these are drawn just as written). */
+  private growSpecks(need: number): void {
+    const count = Math.max(need, (this.speckData.length / SPECK_STRIDE) * 2);
+    this.speckData = new Float32Array(count * SPECK_STRIDE);
+    const g = this.speckMesh!.geometry;
+    this.speckBuffer = peopleInstances(g, this.speckData, SPECK_LAYOUT);
+    g.setAttribute(SPECK_SHOWN, new InstancedBufferAttribute(new Float32Array(count).fill(1), 1));
+  }
+
+  /** The measured looks, once loaded (the far specks take the colours of those already measured). */
+  residentsLoaded(): Residents | null {
+    return this.residents;
   }
 
   /** Bytes held: the stand-ins' instances, the residents' measures, the figures and the population's caches (memory watchdog). */
   bytes(): number {
-    let n = this.data.byteLength + (this.residents?.heldBytes() ?? 0) + this.people.size * 400 + lifeBytes(this.habitat);
+    let n = this.data.byteLength + this.speckData.byteLength * 1.25 + (this.residents?.heldBytes() ?? 0) + this.people.size * 400 + lifeBytes(this.habitat);
     for (const one of this.people.values()) n += one.figure?.figure?.bytes() ?? 0;
     return n;
   }
@@ -372,29 +418,38 @@ export class PeopleView {
 
   /** The debug menu's line. */
   info(): string {
-    return `people: ${this.people.size} up within ${(CROWD_RANGE / 1000).toFixed(1)} km · ${this.figuresDrawn} figures (${this.loading} loading) · ${this.drawn} stand-ins · ${this.waiting} waiting for their look · handover holes ${this.holes}, frames with holes ${this.holeFrames} · figure levels made in ${this.slowestLevels.toFixed(0)} ms at most`;
+    return `people: ${this.people.size} up within ${(CROWD_RANGE / 1000).toFixed(1)} km · ${this.figuresDrawn} figures (${this.loading} loading) · ${this.drawn} stand-ins · ${this.specksDrawn} specks · ${this.waiting} waiting for their look · handover holes ${this.holes}, frames with holes ${this.holeFrames} · figure levels made in ${this.slowestLevels.toFixed(0)} ms at most`;
   }
 
   dispose(): void {
     this.disposed = true;
     for (const key of [...this.people.keys()]) this.letGo(key);
     if (this.mesh) freeMesh(this.mesh);
-    this.mesh = null;
+    if (this.speckMesh) freeMesh(this.speckMesh);
+    this.mesh = this.speckMesh = null;
     this.group.removeFromParent();
   }
 }
 
 /** What someone is doing, as both levels show it. */
-function doingOf(p: Person, who: Resident, deep: boolean): Doing {
-  if (deep) return { pose: POSE.upright, swim: true, anim: { move: 'swim' } };
-  if (p.moving) return { pose: POSE.upright, swim: false, anim: { move: 'walk' } };
-  const still = STILL[p.activity];
-  if (!still) return { pose: POSE.upright, swim: false, anim: { move: 'idle' } };
-  const pick = still.clips[Math.floor(hashToFloat(hash3i(who.id, 29, p.outing, 0)) * still.clips.length)];
-  return { pose: still.pose, swim: false, anim: { move: 'idle', pose: pick } };
+function doingOf(p: Person, who: Resident, foot: Footing): Doing {
+  if (foot.swim) return { pose: foot.pose, swim: true, anim: { move: 'swim' } };
+  if (p.moving) return { pose: foot.pose, swim: false, anim: { move: 'walk' } };
+  const clips = STILL[p.activity];
+  if (!clips) return { pose: foot.pose, swim: false, anim: { move: 'idle' } };
+  const pick = clips[Math.floor(hashToFloat(hash3i(who.id, 29, p.outing, 0)) * clips.length)];
+  return { pose: foot.pose, swim: false, anim: { move: 'idle', pose: pick } };
 }
 
 const dist = (a: Vec3, b: Vec3): number => v3len(v3sub(a, b));
+
+/** Draw the first n instances of a mesh, uploading only those. */
+function upload(mesh: Mesh, buffer: InstancedInterleavedBuffer, n: number, stride: number): void {
+  (mesh.geometry as InstancedBufferGeometry).instanceCount = n;
+  buffer.needsUpdate = true;
+  buffer.clearUpdateRanges();
+  buffer.addUpdateRange(0, n * stride);
+}
 
 /** The levels of detail a figure is drawn at: Actors' levels that draw its parts separately (not merged), finest first. */
 const figureLevels = (lods: readonly LodDef[]): number[] => lods.flatMap((l, i) => (l.merge ? [] : [i]));
