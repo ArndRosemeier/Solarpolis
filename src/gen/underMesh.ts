@@ -90,7 +90,7 @@ const LIP = { width: 0.5, deep: 0.2 };
  * round it at every `every` up, the lattice's bars, the panels below the first band (`door` high, the doorway's
  * height on the side toward the court), and the clearance round it in the vault's opening.
  */
-const LIFT = { side: 3, post: 0.16, band: 0.09, every: 2.8, bar: 0.05, door: 2.6, clear: 0.35 };
+export const LIFT = { side: 3, post: 0.16, band: 0.09, every: 2.8, bar: 0.05, door: 2.6, clear: 0.35 };
 /** Facets across a rib's rounded section; how far its normals lean out of the surface even where it meets it. */
 const RIB_SECTION = 4;
 const RIB_LEAN = 0.6;
@@ -204,18 +204,25 @@ function layLift(t: Terrain, court: number): UnderLift | null {
   return { i, j, toward: [0 - dj, 0 - di], side, above: t.courts[court].floor + l.pave };
 }
 
-/** What comes down through the vault over bay (i, j) (any i: it wraps): a court's light well, or a lift whose court is next to it. */
-function openingOver(t: Terrain, i: number, j: number): Opening | null {
-  const u = underOf(t.habitat), wells = wellsOf(t), well = wells.get(u.key(i, j));
-  if (well) return { shaft: well.shaft, lift: null };
+/** The lift whose cage stands in bay (i, j) (any i: it wraps), with its court's index, or null: a court's lift stands next to the court's own bay. */
+export function underLiftIn(t: Terrain, i: number, j: number): { court: number; lift: UnderLift } | null {
+  const u = underOf(t.habitat), wells = wellsOf(t), key = u.key(i, j);
+  if (wells.has(key)) return null;
   for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
     const next = wells.get(u.key(i + di, j + dj)), lift = next ? underLiftOf(t, next.court) : null;
-    if (lift && lift.j === j && u.key(lift.i, lift.j) === u.key(i, j)) {
-      const radius = (lift.side / 2) * Math.SQRT2 + LIFT.clear * t.habitat.params.landmarks!.handrail;
-      return { shaft: { radius, topRadius: radius, top: lift.above, cap: 'stone' }, lift };
-    }
+    if (next && lift && lift.j === j && u.key(lift.i, lift.j) === key) return { court: next.court, lift };
   }
   return null;
+}
+
+/** What comes down through the vault over bay (i, j) (any i: it wraps): a court's light well, or a lift whose court is next to it. */
+function openingOver(t: Terrain, i: number, j: number): Opening | null {
+  const u = underOf(t.habitat), well = wellsOf(t).get(u.key(i, j));
+  if (well) return { shaft: well.shaft, lift: null };
+  const lift = underLiftIn(t, i, j)?.lift;
+  if (!lift) return null;
+  const radius = (lift.side / 2) * Math.SQRT2 + LIFT.clear * t.habitat.params.landmarks!.handrail;
+  return { shaft: { radius, topRadius: radius, top: lift.above, cap: 'stone' }, lift };
 }
 
 /** The lamp ring's middle height over a pillar's floor. */
