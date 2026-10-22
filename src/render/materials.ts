@@ -760,9 +760,11 @@ export const VAULT = kind('vault', ['position', 'normal', 'color', 'uv', 'finish
   const toward = positionWorld.sub(cameraPosition), up = normalize(vec3(view.eye.x.negate(), view.eye.y.negate(), 0));
   const surface = Fn(() => {
     const out = mix(lit, face, step(3.5, finish)).toVar();
-    // A hamlet's sky (only there: the skies are the heaviest part of the kind).
+    // A hamlet's sky (only there: the skies are the heaviest part of the kind); its arguments set before the branch
+    // (hamletSkies.ts `skyFunction` says why).
+    const look = normalize(toward).toVar(), index = finish.sub(FINISH.screen).toVar();
     If(finish.greaterThan(FINISH.screen - 0.5), () => {
-      const sky = hamletSky(normalize(toward), up, finish.sub(FINISH.screen), below.day.div(SCREEN_DAY), below.clock);
+      const sky = hamletSky(look, up, index, below.day.div(SCREEN_DAY), below.clock);
       out.assign(sky.mul(below.lamp.mul(SCREEN_GLOW)));
     });
     return out;

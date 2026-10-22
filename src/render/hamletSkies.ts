@@ -61,7 +61,7 @@ function aurora(d: V3, o: { at: V2; rise: F }, clock: F): V3 {
 
 /** The sky from the Moon: black, dense with stars, Earth hanging low over the across side, lit from one side. */
 function moon(d: V3, up: V3, along: V3, across: V3, clock: F): V3 {
-  const toward = normalize(up.mul(0.85).add(across.mul(0.4)).add(along.mul(0.25)));
+  const toward = normalize(up.mul(0.92).add(across.mul(0.3)).add(along.mul(0.2)));
   const c = dot(d, toward), r = max(float(1).sub(c), 0).mul(2).sqrt().div(EARTH);
   const disc = float(1).sub(smoothstep(0.96, 1, r));
   // Earth's face: blue sea, white weather, its lit half toward `along`.
@@ -87,14 +87,17 @@ function mars(d: V3, o: { at: V2; rise: F }, up: V3, along: V3, day: F): V3 {
 /** Up through a forest canopy: leaves in layers, each swaying a little, the sky bright in their gaps. */
 function canopy(d: V3, o: { at: V2; rise: F }, day: F, clock: F): V3 {
   let out: V3 = mix(vec3(0.85, 0.92, 1), vec3(0.55, 0.72, 0.95), smoothstep(0, 0.7, o.rise));
+  let gaps: F = float(1);
   // From the highest layer down: the light through the leaves greener and dimmer the more layers it has passed.
   for (const [scale, shade, k] of [[0.7, 0.45, 1], [1.6, 0.65, 2], [3.4, 0.85, 3]] as const) {
     const sway = vec2(sin(clock.mul(0.4 + k * 0.13)).mul(0.03), cos(clock.mul(0.3 + k * 0.17)).mul(0.03));
     const n = mx_fractal_noise_float(vec3(o.at.add(sway).mul(scale), k * 4.1), 3, 2, 0.5);
     const leaf = smoothstep(0.08, 0.2, n);
     out = mix(out, vec3(0.42, 0.68, 0.16).mul(shade), leaf);
+    gaps = gaps.mul(float(1).sub(leaf));
   }
-  return mix(night(d, o.rise).mul(0.4), out, day);
+  // By night the leaves are black against the stars in their gaps.
+  return mix(night(d, o.rise).mul(gaps), out, day);
 }
 
 /** Up from under the sea: blue going green, the surface's waves and the light running in bright threads under it. */
@@ -102,10 +105,47 @@ function deep(o: { at: V2; rise: F }, day: F, clock: F): V3 {
   const water = mix(vec3(0.1, 0.42, 0.48), vec3(0.3, 0.68, 0.85), smoothstep(0.1, 0.9, o.rise));
   const wave = mx_noise_float(vec3(o.at.mul(1.6), clock.mul(0.15)));
   const threads = pow(clamp(float(1).sub(abs(wave)), 0, 1), 12).mul(smoothstep(0.2, 0.6, o.rise));
-  const window = smoothstep(0.82, 0.97, o.rise).mul(0.5);
+  const window = smoothstep(0.82, 0.97, o.rise).mul(0.35);
   const sea = water.add(vec3(0.7, 0.95, 1).mul(threads.mul(0.7).add(window)));
-  return mix(vec3(0.004, 0.012, 0.02), sea, day);
+  // By night only the threads show, faintly, as under a moon.
+  return mix(vec3(0.004, 0.012, 0.02).add(vec3(0.02, 0.05, 0.06).mul(threads)), sea, day);
 }
+
+/** What every sky is drawn from: the direction, the eye's up, the day (0 … 1) and the clock. */
+type SkyArgs = { d: V3; up: V3; along: V3; across: V3; o: { at: V2; rise: F }; day: F; clock: F };
+
+/**
+ * A sky as its own shader function, so that nothing worked out inside one sky's branch is read by another's: three's
+ * node builder declares an expression used twice as a variable set where it is first used twice, which may be inside
+ * one sky's branch, and then reads it unset in the next (render 20261022-193919-skies3: the moon, canopy and sea drew
+ * as if at night, the moon without stars).
+ */
+function skyFunction(name: string, draw: (a: SkyArgs) => V3): (d: V3, up: V3, day: F, clock: F) => V3 {
+  const f = Fn(([d, up, day, clock]: [V3, V3, F, F]) => {
+    const along = vec3(0, 0, 1), across = normalize(vec3(up.y, up.x.negate(), 0));
+    return draw({ d, up, along, across, o: overhead(d, up, along, across), day, clock });
+  }).setLayout({
+    name: `hamletSky_${name}`,
+    type: 'vec3',
+    inputs: [
+      { name: 'd', type: 'vec3' },
+      { name: 'up', type: 'vec3' },
+      { name: 'day', type: 'float' },
+      { name: 'clock', type: 'float' },
+    ],
+  });
+  return (d, up, day, clock) => f(d, up, day, clock) as unknown as V3;
+}
+
+/** The skies' functions, in the order drawn. */
+const SKY_FUNCTIONS = [
+  skyFunction('open', (a) => open(a.d, a.o, a.day, a.clock)),
+  skyFunction('aurora', (a) => aurora(a.d, a.o, a.clock)),
+  skyFunction('moon', (a) => moon(a.d, a.up, a.along, a.across, a.clock)),
+  skyFunction('mars', (a) => mars(a.d, a.o, a.up, a.along, a.day)),
+  skyFunction('canopy', (a) => canopy(a.d, a.o, a.day, a.clock)),
+  skyFunction('deep', (a) => deep(a.o, a.day, a.clock)),
+];
 
 /**
  * Sky `index` (gen/skies.ts) seen along `d` (unit, world) from an eye whose up (toward the axis) is `up`, at `day` of
@@ -113,18 +153,10 @@ function deep(o: { at: V2; rise: F }, day: F, clock: F): V3 {
  */
 export function hamletSky(d: V3, up: V3, index: F, day: F, clock: F): V3 {
   return Fn(() => {
-    const along = vec3(0, 0, 1), across = normalize(vec3(up.y, up.x.negate(), 0)), o = overhead(d, up, along, across);
-    const out = vec3(0).toVar(), k = floor(index.add(0.5)), lit = clamp(day, 0, 1);
-    // One plain If per sky (with one ElseIf chain, three of the six skies drew black on the GPU: render 20261022-193635-skies2).
-    const skies: (() => V3)[] = [
-      () => open(d, o, lit, clock),
-      () => aurora(d, o, clock),
-      () => moon(d, up, along, across, clock),
-      () => mars(d, o, up, along, lit),
-      () => canopy(d, o, lit, clock),
-      () => deep(o, lit, clock),
-    ];
-    skies.forEach((sky, n) => If(abs(k.sub(n)).lessThan(0.5), () => { out.assign(sky()); }));
+    // The arguments set before the branches, for the same reason (`skyFunction`).
+    const out = vec3(0).toVar(), k = floor(index.add(0.5)).toVar(), look = d.toVar(), above = up.toVar();
+    const lit = clamp(day, 0, 1).toVar(), time = clock.toVar();
+    SKY_FUNCTIONS.forEach((sky, n) => If(abs(k.sub(n)).lessThan(0.5), () => { out.assign(sky(look, above, lit, time)); }));
     return out;
   })() as unknown as V3;
 }
