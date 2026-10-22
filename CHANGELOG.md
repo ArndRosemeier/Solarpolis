@@ -2,6 +2,12 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.106 — A gravity meter: why you weigh less running one way
+
+- Inside, a small meter at the bottom right shows the gravity you feel right now, in g, with a bar against what standing still here would give.
+- It says what changes it: running with the spin makes you heavier, against it lighter (at a full run about +45% and −36% in the reference cylinder), and higher up, nearer the axis, you are lighter too. One line says why.
+- Its arrow points spinward, the way the floor itself moves. The "?" opens a short explanation of spin gravity with this habitat's own numbers.
+
 ## v0.105 — Rings and Heights rise out of the floor
 
 - The floor is no longer flat. Ridges called Rings run all the way round the cylinder, 400 m high in the reference habitat, and part the floor into landscape rooms. Each has a steep front toward the port end, cut in terraces, and a long slope toward the wild end.
