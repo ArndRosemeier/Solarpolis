@@ -6,14 +6,17 @@
  *
  * The height is the figure's own, worked out without building it: Actors' body is the base mesh plus a weighted sum of
  * morph targets, and its height the span from its lowest to its highest vertex (`ThreeActor.height`). Only the
- * vertices at the soles and the crown can be either, so the height is that sum over a few hundred of them: about a
- * tenth of a millisecond a person, against a whole shape's tens of milliseconds.
+ * vertices at the soles and the crown can be either, so the height is that sum over a few hundred of them: about half
+ * a millisecond a person (most of it Actors' own target weights), against a whole shape's tens of milliseconds. Of
+ * each target only its rise at those vertices is kept (a kilobyte); the target itself is let go once read, so
+ * measuring a crowd of thousands does not hold the pack's 40 MB of targets (only the figures' worker holds theirs).
  */
 import { outfitGarments, randomConfig, seededRandom, type CharacterCatalog, type CharacterConfig } from '@actors/generator';
 import { Human, sanitizeRace } from '@actors/human';
-import type { MorphTarget } from '@actors/core';
+import { decodeTarget, type Fetcher, type MorphTarget } from '@actors/core';
 import type { Resident } from '../../sim';
 import { SLOT, hexColor, packColor } from '../../gen/standIn';
+import { packFetch } from './pack';
 
 /** Outfits (Actors' presets) made of separate plain garments, each in one colour of its own. */
 const OUTFITS = ['casual', 'sporty', 'layers', 'long-skirt', 'polo', 'cargo', 'summer', 'sport', 'kimono', 'shift-dress', 'halter-dress'] as const;
@@ -26,8 +29,14 @@ const BARE_SHINS = new Set(['shorts', 'denim-shorts', 'shift-dress']);
 const GROWN_HEIGHT = 0.6;
 /** A shell stands on its soles and its head plates reach a little over the body (m). */
 const SHELL_EXTRA = 0.03;
-/** Body vertices to look at for the height: the lowest (soles) and the highest (crown) of the base mesh. */
-const LOWEST = 400, HIGHEST = 300;
+/**
+ * Body vertices to look at for the height: the lowest (soles) and the highest (crown) of the base mesh. Over thousands
+ * of residents the lowest vertex of a body was always among the base's lowest 180 and the highest among its highest
+ * 25 (test/slow/residents.slow.test.ts checks the height against Actors' own); these leave room on both.
+ */
+const LOWEST = 260, HIGHEST = 80;
+/** Target files fetched at once while measuring (the rest wait their turn). */
+const FETCHES = 16;
 
 /** What a stand-in needs of a person: standing height (m), width (× the mean), and colours by slot (packed). */
 export interface Dress {
@@ -42,14 +51,22 @@ export class Residents {
   private readonly candidates: Uint32Array;
   /** Each target's rise at the candidates (m per unit weight), made the first time it is needed. */
   private readonly rise = new Map<string, Float32Array>();
-  private readonly waiting = new Set<string>();
+  /** Targets asked for, and those not yet fetched. */
+  private readonly asked = new Set<string>();
+  private readonly queue: string[] = [];
+  private fetching = 0;
+  private readonly files: Map<string, string>;
+  private readonly folder: string;
   private readonly dresses = new Map<number, Dress>();
   private readonly garments: Map<string, string[]>;
 
-  /** `human` is the pack's loaded human (its runtime is shared, nothing is loaded twice). */
-  constructor(readonly catalog: CharacterCatalog, readonly base: CharacterConfig, readonly human: Human) {
+  /** `human` is the pack's loaded human (its runtime is shared, nothing is loaded twice); `fetcher` reads its files. */
+  constructor(readonly catalog: CharacterCatalog, readonly base: CharacterConfig, readonly human: Human, private readonly fetcher: Fetcher = packFetch) {
     this.ruler = Human.share(human);
-    const rt = human.runtime, body = rt.meshes.find((m) => m.def.role === 'body' && !(m as { stencil?: unknown }).stencil);
+    const rt = human.runtime;
+    this.files = new Map(rt.manifest.targets.map((t) => [t.name, t.file]));
+    this.folder = rt.manifestUrl.slice(0, rt.manifestUrl.lastIndexOf('/') + 1);
+    const body = rt.meshes.find((m) => m.def.role === 'body' && !(m as { stencil?: unknown }).stencil);
     const y = rt.basePositions;
     const verts = [...new Set<number>(body ? Array.from((body as unknown as { map: ArrayLike<number> }).map) : [])].sort((a, b) => y[a * 3 + 1] - y[b * 3 + 1]);
     this.candidates = Uint32Array.from([...verts.slice(0, LOWEST), ...verts.slice(-HIGHEST)]);
@@ -104,21 +121,15 @@ export class Residents {
     h.params = { ...look.body };
     h.race = sanitizeRace({ race: look.race, race2: look.race2, mix: look.raceMix, size: look.raceSize });
     h.modifierValues = { ...look.details };
-    const weights = h.targetWeights(), missing: string[] = [];
-    for (const name of weights.keys()) if (!rt.targets.has(name)) missing.push(name);
-    if (missing.length) {
-      const asked = missing.filter((m) => !this.waiting.has(m));
-      if (asked.length) {
-        asked.forEach((m) => this.waiting.add(m));
-        void rt.ensureTargets(asked).finally(() => asked.forEach((m) => this.waiting.delete(m)));
-      }
-      return null;
-    }
+    const weights = h.targetWeights();
+    let missing = false;
+    for (const [name, w] of weights) if (w && !this.rise.has(name)) { missing = true; this.ask(name); }
+    if (missing) return null;
     const c = this.candidates, y = new Float64Array(c.length);
     for (let k = 0; k < c.length; k++) y[k] = rt.basePositions[c[k] * 3 + 1];
     for (const [name, w] of weights) {
       if (!w) continue;
-      const d = this.riseOf(name, rt.targets.get(name)!);
+      const d = this.rise.get(name)!;
       for (let k = 0; k < c.length; k++) y[k] += w * d[k];
     }
     let lo = Infinity, hi = -Infinity;
@@ -127,11 +138,27 @@ export class Residents {
     return (hi - lo) * (h.shapeOptions().scale ?? 1);
   }
 
-  private riseOf(name: string, t: MorphTarget): Float32Array {
-    let d = this.rise.get(name);
-    if (d) return d;
+  /** Fetch a target (a few at a time), keep its rise at the candidates and let it go. */
+  private ask(name: string): void {
+    if (this.asked.has(name)) return;
+    this.asked.add(name);
+    this.queue.push(name);
+    this.pump();
+  }
+
+  private pump(): void {
+    while (this.fetching < FETCHES && this.queue.length) {
+      const name = this.queue.shift()!, file = this.files.get(name);
+      if (!file) continue;
+      this.fetching++;
+      void this.fetcher(this.folder + file).then((buf) => { this.rise.set(name, this.riseOf(decodeTarget(buf))); }, () => { this.asked.delete(name); })
+        .finally(() => { this.fetching--; this.pump(); });
+    }
+  }
+
+  private riseOf(t: MorphTarget): Float32Array {
     const c = this.candidates;
-    d = new Float32Array(c.length);
+    const d = new Float32Array(c.length);
     for (let k = 0; k < c.length; k++) {
       let j = c[k];
       const at = t.indices;
@@ -142,7 +169,6 @@ export class Residents {
       } else if (j >= t.count) j = -1;
       if (j >= 0) d[k] = t.deltas[j * 3 + 1] * t.scale;
     }
-    this.rise.set(name, d);
     return d;
   }
 

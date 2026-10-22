@@ -39,8 +39,14 @@ const FAR_SHARE = 6;
 const FIGURES = 8;
 const FIGURE_IN = 30;
 const FIGURE_OUT = 40;
-/** Time per frame for measuring people new in the area (ms; the rest wait for the next frame). */
-const MEASURE_BUDGET = 2;
+/**
+ * Time per frame for people new in the area (ms): placing them on the land and measuring their looks, nearest first;
+ * the rest wait for the next frame. After a jump into a crowd of thousands they come in over a few seconds, as the
+ * ground does, and never in one long frame.
+ */
+const NEW_BUDGET = 3;
+/** A walker's light (the terrain's horizons where they are) is looked up again once they are this far on (m). */
+const HORIZON_MOVE = 10;
 /** A walking stride: one cycle (two steps) covers this many body heights. */
 const STRIDE_LENGTH = 0.85;
 /** A swimmer treads water with the head out: the feet this share of the height under the surface. */
@@ -81,6 +87,8 @@ interface Someone {
   turn: number;
   phase: number;
   horizon: [number, number];
+  /** Where the horizons were looked up (world). */
+  litAt: Vec3;
   doing: Doing;
   /** Their figure: loading, or drawn in place of the stand-in. */
   figure: { figure: Figure | null; shown: boolean; dropped: boolean } | null;
@@ -110,6 +118,8 @@ export class PeopleView {
   private waiting = 0;
   private holes = 0;
   private holeFrames = 0;
+  /** The longest a figure's levels took to make on the main thread (ms; the debug line). */
+  private slowestLevels = 0;
   private disposed = false;
 
   constructor(private readonly habitat: Habitat, private readonly terrain: Terrain, private readonly stage: Stage, private readonly camera: Camera, private readonly standOn: (theta: number, s: number) => number) {
@@ -145,17 +155,19 @@ export class PeopleView {
     const h = this.habitat;
     if (this.clock - this.lastScan > SCAN_EVERY || !this.scannedAt || dist(eye, this.scannedAt) > SCAN_MOVE) this.rescan(eye, t);
     const t0 = performance.now(), gone: number[] = [];
+    const room = (): boolean => performance.now() - t0 < NEW_BUDGET;
     let k = 0;
     for (const [key, one] of this.people) {
       k++;
-      const near = !one.placed || dist(one.feet, eye) < EVERY_FRAME || one.figure;
+      if (!one.placed && !room()) continue;
+      const near = !one.placed || one.figure || dist(one.feet, eye) < EVERY_FRAME;
       if (near || (k + this.frameNo) % FAR_SHARE === 0) {
         const p = whereIs(h, t, one.person);
         if (!p) { gone.push(key); continue; }
         one.person = p;
         this.stand(one);
       }
-      if (!one.dress && performance.now() - t0 < MEASURE_BUDGET) one.dress = r.dressOf(one.resident);
+      if (!one.dress && room()) one.dress = r.dressOf(one.resident);
     }
     for (const key of gone) this.letGo(key);
     this.figures(eye);
@@ -176,7 +188,7 @@ export class PeopleView {
       const resident = residentOf(this.habitat, p.resident);
       this.people.set(key, {
         person: p, resident, dress: null, feet: [0, 0, 0], up: [0, 0, 1], front: [1, 0, 0], turn: 0,
-        phase: 2 * Math.PI * hashToFloat(hash3i(p.resident, 17, 3, 0)), horizon: [0, 0], doing: { pose: 0, swim: false, anim: { move: 'idle' } },
+        phase: 2 * Math.PI * hashToFloat(hash3i(p.resident, 17, 3, 0)), horizon: [0, 0], litAt: [0, 0, 0], doing: { pose: 0, swim: false, anim: { move: 'idle' } },
         figure: null, seen: this.scan, placed: false,
       });
     }
@@ -209,7 +221,7 @@ export class PeopleView {
     one.feet = feet;
     one.up = up;
     one.doing = doing;
-    if (!one.placed || p.moving) one.horizon = horizonAt(this.terrain, p.theta, p.s);
+    if (!one.placed || (p.moving && dist(feet, one.litAt) > HORIZON_MOVE)) { one.horizon = horizonAt(this.terrain, p.theta, p.s); one.litAt = feet; }
     one.placed = true;
   }
 
@@ -247,11 +259,15 @@ export class PeopleView {
     // Every level is compiled now (Actors makes the crowd level's merged mesh when first asked for it), so a switch
     // between them never builds a shader on the render path.
     const c = figure.character;
+    let made = 0;
     for (let level = c.lods.length - 1; level >= 0; level--) {
+      const t0 = performance.now();
       c.setLod(level);
       castAsWorn(figure.object);
+      made += performance.now() - t0;
       await this.stage.prepare(figure.object, { everyCaster: true });
     }
+    this.slowestLevels = Math.max(this.slowestLevels, made);
     c.lodCamera = this.camera;
     c.setLod('auto');
     return figure;
@@ -326,7 +342,7 @@ export class PeopleView {
 
   /** The debug menu's line. */
   info(): string {
-    return `people: ${this.people.size} up within ${(CROWD_RANGE / 1000).toFixed(1)} km · ${this.figuresDrawn} figures (${this.loading} loading) · ${this.drawn} stand-ins · ${this.waiting} waiting for their look · handover holes ${this.holes}, frames with holes ${this.holeFrames}`;
+    return `people: ${this.people.size} up within ${(CROWD_RANGE / 1000).toFixed(1)} km · ${this.figuresDrawn} figures (${this.loading} loading) · ${this.drawn} stand-ins · ${this.waiting} waiting for their look · handover holes ${this.holes}, frames with holes ${this.holeFrames} · figure levels made in ${this.slowestLevels.toFixed(0)} ms at most`;
   }
 
   dispose(): void {

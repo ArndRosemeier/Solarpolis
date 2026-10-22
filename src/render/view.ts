@@ -181,9 +181,14 @@ export class InteriorView {
     return this.figure?.bytes() ?? 0;
   }
 
+  /** Bytes the people around the player hold: figures, stand-ins, measures, the population's caches (memory watchdog). */
+  peopleBytes(): number {
+    return this.people?.bytes() ?? 0;
+  }
+
   /** Bytes of geometry this view holds (memory watchdog). */
   bytes(): number {
-    return (this.tiles?.bytes() ?? 0) + (this.plants?.bytes() ?? 0) + (this.landmarks?.bytes() ?? 0) + (this.stair?.bytes() ?? 0) + (this.courts?.bytes() ?? 0) + (this.crossings?.bytes() ?? 0) + (this.halls?.bytes() ?? 0) + (this.people?.bytes() ?? 0);
+    return (this.tiles?.bytes() ?? 0) + (this.plants?.bytes() ?? 0) + (this.landmarks?.bytes() ?? 0) + (this.stair?.bytes() ?? 0) + (this.courts?.bytes() ?? 0) + (this.crossings?.bytes() ?? 0) + (this.halls?.bytes() ?? 0);
   }
 
   /** Give memory back (memory watchdog): drop every cached tile and plant cell not on screen. */

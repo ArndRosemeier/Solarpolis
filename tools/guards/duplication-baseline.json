@@ -388,6 +388,10 @@
     "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
   },
   {
+    "key": "same name: solarpolis/render/people.ts#follow + solarpolis/render/plants.ts#follow",
+    "reason": "The views' per-frame step around the eye shares only its name and the shape of a budgeted loop: plants choose and stream cells through the worker pool, people ask the population where each person is and measure their looks."
+  },
+  {
     "key": "same name: solarpolis/render/people.ts#follow + solarpolis/render/terrain.ts#follow",
     "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
   },

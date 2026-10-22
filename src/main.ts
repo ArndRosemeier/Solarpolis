@@ -111,6 +111,7 @@ class ViewSlot<V extends PageView> {
 const insideSlot = new ViewSlot('Hold the right mouse button to look around · W A S D to move · Shift to run · Space to jump · wheel to see yourself · F to fly (E up, Q down)', 'Building the interior…', 'terrain tiles', async (h) => {
   const v = await InteriorView.create(h);
   memory.track('player body', () => v.bodyBytes());
+  memory.track('people', () => v.peopleBytes());
   return v;
 });
 const outsideSlot = new ViewSlot('Hold the right mouse button to swing around · wheel to come closer · 1 habitat, 2 Earth, 3 Moon, 4 nearest neighbour · F to fly (W A S D, E up, Q down, Shift faster)', 'Building the sky…', 'sky maps, stars and skin detail', (h) => OutsideView.create(h));

@@ -50,8 +50,16 @@ async function logPeople(page) {
   await page.keyboard.press('Control+Shift+F12');
   const text = await page.locator('.dbg-panel .dbg-info').innerText({ timeout: 3000 }).catch(() => '');
   await page.locator('.dbg-panel .dbg-close').click().catch(() => {});
-  const lines = text.split('\n').filter((l) => l.startsWith('people') || l.startsWith('shaders') || l.startsWith('memory') || l.includes('MB'));
+  const lines = text.split('\n').filter((l) => l.startsWith('people') || l.startsWith('shaders') || l.startsWith('memory') || l.includes('MB') || l.includes('fps'));
   await page.evaluate((ls) => { for (const l of ls) console.warn(l); }, lines.length ? lines : ['(no people line)']);
+  // Builds after the warm-up that started too close together: which, and how (a node-sync one was drawn uncompiled).
+  await page.evaluate(() => {
+    const run = (window.shaders?.events ?? []).filter((e) => e.phase === 'run' && (e.kind === 'node-sync' || e.kind === 'node-async')).sort((a, b) => a.t - b.t);
+    for (let i = 1; i < run.length; i++) {
+      if (run[i].t - run[i - 1].t < 199) console.warn(`close builds ${(run[i].t - run[i - 1].t).toFixed(0)} ms apart: ${run[i - 1].kind} "${run[i - 1].what}" then ${run[i].kind} "${run[i].what}"`);
+    }
+    for (const e of run) if (e.kind === 'node-sync') console.warn(`drawn uncompiled: "${e.what}" (${e.ms.toFixed(0)} ms)`);
+  });
 }
 /** Walk ahead (W) for `steps` stretches of `ms`, a picture after each (`-w1`, `-w2`, ...), then log the plant LOD line. */
 const walk = (steps, ms) => [...Array.from({ length: steps }, (_, i) => [{ key: 'KeyW', hold: ms }, { shot: `w${i + 1}` }]).flat(), { run: logPlantLod }];
@@ -155,7 +163,7 @@ export const views = {
   'outside-close': { query: 'view=outside', about: 'wheel in close to the hull', steps: [{ wheel: -2400 }, { wait: 3000 }] },
   'people-crowd': { query: 'view=inside', about: 'before the busiest spot within 2 km in the morning: as they appear (-early), once the nearest have their figures (-near), a step closer (-closer); logs the people and shader lines', settle: 6000, steps: [{ debug: 'Before the nearest crowd' }, { wait: 3000 }, { shot: 'early' }, { wait: 12000 }, { shot: 'near' }, { run: logPeople }, { key: 'KeyW', hold: 1500 }, { wait: 4000 }, { shot: 'closer' }, { run: logPeople }] },
   'people-above': { query: 'view=inside', about: 'flown up over the busiest spot within 2 km, looking down at the crowd and out across the land', settle: 6000, steps: [{ debug: 'Before the nearest crowd' }, { wait: 6000 }, { key: 'KeyF' }, { key: 'KeyE', hold: 2500 }, { look: [0, 160] }, { wait: 3000 }, { shot: 'down' }, { look: [0, -120] }, { wait: 2000 }, { run: logPeople }] },
-  'people-dusk': { query: 'view=inside', about: 'at dusk (12 hours on), beside the Lift Stair (-stair) and from over the floor (-far): the evening crowd on the Gate face', settle: 6000, steps: [...Array.from({ length: 6 }, () => ({ debug: 'Two hours later' })), { debug: 'Fly: beside the Lift Stair' }, { wait: 8000 }, { shot: 'stair' }, { run: logPeople }, { debug: 'Fly: the Lift Stair from over the floor' }, { wait: 6000 }, { shot: 'far' }] },
+  'people-stair': { query: 'view=inside', about: 'in the afternoon (6 hours on, the busiest time there), beside the Lift Stair (-stair) and from over the floor (-far): about two thousand people within 1.5 km come in nearest first; logs the people, frame and shader lines', settle: 6000, steps: [...Array.from({ length: 3 }, () => ({ debug: 'Two hours later' })), { debug: 'Fly: beside the Lift Stair' }, { wait: 10000 }, { shot: 'stair' }, { run: logPeople }, { debug: 'Fly: the Lift Stair from over the floor' }, { wait: 8000 }, { shot: 'far' }, { run: logPeople }] },
   'memory-people': { query: 'view=inside', about: 'before the busiest spot within 2 km for 30 s with figures loaded, then a heap snapshot: who holds the JS heap', settle: 6000, steps: [memoryDetails, { debug: 'Before the nearest crowd' }, { wait: 30000 }, { run: logPeople }, { shot: 'before-heap' }, heap('people')] },
   'memory-title': { query: '', about: 'the title flight for 40 s, then a heap snapshot: who holds the JS heap', steps: [memoryDetails, { wait: 40000 }, heap('title')] },
   'memory-inside': {

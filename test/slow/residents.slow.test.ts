@@ -19,10 +19,10 @@ test('residents: a stand-in is exactly as tall as the figure Actors builds from 
   const human = await Human.load(join(pack, 'manifest.json'), fetcher);
   const all = buildCatalog(human, Object.keys(IRIS_PRESETS));
   const catalog = { ...all, garments: all.garments.filter((g) => !g.credit), hair: all.hair.filter((x) => !x.credit) };
-  const residents = new Residents(catalog, defaultConfig(catalog), human), h = derive(REFERENCE);
+  const residents = new Residents(catalog, defaultConfig(catalog), human, fetcher), h = derive(REFERENCE);
   const body = human.runtime.meshes.find((m) => m.def.role === 'body' && !(m as { stencil?: unknown }).stencil) as unknown as { map: ArrayLike<number> };
   let shells = 0;
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 120; i++) {
     const r = residentOf(h, i * 997 + 3);
     let dress = residents.dressOf(r);
     for (let k = 0; !dress && k < 500; k++) { await new Promise((ok) => setTimeout(ok, 20)); dress = residents.dressOf(r); }
