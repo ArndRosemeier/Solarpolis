@@ -5,7 +5,7 @@ Shader compiles are the worst kind of stutter: the frame waits for a driver. Sca
 ## The rules
 
 1. **Each shader compile blocks for under 100 ms.** Aim for about 10 ms.
-2. **After the loading screen, at most 5 new shaders per second, at least 200 ms apart, and at most one per frame.**
+2. **After the loading screen, shader builds take at most a third of the time, spread evenly: after a build of t ms the next waits 2t ms, and at most one per frame** (Arnd, 2026-10-22; it was 5 per second, 200 ms apart, which made a person's dozen 1–2 ms shadow builds take seconds).
 3. **Nothing compiles on the render path.** An object enters the scene only after its shaders are ready.
 
 ## How the code keeps them
@@ -16,7 +16,7 @@ The renderer foundation (the Stage, the compile cap, the renderer hooks and the 
 |---|---|
 | Material registry (`src/render/materials.ts`) | Every material is a *kind* from a closed list, and every mesh of a kind shares one material. Variation goes in vertex attributes or uniforms, never in a new material. |
 | Stage | `warmUp()` compiles every kind against the real scene behind the loading screen, then the cap switches on. `add(obj)` compiles an object first and only then puts it into the scene. `warmLater` compiles under the cap in the background. |
-| Cap | Hands out build slots: at most 5 per second, at least 200 ms apart, one per frame. |
+| Cap | Hands out build slots: `share` (1/3) of the time, a build of t ms followed by 2t ms without one, one per frame. `slot()` resolves to a `release` to call once the build is done (its time sets the wait). |
 | Renderer hooks | The safety net on three r186 internals: async builds queue behind the cap; an uncompiled pipeline is skipped until ready. |
 | Monitor | Records every build; breaches show in the debug menu. |
 

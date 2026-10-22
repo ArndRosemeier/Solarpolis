@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { JOINT, LIMB, SLOT, STAND_IN_ATTRIBUTES, STAND_IN_STRIDE, hexColor, packColor, standInArrays } from '../src/gen/standIn';
+import { JOINT, LIMB, SLOT, STAND_IN_ATTRIBUTES, STAND_IN_STRIDE, hexColor, hexOf, packColor, standInArrays } from '../src/gen/standIn';
 
 test('stand-in: one body of height 1, feet on the ground, every part dressed and on its limb', () => {
   const a = standInArrays(), n = a.positions.length / 3;
@@ -30,4 +30,10 @@ test('stand-in: a colour packs into one float and back', () => {
     assert.ok(Number.isInteger(v) && v < 2 ** 24 && Math.fround(v) === v);
     assert.deepEqual([v % 256, Math.floor(v / 256) % 256, Math.floor(v / 65536)].map((x) => x / 255), c);
   }
+});
+
+test('stand-in: a hex colour reads back as the channels it was written from', () => {
+  assert.equal(hexOf([0.404, 0.233, 0.169]), '#673b2b');
+  assert.equal(hexOf([2, -1, 0.5]), '#ff0080');
+  for (const hex of ['#000000', '#3b2417', '#e6cab3', '#ffffff']) assert.equal(hexOf(hexColor(hex)), hex);
 });

@@ -48,10 +48,14 @@ const SCAN_MOVE = 100;
 const EVERY_FRAME = 60;
 const HALF_FRAMES = 250;
 const FAR_SHARE = 6;
-/** Figures: how many at most, loaded within `FIGURE_IN` m of the eye and given back beyond `FIGURE_OUT`. */
+/**
+ * Figures: how many at most, loaded within `FIGURE_IN` m of the eye and given back beyond `FIGURE_OUT`. A figure takes
+ * a moment to get ready (fitting its body, then building its shadow shaders under the shader cap, docs/SHADERS.md), so
+ * it starts well before someone is near enough to look at closely.
+ */
 const FIGURES = 8;
-const FIGURE_IN = 30;
-const FIGURE_OUT = 40;
+const FIGURE_IN = 50;
+const FIGURE_OUT = 65;
 /**
  * Time per frame for people new in the area (ms): placing them on the land and measuring their looks, nearest first;
  * the rest wait for the next frame. After a jump into a crowd of thousands they come in over a few seconds, as the
@@ -258,10 +262,12 @@ export class PeopleView {
     for (const one of this.people.values()) if (one.dress && dist(one.feet, eye) < FIGURE_IN) wanted.push(one);
     wanted.sort((a, b) => dist(a.feet, eye) - dist(b.feet, eye));
     const keep = new Set(wanted.slice(0, FIGURES));
+    // A figure of someone no longer among the nearest makes room once one of the nearest is still without one.
+    const short = wanted.slice(0, FIGURES).some((one) => !one.figure);
     for (const one of this.people.values()) {
       if (!one.figure) continue;
       const d = dist(one.feet, eye);
-      if (d > FIGURE_OUT || (!keep.has(one) && d > FIGURE_IN)) this.dropFigure(one);
+      if (d > FIGURE_OUT || (!keep.has(one) && (d > FIGURE_IN || short))) this.dropFigure(one);
     }
     let count = 0;
     for (const one of this.people.values()) if (one.figure) count++;

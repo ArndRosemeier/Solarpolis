@@ -61,14 +61,20 @@ function reverseDepthBias(root: Object3D): void {
 }
 
 /**
+ * Parts too small or too deep in the face to show in a shadow: teeth, tongue, eyes, lashes, brows. Each caster costs a
+ * figure a shadow build of its own under the shader cap (docs/SHADERS.md), a fifth of a second before it can be drawn.
+ */
+const SHADOWLESS = /^(teeth|tongue|eyes|eyelashes|brows-.*)$/;
+
+/**
  * Ready a figure for the near shadow map (docs/SHADERS.md): it takes shadows; the parts it wears cast (the pack's other
- * garments stay hidden; a change of clothes would prepare it again); a see-through two-sided part (lashes, brows) is
- * drawn in two passes, one shader each, so its shadow is cast from one side.
+ * garments stay hidden; a change of clothes would prepare it again), but not the small parts of the face; a see-through
+ * two-sided part is drawn in two passes, one shader each, so its shadow is cast from one side.
  */
 export function castAsWorn(root: Object3D): void {
   root.traverse((o) => {
     o.receiveShadow = true;
-    o.castShadow = o.visible;
+    o.castShadow = o.visible && !SHADOWLESS.test(o.name);
     const m = (o as Mesh).material as Material | undefined;
     if (m && !Array.isArray(m) && m.transparent && m.side === DoubleSide) m.shadowSide = FrontSide;
   });
