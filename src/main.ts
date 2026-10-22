@@ -278,11 +278,11 @@ toPlace('Beside the nearest person in a drone body', 4, (eco, t, s) => {
   const d = best.theta - t, dx = (d - 2 * Math.PI * Math.round(d / (2 * Math.PI))) * r, dy = best.s - s, l = Math.hypot(dx, dy) || 1;
   return { theta: best.theta, s: best.s, way: [dx / l, dy / l] };
 });
-/** 6 m from the nearest party of two or more down on the grass (sitting or lying, not on a seat), facing it. */
+/** 6 m from the nearest party of two or more down on the grass (sitting or lying, not on a seat) within 6 km, facing it. */
 toPlace('Beside the nearest party on the grass', 6, (eco, t, s) => {
   const h = eco.terrain.habitat, r = h.radius, v = view();
   if (!v) return null;
-  const down = peopleAt(h, v.time, { theta: t, s, radius: 1500 }, eco.terrain).filter((p) => !p.moving && p.size > 1 && p.posture !== POSE.upright && p.activity !== 'bench');
+  const down = peopleAt(h, v.time, { theta: t, s, radius: 6000 }, eco.terrain).filter((p) => !p.moving && p.size > 1 && p.posture !== POSE.upright && p.activity !== 'bench');
   const best = down.sort((a, b) => floorGap(r, t, s, a.theta, a.s) - floorGap(r, t, s, b.theta, b.s))[0];
   if (!best) return null;
   const d = best.theta - t, dx = (d - 2 * Math.PI * Math.round(d / (2 * Math.PI))) * r, dy = best.s - s, l = Math.hypot(dx, dy) || 1;
