@@ -9,7 +9,7 @@
  *   lane     the lanes left open between them, every `under.lanes` bay lines, crossing at the wellhead;
  *   gallery  the indoor streets between hamlets, under the land's Sunwalk and ways;
  *   cistern  pillared water halls: the water the habitat moves to keep its spin balanced, warmed on its way to the radiators;
- *   lake     under the ring lake: a low gallery whose ceiling is the lake's glass bed (or no room at all: `lakeHeight`);
+ *   lake     under the ring lake: a gallery whose ceiling is the lake's glass bed;
  *   works    under the reserve: the habitat mind's own (no hamlets there, as there are no entrances);
  *   dim      the rest: open pillar forest, lit low.
  *
@@ -20,7 +20,8 @@
  * Cisterns are square blocks of bays in rings round the axis, evenly along the worked floor, as many as `under.cisterns` asks.
  *
  * Pure and seeded; nothing is stored per bay: `useAt` works any bay out on its own, so a habitat of millions of bays
- * costs only its hamlets. Distances are over the unrolled floor (θ times the radius, and s). Later steps add what the
+ * costs only its hamlets. Distances are over the unrolled floor (θ times the radius, and s). How high the layer lies
+ * follows the land over it: that is the terrain's (`levelsOf`, gen/underLevels.ts). Later steps add more of what the
  * terrain decides (great rooms under hills, root bells).
  */
 import { angleDiff, deriveSeed, Rng } from '@futuremagic/core';
@@ -67,15 +68,6 @@ export interface Under {
   readonly dTheta: number;
   readonly bay: number;
   readonly s0: number;
-  /**
-   * The layer's levels as heights over the profile (negative: under the ground's mean): the ceiling (the deck's
-   * underside), where the vault ribs spring, and the floor.
-   */
-  readonly ceiling: number;
-  readonly springing: number;
-  readonly floor: number;
-  /** Clear height of the gallery under the ring lake's glass bed (m); 0 or less: the lake's basin fills the layer. */
-  readonly lakeHeight: number;
   readonly hamlets: readonly Hamlet[];
   /** The bay a point of the floor lies over, or null beyond the floor (the endcaps). */
   bayAt(theta: number, s: number): { i: number; j: number } | null;
@@ -111,8 +103,7 @@ export function makeUnder(h: Habitat): Under {
   const bay = u.bay, around = Math.max(3, Math.round((TURN * R) / bay)), dTheta = TURN / around;
   const along = Math.max(1, Math.floor((floorEnd - floorStart) / bay));
   const s0 = floorStart + (floorEnd - floorStart - along * bay) / 2;
-  const ly = h.params.layers, ceiling = -(ly.soilMax + ly.ceilingDeck), floor = ceiling - ly.living;
-  const lake = plan.lake, lakeHeight = lake ? lake.level - lake.depth - ly.ceilingDeck - floor : 0;
+  const lake = plan.lake;
 
   const bayAt = (theta: number, s: number): { i: number; j: number } | null => {
     const j = Math.floor((s - s0) / bay);
@@ -230,7 +221,6 @@ export function makeUnder(h: Habitat): Under {
 
   return {
     habitat: h, around, along, dTheta, bay, s0,
-    ceiling, springing: floor + u.spring * ly.living, floor, lakeHeight,
     hamlets, bayAt, centreOf, useAt, hamletOf,
   };
 }

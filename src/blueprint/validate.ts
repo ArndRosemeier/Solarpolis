@@ -93,8 +93,9 @@ export function validate(h: Habitat): Finding[] {
     out.push({ id: 'life', severity: 'invalid', message: 'animals need squirrels ≥ 0 per hectare, a range > 0, a share of the day out between 0 and 1, deer ≥ 0 per km², herds of at least 1 and a roam > 0' });
   const u = p.under, us = u.stone;
   if (!(u.bay > 0 && u.bay < pl.entranceSpacing / 2 && us.density > 0 && us.strength > 0 && us.modulus > 0 && us.safetyFactor >= 1 && u.land >= 0 && u.spring > 0 && u.spring < 1
-    && u.household.people > 0 && u.household.bays > 0 && u.halls >= 0 && Number.isInteger(u.lanes) && u.lanes >= 2 && u.cisterns >= 0 && u.cisterns <= 1))
-    out.push({ id: 'under', severity: 'invalid', message: 'the Understorey needs a bay > 0 under half the entrance spacing, a stone with density, strength and stiffness > 0 and a safety factor ≥ 1, a load ≥ 0, ribs springing between floor and ceiling, households and their homes > 0, halls ≥ 0, lanes every 2 bays or more and a cistern share from 0 to 1' });
+    && u.household.people > 0 && u.household.bays > 0 && u.halls >= 0 && Number.isInteger(u.lanes) && u.lanes >= 2 && u.cisterns >= 0 && u.cisterns <= 1
+    && u.grade > 0 && u.grade < 1 && u.lamp > 0 && u.lamp <= 1 && u.mist > 0))
+    out.push({ id: 'under', severity: 'invalid', message: 'the Understorey needs a bay > 0 under half the entrance spacing, a stone with density, strength and stiffness > 0 and a safety factor ≥ 1, a load ≥ 0, ribs springing between floor and ceiling, households and their homes > 0, halls ≥ 0, lanes every 2 bays or more, a cistern share from 0 to 1, a floor grade between 0 and 1, lamps from 0 to 1 of daylight and a mist > 0' });
   else if (2 * h.pillars.radius > u.bay * PILLAR_MOST)
     out.push({ id: 'under', severity: 'invalid', message: `the pillars must be ${(2 * h.pillars.radius).toFixed(1)} m thick to hold the land: more than ${pct(PILLAR_MOST)} of the ${u.bay} m bay` });
   else if (2 * h.pillars.radius > u.bay * PILLAR_STOUT)

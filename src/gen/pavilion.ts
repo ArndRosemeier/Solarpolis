@@ -27,8 +27,11 @@ import { v3cross, v3norm, type Vec3 } from '@futuremagic/core';
 import { Shape, type RGB } from './shapes';
 import type { Pavilion } from './landmarks';
 
-/** What the surfaces are made of (the BUILT kind reads it, render/materials.ts). */
-export const FINISH = { stone: 0, timber: 1, bronze: 2, ceramic: 3 } as const;
+/**
+ * What the surfaces are made of (the BUILT kind reads it, render/materials.ts). `lamp` is a lamp's glowing face, which
+ * only the Understorey's VAULT kind lights itself (gen/underMesh.ts).
+ */
+export const FINISH = { stone: 0, timber: 1, bronze: 2, ceramic: 3, lamp: 4 } as const;
 
 /** The levels every landmark is drawn at (the summit hut's too, gen/summitHut.ts), and `solid` for the physics. */
 export const LANDMARK_LEVELS = ['far', 'mid', 'near'] as const;
