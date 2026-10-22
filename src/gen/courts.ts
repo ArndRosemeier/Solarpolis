@@ -219,19 +219,19 @@ function layCourt(t: Terrain, index: number): CourtLayout | null {
 const ARC_STEP = 0.1;
 
 /** Walking a court's floor: points (θ, s) put at a radius and angle of its frame, and arcs round it. */
-function courtWalk(l: CourtLayout): { pts: number[]; at: (r: number, a: number) => void; arc: (r: number, a0: number, a1: number) => void; aisle: number } {
+function courtWalk(l: CourtLayout): { pts: number[]; put: (r: number, a: number) => void; arc: (r: number, a0: number, a1: number) => void; aisle: number } {
   const frame = frameOf(l.court), pts: number[] = [];
-  const at = (r: number, a: number): void => { const p = floorAt(l.habitat, frame, r * Math.cos(a), r * Math.sin(a)); pts.push(p.theta, p.s); };
+  const put = (r: number, a: number): void => { const p = floorAt(l.habitat, frame, r * Math.cos(a), r * Math.sin(a)); pts.push(p.theta, p.s); };
   const arc = (r: number, a0: number, a1: number): void => {
     const n = Math.max(1, Math.ceil(Math.abs(a1 - a0) / ARC_STEP));
-    for (let i = 1; i <= n; i++) at(r, a0 + ((a1 - a0) * i) / n);
+    for (let i = 1; i <= n; i++) put(r, a0 + ((a1 - a0) * i) / n);
   };
   // The aisle: round the paving inside the stairs and the benches.
   const aisle = l.inner - 0.8 * l.handrail;
   // Out of the portal's doors and a step in.
-  at(l.face - (PART.project + 0.5) * l.handrail, l.portal.angle);
-  at(aisle, l.portal.angle);
-  return { pts, at, arc, aisle };
+  put(l.face - (PART.project + 0.5) * l.handrail, l.portal.angle);
+  put(aisle, l.portal.angle);
+  return { pts, put, arc, aisle };
 }
 
 const short = (d: number): number => Math.atan2(Math.sin(d), Math.cos(d));
@@ -246,9 +246,9 @@ function passage(l: CourtLayout): { w: ReturnType<typeof courtWalk>; out: number
   const beyond = foot(stair) + (stair.dir * 0.6 * hr) / mid, middle = (l.landing.a0 + l.landing.a1) / 2;
   const B = P + short(beyond - P), E = B - (beyond - middle);
   w.arc(w.aisle, P, B);
-  w.at(mid, B);
+  w.put(mid, B);
   w.arc(mid, B, E);
-  w.at(l.outer + hr, E);
+  w.put(l.outer + hr, E);
   return { w, out: E };
 }
 
