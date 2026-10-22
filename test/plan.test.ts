@@ -111,13 +111,15 @@ for (const { name, plan } of plans) {
     assert.equal(plan.districtAt(0, (profile.floorStart + plan.reserveEnd) / 2), null, 'none in the reserve');
   });
 
-  test(`plan (${name}): entrances in their own districts, apart, off the lake`, () => {
-    const entrances = plan.sites.filter((s) => s.kind === 'entrance');
+  test(`plan (${name}): entrances in their own districts, apart, off the lake and the worked floor's ends`, () => {
+    const entrances = plan.sites.filter((s) => s.kind === 'entrance'), margin = h.params.plan.entranceSpacing * 0.15;
     assert.equal(entrances.length, plan.districts.reduce((a, d) => a + d.entrances.length, 0));
     for (const d of plan.districts) assert.ok(d.entrances.length >= 1, `district ${d.id} has a way down`);
     for (const e of entrances) {
       assert.equal(plan.districtAt(e.theta, e.s)?.id, e.district);
       if (plan.lake) assert.ok(Math.abs(e.s - plan.lake.s) >= plan.lake.halfWidth);
+      // Never dug into the Gate's foot, nor right at the reserve's edge.
+      assert.ok(e.s >= plan.reserveEnd + margin - 1e-6 && e.s <= profile.floorEnd - margin + 1e-6, `an entrance ${(profile.floorEnd - e.s).toFixed(0)} m from the floor's end`);
     }
   });
 
