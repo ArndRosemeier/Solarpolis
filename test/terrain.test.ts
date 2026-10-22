@@ -188,6 +188,9 @@ for (const { name, params } of MATRIX) {
         assert.ok(Math.abs(wa - wb) < 2e-3 + Math.abs(wa) * 2e-7, `edge point ${j} axis ${c}: ${wa} vs ${wb}`);
       }
     }
+    // Skirts hang at least two of the tile's errors below its edge: a coarser neighbour strays by about its own.
+    const sv = row * row * 3, drop = Math.hypot(ta.positions[sv] - ta.positions[0], ta.positions[sv + 1] - ta.positions[1], ta.positions[sv + 2] - ta.positions[2]);
+    assert.ok(drop >= 2 * ta.error - 1e-3, `skirt ${drop.toFixed(2)} m against the error ${ta.error.toFixed(2)} m`);
     // Each point's floor layers share it whole (255 between them, give or take rounding).
     for (let v = 0; v < row * row; v += 31) {
       let sum = 0;

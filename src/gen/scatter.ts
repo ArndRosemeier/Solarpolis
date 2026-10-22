@@ -28,7 +28,7 @@ import { hash3f, deriveSeed } from '@futuremagic/core';
 import { FLOOR_LAYERS, fromWorld, groundNormal, toWorld, wrapAngle, type CoverSpec, type DebrisSpec, type Habitat, type PlantSpec, type Vec3 } from '../blueprint';
 import { TREE_HEIGHT, type Ecology } from './ecology';
 import { horizonAt } from './horizon';
-import { groundSlope } from './terrain';
+import { groundSlope, type Terrain } from './terrain';
 import { keptClear } from './landmarks';
 import { pathsOf, type PathNet } from './paths';
 import { plantedIn, plantingsOf, scatterKeepsOff } from './planted';
@@ -538,12 +538,12 @@ function tiltAt(ecology: Ecology, theta: number, s: number, p: Vec3): [number, n
 
 /** How steep the ground is at a point (0 flat … 1 a wall), from its height a step either way (m). */
 export function slopeAt(ecology: Ecology, theta: number, s: number, ground: number, step: number): number {
-  return groundSlope(normalAt(ecology, theta, s, ground, step), theta);
+  return groundSlope(normalAt(ecology.terrain, theta, s, ground, step), theta);
 }
 
 /** The ground's unit normal at a point (world, into the air), from its height a step either way (m). */
-export function normalAt(ecology: Ecology, theta: number, s: number, ground: number, step: number): Vec3 {
-  const t = ecology.terrain, { profile } = t.habitat;
+export function normalAt(t: Pick<Terrain, 'habitat' | 'heightAt'>, theta: number, s: number, ground: number, step: number): Vec3 {
+  const { profile } = t.habitat;
   const r = Math.max(profile.at(s).r, 1e-6), d = Math.max(step * 0.5, 0.5);
   // The ground's normal from a step around the axis and a step along the profile (back where it ends).
   const ta = theta + d / r, sb = s + d <= profile.length ? s + d : s - d;

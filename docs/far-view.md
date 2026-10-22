@@ -102,6 +102,14 @@ The Mountain's top (gravity below `plan.mountain.snowLine`, 0.15 of the floor's)
 
 Renders (v0.062 + snow): `/mnt/project-files/far-view/snow/`. Open: the light near the axis is 10–20× the floor's, so the snow there still burns nearly white at the eyes' ×0.3; a real snowfield under that light would melt within the hour unless the sunline is dimmed near its ends or the habitat keeps it (the design thread's call).
 
+## Ready for a taller floor (2026-10-22)
+
+The floor gets Rings (to 0.1 R) and Heights (to 0.33 R; design thread, PR #102). What that asked of the far view:
+
+- **Skirts.** A tile's skirt hung about half a cell below its edge. On a sharp crest a coarser neighbour's edge strays from the true ground by about its own error, which can be more than that, so sky would show along ridgelines. Skirts now hang at least two of their tile's errors (`SKIRT_ERRORS`, gen/tiles.ts).
+- **The eyes' meter** walked the terrain only for rays from or onto the endcaps and took the floor's hills as gentle. It now walks every ray (24 steps, closer near the eye, then halvings) and takes the land's own normal where a ray lands (`normalAt`, 8 m), so a sunlit Ring face counts as lit. It meters three rays a frame (about a quarter of a millisecond each) instead of four.
+- Unchanged and fine: heights are float32 throughout, tiles split on their measured error and come nearer by their own relief, horizons walk the whole profile, plants cull on height over the ground under the eye. Far shadow edges are soft (horizons every 8 cells, about 550 m on a root tile) until the tiles refine.
+
 ## Still open
 
 - The endcaps: waterfalls where the rivers drop over the walls (the rivers already fall in cascades); landmarks.

@@ -13,7 +13,7 @@ function ring(eco: ReturnType<typeof makeEcology>, g: number, n = 96) {
   const t = eco.terrain, { profile } = t.habitat, s = landformOf(t.habitat).endcapAt(true, g);
   return Array.from({ length: n }, (_, i) => {
     const theta = ((i + 0.5) / n) * 2 * Math.PI, height = t.heightAt(theta, s), p = toWorld(profile, { theta, s, h: height });
-    const nn = normalAt(eco, theta, s, height, 2), r = Math.hypot(p[0], p[1]);
+    const nn = normalAt(eco.terrain, theta, s, height, 2), r = Math.hypot(p[0], p[1]);
     return { theta, s, height, p, level: -(nn[0] * p[0] + nn[1] * p[1]) / r };
   });
 }
