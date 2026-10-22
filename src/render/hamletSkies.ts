@@ -10,19 +10,25 @@
  */
 import { Fn, If, abs, clamp, cos, dot, exp, float, floor, hash, max, mix, mx_fractal_noise_float, mx_noise_float, mx_worley_noise_vec2, normalize, sin, smoothstep, vec2, vec3 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
+import { glassSky } from './glassDeck';
 
 type F = Node<'float'>;
 type V2 = Node<'vec2'>;
 type V3 = Node<'vec3'>;
 
 /** The skies in the order drawn: must be the catalogue's (gen/skies.ts; a test checks). */
-export const SKY_DRAWN = ['open', 'aurora', 'moon', 'mars', 'canopy', 'deep'] as const;
+export const SKY_DRAWN = ['open', 'aurora', 'moon', 'mars', 'canopy', 'deep', 'glass'] as const;
 
 /** Stars: cells round the sky (per radian) and the share of cells holding one. */
 const STAR_CELLS = 260;
 const STAR_SHARE = 0.004;
 /** Earth from the Moon: its angular radius (rad), drawn heroic (about four times its true size). */
 const EARTH = 0.06;
+/**
+ * The glass deck's land light (sunlit white paper 1) as a sky's (about 1 for its brightest): the far side by day is a
+ * few tenths of paper's, the sunline far brighter.
+ */
+const GLASS_GAIN = 2.5;
 
 /** Where a direction meets a plane one unit overhead (its along and across), and how far up the direction looks. */
 function overhead(d: V3, up: V3, along: V3, across: V3): { at: V2; rise: F } {
@@ -155,6 +161,8 @@ const SKY_FUNCTIONS = [
   skyFunction('mars', (a) => mars(a.d, a.o, a.up, a.along, a.day)),
   skyFunction('canopy', (a) => canopy(a.d, a.o, a.day, a.clock)),
   skyFunction('deep', (a) => deep(a.o, a.day, a.clock)),
+  // The real sky above: its own day and night, as taken (render/glassDeck.ts).
+  skyFunction('glass', (a) => glassSky(a.d).mul(GLASS_GAIN)),
 ];
 
 /**
