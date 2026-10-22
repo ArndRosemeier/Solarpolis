@@ -43,6 +43,8 @@ import { SpeckView } from './specks';
 import { FlierView } from './fliers';
 import { AnimalView, DEER, SQUIRRELS } from './animals';
 import { CabinView } from './lift';
+import { SKIES, skyOverBay } from '../gen/skies';
+import { underOf } from '../gen/under';
 import { calledFrom, doorsAbove, doorsBelow, doorsHit, eyeInCabin, liftDoorsNear, outside, type LiftDoors } from '../gen/lifts';
 
 /** Running is this many times the walking speed. */
@@ -243,7 +245,7 @@ export class InteriorView {
   info(): string {
     const a = this.flyer ? fromWorld(this.habitat.profile, ...this.flyer.eye) : this.walker.at;
     const c = this.character, g = this.habitat.gravityAt(Math.hypot(...this.current().eye.slice(0, 2) as [number, number]));
-    const where = this.below ? 'below the land, ' : '', ride = this.cabin?.ride;
+    const where = this.below ? `below the land${this.skyLine(a.theta, a.s)}, ` : '', ride = this.cabin?.ride;
     const mode = ride?.aboard ? `in a lift, ${ride.waits ? 'waiting for the floor below' : ride.to > ride.from ? 'going up' : 'going down'}` : where + (this.flyer ? `flying ${this.flyer.clearance().toFixed(0)} m up`
       : !c ? 'on foot (waiting for the physics)' : `on foot, ${c.swimming ? 'swimming' : c.grounded ? 'standing' : 'in the air'}, gravity ${(g / 9.81).toFixed(2)} g`);
     return [
@@ -263,6 +265,12 @@ export class InteriorView {
       ...(this.animals.length ? this.animals.map((a) => a.info()) : ['animals: none']),
       `θ ${(a.theta * 180 / Math.PI).toFixed(1)}°, s ${(a.s / 1000).toFixed(2)} of ${(this.habitat.profile.length / 1000).toFixed(2)} km, ground ${this.standOn(a.theta, a.s).toFixed(1)} m, ${mode}, eyes ×${this.exposure.toFixed(2)}`,
     ].join('\n');
+  }
+
+  /** Below the land, which hamlet's sky is over (θ, s) (gen/skies.ts), for the debug menu. */
+  private skyLine(theta: number, s: number): string {
+    const bay = underOf(this.habitat).bayAt(theta, s), sky = bay ? skyOverBay(this.habitat, bay.i, bay.j) : -1;
+    return sky < 0 ? ' (no sky over this bay)' : ` (under a hamlet's ${SKIES[sky].name} sky)`;
   }
 
   /** The sunline's light and the clouds at the clock's hour. */
@@ -649,6 +657,7 @@ export class InteriorView {
     const centre = this.flyer || !c ? eye : v3madd(this.walker.feetAt(), c.up, HUMAN.height / 2);
     if (this.below) {
       shineBelow(centre, eye, this.habitat.params.under.lamp);
+      below.clock.value = this.time;
       below.day.value = dayOverhead(this.habitat, this.terrain, this.emission, emissionMean(this.emission), air.skyLight.value, this.norm, centre);
     }
     else shineOn(this.habitat, this.terrain, this.emission, emissionMean(this.emission), air.skyLight.value, this.norm, centre, eye);
