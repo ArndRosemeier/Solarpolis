@@ -30,11 +30,12 @@ import type { Pavilion } from './landmarks';
 /**
  * What the surfaces are made of (the BUILT kind reads it, render/materials.ts). `lamp` is a lamp's glowing face,
  * `sky` a light well's glass seen from below, bright with the day above; the houses below build in `brick`, `plaster`,
- * rammed `earth` and the screen era's `panel`s, and a lived-in house's `window` glows with its rooms' light (gen/homes.ts);
+ * rammed `earth` and the screen era's `panel`s, a lived-in house's `window` glows with its rooms' light (gen/homes.ts),
+ * and a bath's `water` lies still under the lamps (gen/hallMesh.ts);
  * `screen` is the first of a hamlet's sky screens (`screen + k` shows sky k of gen/skies.ts). Only the Understorey's
  * VAULT kind draws lamps, wells, windows and screens (gen/underMesh.ts).
  */
-export const FINISH = { stone: 0, timber: 1, bronze: 2, ceramic: 3, lamp: 4, sky: 5, brick: 6, plaster: 7, earth: 8, panel: 9, window: 10, screen: 16 } as const;
+export const FINISH = { stone: 0, timber: 1, bronze: 2, ceramic: 3, lamp: 4, sky: 5, brick: 6, plaster: 7, earth: 8, panel: 9, window: 10, water: 11, screen: 16 } as const;
 
 /** The levels every landmark is drawn at (the summit hut's too, gen/summitHut.ts), and `solid` for the physics. */
 export const LANDMARK_LEVELS = ['far', 'mid', 'near'] as const;

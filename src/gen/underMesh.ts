@@ -10,7 +10,8 @@
  *   the capital (upright there) to the ceiling (level there) at half a bay out, ribs along it and a ring rib round its
  *   top up close; between the four, the flat spandrel at the ceiling;
  * - at the floor's two ends, a wall from floor to ceiling;
- * - in a hamlet's home bays, its houses (gen/homes.ts, gen/homeMesh.ts).
+ * - in a hamlet's home bays, its houses (gen/homes.ts, gen/homeMesh.ts); in its hall bays, its halls (gen/halls.ts,
+ *   gen/hallMesh.ts).
  *
  * The lamps light it: each ring throws most of its light up into the vaults, the rest all round (`glow`, baked per
  * vertex, as the light at each point relative to the floor in the middle of a level bay, through the mist below,
@@ -33,6 +34,8 @@ import { underOf, type Under } from './under';
 import { skyOverBay } from './skies';
 import { housesIn, type House } from './homes';
 import { houseShape, houseSolid } from './homeMesh';
+import { hallAt } from './halls';
+import { hallShape, hallSolid } from './hallMesh';
 
 export type UnderDetail = 'far' | 'mid' | 'near';
 
@@ -393,8 +396,10 @@ function buildBay(sh: Shape, lv: UnderLevels, s: Sizes, i: number, j: number, de
   }, VAULT);
   if (opening) shaftUp(sh, opening.shaft, ring.length - 1, (b) => onRay(b, 0), [mx, my], d);
   if (opening?.lift) liftCage(sh, bay, opening.lift, lv.terrain.habitat.params.landmarks!.handrail, [mx, my], d);
-  // A hamlet's houses in its home bays (gen/homes.ts).
+  // A hamlet's houses in its home bays (gen/homes.ts), its halls round its wellhead (gen/halls.ts).
   for (const house of housesOf(lv, s, i, j, bay)) houseShape(sh, house, bay.at, lv.terrain.habitat.params.landmarks!.handrail, detail);
+  const hall = opening ? null : hallAt(lv.terrain.habitat, i, j);
+  if (hall) hallShape(sh, lv.terrain.habitat, hall, i, j, A, W, PILLAR.plinth * s.rp, bay.at, detail);
   // The pillar at the bay's first corner (and, on the last row, the one at its far end).
   const placePillar = (x: number, y: number, levels: Levels): void => {
     const p = new Shape(d.shaft, true, true);
@@ -703,6 +708,8 @@ export function underSolid(t: Terrain, origin: Vec3, size: number): { positions:
     const lift = openingOver(t, i, j)?.lift;
     if (lift) liftCage(b, bay, lift, h.params.landmarks!.handrail, [A / 2, W / 2], DETAIL.far);
     for (const house of housesOf(lv, s, i, j, bay)) houseSolid(b, house, bay.at, h.params.landmarks!.handrail);
+    const hall = openingOver(t, i, j) ? null : hallAt(h, i, j);
+    if (hall) hallSolid(b, h, hall, i, j, A, W, PILLAR.plinth * s.rp, bay.at);
     for (const [x, end] of [[0, j === 0], [A, j === u.along - 1]] as const) {
       if (!end) continue;
       const l0 = bay.at(x, 0), l1 = bay.at(x, W);

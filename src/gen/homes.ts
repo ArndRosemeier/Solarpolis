@@ -19,6 +19,7 @@ import type { DistrictStyle, Habitat } from '../blueprint';
 import { planOf } from './plan';
 import { underOf, type Hamlet } from './under';
 import type { Levels } from './underLevels';
+import { PARAPET, cornerLevels } from './building';
 
 export const ERAS = ['founders', 'screen', 'return'] as const;
 export type Era = (typeof ERAS)[number];
@@ -56,11 +57,10 @@ export interface House {
 const STOREY = 4;
 /** Head room left under the vaults' springing over the roof's parapet, in handrails. */
 const HEADROOM = 2;
-/** The parapet round a roof terrace and the yard wall (chest high: the house shows over it), in handrails. */
-export const PARAPET = 1;
+/** The yard wall (chest high: the house shows over it), in handrails. */
 export const YARD_WALL = 1.2;
 /** The walk left round each plot (beside the pillars' plinths), in handrails. */
-const WALK = 2;
+export const WALK = 2;
 /** A plot's least width and depth, in handrails. */
 const NARROWEST = 8;
 const DEPTH = 10;
@@ -83,7 +83,14 @@ const STYLED: Readonly<Record<DistrictStyle, { build: Build; eras: [number, numb
   makers: { build: 'brick', eras: [0.5, 0.5, 4], storeys: [0.5, 2, 3, 2], empty: 0.01 },
   'let-go': { build: 'plaster', eras: [3, 1.5, 1], storeys: [2, 2, 1, 0], empty: 0.3 },
 };
+/** What a district's style builds in today. */
+export const buildOfStyle = (style: DistrictStyle): Build => STYLED[style].build;
 const ERA_BUILD: Readonly<Record<Exclude<Era, 'return'>, Build>> = { founders: 'cast', screen: 'panel' };
+
+/** The style of the district a hamlet lies in. */
+export function styleOf(h: Habitat, m: Hamlet): DistrictStyle {
+  return planOf(h).districts[m.district]?.style ?? 'orchard';
+}
 
 /**
  * The houses in bay (i, j), none but in a hamlet's home bays: `along` × `around` (m), the pillars' plinths reaching
@@ -94,7 +101,7 @@ export function housesIn(h: Habitat, i: number, j: number, along: number, around
   if (u.useAt(i, j) !== 'home') return [];
   const m = u.hamletOf(i, j);
   if (!m) return [];
-  const hr = h.params.landmarks?.handrail ?? 1, style = STYLED[planOf(h).districts[m.district]?.style ?? 'orchard'];
+  const hr = h.params.landmarks?.handrail ?? 1, style = STYLED[styleOf(h, m)];
   // As many plots as households to the bay, fewer where a bay is too short for them.
   const clear = plinth + WALK * hr, x0 = clear, x1 = along - clear, y0 = clear, y1 = around - clear;
   const n = Math.min(Math.max(1, Math.round(1 / h.params.under.household.bays)), Math.floor((x1 - x0) / (NARROWEST * hr))), width = (x1 - x0) / n;
@@ -111,9 +118,7 @@ export function housesIn(h: Habitat, i: number, j: number, along: number, around
       : { x0: plot.x0 + side, x1: plot.x1 - side, y0: plot.y0 + yard, y1: plot.y1 - side };
     // Level on the floor's highest point in its plot (its door is never below its yard); as many storeys as fit under
     // the lowest springing over it.
-    let base = -Infinity, roof = Infinity;
-    for (const [x, y] of [[plot.x0, plot.y0], [plot.x1, plot.y0], [plot.x0, plot.y1], [plot.x1, plot.y1]]) base = Math.max(base, levels(x, y).floor);
-    for (const [x, y] of [[body.x0, body.y0], [body.x1, body.y0], [body.x0, body.y1], [body.x1, body.y1]]) roof = Math.min(roof, levels(x, y).springing);
+    const base = Math.max(...cornerLevels(plot, levels).map((l) => l.floor)), roof = Math.min(...cornerLevels(body, levels).map((l) => l.springing));
     const storey = STOREY * hr, fit = Math.floor((roof - base - (HEADROOM + PARAPET) * hr) / storey);
     if (fit < 1) continue;
     const storeys = 1 + rng.weighted([0, 1, 2, 3].filter((s) => s < fit), (s) => style.storeys[s]);
@@ -123,8 +128,8 @@ export function housesIn(h: Habitat, i: number, j: number, along: number, around
   return out;
 }
 
-/** Which way a home bay's doors face: around toward its hamlet's wellhead (the shorter way round), or +y beside it. */
-function doorToward(u: ReturnType<typeof underOf>, m: Hamlet, i: number): -1 | 1 {
+/** Which way a bay's doors face: around toward its hamlet's wellhead (the shorter way round), or +y beside it. */
+export function doorToward(u: ReturnType<typeof underOf>, m: Hamlet, i: number): -1 | 1 {
   const d = ((m.i - i) % u.around + u.around + u.around / 2) % u.around - u.around / 2;
   return d < 0 ? -1 : 1;
 }

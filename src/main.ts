@@ -33,7 +33,9 @@ import { crossingsOf, type Crossing, type CrossingKind } from './gen/crossings';
 import { landformOf, planOf, type GroundForm } from './gen/plan';
 import { WORK_KINDS, isDug, type Work, type WorkKind } from './gen/works';
 import { angleDiff } from '@futuremagic/core';
-import { underOf, type Hamlet } from './gen/under';
+import { baysOfHamlet, underOf, type Hamlet } from './gen/under';
+import { HALL_KINDS, hallAt } from './gen/halls';
+import { doorToward } from './gen/homes';
 import { underLiftOf } from './gen/underMesh';
 import { GLASS, SKIES, hamletSkiesOf, skyOverBay } from './gen/skies';
 import { pavilionPlan } from './gen/pavilion';
@@ -798,9 +800,8 @@ function underSky(want: number): void {
   if (!h || !v) return;
   const u = underOf(h), skies = hamletSkiesOf(h);
   for (const m of u.hamlets.filter((x) => skies[x.court] === want)) {
-    for (let r = 1; r < 6; r++) for (let di = -r; di <= r; di++) for (const dj of [-r, r]) {
-      const i = m.i + di, j = m.j + dj;
-      if (j < 0 || j >= u.along || u.hamletOf(i, j) !== m || skyOverBay(h, i, j) !== want || u.useAt(i, j) === 'lane') continue;
+    for (const { i, j } of baysOfHamlet(u, m, 5)) {
+      if (skyOverBay(h, i, j) !== want || u.useAt(i, j) === 'lane' || u.useAt(i, j) === 'well') continue;
       const c = u.centreOf(i, j);
       v.goBelow(c.theta, c.s, 0);
       return;
@@ -814,11 +815,28 @@ debug.add({
     if (!h || !v) return;
     const u = underOf(h);
     for (const m of hamletsNear(h, v.walker.at.theta, v.walker.at.s).slice(0, 8)) {
-      for (let r = 1; r < 8; r++) for (let di = -r; di <= r; di++) for (const dj of [-r, r]) {
-        const i = m.i + di, j = m.j + dj;
-        if (j < 0 || j >= u.along || u.hamletOf(i, j) !== m || u.useAt(i, j) !== 'home' || u.useAt(i - 1, j) !== 'home') continue;
+      for (const { i, j } of baysOfHamlet(u, m, 8)) {
+        if (u.useAt(i, j) !== 'home' || u.useAt(i - 1, j) !== 'home') continue;
         const c = u.centreOf(i, j);
         v.goBelow(c.theta - u.dTheta / 2, c.s, 0);
+        return;
+      }
+    }
+  },
+});
+/** Below, at a hamlet's hall of the next kind (gen/halls.ts): on the walk on its wellhead side, looking at its front. */
+let nextHall = 0;
+debug.add({
+  label: "Below: at the next kind of hall (kitchen, bath, shop, stage, minds' room, commons)", group: 'Go', run: () => {
+    const h = lab.habitat, v = view();
+    if (!h || !v) return;
+    const u = underOf(h), want = HALL_KINDS[nextHall++ % HALL_KINDS.length];
+    for (const m of hamletsNear(h, v.walker.at.theta, v.walker.at.s).slice(0, 8)) {
+      for (const { i, j } of baysOfHamlet(u, m, Math.ceil(m.hall) + 1)) {
+        if (hallAt(h, i, j) !== want) continue;
+        // On the walk on its wellhead side, a few steps back, facing it (a positive heading turns toward −θ).
+        const c = u.centreOf(i, j), toward = doorToward(u, m, i);
+        v.goBelow(c.theta + toward * 0.65 * u.dTheta, c.s, (toward * Math.PI) / 2);
         return;
       }
     }

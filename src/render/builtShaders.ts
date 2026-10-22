@@ -134,24 +134,32 @@ export const windowPane = Fn(([st, room, outside]: [V2, V3, V3]) => {
 }).setLayout({ name: 'windowPane', type: 'vec3', inputs: [{ name: 'st', type: 'vec2' }, { name: 'room', type: 'vec3' }, { name: 'outside', type: 'vec3' }] }) as unknown as (st: V2, room: V3, outside: V3) => V3;
 
 /**
+ * Still water under the lamps (`st` across it in metres, `col` its colour as lit, `light` the lamps' light there,
+ * `clock` seconds): dark, with the lamps' light broken on its slow ripples.
+ */
+export const stillWater = Fn(([st, col, light, clock]: [V2, V3, V3, F]) => {
+  const a = mx_noise_float(vec3(st.mul(1.3), clock.mul(0.15))), b = mx_noise_float(vec3(st.mul(3.1).add(7.7), clock.mul(0.23)));
+  const glint = smoothstep(0.35, 0.75, a.mul(0.6).add(b.mul(0.4)).abs()).mul(shows(st.mul(3.1)));
+  return col.add(light.mul(glint.mul(0.35)));
+}).setLayout({ name: 'stillWater', type: 'vec3', inputs: [{ name: 'st', type: 'vec2' }, { name: 'col', type: 'vec3' }, { name: 'light', type: 'vec3' }, { name: 'clock', type: 'float' }] }) as unknown as (st: V2, col: V3, light: V3, clock: F) => V3;
+
+/**
  * A built surface's albedo: its finish over the vertex colour (`FINISH` in gen/pavilion.ts: 0 stone, 1 timber, 2
  * bronze, 3 ceramic, 6 brick, 7 plaster, 8 earth, 9 panel; anything else plain). One plain If each.
  */
-export function builtAlbedo(albedo: V3, st: V2, finish: F): V3 {
-  return Fn(() => {
-    const out = vec3(albedo).toVar();
-    const is = (k: number): Node<'bool'> => abs(finish.sub(k)).lessThan(0.5);
-    If(is(0), () => { out.assign(ashlar(albedo, st)); });
-    If(is(1), () => { out.assign(timber(albedo, st)); });
-    If(is(2), () => { out.assign(bronze(albedo, st)); });
-    If(is(3), () => { out.assign(ceramic(albedo, st)); });
-    If(is(6), () => { out.assign(brick(albedo, st)); });
-    If(is(7), () => { out.assign(plaster(albedo, st)); });
-    If(is(8), () => { out.assign(earth(albedo, st)); });
-    If(is(9), () => { out.assign(panel(albedo, st)); });
-    return out;
-  })() as unknown as V3;
-}
+export const builtAlbedo = Fn(([albedo, st, finish]: [V3, V2, F]) => {
+  const out = vec3(albedo).toVar();
+  const is = (k: number): Node<'bool'> => abs(finish.sub(k)).lessThan(0.5);
+  If(is(0), () => { out.assign(ashlar(albedo, st)); });
+  If(is(1), () => { out.assign(timber(albedo, st)); });
+  If(is(2), () => { out.assign(bronze(albedo, st)); });
+  If(is(3), () => { out.assign(ceramic(albedo, st)); });
+  If(is(6), () => { out.assign(brick(albedo, st)); });
+  If(is(7), () => { out.assign(plaster(albedo, st)); });
+  If(is(8), () => { out.assign(earth(albedo, st)); });
+  If(is(9), () => { out.assign(panel(albedo, st)); });
+  return out;
+}).setLayout({ name: 'builtAlbedo', type: 'vec3', inputs: [{ name: 'albedo', type: 'vec3' }, { name: 'st', type: 'vec2' }, { name: 'finish', type: 'float' }] }) as unknown as (albedo: V3, st: V2, finish: F) => V3;
 
 /**
  * The horizons (for `sunlit`, materials.ts) of the three openings a point under a round roof sees the sunline
