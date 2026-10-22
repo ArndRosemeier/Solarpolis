@@ -36,11 +36,15 @@ const DOOR_SLACK = 1.2;
 const TOP_SPEED = 6;
 const SHORTEST = 3;
 
-/** The cabin, in handrails: its walls in from the cage's side, its height, the panels' and the rail's height, its parts' thickness. */
-const CABIN = { gap: 0.15, high: 2.4, panel: 1.0, rail: 0.95, post: 0.1, plate: 0.12, lamp: 0.5 };
+/**
+ * The cabin, in handrails: its walls in from the cage's side, its height inside, the panels' and the rail's height, its
+ * posts' and plates' thickness, the lamp's radius, a floor board's width, a lattice bar's.
+ */
+const CABIN = { gap: 0.15, high: 2.4, panel: 0.9, rail: 0.95, post: 0.1, plate: 0.12, lamp: 0.5, board: 0.14, bar: 0.035 };
 const BRONZE: RGB = [0.22, 0.15, 0.08];
 const FLOOR: RGB = [0.3, 0.22, 0.15];
 const LAMP: RGB = [1, 0.92, 0.78];
+const RAIL: RGB = [0.36, 0.24, 0.14];
 
 /** The handrail lifts are sized by (a habitat without landmarks has no courts, and so no lifts). */
 const handrailOf = (h: Habitat): number => h.params.landmarks?.handrail ?? 1;
@@ -143,7 +147,7 @@ export function calledFrom(t: Terrain, court: number): number {
   const lift = underLiftOf(t, court), ride = rideOf(t, court), hr = handrailOf(t.habitat);
   if (!lift || !ride) return 1;
   const c = underOf(t.habitat).centreOf(lift.i, lift.j), ceiling = levelsOf(t).levelAt(c.theta, c.s).ceiling;
-  return Math.min(1, (ceiling + CABIN.high * hr - ride.bottom) / Math.max(1e-6, ride.top - ride.bottom));
+  return Math.min(1, (ceiling + (CABIN.high + 2 * CABIN.plate) * hr - ride.bottom) / Math.max(1e-6, ride.top - ride.bottom));
 }
 
 /**
@@ -152,24 +156,42 @@ export function calledFrom(t: Terrain, court: number): number {
  * it is drawn only near the one riding it.
  */
 export function buildCabin(h: Habitat, side: number): Shape {
-  const hr = handrailOf(h), C = CABIN, w = side / 2 - C.gap * hr, top = C.high * hr, sh = new Shape(16, true, true);
-  const ex: Vec3 = [1, 0, 0], ey: Vec3 = [0, 1, 0], ez: Vec3 = [0, 0, 1];
+  const hr = handrailOf(h), C = CABIN, w = side / 2 - C.gap * hr, floor = C.plate * hr, top = floor + C.high * hr, sh = new Shape(16, true, true);
+  const ex: Vec3 = [1, 0, 0], ey: Vec3 = [0, 1, 0], ez: Vec3 = [0, 0, 1], t = (C.post * hr) / 4;
+  // The floor: timber boards across the doorway, a hair apart, on the cage's floor (not flush with it).
   sh.finish = FINISH.timber;
-  sh.block([0, 0, -(C.plate * hr) / 2], ex, ey, ez, [w, w, (C.plate * hr) / 2], FLOOR);
+  const boards = Math.max(1, Math.round((2 * w) / (C.board * hr))), pitch = (2 * w) / boards;
+  for (let k = 0; k < boards; k++) sh.block([-w + (k + 0.5) * pitch, 0, floor / 2], ex, ey, ez, [pitch / 2 - 0.004, w, floor / 2], FLOOR);
   sh.finish = FINISH.bronze;
-  sh.block([0, 0, top + (C.plate * hr) / 2], ex, ey, ez, [w, w, (C.plate * hr) / 2], BRONZE);
-  for (const [a, b] of [[1, 1], [1, -1], [-1, -1], [-1, 1]]) sh.block([a * w, b * w, top / 2], ex, ey, ez, [(C.post * hr) / 2, (C.post * hr) / 2, top / 2], BRONZE);
-  // The panels and rail: the back (−x) and both sides (±y).
-  const t = (C.post * hr) / 4;
-  for (const [c, half] of [[[-w, 0, 0], [t, w, 0]], [[0, w, 0], [w, t, 0]], [[0, -w, 0], [w, t, 0]]] as [Vec3, Vec3][]) {
-    sh.block([c[0], c[1], (C.panel * hr) / 2], ex, ey, ez, [half[0], half[1], (C.panel * hr) / 2], BRONZE);
-    sh.block([c[0], c[1], C.rail * hr + C.panel * hr * 0.05], ex, ey, ez, [half[0] + t, half[1] + t, t], BRONZE);
+  sh.block([w - t, 0, floor + t / 2], ex, ey, ez, [t, w, t / 2], BRONZE);
+  sh.block([0, 0, top + floor / 2], ex, ey, ez, [w, w, floor / 2], BRONZE);
+  for (const [a, b] of [[1, 1], [1, -1], [-1, -1], [-1, 1]]) sh.block([a * w, b * w, (floor + top) / 2], ex, ey, ez, [(C.post * hr) / 2, (C.post * hr) / 2, (top - floor) / 2], BRONZE);
+  // The back (−x) and both sides (±y): a panel to waist height, a timber rail, and over it a lattice of crossed bars
+  // to the roof, with a band across its middle.
+  const panelTop = floor + C.panel * hr, rail = floor + C.rail * hr, mid = (panelTop + top) / 2;
+  for (const n of [[-1, 0, 0], [0, 1, 0], [0, -1, 0]] as Vec3[]) {
+    const c: Vec3 = [n[0] * w, n[1] * w, 0], u: Vec3 = [-n[1], n[0], 0], half: Vec3 = [Math.abs(n[0]) * t + Math.abs(u[0]) * w, Math.abs(n[1]) * t + Math.abs(u[1]) * w, 0];
+    sh.block([c[0], c[1], (floor + panelTop) / 2], ex, ey, ez, [half[0], half[1], (panelTop - floor) / 2], BRONZE);
+    sh.block([c[0], c[1], mid], ex, ey, ez, [half[0], half[1], t], BRONZE);
+    for (const [z0, z1] of [[panelTop, mid], [mid, top]]) {
+      const len = Math.hypot(2 * w, z1 - z0);
+      for (const sgn of [1, -1]) {
+        const ax = v3norm([u[0] * 2 * w * sgn, u[1] * 2 * w * sgn, z1 - z0]), up = v3norm(v3cross(ax, n));
+        sh.block([c[0], c[1], (z0 + z1) / 2], ax, n, up, [len / 2, (C.bar * hr) / 2, (C.bar * hr) / 2], BRONZE);
+      }
+    }
+    sh.finish = FINISH.timber;
+    sh.block([c[0] - n[0] * 2 * t, c[1] - n[1] * 2 * t, rail], ex, ey, ez, [Math.abs(n[0]) * 1.5 * t + Math.abs(u[0]) * (w - t), Math.abs(n[1]) * 1.5 * t + Math.abs(u[1]) * (w - t), 1.5 * t], RAIL);
+    sh.finish = FINISH.bronze;
   }
   // The lamp: a glowing disc under the roof.
   sh.finish = FINISH.lamp;
-  sh.arc(top - 0.01, 0, top - 0.01, C.lamp * hr, -1, 0, 0, 2 * Math.PI, 16, LAMP);
+  sh.arc(top - 0.01, 0, top - 0.01, C.lamp * hr, -1, 0, 0, 2 * Math.PI, 24, LAMP);
   return sh;
 }
 
-/** The world eye of one standing in the cabin at `p`, `eye` m over its floor. */
-export const eyeInCabin = (p: Place, eye: number): Vec3 => [0, 1, 2].map((a) => p.at[a] + p.ez[a] * eye) as Vec3;
+/** The world eye of one standing in the cabin at `p`, `eye` m over its floor (which stands a plate over the frame's). */
+export const eyeInCabin = (h: Habitat, p: Place, eye: number): Vec3 => {
+  const up = eye + CABIN.plate * handrailOf(h);
+  return [0, 1, 2].map((a) => p.at[a] + p.ez[a] * up) as Vec3;
+};

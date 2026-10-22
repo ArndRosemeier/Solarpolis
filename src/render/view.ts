@@ -540,7 +540,7 @@ export class InteriorView {
     this.halls?.follow(v.eye);
     // In a lift the floor below is wanted all the way (from the shaft the eye is above the vaults, and wants none).
     const rideFrom = this.cabin?.aboard ? this.cabin.place(0) : null;
-    this.under?.follow(v.eye, rideFrom ? eyeInCabin(rideFrom, EYE_HEIGHT) : v.eye);
+    this.under?.follow(v.eye, rideFrom ? eyeInCabin(this.habitat, rideFrom, EYE_HEIGHT) : v.eye);
     this.cabin?.poseAt(v.eye);
     this.showLand(!this.below);
     this.people?.follow(v.eye, this.time, this.frameDt);
@@ -566,7 +566,7 @@ export class InteriorView {
     if (this.flyer) return this.flyer.view();
     const v = this.walker.view(), cabin = this.cabin?.aboard ? this.cabin.place() : null;
     // In a lift: standing in the cabin, looking round as on foot.
-    if (cabin) return { eye: eyeInCabin(cabin, EYE_HEIGHT), look: v.look, up: cabin.ez };
+    if (cabin) return { eye: eyeInCabin(this.habitat, cabin, EYE_HEIGHT), look: v.look, up: cabin.ez };
     if (this.chase < 0.01) return v;
     // From behind and a little above the head, looking the same way; never under the ground.
     const d = this.chase;
