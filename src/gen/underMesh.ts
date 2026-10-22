@@ -9,7 +9,8 @@
  * - the fan vault: from each of its four pillars a quarter of a conoid, its horizontal sections circles, rising from
  *   the capital (upright there) to the ceiling (level there) at half a bay out, ribs along it and a ring rib round its
  *   top up close; between the four, the flat spandrel at the ceiling;
- * - at the floor's two ends, a wall from floor to ceiling.
+ * - at the floor's two ends, a wall from floor to ceiling;
+ * - in a hamlet's home bays, its houses (gen/homes.ts, gen/homeMesh.ts).
  *
  * The lamps light it: each ring throws most of its light up into the vaults, the rest all round (`glow`, baked per
  * vertex, as the light at each point relative to the floor in the middle of a level bay, through the mist below,
@@ -30,6 +31,8 @@ import { levelsOf, type Levels, type UnderLevels } from './underLevels';
 import { courtLayoutOf, lightWellOf } from './courts';
 import { underOf, type Under } from './under';
 import { skyOverBay } from './skies';
+import { housesIn, type House } from './homes';
+import { houseShape, houseSolid } from './homeMesh';
 
 export type UnderDetail = 'far' | 'mid' | 'near';
 
@@ -317,9 +320,21 @@ function conoid(bay: Bay, s: Sizes, px: number, py: number): { spot: (t: number,
   return { spot: onVault, facing, meridian };
 }
 
+/** The houses standing in bay (i, j): none but in a hamlet's home bays, and only in a habitat with human sizes. */
+function housesOf(lv: UnderLevels, s: Sizes, i: number, j: number, bay: Bay): House[] {
+  const h = lv.terrain.habitat;
+  return h.params.landmarks && !openingOver(lv.terrain, i, j) ? housesIn(h, i, j, s.along, s.around, PILLAR.plinth * s.rp, bay.at) : [];
+}
+
+/** The houses in bay (i, j) (its frame: x along the axis, y around, from its first corner), and its levels anywhere in it. */
+export function underHousesIn(t: Terrain, i: number, j: number): { houses: House[]; at: (x: number, y: number) => Levels; along: number; around: number } {
+  const lv = levelsOf(t), s = sizesOf(t.habitat), bay = bayOf(lv, s, i, j);
+  return { houses: housesOf(lv, s, i, j, bay), at: bay.at, along: s.along, around: s.around };
+}
+
 /** One bay of the structure, built in its own frame. */
-function buildBay(sh: Shape, lv: UnderLevels, s: Sizes, i: number, j: number, d: (typeof DETAIL)[UnderDetail]): void {
-  const u = lv.under, bay = bayOf(lv, s, i, j), A = s.along, W = s.around, quarter = Math.PI / 2, opening = openingOver(lv.terrain, i, j);
+function buildBay(sh: Shape, lv: UnderLevels, s: Sizes, i: number, j: number, detail: UnderDetail): void {
+  const d = DETAIL[detail], u = lv.under, bay = bayOf(lv, s, i, j), A = s.along, W = s.around, quarter = Math.PI / 2, opening = openingOver(lv.terrain, i, j);
   // The floor, paved.
   sh.finish = FINISH.stone;
   sh.smoothGrid(d.floor, d.floor, (a, b) => {
@@ -378,6 +393,8 @@ function buildBay(sh: Shape, lv: UnderLevels, s: Sizes, i: number, j: number, d:
   }, VAULT);
   if (opening) shaftUp(sh, opening.shaft, ring.length - 1, (b) => onRay(b, 0), [mx, my], d);
   if (opening?.lift) liftCage(sh, bay, opening.lift, lv.terrain.habitat.params.landmarks!.handrail, [mx, my], d);
+  // A hamlet's houses in its home bays (gen/homes.ts).
+  for (const house of housesOf(lv, s, i, j, bay)) houseShape(sh, house, bay.at, lv.terrain.habitat.params.landmarks!.handrail, detail);
   // The pillar at the bay's first corner (and, on the last row, the one at its far end).
   const placePillar = (x: number, y: number, levels: Levels): void => {
     const p = new Shape(d.shaft, true, true);
@@ -535,7 +552,7 @@ export function buildUnderTile(t: Terrain, key: TileKey, detail: UnderDetail = u
   const out = new Shape(d.shaft, true, true), glow: number[] = [];
   for (const { i, j } of baysOf(u, key)) {
     const b = new Shape(d.shaft, true, true), first = out.vertices;
-    buildBay(b, lv, s, i, j, d);
+    buildBay(b, lv, s, i, j, detail);
     bendInto(out, h, bayFrame(u, i, j), b, origin);
     bakeGlow(lv, s, i, j, origin, out, first, glow);
   }
@@ -685,6 +702,7 @@ export function underSolid(t: Terrain, origin: Vec3, size: number): { positions:
     // A court's lift cage: its posts, bands and panels (the doorway open).
     const lift = openingOver(t, i, j)?.lift;
     if (lift) liftCage(b, bay, lift, h.params.landmarks!.handrail, [A / 2, W / 2], DETAIL.far);
+    for (const house of housesOf(lv, s, i, j, bay)) houseSolid(b, house, bay.at, h.params.landmarks!.handrail);
     for (const [x, end] of [[0, j === 0], [A, j === u.along - 1]] as const) {
       if (!end) continue;
       const l0 = bay.at(x, 0), l1 = bay.at(x, W);
