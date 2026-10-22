@@ -15,7 +15,7 @@ import { outfitGarments, randomConfig, seededRandom, type CharacterCatalog, type
 import { Human, sanitizeRace } from '@actors/human';
 import { decodeTarget, type Fetcher, type MorphTarget } from '@actors/core';
 import type { Resident } from '../../sim';
-import { DYES, SLOT, hexColor, packColor, skinTone } from '../../gen/standIn';
+import { DYES, SLOT, hexColor, hexOf, packColor, skinTone } from '../../gen/standIn';
 import { packFetch } from './pack';
 
 /** Outfits (Actors' presets) made of separate plain garments, each in one colour of its own. */
@@ -46,6 +46,13 @@ function mixOf(random: () => number): { african: number; asian: number; caucasia
   const dark = random(), split = random();
   return { african: dark, asian: (1 - dark) * split, caucasian: (1 - dark) * (1 - split) };
 }
+
+/**
+ * Whether figures wear Actors' photo skins. Off for now: with Actors 0.6.5's shared node materials the skin's photo
+ * textures, given each figure as an input of its own, are not bound when it is drawn, so everybody's skin came out
+ * nearly white. The procedural skin in the photos' mean colour stands in until Actors binds them.
+ */
+const PHOTO_SKIN = false;
 
 /** What a stand-in needs of a person: standing height (m), width (× the mean), and colours by slot (packed). */
 export interface Dress {
@@ -95,7 +102,10 @@ export class Residents {
     const garmentColors: Record<string, string> = {};
     for (const g of outfit) garmentColors[g] = DYES[Math.floor(random() * DYES.length)];
     const hairColor = look.hairColor ?? this.catalog.hairColors[Math.floor(random() * this.catalog.hairColors.length)]?.id ?? '#3b2417';
-    return { ...look, body: { ...body, ...mixOf(random) }, outfit, garmentColors, hairColor, anatomy: false, detail: 'high', animation: null };
+    const grown = { ...body, ...mixOf(random) }, tone = this.human.skinTextureTone(grown);
+    // The skin's colour is the photo skins' own mean, so it is the same in either kind of skin (PHOTO_SKIN).
+    const skin = PHOTO_SKIN && look.skin === 'photo' ? 'photo' : 'procedural', skinColor = tone ? hexOf(tone) : look.skinColor;
+    return { ...look, body: grown, skin, skinColor, outfit, garmentColors, hairColor, anatomy: false, detail: 'high', animation: null };
   }
 
   /**

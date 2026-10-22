@@ -60,6 +60,11 @@ export function hexColor(hex: string): [number, number, number] {
   return Number.isFinite(n) ? [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255] : [0.5, 0.5, 0.5];
 }
 
+/** 0..1 channels (sRGB) as a hex colour ('#rrggbb'): `hexColor` the other way. */
+export function hexOf(c: readonly number[]): string {
+  return `#${c.slice(0, 3).map((v) => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, '0')).join('')}`;
+}
+
 /** Garment colours (sRGB) the residents dress in (render/actors/residents.ts): light, quiet, natural dyes, and a few strong ones. */
 export const DYES = ['#e6e1d6', '#d2bd98', '#8b8e93', '#5b6470', '#3566a8', '#2f6b45', '#a8b8c0', '#c9a27e', '#f1efe9', '#5f6838', '#8a4b2a', '#b9504a', '#d8b04a', '#1f7a7a', '#3b3f46'];
 
