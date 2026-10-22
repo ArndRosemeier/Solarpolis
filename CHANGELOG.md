@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.092 — Renders publish in seconds again
+
+- Behind the scenes: the render PC pushes each result set on top of the last one, so it uploads only the new pictures instead of the whole branch (seconds, not minutes), and a hung network call can no longer stop the watcher for good.
+
 ## v0.091 — Riding the lifts down and up
 
 - Click the bronze doors in an entrance court's portal (left button, or a tap) and you step into a lift cabin that rides down its shaft into the Understorey. The pointer turns into a hand over doors you can use.
