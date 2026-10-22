@@ -1,12 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { FLOOR_LAYERS, MATRIX, STYLE_LAND, derive } from '../src/blueprint';
-import { makeTerrain } from '../src/gen/terrain';
-import { makeEcology } from '../src/gen/ecology';
 import { planOf, type PlanPath } from '../src/gen/plan';
 import { CROWN, pathCover, pathsOf } from '../src/gen/paths';
 import { cellsNear, plantCell, plantsOf, PLANT_STRIDE } from '../src/gen/scatter';
 import { fromWorld, toWorld } from '../src/blueprint';
+import { terrainOf, ecologyOf } from './worlds';
 
 /** Every `every`-th point of a path, with the direction across it there (unit, in θ·R and s). */
 function along(path: PlanPath, R: number, every: number): { theta: number; s: number; nu: number; ns: number }[] {
@@ -39,7 +38,7 @@ for (const { name, params } of MATRIX) {
   });
 
   test(`paths (${name}): the ground is level across each path, crowned a little, and stays close to the land`, () => {
-    const h = derive(params), t = makeTerrain(h), plan = planOf(h), net = pathsOf(h), R = h.radius;
+    const t = terrainOf(name), h = t.habitat, plan = planOf(h), net = pathsOf(h), R = h.radius;
     let checked = 0;
     for (const path of plan.paths) {
       const half = path.width / 2;
@@ -64,7 +63,7 @@ for (const { name, params } of MATRIX) {
   });
 
   test(`paths (${name}): each path is laid in its surface, a far one is a faint line, and no plant stands on one`, () => {
-    const h = derive(params), eco = makeEcology(makeTerrain(h)), t = eco.terrain, plan = planOf(h), net = pathsOf(h), R = h.radius;
+    const eco = ecologyOf(name), h = eco.terrain.habitat, t = eco.terrain, plan = planOf(h), net = pathsOf(h), R = h.radius;
     const out = new Float32Array(3), floor = new Uint8Array(FLOOR_LAYERS.length);
     const sunwalk = plan.paths.find((p) => p.kind === 'sunwalk')!;
     let laid = 0;

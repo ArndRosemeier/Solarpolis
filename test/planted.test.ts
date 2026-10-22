@@ -8,7 +8,7 @@ import { LEVELS, cellBounds, cellsNear, plantCell, plantsOf, PLANT_STRIDE, type 
 import { placeAt } from '../src/gen/shapes';
 import { outOfPlace } from '../src/gen/shapes';
 import { TREE_HEIGHT } from '../src/gen/ecology';
-import { ecologyOf } from './worlds';
+import { ecologyOf, terrainOf } from './worlds';
 
 
 test('planted: every climate names a tree of its own biomes as the founders\' tree', () => {
@@ -21,7 +21,7 @@ test('planted: every climate names a tree of its own biomes as the founders\' tr
 
 for (const { name, params } of MATRIX) {
   test(`planted (${name}): the founders' grove stands on its plan site, a ring of the tallest trees round a clearing`, () => {
-    const t: Terrain = makeTerrain(derive(params)), p = plantingsOf(t);
+    const t: Terrain = terrainOf(name), p = plantingsOf(t);
     const site = siteOf(planOf(t.habitat), 'founders-grove');
     if (!site) { assert.equal(p.groves.length, 0); return; }
     assert.equal(p.groves.length, 1);

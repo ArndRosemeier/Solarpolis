@@ -2,10 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MATRIX, derive, fromWorld, validate, withParams } from '../src/blueprint';
 import { makeTerrain } from '../src/gen/terrain';
-import { makeEcology } from '../src/gen/ecology';
 import { riverPoint, type River } from '../src/gen/rivers';
 import { buildWater } from '../src/gen/water';
 import { bounds, buildTile, children, makeLayout, roots, type TileKey } from '../src/gen/tiles';
+import { ecologyOf, terrainOf } from './worlds';
 
 /** How far in from the hull a height above the profile at s is: what water runs down. */
 const elevationOf = (h: ReturnType<typeof derive>, s: number, height: number) => {
@@ -18,7 +18,7 @@ const downstream = (r: River) => Array.from({ length: r.count }, (_, n) => (r.fr
 
 for (const { name, params } of MATRIX) {
   test(`rivers (${name}): fall from springs on the endcaps into the lake, never uphill, in channels they carved`, () => {
-    const h = derive(params), t = makeTerrain(h), spec = params.relief.rivers;
+    const t = terrainOf(name), h = t.habitat, spec = params.relief.rivers;
     if (!spec || !t.lake) { assert.equal(t.rivers.length, 0, 'no lake, no rivers'); return; }
     assert.equal(t.rivers.length, spec.count);
     const lake = t.lake, { profile } = h;
@@ -54,7 +54,7 @@ for (const { name, params } of MATRIX) {
   });
 
   test(`river water (${name}): ribbons over the channel at the water's level, facing the air, flowing downstream`, () => {
-    const h = derive(params), t = makeTerrain(h);
+    const t = terrainOf(name), h = t.habitat;
     if (!t.rivers.length) return;
     const r = t.rivers[0], i = Math.floor(r.count * 0.6), s = r.s0 + i * r.step, mid = riverPoint(r, s);
     const rad = h.profile.at(s).r, half = (mid.halfWidth * 30) / rad;
@@ -90,7 +90,7 @@ for (const { name, params } of MATRIX) {
 }
 
 test('river water: far away, a river lies over the coarse ground its tile draws (it never sinks under a hillside)', () => {
-  const h = derive(MATRIX[0].params), t = makeTerrain(h), eco = makeEcology(t), layout = makeLayout(t);
+  const eco = ecologyOf(MATRIX[0].name), t = eco.terrain, h = t.habitat, layout = makeLayout(t);
   const r = t.rivers[0], i = Math.floor(r.count * 0.5), s = r.s0 + i * r.step, theta = r.theta[i];
   const holds = (k: TileKey) => { const b = bounds(layout, k); const u = ((theta - b.theta0) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI); return s >= b.s0 && s < b.s1 && u < b.theta1 - b.theta0; };
   let key = roots(layout).find(holds)!;
@@ -109,7 +109,7 @@ test('river water: far away, a river lies over the coarse ground its tile draws 
 });
 
 test('rivers: they wet their banks (reeds and willows grow there) and need a lake narrower than them to be valid', () => {
-  const h = derive(MATRIX[0].params), t = makeTerrain(h), eco = makeEcology(t), { profile } = h;
+  const eco = ecologyOf(MATRIX[0].name), t = eco.terrain, h = t.habitat, { profile } = h;
   let near = 0, far = 0, n = 0;
   for (const r of t.rivers) for (let i = 0; i < r.count; i += 97) {
     const s = r.s0 + i * r.step;

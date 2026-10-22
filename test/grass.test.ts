@@ -5,6 +5,7 @@ import { makeTerrain } from '../src/gen/terrain';
 import { makeEcology, nearestFloor } from '../src/gen/ecology';
 import { buildTuft, type TuftMesh } from '../src/gen/grass';
 import { COVER_FADE, LEVELS, cellBounds, cellsNear, coverChance, plantCell, plantsOf, PLANT_STRIDE } from '../src/gen/scatter';
+import { ecologyOf } from './worlds';
 
 const tris = (m: TuftMesh) => m.index.length / 3;
 
@@ -34,9 +35,9 @@ for (const form of COVER_FORMS) {
   });
 }
 
-for (const { name, params } of MATRIX) {
+for (const { name } of MATRIX) {
   test(`grass (${name}): cover grows where its floor layer is, as densely as the layer covers the ground`, () => {
-    const h = derive(params), eco = makeEcology(makeTerrain(h)), plants = plantsOf(eco), { profile } = h;
+    const eco = ecologyOf(name), h = eco.terrain.habitat, plants = plantsOf(eco), { profile } = h;
     const cover = plants.filter((p) => p.what === 'cover');
     assert.equal(cover.length, eco.climate.cover.length, 'every cover of the climate');
     const s = (profile.floorStart + profile.floorEnd) / 2, eye = toWorld(profile, { theta: 1, s, h: 1.7 });
@@ -67,7 +68,7 @@ for (const { name, params } of MATRIX) {
 }
 
 test('grass: the floor layer is read the same whichever cell asks, between its lattice points smoothly', () => {
-  const eco = makeEcology(makeTerrain(derive(MATRIX[0].params))), { profile } = eco.terrain.habitat;
+  const eco = ecologyOf(MATRIX[0].name), { profile } = eco.terrain.habitat;
   const layer = FLOOR_LAYERS.indexOf('grass'), a = coverChance(eco, layer), b = coverChance(eco, layer);
   const s0 = (profile.floorStart + profile.floorEnd) / 2;
   let last = a(0.5, s0);
@@ -81,7 +82,7 @@ test('grass: the floor layer is read the same whichever cell asks, between its l
 });
 
 test('grass: no grass on bare rock, at the waterline or on the lake bed; dry grass in the mediterranean', () => {
-  const eco = makeEcology(makeTerrain(derive(MATRIX[0].params))), lake = eco.terrain.lake;
+  const eco = ecologyOf(MATRIX[0].name), lake = eco.terrain.lake;
   const grass = coverChance(eco, FLOOR_LAYERS.indexOf('grass'));
   if (lake) for (const theta of [0, 1.3, 2.9]) assert.ok(grass(theta, lake.s) < 0.05, 'none in the lake');
   // A meadow is found (the debug menu goes there), and grass grows thick in it.
