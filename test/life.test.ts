@@ -98,8 +98,8 @@ for (const { name, params } of MATRIX) {
       // Everyone near the first: walking a few steps apart, staying within their shape (a ring to dance in is the widest).
       const far = Math.max(...list.map((p) => near(p, list[0])));
       if (far <= 4 + 2.5 * size) together++;
-      if (list.some((p) => p.moving) || !['meet', 'gather'].includes(list[0].activity)) continue;
-      // A talking ring: each faces its middle.
+      if (list.some((p) => p.moving || p.act !== 'talk') || !['meet', 'gather'].includes(list[0].activity)) continue;
+      // A talking ring (talking now, not looking about or off on a stroll): each faces its middle.
       const R0 = list[0];
       const xy = list.map((p) => { const d = p.theta - R0.theta; return [p.s - R0.s, (d - 2 * Math.PI * Math.round(d / (2 * Math.PI))) * R]; });
       const mx = xy.reduce((a, q) => a + q[0], 0) / size, my = xy.reduce((a, q) => a + q[1], 0) / size;

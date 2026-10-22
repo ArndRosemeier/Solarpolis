@@ -13,7 +13,7 @@ import { BODY_WIDTH, MEAN_HEIGHT, POSE, SPECK_STRIDE, guessBands, packColor, wri
 import { designGuess } from '../gen/drone';
 import { kept } from '../gen/kept';
 import type { Habitat } from '../blueprint';
-import { footingOf, postureOf } from './footing';
+import { footingOf } from './footing';
 import { peopleAt, personKey, residentOf } from './population';
 
 /** Everyone up on the land at clock time `t`, as the speck layer draws them, in order of `personKey`. */
@@ -61,6 +61,8 @@ interface Still {
   s: Float64Array;
   h: Float32Array;
   swim: Uint8Array;
+  /** How they held themselves (a new beat may sit them down where they stood). */
+  pose: Uint8Array;
   horizon: Float32Array;
 }
 const KEPT = 250000;
@@ -78,7 +80,7 @@ export function specksAt(terrain: Terrain, t: number): Specks {
   const keys = people.map(personKey), order = Array.from(people.keys()).sort((a, b) => keys[a] - keys[b]);
   const out: Specks = { t, count: n, data: new Float32Array(n * SPECK_STRIDE), key: new Float64Array(n), resident: new Int32Array(n), design: new Int8Array(n) };
   const before = stills.get(terrain), still = order.filter((at) => !people[at].moving).length;
-  const next: Still | null = still <= KEPT ? { key: new Float64Array(still), theta: new Float64Array(still), s: new Float64Array(still), h: new Float32Array(still), swim: new Uint8Array(still), horizon: new Float32Array(still * 2) } : null;
+  const next: Still | null = still <= KEPT ? { key: new Float64Array(still), theta: new Float64Array(still), s: new Float64Array(still), h: new Float32Array(still), swim: new Uint8Array(still), pose: new Uint8Array(still), horizon: new Float32Array(still * 2) } : null;
   let j = 0, kept = 0;
   order.forEach((at, i) => {
     const p = people[at], key = keys[at];
@@ -86,9 +88,9 @@ export function specksAt(terrain: Terrain, t: number): Specks {
     if (!p.moving && before) {
       // Both lists go up by key: the last one's row for this person, if they stood still there too.
       while (j < before.key.length && before.key[j] < key) j++;
-      if (j < before.key.length && before.key[j] === key && before.theta[j] === p.theta && before.s[j] === p.s) {
+      if (j < before.key.length && before.key[j] === key && before.theta[j] === p.theta && before.s[j] === p.s && before.pose[j] === p.posture) {
         const swim = before.swim[j] === 1;
-        foot = { h: before.h[j], pose: swim ? POSE.upright : postureOf(p.activity), swim };
+        foot = { h: before.h[j], pose: swim ? POSE.upright : p.posture, swim };
         horizon = [before.horizon[j * 2], before.horizon[j * 2 + 1]];
       }
     }
@@ -96,7 +98,7 @@ export function specksAt(terrain: Terrain, t: number): Specks {
     foot ??= footingOf(terrain, p, landmarkTopAt(terrain, p.theta, p.s), body?.height ?? MEAN_HEIGHT);
     horizon ??= horizonOf(terrain, p.theta, p.s);
     if (!p.moving && next) {
-      next.key[kept] = key; next.theta[kept] = p.theta; next.s[kept] = p.s; next.h[kept] = foot.h; next.swim[kept] = foot.swim ? 1 : 0;
+      next.key[kept] = key; next.theta[kept] = p.theta; next.s[kept] = p.s; next.h[kept] = foot.h; next.swim[kept] = foot.swim ? 1 : 0; next.pose[kept] = p.posture;
       next.horizon[kept * 2] = horizon[0]; next.horizon[kept * 2 + 1] = horizon[1];
       kept++;
     }

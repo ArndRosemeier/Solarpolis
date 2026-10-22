@@ -6,6 +6,7 @@
 import { nearestFloor, nearestWood, type Ecology, type Found } from './gen/ecology';
 import { nearestOnPath } from './gen/paths';
 import { busiestNear, deerAt, fleetOf, flierAt, floorGap, herdsNear, peopleAt, personKey, residentOf, venuesOf, type Person } from './sim';
+import { POSE } from './gen/standIn';
 import { nearestPlace, vineFaceFoot } from './gen/places';
 import { besideRiver, nearestSample, type River } from './gen/rivers';
 import './app/style.css';
@@ -280,6 +281,16 @@ toPlace('Beside the nearest person in a drone body', 4, (eco, t, s) => {
   const aloft = peopleAt(h, v.time, { theta: t, s, radius: 1500 }, eco.terrain).filter((p) => residentOf(h, p.resident).body === 'drone');
   const by = (p: Person): number => floorGap(r, t, s, p.theta, p.s) + (p.moving || p.size < 2 ? 1e6 : 0);
   const best = aloft.sort((a, b) => by(a) - by(b))[0];
+  if (!best) return null;
+  const d = best.theta - t, dx = (d - 2 * Math.PI * Math.round(d / (2 * Math.PI))) * r, dy = best.s - s, l = Math.hypot(dx, dy) || 1;
+  return { theta: best.theta, s: best.s, way: [dx / l, dy / l] };
+});
+/** 6 m from the nearest party of two or more down on the grass (sitting or lying, not on a seat) within 6 km, facing it. */
+toPlace('Beside the nearest party on the grass', 6, (eco, t, s) => {
+  const h = eco.terrain.habitat, r = h.radius, v = view();
+  if (!v) return null;
+  const down = peopleAt(h, v.time, { theta: t, s, radius: 6000 }, eco.terrain).filter((p) => !p.moving && p.size > 1 && p.posture !== POSE.upright && p.activity !== 'bench');
+  const best = down.sort((a, b) => floorGap(r, t, s, a.theta, a.s) - floorGap(r, t, s, b.theta, b.s))[0];
   if (!best) return null;
   const d = best.theta - t, dx = (d - 2 * Math.PI * Math.round(d / (2 * Math.PI))) * r, dy = best.s - s, l = Math.hypot(dx, dy) || 1;
   return { theta: best.theta, s: best.s, way: [dx / l, dy / l] };
@@ -772,9 +783,13 @@ goBelow('Below: the pillar forest under here', (h, theta, s) => {
   const u = underOf(h);
   return u.bayAt(theta, Math.min(u.s0 + (u.along - 0.5) * u.bay, Math.max(u.s0 + u.bay / 2, s)));
 });
-goBelow("Below: under the nearest entrance court (its hamlet's wellhead)", (h, theta, s) => {
+/** The hamlets nearest (θ, s) first (over the unrolled floor). */
+const hamletsNear = (h: Habitat, theta: number, s: number): Hamlet[] => {
   const R = h.radius, away = (m: Hamlet): number => Math.hypot(Math.atan2(Math.sin(m.site.theta - theta), Math.cos(m.site.theta - theta)) * R, m.site.s - s);
-  const m = [...underOf(h).hamlets].sort((a, b) => away(a) - away(b))[0];
+  return [...underOf(h).hamlets].sort((a, b) => away(a) - away(b));
+};
+goBelow("Below: under the nearest entrance court (its hamlet's wellhead)", (h, theta, s) => {
+  const m = hamletsNear(h, theta, s)[0];
   return m ? { i: m.i, j: m.j } : null;
 });
 /** Below, in the middle of a bay under sky `want` (gen/skies.ts), off the wellhead and its lanes. */
@@ -792,6 +807,23 @@ function underSky(want: number): void {
     }
   }
 }
+/** Below, in a hamlet's street: on the walk between two of its home bays, looking along the axis down it. */
+debug.add({
+  label: "Below: in a street among a hamlet's homes", group: 'Go', run: () => {
+    const h = lab.habitat, v = view();
+    if (!h || !v) return;
+    const u = underOf(h);
+    for (const m of hamletsNear(h, v.walker.at.theta, v.walker.at.s).slice(0, 8)) {
+      for (let r = 1; r < 8; r++) for (let di = -r; di <= r; di++) for (const dj of [-r, r]) {
+        const i = m.i + di, j = m.j + dj;
+        if (j < 0 || j >= u.along || u.hamletOf(i, j) !== m || u.useAt(i, j) !== 'home' || u.useAt(i - 1, j) !== 'home') continue;
+        const c = u.centreOf(i, j);
+        v.goBelow(c.theta - u.dTheta / 2, c.s, 0);
+        return;
+      }
+    }
+  },
+});
 let nextSky = 0;
 debug.add({ label: 'Below: under the next kind of hamlet sky', group: 'Go', run: () => underSky(nextSky++ % SKIES.length) });
 debug.add({ label: 'Below: under a glass deck (the real sky above)', group: 'Go', run: () => underSky(GLASS) });
@@ -802,6 +834,7 @@ debug.addInfo(() => view()?.clockLine() ?? '');
 const nextOf = <T>(choices: T[], now: T): T => choices[(choices.indexOf(now) + 1) % choices.length];
 debug.add({ label: 'Clock speed: real time → ×60 → ×600 → paused', group: 'Time', run: () => { const v = view(); if (v) v.timeScale = nextOf([1, 60, 600, 0], v.timeScale); } });
 debug.add({ label: 'Two hours later', group: 'Time', run: () => view()?.skip(7200) });
+debug.add({ label: 'Five minutes later', group: 'Time', run: () => view()?.skip(300) });
 debug.add({ label: 'Clouds: schedule → few → half → overcast → none', group: 'Time', run: () => { const v = view(); if (v) v.cloudCover = nextOf<number | null>([null, 0.15, 0.5, 0.85, 0], v.cloudCover); } });
 const toClouds = (label: string, share: number): void => debug.add({
   label, group: 'Go',

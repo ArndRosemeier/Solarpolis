@@ -31,7 +31,7 @@ import { cellHash, floorShare, floorSurface, rockFromAfar, snowOver, woodsFromAf
 import { RISE_RANGE } from '../gen/tiles';
 import { filtered } from './textures';
 import { cloudMarch, cloudShade } from './cloudShaders';
-import { builtAlbedo, roofHorizons } from './builtShaders';
+import { builtAlbedo, roofHorizons, windowPane } from './builtShaders';
 import { hamletSky } from './hamletSkies';
 import { FINISH } from '../gen/pavilion';
 import { LAMPLIGHT } from '../gen/underMesh';
@@ -742,6 +742,8 @@ const SKY_FACE = 1.5;
  * land's: full once the day overhead is `SCREEN_DAY` of midday's.
  */
 const SCREEN_GLOW = 2.2;
+/** A window's glow in the lamps' floor light (its vertex colour the rooms' light; an unlit one's dark glass). */
+const WINDOW_GLOW = 2.4;
 const SCREEN_DAY = 0.5;
 export const MIST_GLOW = 0.25;
 
@@ -756,10 +758,16 @@ export const VAULT = kind('vault', ['position', 'normal', 'color', 'uv', 'finish
   const light = below.tint.mul(below.lamp);
   const albedo = builtAlbedo(vertexColor().rgb, uv(), finish);
   const lit = albedo.mul(light.mul(glow.x).add(below.day.mul(glow.y)));
-  const face = mix(light.mul(LAMP_FACE), vec3(below.day.mul(SKY_FACE)), step(4.5, finish));
+  const face = mix(light.mul(LAMP_FACE), vec3(below.day.mul(SKY_FACE)), step(FINISH.sky - 0.5, finish));
+  // A lamp's or a well's face (finishes 4 and 5), and a lived-in house's window, its rooms' light through the glass.
+  const glows = step(FINISH.lamp - 0.5, finish).mul(step(finish, FINISH.sky + 0.5));
+  const window = abs(finish.sub(FINISH.window)).lessThan(0.5);
   const toward = positionWorld.sub(cameraPosition), up = normalize(vec3(view.eye.x.negate(), view.eye.y.negate(), 0));
   const surface = Fn(() => {
-    const out = mix(lit, face, step(3.5, finish)).toVar();
+    const out = mix(lit, face, glows).toVar();
+    // A window's arguments set before its branch too.
+    const pane = uv().toVar(), room = vertexColor().rgb.mul(light).mul(WINDOW_GLOW).toVar(), outside = light.mul(glow.x).toVar();
+    If(window, () => out.assign(windowPane(pane, room, outside)));
     // A hamlet's sky (only there: the skies are the heaviest part of the kind); its arguments set before the branch
     // (hamletSkies.ts `skyFunction` says why).
     const look = normalize(toward).toVar(), index = finish.sub(FINISH.screen).toVar();

@@ -24,7 +24,7 @@ import { hash3i, hashToFloat } from '@futuremagic/core';
 import { fromWorld, toView, toWorld, type Habitat, type Vec3, apart as dist } from '../blueprint';
 import type { Terrain } from '../gen/terrain';
 import { horizonAt } from '../gen/horizon';
-import { MEAN_HEIGHT, SPECK_STRIDE, STAND_IN_STRIDE, speckBands, standInArrays, writeSpeck } from '../gen/standIn';
+import { MEAN_HEIGHT, POSE, SPECK_STRIDE, STAND_IN_STRIDE, speckBands, standInArrays, writeSpeck } from '../gen/standIn';
 import { floorGap, footingOf, personKey, lifeBytes, peopleAt, residentOf, talkerAt, whereIs, type Activity, type Footing, type Person, type Resident } from '../sim';
 import { CROWD, STAND_IN_LAYOUT, layInstances } from './materials';
 import { arraysGeometry, drawnAnywhere, freeMesh, instancedOf, sendInstances } from './geometry';
@@ -81,8 +81,9 @@ interface Doing {
 }
 
 /**
- * What people do at their places, as the figures' clips (a held share for a still pose; the pose is `postureOf`'s). In a
- * party that talks, the one whose turn it is speaks (`TALK`) and the others listen (`LISTEN`); someone alone waits.
+ * What people do at their places, as the figures' clips (sim/beats.ts says what and how they hold themselves; a held
+ * share of a clip is a still pose). In a party that talks, the one whose turn it is speaks (`TALK`) and the others
+ * listen (`LISTEN`); someone alone waits.
  */
 const STILL: Partial<Record<Activity, { clip: string; hold?: number }[]>> = {
   meet: [{ clip: 'idle' }, { clip: 'arms folded' }],
@@ -90,15 +91,20 @@ const STILL: Partial<Record<Activity, { clip: string; hold?: number }[]>> = {
   watch: [{ clip: 'idle' }, { clip: 'arms folded' }],
   play: [{ clip: 'dance' }, { clip: 'idle' }],
   make: [{ clip: 'repair (kneeling)' }],
-  sit: [{ clip: 'repair (kneeling)', hold: 0.1 }],
-  picnic: [{ clip: 'get up from lying', hold: 0 }],
-  stargaze: [{ clip: 'get up from lying', hold: 0 }],
 };
-/** Parties that talk while they stay: who speaks, and how the others listen (standing, or sitting on a seat). */
-const TALKS = new Set<Activity>(['meet', 'gather', 'bench']);
 const TALK = { clip: 'talk' }, LISTEN = [{ clip: 'nod' }, { clip: 'idle' }, { clip: 'idle' }, { clip: 'arms folded' }];
+/** Down on the grass (kneeling, sitting back), and lying on it: held shares of the pack's clips. */
+const KNEEL = { clip: 'repair (kneeling)', hold: 0.1 }, LIE = { clip: 'get up from lying', hold: 0 };
 /** A listener's way of listening changes this often (s), at most. */
 const LISTEN_FOR = 9;
+/** Someone eating or drinking lifts it this often (s); a speaker sitting on the grass talks with their hands in steps this long. */
+const EAT_EVERY = 12;
+const HANDS_FOR = 4;
+/**
+ * Getting down and up, played on the game clock over the clip's length (s): onto a seat and up from it, and lying down
+ * (getting up from lying, backwards) and getting up. Down onto the grass and up from it, the clips cross-fade.
+ */
+const SIT_DOWN = { clip: 'sit down', span: 1.33 }, STAND_UP = { clip: 'stand up', span: 1.07 }, GET_UP = { clip: 'get up from lying', span: 1.57 };
 
 /** Someone in a drone body, followed here and drawn by the drones' view: who, where now, and what is built under them. */
 export interface Aloft {
@@ -217,7 +223,7 @@ export class PeopleView {
       if (due) {
         const p = whereIs(h, t, one.person, this.terrain);
         if (!p) { gone.push(key); continue; }
-        const still = !fresh && !p.moving && !one.person.moving && p.theta === one.person.theta && p.s === one.person.s && p.activity === one.person.activity;
+        const still = !fresh && !p.moving && !one.person.moving && p.theta === one.person.theta && p.s === one.person.s && p.activity === one.person.activity && p.posture === one.person.posture;
         one.person = p;
         if (fresh) timed(() => this.stand(one)); else if (!still) this.stand(one);
         // A figure in a talking party: the turn to speak moves on while they stand still.
@@ -449,21 +455,52 @@ function doingOf(p: Person, who: Resident, foot: Footing, t: number): Doing {
   return { pose: foot.pose, swim: false, anim: animOf(p, who, t) };
 }
 
-/** A figure's animation at clock time t (out of the water): walking, or what they do at their place. */
+/** A figure's animation at clock time t (out of the water): walking, getting down or up, or the beat they are in. */
 function animOf(p: Person, who: Resident, t: number): AnimState {
   if (p.moving) return { move: 'walk' };
-  const seated = p.activity === 'bench';
-  if (TALKS.has(p.activity) && p.size > 1) {
-    // Seated, the speaker talks with their hands and the others sit; standing, the others nod, wait, fold their arms.
-    if (talkerAt(p, t) === p.member) return seated ? { move: 'idle', pose: { clip: 'sit and talk' } } : { move: 'idle', pose: TALK };
-    if (seated) return { move: 'sit' };
-    const k = Math.floor(t / LISTEN_FOR);
-    return { move: 'idle', pose: LISTEN[Math.floor(hashToFloat(hash3i(who.id, 31, p.outing, k)) * LISTEN.length)] };
+  const seat = p.activity === 'bench', changing = changeOf(p, seat);
+  if (changing) return changing;
+  const byHash = <T>(list: readonly T[], k: number, salt: number): T => list[Math.floor(hashToFloat(hash3i(who.id, salt, p.outing, k)) * list.length)];
+  // How they hold themselves, before what they do.
+  const held: AnimState = p.posture === POSE.lie ? { move: 'idle', pose: LIE } : p.posture === POSE.kneel ? (seat ? { move: 'sit' } : { move: 'idle', pose: KNEEL }) : { move: 'idle' };
+  switch (p.act) {
+    case 'talk': {
+      if (p.size < 2 || p.posture === POSE.lie) return held;
+      const speaks = talkerAt(p, t) === p.member;
+      if (p.posture === POSE.kneel) {
+        // Seated, the speaker talks with their hands (on the seat its own clip, on the grass over the kneel).
+        if (!speaks) return held;
+        return seat ? { move: 'idle', pose: { clip: 'sit and talk' } } : { ...held, action: { id: 'talk', t0: Math.floor(t / HANDS_FOR) * HANDS_FOR, dur: HANDS_FOR } };
+      }
+      return speaks ? { move: 'idle', pose: TALK } : { move: 'idle', pose: byHash(LISTEN, Math.floor(t / LISTEN_FOR), 31) };
+    }
+    case 'eat': {
+      const t0 = Math.floor(t / EAT_EVERY) * EAT_EVERY + EAT_EVERY * hashToFloat(hash3i(who.id, 37, p.outing, 0)) * 0.5;
+      return { ...held, action: { id: 'eat', t0, dur: 1.4 } };
+    }
+    case 'work': case 'play': {
+      const clips = STILL[p.activity];
+      return clips && p.posture !== POSE.lie ? { move: 'idle', pose: byHash(clips, 0, 29) } : held;
+    }
+    case 'look': case 'quiet':
+      return p.posture === POSE.upright ? { move: 'idle', pose: byHash([{ clip: 'idle' }, { clip: 'arms folded' }], 0, 29) } : held;
+    default:
+      return held;
   }
-  if (seated) return { move: 'sit' };
-  const clips = STILL[p.activity];
-  if (!clips) return { move: 'idle' };
-  return { move: 'idle', pose: clips[Math.floor(hashToFloat(hash3i(who.id, 29, p.outing, 0)) * clips.length)] };
+}
+
+/** Getting down or up, as it happens: a clip scrubbed on the game clock, or null (none for it, or it is over). */
+function changeOf(p: Person, seat: boolean): AnimState | null {
+  if (p.from === p.posture) return null;
+  const scrub = (c: { clip: string; span: number }, backward: boolean): AnimState | null => {
+    if (p.since >= c.span) return null;
+    const f = Math.min(0.999, Math.max(0, p.since / c.span));
+    return { move: 'idle', pose: { clip: c.clip, hold: backward ? 1 - f : f } };
+  };
+  if (p.posture === POSE.lie) return scrub(GET_UP, true);
+  if (p.from === POSE.lie) return scrub(GET_UP, false);
+  if (!seat) return null;
+  return p.posture === POSE.kneel ? scrub(SIT_DOWN, false) : scrub(STAND_UP, false);
 }
 
 

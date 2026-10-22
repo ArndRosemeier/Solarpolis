@@ -13,7 +13,7 @@
  * everything relative to the camera never loses precision (docs/ARCHITECTURE.md, "Where does the camera sit?").
  * Edges between tiles of different size are hidden by skirts: a strip hanging down from each edge. Pure: no three.js.
  */
-import { groundNormal, toWorld, wrapAngle, type Vec3 } from '../blueprint';
+import { fromWorld, groundNormal, toWorld, wrapAngle, type Vec3 } from '../blueprint';
 import { groundSlope, type Terrain } from './terrain';
 import { horizonAt } from './horizon';
 import type { Ecology } from './ecology';
@@ -180,31 +180,34 @@ export function parent(layout: TileLayout, k: TileKey): TileKey {
 }
 
 /**
- * A sphere around a node's ground at h = 0 (world axes). A built tile's own `relief` widens it in `select`: each tile
- * measures its own, so a flat meadow underfoot is not taken to be as near as the tallest terrace anywhere could be.
+ * A sphere around a node's ground between heights `low` and `high` (m off h = 0, world axes). A built tile measures
+ * its own (`TileFit`), so the sphere is set at the ground's middle height and holds only its range: the ground a
+ * kilometre up on a Height is near an eye standing on it, and the floor a kilometre below is not.
  */
-export function sphere(terrain: Terrain, layout: TileLayout, k: TileKey): { center: Vec3; radius: number } {
+export function sphere(terrain: Terrain, layout: TileLayout, k: TileKey, low = 0, high = 0): { center: Vec3; radius: number } {
   const b = bounds(layout, k);
   const { profile } = terrain.habitat;
   const tc = (b.theta0 + b.theta1) / 2, sc = (b.s0 + b.s1) / 2;
-  const center = toWorld(profile, { theta: tc, s: sc, h: 0 });
+  const center = toWorld(profile, { theta: tc, s: sc, h: (low + high) / 2 });
   let radius = 0;
   for (const s of [b.s0, sc, b.s1]) {
     for (const t of [b.theta0, tc, b.theta1]) {
-      const p = toWorld(profile, { theta: t, s, h: 0 });
-      radius = Math.max(radius, Math.hypot(p[0] - center[0], p[1] - center[1], p[2] - center[2]));
+      for (const h of low === high ? [low] : [low, high]) {
+        const p = toWorld(profile, { theta: t, s, h });
+        radius = Math.max(radius, Math.hypot(p[0] - center[0], p[1] - center[1], p[2] - center[2]));
+      }
     }
   }
   return { center, radius };
 }
 
-/** `sphere`, remembered per tile: the tree is walked every frame. */
-export function spheres(terrain: Terrain, layout: TileLayout): (k: TileKey) => { center: Vec3; radius: number } {
+/** `sphere`, remembered per tile: the tree is walked every frame (a tile's fit does not change once it is built). */
+export function spheres(terrain: Terrain, layout: TileLayout): (k: TileKey, fit: Pick<TileFit, 'low' | 'high'>) => { center: Vec3; radius: number } {
   const memo = new Map<string, { center: Vec3; radius: number }>();
-  return (k) => {
+  return (k, fit) => {
     const id = keyId(k);
     let sp = memo.get(id);
-    if (!sp) { sp = sphere(terrain, layout, k); memo.set(id, sp); }
+    if (!sp) { sp = sphere(terrain, layout, k, fit.low, fit.high); memo.set(id, sp); }
     return sp;
   };
 }
@@ -218,8 +221,9 @@ export function cellSize(layout: TileLayout, k: TileKey): number {
 export interface TileFit {
   /** How far its grid strays from the true ground (m). */
   error: number;
-  /** How far its ground lies off h = 0 at most (m). */
-  relief: number;
+  /** The lowest and highest its ground (and anything between its points) lies off h = 0 (m). */
+  low: number;
+  high: number;
 }
 
 export interface Selection {
@@ -239,7 +243,7 @@ export interface Selection {
  * Choose the tiles for a view: split a tile while its error (how far its grid strays from the true ground, measured
  * when it was built) looks bigger than `maxPixels` from `eye` (with `pixelsPerRadian` = screen height / vertical
  * field of view), or its cells look bigger than `CELL_PIXELS` (`splitError`), provided all its children are built. `fitOf` gives a
- * built tile's error and relief (`TileMesh` has both), undefined if not built.
+ * built tile's error and height range (`TileMesh` has them), undefined if not built.
  */
 export function select(terrain: Terrain, layout: TileLayout, eye: Vec3, pixelsPerRadian: number, maxPixels: number, fitOf: (k: TileKey) => TileFit | undefined, sphereOf = spheres(terrain, layout)): Selection {
   const ready = (k: TileKey): boolean => fitOf(k) !== undefined;
@@ -248,8 +252,8 @@ export function select(terrain: Terrain, layout: TileLayout, eye: Vec3, pixelsPe
   const visit = (k: TileKey): void => {
     const fit = fitOf(k);
     if (!fit) { want.push({ k, need: Infinity }); return; }
-    const sp = sphereOf(k);
-    const d = Math.max(1, Math.hypot(eye[0] - sp.center[0], eye[1] - sp.center[1], eye[2] - sp.center[2]) - sp.radius - fit.relief);
+    const sp = sphereOf(k, fit);
+    const d = Math.max(1, Math.hypot(eye[0] - sp.center[0], eye[1] - sp.center[1], eye[2] - sp.center[2]) - sp.radius);
     // How far over its limits the tile is: its error, or its cells.
     const pixels = (splitError(layout, k, fit.error) / d) * pixelsPerRadian;
     if (pixels <= maxPixels || k.level >= layout.maxLevel) { draw.push(k); return; }
@@ -317,8 +321,12 @@ export interface TileMesh {
   index: Uint32Array;
   /** How far the grid strays from the true ground between its points (m): its error on screen decides splitting. */
   error: number;
-  /** How far its ground (and anything between its points) lies off h = 0 at most (m): how much nearer than its flat sphere it can be. */
-  relief: number;
+  /**
+   * The lowest and highest its ground (and anything between its points, and its water) lies off h = 0 (m): the
+   * selection's sphere holds that range (`sphere`).
+   */
+  low: number;
+  high: number;
   /** The water over this tile (the lake, the rivers: `gen/water.ts`), if any, relative to the same origin. */
   water: WaterMesh | null;
 }
@@ -504,9 +512,9 @@ export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): Til
     index.push(a, sa, bb, bb, sa, sb, a, bb, sa, bb, sb, sa);
   }
 
-  let relief = 0;
-  for (const g of heights) relief = Math.max(relief, Math.abs(g));
-  relief += error;
+  let low = Infinity, high = -Infinity;
+  for (const g of heights) { low = Math.min(low, g); high = Math.max(high, g); }
+  low -= error; high += error;
 
   // The floor shares as two four-channel attributes.
   const floorA = new Uint8Array(count * 4), floorB = new Uint8Array(count * 4);
@@ -529,5 +537,13 @@ export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): Til
     return Math.max(on(1, 1), on(halvedAround ? 2 : 1, 2));
   };
   const water = buildWater(terrain, { ...b, cell: patch, drawn }, origin);
-  return { key: k, origin, positions, normals, colors, morph, horizon, canopy, floorA, floorB, index: Uint32Array.from(index), error, relief, water };
+  // The water lies over the ground (the lake's level over its bed): the tile's range holds it too.
+  if (water) {
+    const w = water.positions;
+    for (let i = 0; i < w.length; i += 3) {
+      const at = fromWorld(profile, origin[0] + w[i], origin[1] + w[i + 1], origin[2] + w[i + 2]).h;
+      low = Math.min(low, at); high = Math.max(high, at);
+    }
+  }
+  return { key: k, origin, positions, normals, colors, morph, horizon, canopy, floorA, floorB, index: Uint32Array.from(index), error, low, high, water };
 }
