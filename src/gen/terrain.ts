@@ -319,8 +319,9 @@ export function makeTerrain(h: Habitat): Terrain {
   /** The land before the rivers carve it. */
   const landAt = (theta: number, s: number): number => {
     const [x, y, z] = at(theta, s);
-    let height = 0;
     const f = onFloor(s);
+    // The room it lies in: the rooms between the Rings step down toward the lake (none at the floor's ends).
+    let height = f > 0 ? f * form.roomAt(theta, s) : 0;
     // The landforms the plan built on the floor (gen/plan.ts: the Rings and the Heights).
     const on = f > 0 ? form.landformAt(theta, s) : null;
     if (f > 0 && hills > 0) {
@@ -337,7 +338,8 @@ export function makeTerrain(h: Habitat): Terrain {
       if (k !== null && lake) hill *= smoothstep(0, shore, -k * lake.halfWidth); // 0 at the water, full a shore away
       height += f * hill;
     }
-    raised = on ? f * formAt(on, x, y, z, height) : 0;
+    // (A Ring stands on the lower room: up its step it rises only where it stands higher than the step.)
+    raised = on ? f * Math.max(0, formAt(on, x, y, z, height) - on.room) : 0;
     // The districts' works (gen/works.ts), raised or dug.
     if (f > 0 && plan.works.length) raised += f * plan.worksAt(theta, s);
     height += raised;
@@ -488,7 +490,8 @@ export function makeTerrain(h: Habitat): Terrain {
   };
   const hollowAt = (theta: number, s: number): number => {
     const f = onFloor(s);
-    return f > 0 ? f * ((form.landformAt(theta, s)?.top ?? 0) + Math.max(0, plan.worksAt(theta, s))) : 0;
+    const on = f > 0 ? form.landformAt(theta, s) : null;
+    return f > 0 ? f * (Math.max(0, (on?.top ?? 0) - (on?.room ?? 0)) + Math.max(0, plan.worksAt(theta, s))) : 0;
   };
 
   return { habitat: h, form, lake, rivers, riverAt: inRiver, heightAt, standAt, waterDepth, courtAt, courts: courts.map((c) => c.court), terraceAt, builtAt, hollowAt };

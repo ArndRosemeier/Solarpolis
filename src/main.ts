@@ -412,6 +412,13 @@ const toRiver = (label: string, down: number, pick: (r: River, i: number) => boo
 });
 toRiver('To the nearest river', 40, (r, i) => r.steep[i] < 0.05);
 toRiver('Below the nearest falls', 200, (r, i) => r.steep[i] > 0.8);
+// Where a river breaks through a Ring (gen/plan.ts `roomAt`): the only falls on the floor, one room down to the next.
+const ringFall = (r: River, i: number): boolean => {
+  const p = lab.habitat?.profile, s = r.s0 + i * r.step;
+  return !!p && s > p.floorStart && s < p.floorEnd && r.steep[i] > 0.5;
+};
+toRiver('Below the nearest Ring fall', 80, ringFall);
+toRiver('Above the nearest Ring fall', -40, ringFall);
 go('The middle of the floor', (h) => (h.profile.floorStart + h.profile.floorEnd) / 2);
 go('The foot of the wild endcap', (h) => h.profile.floorStart + 20);
 go('Halfway up the wild endcap', (h) => h.profile.floorStart / 2);

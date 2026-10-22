@@ -191,7 +191,7 @@ for (const { name, params } of MATRIX) {
         const own = workAt(w, wrap(theta - w.theta) * R, s - w.s), form = plan.landformAt(theta, s);
         if (!form) assert.ok(Math.abs(t.builtAt(theta, s) - own) < 1e-6 * Math.max(1, w.height), `${kind} built as designed`);
         assert.ok(Math.abs(plan.worksAt(theta, s) - own) < 1e-9, 'one work there');
-        assert.ok(Math.abs(t.hollowAt(theta, s) - ((form?.top ?? 0) + Math.max(0, own))) < 1e-6, 'hollow under what is raised');
+        assert.ok(Math.abs(t.hollowAt(theta, s) - (Math.max(0, (form?.top ?? 0) - (form?.room ?? 0)) + Math.max(0, own))) < 1e-6, 'hollow under what is raised');
         most = Math.max(most, Math.abs(own));
       }
       assert.ok(most > w.height * 0.3, `${kind} stands out of the land`);
@@ -201,7 +201,7 @@ for (const { name, params } of MATRIX) {
 
 test('works (reference): the wild reserve\'s valley sides stand bolder than the worked floor\'s; the valleys\' floors stay gentle', () => {
   const t = terrainOf('reference'), plan = planOf(t.habitat), h = t.habitat, { floorStart } = h.profile;
-  /** The land's mean height up the valleys' sides (or along their floors), less what was built, over a stretch of the floor. */
+  /** The land's mean height up the valleys' sides (or along their floors) over its room, less what was built, over a stretch of the floor. */
   const mean = (s0: number, s1: number, side: boolean): number => {
     let sum = 0, n = 0;
     for (let i = 0; i < 400; i++) {
@@ -209,7 +209,7 @@ test('works (reference): the wild reserve\'s valley sides stand bolder than the 
       const across = side ? 0.75 + 0.2 * ((i * 0.7548777) % 1) : 0.05 + 0.1 * ((i * 0.7548777) % 1);
       const theta = plan.valleyAt(valley, s) + ((i % 2 ? 1 : -1) * across * Math.PI) / plan.valleys;
       if (t.riverAt(theta, s) || t.courtAt(theta, s) || plan.workOf(theta, s) || plan.landformAt(theta, s)) continue;
-      sum += t.heightAt(theta, s); n++;
+      sum += t.heightAt(theta, s) - plan.roomAt(theta, s); n++;
     }
     return sum / Math.max(1, n);
   };

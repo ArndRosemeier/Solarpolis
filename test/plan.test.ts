@@ -164,7 +164,10 @@ test('plan: an unknown culture or a plan without valleys is invalid', () => {
 
 test('plan: the terrain keeps the plan\'s lake', () => {
   for (const { name } of MATRIX) {
-    const t = terrainOf(name);
-    assert.deepEqual(t.lake, lakeOf(t.habitat));
+    const t = terrainOf(name), lake = lakeOf(t.habitat), plan = planOf(t.habitat);
+    assert.deepEqual(t.lake, plan.lake);
+    // Where it lies and how big, as the habitat's lake; its water down in the lowest room, every step below the ends.
+    assert.deepEqual(t.lake && { ...t.lake, level: 0 }, lake && { ...lake, level: 0 });
+    if (lake) assert.ok(Math.abs(t.lake!.level - lake.level - plan.roomAt(0, lake.s)) < 1e-9, 'the lake down in its room');
   }
 });
