@@ -15,20 +15,20 @@
  *
  * Heights are over the ground (or the water) under them, except a glider's, which is its distance from the axis. Pure.
  */
-import { deriveSeed, hash3i, hashToFloat } from '@futuremagic/core';
+import { deriveSeed, hash3i } from '@futuremagic/core';
 import { kept } from '../gen/kept';
 import { planOf, siteOf } from '../gen/plan';
 import { VINE_TOP, placesOf } from '../gen/places';
 import type { Terrain } from '../gen/terrain';
-import type { Habitat } from '../blueprint';
+import { DRONE_ROLES, type DroneRole, type Habitat } from '../blueprint';
 import { floorGap, pointAlong, type Route } from './walks';
-import { routeOf } from './population';
+import { routeOf, unit } from './population';
 import { venuesOf } from './venues';
 
 const TURN = 2 * Math.PI;
 
-export type Role = 'courier' | 'tender' | 'surveyor' | 'lifter' | 'glider' | 'guardian';
-export const ROLES: readonly Role[] = ['courier', 'tender', 'surveyor', 'lifter', 'glider', 'guardian'];
+export type Role = DroneRole;
+export const ROLES: readonly Role[] = DRONE_ROLES;
 
 type Move = 'round' | 'roam' | 'orbit' | 'shuttle' | 'drift';
 
@@ -84,8 +84,6 @@ const BEAT = { work: 30, hop: 6 } as const;
 /** A courier's stop at the place it flew to (s). */
 const STOP = 90;
 
-/** A float in [0, 1) from a seed and three numbers. */
-const unit = (seed: number, a: number, b: number, c: number): number => hashToFloat(hash3i(seed, a, b, c));
 /** The short way from one angle to another. */
 const turnTo = (d: number): number => d - TURN * Math.round(d / TURN);
 
@@ -179,7 +177,7 @@ const stopsOf = kept((h: Habitat): readonly (readonly number[])[] => {
   order.forEach((k, i) => { rank[k] = i; });
   return courts.map((c, k) => {
     const best: { j: number; g: number }[] = [];
-    const consider = (j: number): void => {
+    const weigh = (j: number): void => {
       const g = floorGap(R, c.theta, c.s, courts[j].theta, courts[j].s);
       if (best.length < NEIGHBOURS || g < best[best.length - 1].g) {
         best.push({ j, g });
@@ -188,8 +186,8 @@ const stopsOf = kept((h: Habitat): readonly (readonly number[])[] => {
       }
     };
     const far = (): number => (best.length < NEIGHBOURS ? Infinity : best[best.length - 1].g);
-    for (let i = rank[k] + 1; i < order.length && courts[order[i]].s - c.s <= far(); i++) consider(order[i]);
-    for (let i = rank[k] - 1; i >= 0 && c.s - courts[order[i]].s <= far(); i--) consider(order[i]);
+    for (let i = rank[k] + 1; i < order.length && courts[order[i]].s - c.s <= far(); i++) weigh(order[i]);
+    for (let i = rank[k] - 1; i >= 0 && c.s - courts[order[i]].s <= far(); i--) weigh(order[i]);
     const own = v.byCourt[k].filter((i) => v.venues[i].kind !== 'court').map((i) => v.venues[i].vertex);
     return [...new Set([...own, ...best.map((x) => v.courtVertex[x.j])])].filter((w) => w !== v.courtVertex[k]);
   });
@@ -305,11 +303,11 @@ function orbit(h: Habitat, job: Job, time: number): Spot {
 /** A Gate lifter: up the face from its foot to near the hub, a stop to load, down again, a stop to unload. */
 function shuttle(job: Job, time: number): Spot {
   const leg = job.along / job.speed, T = 2 * leg + 2 * STOP, shifted = time + T * unit(job.seed, 0, 0, 0), u = shifted - Math.floor(shifted / T) * T;
-  const at = (s: number, heading: number, speed: number, doing: Doing): Spot => ({ theta: job.theta, s, height: job.height, heading, speed, climb: 0, doing });
-  if (u < STOP) return at(job.s, Math.PI, 0, 'work');
-  if (u < STOP + leg) return at(job.s + (u - STOP) * job.speed, 0, job.speed, 'fly');
-  if (u < 2 * STOP + leg) return at(job.s + job.along, 0, 0, 'work');
-  return at(job.s + job.along - (u - 2 * STOP - leg) * job.speed, Math.PI, job.speed, 'fly');
+  const spotAt = (s: number, heading: number, speed: number, doing: Doing): Spot => ({ theta: job.theta, s, height: job.height, heading, speed, climb: 0, doing });
+  if (u < STOP) return spotAt(job.s, Math.PI, 0, 'work');
+  if (u < STOP + leg) return spotAt(job.s + (u - STOP) * job.speed, 0, job.speed, 'fly');
+  if (u < 2 * STOP + leg) return spotAt(job.s + job.along, 0, 0, 'work');
+  return spotAt(job.s + job.along - (u - 2 * STOP - leg) * job.speed, Math.PI, job.speed, 'fly');
 }
 
 /** A glider: round the axis at its distance from it, slowly, swinging along it. */

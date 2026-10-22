@@ -15,7 +15,7 @@
  */
 import { Group, InstancedBufferAttribute, InstancedInterleavedBuffer, MathUtils, Vector2, type Camera, type InstancedBufferGeometry, type Mesh, type PerspectiveCamera } from 'three/webgpu';
 import type { Stage } from '@futuremagic/stage';
-import { hash3i, hashToFloat } from '@futuremagic/core';
+import { hash3i, hashToFloat, v3len, v3sub } from '@futuremagic/core';
 import { toView, toWorld, type Habitat, type Vec3 } from '../blueprint';
 import type { Terrain } from '../gen/terrain';
 import { horizonAt, OPEN_SKY } from '../gen/horizon';
@@ -26,7 +26,7 @@ import type { WorkerPool } from '../workers/pool';
 import { DRONE, DRONE_VEIL, FLIER_LAYOUT, SPECK, SPECK_LAYOUT, layInstances } from './materials';
 import { turnFor } from './people';
 import { FLIER_STRIDE, writeFlier } from './droneShaders';
-import { drawnAnywhere, dropUploaded, freeMesh, instancedOf, meshGeometry, quadInstances } from './geometry';
+import { drawnAnywhere, dropUploaded, freeMesh, instancedOf, meshGeometry, quadInstances, sendInstances } from './geometry';
 
 /** A drone is drawn whole from this many pixels across, coarse down to `SPECK_PX`, a speck below. Back up at `BACK` × each. */
 const NEAR_PX = 48;
@@ -99,13 +99,13 @@ export class FlierView {
     this.slowest = performance.now() - t0;
     if (this.disposed || designs.some((d) => !d)) return;
     const fleet = fleetOf(this.terrain);
-    const drawn = await Promise.all(designs.map((d) => this.upload(d!, Math.max(1, fleet.filter((j) => j.role === d!.role && j.design === d!.index).length))));
+    const drawn = await Promise.all(designs.map((d) => this.onGpu(d!, Math.max(1, fleet.filter((j) => j.role === d!.role && j.design === d!.index).length))));
     const specks = drawnAnywhere(quadInstances(), SPECK.material, 'drone specks');
     const data = new Float32Array(Math.max(1, fleet.length) * SPECK_STRIDE), buffer = layInstances(specks.geometry, data, SPECK_LAYOUT);
     specks.geometry.setAttribute(SPECK_SHOWN, new InstancedBufferAttribute(new Float32Array(Math.max(1, fleet.length)).fill(1), 1));
     (specks.geometry as InstancedBufferGeometry).instanceCount = 0;
     await this.stage.prepare(specks);
-    if (this.disposed) { for (const d of drawn) this.free(d); freeMesh(specks); return; }
+    if (this.disposed) { for (const d of drawn) this.letGo(d); freeMesh(specks); return; }
     this.specks = { mesh: specks, data, buffer };
     for (const d of drawn) for (const l of d.levels) this.group.add(l.body, l.veil);
     this.group.add(specks);
@@ -114,8 +114,8 @@ export class FlierView {
   }
 
   /** A design's two levels on the GPU, room for `most` drones of it in each; the shapes' CPU copies let go. */
-  private async upload(design: DroneDesign, most: number): Promise<Drawn> {
-    const make = (m: DesignMesh, name: string, body: boolean, buffer: Float32Array | InstancedInterleavedBuffer): { mesh: Mesh; buffer: InstancedInterleavedBuffer } => {
+  private async onGpu(design: DroneDesign, most: number): Promise<Drawn> {
+    const meshFor = (m: DesignMesh, name: string, body: boolean, buffer: Float32Array | InstancedInterleavedBuffer): { mesh: Mesh; buffer: InstancedInterleavedBuffer } => {
       const g = instancedOf(meshGeometry(m.index, { position: [m.positions, 3], normal: [m.normals, 3], paint: [m.paint, 4], spin: body ? [m.spin, 4] : undefined }));
       const shared = layInstances(g, buffer, FLIER_LAYOUT);
       g.instanceCount = 0;
@@ -127,7 +127,7 @@ export class FlierView {
     const levels = [];
     for (const [k, level] of [design.body, design.coarse.body].entries()) {
       const data = new Float32Array(most * FLIER_STRIDE);
-      const body = make(level, LEVELS[k], true, data), veil = make(k === 0 ? design.veil : design.coarse.veil, `${LEVELS[k]} veil`, false, body.buffer);
+      const body = meshFor(level, LEVELS[k], true, data), veil = meshFor(k === 0 ? design.veil : design.coarse.veil, `${LEVELS[k]} veil`, false, body.buffer);
       levels.push({ body: body.mesh, veil: veil.mesh, data, buffer: body.buffer, count: 0 });
     }
     const gpuBytes = designBytes(design);
@@ -153,11 +153,11 @@ export class FlierView {
     let speckCount = 0, written = 0;
     this.counts = [0, 0, 0];
     this.ones.forEach((one, id) => {
-      const due = !one.flier || dist(one.at, eye) < EVERY_FRAME || (id + this.frameNo) % FAR_SHARE === 0;
-      if (due) this.place(one, flierAt(this.terrain, id, t), one.flier ? dt : 0);
+      const due = !one.flier || away(one.at, eye) < EVERY_FRAME || (id + this.frameNo) % FAR_SHARE === 0;
+      if (due) this.putDrone(one, flierAt(this.terrain, id, t), one.flier ? dt : 0);
       const f = one.flier!, d = byDesign.get(`${f.role}/${f.design}`)!;
       // Its level by its size on screen, with a margin each way so it does not flicker at the line.
-      const px = (d.size * pxPerMetre) / Math.max(1e-3, dist(one.at, eye));
+      const px = (d.size * pxPerMetre) / Math.max(1e-3, away(one.at, eye));
       const level: Level = one.level === 0 ? (px >= NEAR_PX / BACK ? 0 : px >= SPECK_PX ? 1 : 2)
         : one.level === 1 ? (px >= NEAR_PX ? 0 : px >= SPECK_PX / BACK ? 1 : 2)
         : px >= NEAR_PX ? 0 : px >= SPECK_PX ? 1 : 2;
@@ -179,14 +179,14 @@ export class FlierView {
     if (written !== this.ones.length) { this.holes += this.ones.length - written; this.holeFrames++; }
     for (const d of drawn) for (const l of d.levels) {
       for (const m of [l.body, l.veil]) (m.geometry as InstancedBufferGeometry).instanceCount = l.count;
-      upload(l.buffer, l.count, FLIER_STRIDE);
+      sendInstances(l.buffer, l.count, FLIER_STRIDE);
     }
     (specks.mesh.geometry as InstancedBufferGeometry).instanceCount = speckCount;
-    upload(specks.buffer, speckCount, SPECK_STRIDE);
+    sendInstances(specks.buffer, speckCount, SPECK_STRIDE);
   }
 
   /** Put a drone where the fleet says it is now: its ground point, its turn eased toward its way, its bank, its light. */
-  private place(one: One, f: Flier, dt: number): void {
+  private putDrone(one: One, f: Flier, dt: number): void {
     const h = this.habitat, { profile } = h, drawn = this.drawn!.find((d) => d.design.role === f.role && d.design.index === f.design)!;
     const low = toWorld(profile, { theta: f.theta, s: f.s, h: f.h });
     one.low = low;
@@ -205,11 +205,11 @@ export class FlierView {
     // Low, the land's horizons light it; high, the open sky.
     const agl = f.h - this.terrain.standAt(f.theta, f.s);
     if (agl > LOW) one.horizon = [OPEN_SKY, OPEN_SKY];
-    else if (dist(low, one.litAt) > LIGHT_MOVE) { one.horizon = horizonAt(this.terrain, f.theta, f.s); one.litAt = low; }
+    else if (away(low, one.litAt) > LIGHT_MOVE) { one.horizon = horizonAt(this.terrain, f.theta, f.s); one.litAt = low; }
     one.flier = f;
   }
 
-  private free(d: Drawn): void {
+  private letGo(d: Drawn): void {
     for (const l of d.levels) { freeMesh(l.body); freeMesh(l.veil); }
   }
 
@@ -229,7 +229,7 @@ export class FlierView {
 
   dispose(): void {
     this.disposed = true;
-    for (const d of this.drawn ?? []) this.free(d);
+    for (const d of this.drawn ?? []) this.letGo(d);
     if (this.specks) freeMesh(this.specks.mesh);
     this.drawn = null;
     this.specks = null;
@@ -237,11 +237,5 @@ export class FlierView {
   }
 }
 
-const dist = (a: Vec3, b: Vec3): number => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+const away = (a: Vec3, b: Vec3): number => v3len(v3sub(a, b));
 const wrap = (a: number): number => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
-
-function upload(buffer: InstancedInterleavedBuffer, n: number, stride: number): void {
-  buffer.needsUpdate = true;
-  buffer.clearUpdateRanges();
-  buffer.addUpdateRange(0, Math.max(1, n) * stride);
-}

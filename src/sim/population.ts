@@ -89,8 +89,8 @@ interface Census {
   readonly going: number;
 }
 
-/** A float in [0, 1) from the habitat's seed and three numbers. */
-const unit = (seed: number, a: number, b: number, c: number): number => hashToFloat(hash3i(seed, a, b, c));
+/** A float in [0, 1) from a seed and three numbers (the population's and the drones'). */
+export const unit = (seed: number, a: number, b: number, c: number): number => hashToFloat(hash3i(seed, a, b, c));
 /** A standard normal from the same. */
 function normal(seed: number, a: number, b: number, c: number): number {
   const u = Math.max(1e-9, unit(seed, a, b, c)), v = unit(seed, a, b, c + 7919);

@@ -15,8 +15,8 @@
  */
 import { buildDrone, designDrone, type ArchetypeId, type DroneModel, type DroneSlot, type PropKind, type RGB } from '@actors/drone';
 import { deriveSeed, hash3i, hashToFloat } from '@futuremagic/core';
-import type { Habitat, Vec3 } from '../blueprint';
-import type { Role } from '../sim/air';
+import type { DroneRole, Habitat, Vec3 } from '../blueprint';
+type Role = DroneRole;
 import { simplify, type Shape } from './simplify';
 
 export type { Shape };
@@ -87,9 +87,9 @@ const COARSE_CELLS = 10;
 
 /** The design of a role's drone `index` in a habitat (a pure function of its seed). */
 export function droneDesign(h: Habitat, role: Role, index: number): DroneDesign {
-  const kit = KIT[role], seed = deriveSeed(h.seed, 'drone', role, index), pick = (k: number): number => hashToFloat(hash3i(seed, k, 0, 0));
-  const palette = kit.palettes[Math.floor(pick(1) * kit.palettes.length)];
-  const propulsion = kit.propulsion[Math.floor(pick(2) * kit.propulsion.length)];
+  const kit = KIT[role], seed = deriveSeed(h.seed, 'drone', role, index), chance = (k: number): number => hashToFloat(hash3i(seed, k, 0, 0));
+  const palette = kit.palettes[Math.floor(chance(1) * kit.palettes.length)];
+  const propulsion = kit.propulsion[Math.floor(chance(2) * kit.propulsion.length)];
   const spec = designDrone({ seed, archetype: kit.archetype, propulsion, palette, armed: false });
   const model = buildDrone(spec);
   const { body, veil } = flatten(model);
@@ -132,7 +132,7 @@ function slotLook(model: DroneModel): Record<DroneSlot, { rgb: Vec3; a: number; 
 type Mat = { r: [number, number, number, number]; t: Vec3; s: Vec3 };
 
 /** Rotate v by unit quaternion q (x, y, z, w). */
-function rotate(q: readonly number[], v: readonly number[]): Vec3 {
+function byQuaternion(q: readonly number[], v: readonly number[]): Vec3 {
   const [x, y, z, w] = q, [a, b, c] = v;
   const ix = w * a + y * c - z * b, iy = w * b + z * a - x * c, iz = w * c + x * b - y * a, iw = -x * a - y * b - z * c;
   return [ix * w + iw * -x + iy * -z - iz * -y, iy * w + iw * -y + iz * -x - ix * -z, iz * w + iw * -z + ix * -y - iy * -x];
@@ -149,7 +149,7 @@ function restFrames(model: DroneModel): Mat[] {
   const out: Mat[] = [];
   model.nodes.forEach((n, i) => {
     if (n.parent < 0) { out[i] = { r: [...n.quaternion] as Mat['r'], t: [...n.position], s: [...n.scale] }; return; }
-    const p = out[n.parent], scaled: Vec3 = [n.position[0] * p.s[0], n.position[1] * p.s[1], n.position[2] * p.s[2]], moved = rotate(p.r, scaled);
+    const p = out[n.parent], scaled: Vec3 = [n.position[0] * p.s[0], n.position[1] * p.s[1], n.position[2] * p.s[2]], moved = byQuaternion(p.r, scaled);
     out[i] = { r: qmul(p.r, n.quaternion), t: [p.t[0] + moved[0], p.t[1] + moved[1], p.t[2] + moved[2]], s: [p.s[0] * n.scale[0], p.s[1] * n.scale[1], p.s[2] * n.scale[2]] };
   });
   return out;
@@ -167,7 +167,7 @@ function motionOf(model: DroneModel, frames: Mat[]): { spin: Map<number, number>
         const d = Math.abs(tr.values[k * 4 - 4] * tr.values[k * 4] + tr.values[k * 4 - 3] * tr.values[k * 4 + 1] + tr.values[k * 4 - 2] * tr.values[k * 4 + 2] + tr.values[k * 4 - 1] * tr.values[k * 4 + 3]);
         turned += 2 * Math.acos(Math.min(1, d));
       }
-      const up = rotate(frames[tr.node].r, [0, 1, 0]);
+      const up = byQuaternion(frames[tr.node].r, [0, 1, 0]);
       if (turned > 2 * Math.PI && up[1] > Math.cos((10 * Math.PI) / 180)) {
         // Its way round: the sign of the turn about up between the first two keys.
         const q0 = Array.from(tr.values.slice(0, 4)), q1 = Array.from(tr.values.slice(4, 8));
@@ -194,7 +194,7 @@ function flatten(model: DroneModel): { body: Shape; veil: Shape } {
   const mover = (i: number): number => { for (let k = i; k >= 0; k = model.nodes[k].parent) if (spin.has(k) || strobe.has(k)) return k; return -1; };
   const parts = { body: [] as DroneModel['meshes'], veil: [] as DroneModel['meshes'] };
   for (const m of model.meshes) (look[m.slot].veil ? parts.veil : parts.body).push(m);
-  const build = (list: DroneModel['meshes'], veil: boolean): Shape => {
+  const shapeOf = (list: DroneModel['meshes'], veil: boolean): Shape => {
     const vertices = list.reduce((a, m) => a + m.positions.length / 3, 0), triangles = list.reduce((a, m) => a + m.indices.length, 0);
     const out: Shape = { positions: new Float32Array(vertices * 3), normals: new Float32Array(vertices * 3), colors: new Float32Array(vertices * 4), parts: new Float32Array(vertices * 4), index: new Uint32Array(triangles) };
     let v = 0, t = 0;
@@ -204,8 +204,8 @@ function flatten(model: DroneModel): { body: Shape; veil: Shape } {
       for (let i = 0; i < m.indices.length; i++) out.index[t + i] = m.indices[i] + v;
       t += m.indices.length;
       for (let i = 0; i < m.positions.length / 3; i++, v++) {
-        const p = rotate(f.r, [m.positions[i * 3] * f.s[0], m.positions[i * 3 + 1] * f.s[1], m.positions[i * 3 + 2] * f.s[2]]);
-        const nl = rotate(f.r, [m.normals[i * 3] / f.s[0], m.normals[i * 3 + 1] / f.s[1], m.normals[i * 3 + 2] / f.s[2]]), l = Math.hypot(...nl) || 1;
+        const p = byQuaternion(f.r, [m.positions[i * 3] * f.s[0], m.positions[i * 3 + 1] * f.s[1], m.positions[i * 3 + 2] * f.s[2]]);
+        const nl = byQuaternion(f.r, [m.normals[i * 3] / f.s[0], m.normals[i * 3 + 1] / f.s[1], m.normals[i * 3 + 2] / f.s[2]]), l = Math.hypot(...nl) || 1;
         out.positions.set([p[0] + f.t[0], p[1] + f.t[1], p[2] + f.t[2]], v * 3);
         out.normals.set([nl[0] / l, nl[1] / l, nl[2] / l], v * 3);
         // A plume or beam fades to its tip (Actors' adapter: (1 − fade)^1.6).
@@ -216,7 +216,7 @@ function flatten(model: DroneModel): { body: Shape; veil: Shape } {
     }
     return out;
   };
-  return { body: build(parts.body, false), veil: build(parts.veil, true) };
+  return { body: shapeOf(parts.body, false), veil: shapeOf(parts.veil, true) };
 }
 
 /** The body's bob in the hover clip: half its rise and fall (m), and the clip's length. */

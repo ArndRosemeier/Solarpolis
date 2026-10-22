@@ -25,7 +25,7 @@ import { horizonAt } from '../gen/horizon';
 import { MEAN_HEIGHT, SPECK_SHOWN, SPECK_STRIDE, STAND_IN_STRIDE, speckBands, standInArrays, writeSpeck } from '../gen/standIn';
 import { floorGap, footingOf, personKey, lifeBytes, peopleAt, residentOf, whereIs, type Activity, type Footing, type Person, type Resident } from '../sim';
 import { CROWD, SPECK, SPECK_LAYOUT, STAND_IN_LAYOUT, layInstances } from './materials';
-import { arraysGeometry, drawnAnywhere, freeMesh, instancedOf, quadInstances } from './geometry';
+import { arraysGeometry, drawnAnywhere, freeMesh, instancedOf, quadInstances, sendInstances } from './geometry';
 import { Figure, castAsWorn, type AnimState } from './actors/figure';
 import { humanCatalog } from './actors/pack';
 import { Residents, type Dress } from './actors/residents';
@@ -452,9 +452,7 @@ export function turnFor(profile: Habitat['profile'], s: number, heading: number)
 
 function upload(mesh: Mesh, buffer: InstancedInterleavedBuffer, n: number, stride: number): void {
   (mesh.geometry as InstancedBufferGeometry).instanceCount = n;
-  buffer.needsUpdate = true;
-  buffer.clearUpdateRanges();
-  buffer.addUpdateRange(0, n * stride);
+  sendInstances(buffer, n, stride);
 }
 
 /** The levels of detail a figure is drawn at: Actors' levels that draw its parts separately (not merged), finest first. */

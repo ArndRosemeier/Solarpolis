@@ -232,6 +232,10 @@ export interface Life {
  *   gliders    per km of the floor's length: they ride the still, thin air near the axis;
  *   guardians  per km of the ring lake's shores, and at the flight launch: they hover, ready to catch a flyer or a swimmer.
  */
+/** The drones' roles, in the order the fleet and the designs list them (sim/air.ts, gen/drone.ts). */
+export const DRONE_ROLES = ['courier', 'tender', 'surveyor', 'lifter', 'glider', 'guardian'] as const;
+export type DroneRole = (typeof DRONE_ROLES)[number];
+
 export interface Drones {
   couriers: number;
   tenders: number;
