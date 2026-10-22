@@ -2,6 +2,11 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.085 — Actors 0.6.5
+
+- People and animals come from Actors 0.6.5: only the clothes a person actually wears are fitted and drawn, and a change of outfit costs one pass.
+- Fixes from Actors: no red glow along wrists, fingertips and beards facing away from the light, no missing shoes, and no pinholes at clothing seams from afar.
+
 ## v0.084 — A better look at the deer
 
 - Debug menu: "Fly: the nearest deer from 60 m" (and the squirrel one from 15 m) now stays low, under the trees, instead of ending up in a crown.
