@@ -842,5 +842,41 @@
   {
     "key": "idiom: [.mul .sub] in solarpolis/render/hamletSkies.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
     "reason": "TSL arithmetic (mul, sub on nodes) is how every shader writes a formula; each is its own (a hamlet sky's Earth disc, the VAULT's sky screen, the outside sky's discs)."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/animal.ts#dispose + solarpolis/render/glassDeck.ts#dispose",
+    "reason": "The views' own interface (bytes, info, dispose), which InteriorView and the memory watchdog call on each of them; GlassDeck (render/glassDeck.ts) is one more such view, holding the glass deck's atlas."
+  },
+  {
+    "key": "same name: solarpolis/render/animals.ts#bytes + solarpolis/render/glassDeck.ts#bytes",
+    "reason": "The views' own interface (bytes, info, dispose), which InteriorView and the memory watchdog call on each of them; GlassDeck (render/glassDeck.ts) is one more such view, holding the glass deck's atlas."
+  },
+  {
+    "key": "same name: solarpolis/render/glassDeck.ts#bytes + solarpolis/render/people.ts#bytes",
+    "reason": "The views' own interface (bytes, info, dispose), which InteriorView and the memory watchdog call on each of them; GlassDeck (render/glassDeck.ts) is one more such view, holding the glass deck's atlas."
+  },
+  {
+    "key": "same name: solarpolis/render/glassDeck.ts#bytes + solarpolis/render/specks.ts#bytes",
+    "reason": "The views' own interface (bytes, info, dispose), which InteriorView and the memory watchdog call on each of them; GlassDeck (render/glassDeck.ts) is one more such view, holding the glass deck's atlas."
+  },
+  {
+    "key": "same name: solarpolis/render/glassDeck.ts#dispose + solarpolis/render/lift.ts#dispose",
+    "reason": "The views' own interface (bytes, info, dispose), which InteriorView and the memory watchdog call on each of them; GlassDeck (render/glassDeck.ts) is one more such view, holding the glass deck's atlas."
+  },
+  {
+    "key": "same name: solarpolis/render/glassDeck.ts#info + solarpolis/render/specks.ts#info",
+    "reason": "The views' own interface (bytes, info, dispose), which InteriorView and the memory watchdog call on each of them; GlassDeck (render/glassDeck.ts) is one more such view, holding the glass deck's atlas."
+  },
+  {
+    "key": "same name: solarpolis/render/glassDeck.ts#info + solarpolis/render/terrain.ts#info",
+    "reason": "The views' own interface (bytes, info, dispose), which InteriorView and the memory watchdog call on each of them; GlassDeck (render/glassDeck.ts) is one more such view, holding the glass deck's atlas."
+  },
+  {
+    "key": "same name: solarpolis/render/glassDeck.ts#info + solarpolis/render/tiled.ts#info",
+    "reason": "The views' own interface (bytes, info, dispose), which InteriorView and the memory watchdog call on each of them; GlassDeck (render/glassDeck.ts) is one more such view, holding the glass deck's atlas."
+  },
+  {
+    "key": "same name: solarpolis/render/glassDeck.ts#info + solarpolis/render/traffic.ts#info",
+    "reason": "The views' own interface (bytes, info, dispose), which InteriorView and the memory watchdog call on each of them; GlassDeck (render/glassDeck.ts) is one more such view, holding the glass deck's atlas."
   }
 ]

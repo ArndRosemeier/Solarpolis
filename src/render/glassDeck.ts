@@ -1,8 +1,9 @@
 /**
  * The glass deck (gen/skies.ts `glass`): a hamlet that chose it shows on its ceilings the real sky over the land above,
- * as one standing there would see it: the far side of the habitat overhead, the sunline, the clouds. It is taken as six
- * views from the land straight over the eye (one a frame, a round again every `REFRESH` seconds) into an atlas of six
- * faces, which the VAULT kind looks up by the direction one looks (`glassSky`), so it reads as far off as the land is.
+ * as from a mast over it: the far side of the habitat overhead, the sunline, the clouds. It is taken as six views from
+ * over the land straight above the eye, clear of the tallest crowns (one a frame, a round again every `REFRESH`
+ * seconds), into an atlas of six faces, which the VAULT kind looks up by the direction one looks (`glassSky`), so it
+ * reads as far off as the land is.
  *
  * Memory (CLAUDE.md rule 12): the atlas holds GPU memory only while a glass deck is near (`GLASS_FACE`² × 6 half-float
  * texels, 3 MB at 256); the views are drawn into a target of one face (its multisampled buffers transient), given up
@@ -14,6 +15,7 @@
 import { HalfFloatType, LinearFilter, PerspectiveCamera, RGBAFormat, RenderTarget, Vector2, Box2, type Scene, type WebGPURenderer } from 'three/webgpu';
 import { Fn, abs, clamp, dot, float, select, texture, uniform, vec2, vec3 } from 'three/tsl';
 import type { Node, Texture, TextureNode } from 'three/webgpu';
+import { v3cross } from '@futuremagic/core';
 import { toView, type Vec3 } from '../blueprint';
 
 type V3 = Node<'vec3'>;
@@ -38,9 +40,8 @@ const FACES: readonly { f: Vec3; u: Vec3 }[] = [
   { f: [0, 0, 1], u: [1, 0, 0] },
   { f: [0, 0, -1], u: [1, 0, 0] },
 ];
-const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 /** A face's right: its views' x. */
-const rightOf = (k: number): Vec3 => cross(FACES[k].f, FACES[k].u);
+const rightOf = (k: number): Vec3 => v3cross(FACES[k].f, FACES[k].u);
 
 /** The atlas's texels: half floats, filtered, no depth. */
 const atlasOptions = { type: HalfFloatType, format: RGBAFormat, depthBuffer: false, generateMipmaps: false, minFilter: LinearFilter, magFilter: LinearFilter } as const;
@@ -116,17 +117,19 @@ export class GlassDeck {
     return (this.court >= 0 ? COLUMNS * ROWS * face : 0) + (this.view ? face * (1 + samples) + GLASS_FACE * GLASS_FACE * 4 * samples : 0);
   }
 
-  /** Whether the atlas holds a whole round of views of the deck near. */
-  get shown(): boolean {
-    return this.court >= 0 && ready.value === 1;
+  /** A line for the debug menu. */
+  info(): string {
+    if (this.court < 0) return 'glass deck: none near';
+    const round = this.from ? `taking views (${this.face} of ${FACES.length})` : `next views in ${Math.max(0, this.wait).toFixed(0)} s`;
+    return `glass deck: hamlet ${this.court}, ${(this.bytes() / 1e6).toFixed(1)} MB, ${round}`;
   }
 
   /**
    * After the frame is drawn: take the next view for the deck wanted (null: none is near, and the atlas is given up),
    * with the scene posed about the frame's `eye` (world). `dt` real seconds.
    */
-  step(dt: number, eye: Vec3, want: GlassWant | null, stage: GlassStage): void {
-    if (!want) { this.release(); return; }
+  takeViews(dt: number, eye: Vec3, want: GlassWant | null, stage: GlassStage): void {
+    if (!want) { this.dropAtlas(); return; }
     if (want.court !== this.court) {
       if (!this.atlas) {
         this.atlas = new RenderTarget(COLUMNS * GLASS_FACE, ROWS * GLASS_FACE, atlasOptions);
@@ -179,7 +182,7 @@ export class GlassDeck {
   }
 
   /** Give the atlas and any view target back. */
-  release(): void {
+  dropAtlas(): void {
     if (this.court < 0) return;
     this.court = -1;
     this.from = null;
@@ -192,6 +195,6 @@ export class GlassDeck {
   }
 
   dispose(): void {
-    this.release();
+    this.dropAtlas();
   }
 }

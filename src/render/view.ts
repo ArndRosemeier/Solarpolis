@@ -78,6 +78,8 @@ const GLARE_COLUMNS = 5, GLARE_ROWS = 4, GLARE_PER_FRAME = 4;
 const BODY_LAYER = 1;
 /** How far (in handrails) one steps out of a lift's doors on arriving (`outside`). */
 const STEP_OUT = 1.5;
+/** The glass deck's views: how far over the tallest trees' height (×). */
+const OVER_CROWNS = 1.3;
 
 export class InteriorView {
   readonly canvas = document.createElement('canvas');
@@ -242,7 +244,7 @@ export class InteriorView {
     this.halls?.shed();
     this.under?.shed();
     this.people?.shed();
-    this.glass?.release();
+    this.glass?.dropAtlas();
   }
 
   /** Lines for the debug menu. */
@@ -263,6 +265,7 @@ export class InteriorView {
       this.crossings?.info() ?? 'river crossings: none',
       this.halls?.info() ?? 'grown halls: none',
       this.under?.info() ?? 'understorey: none',
+      this.glass?.info() ?? 'glass deck: none',
       this.people?.info() ?? 'people: none',
       this.specks?.info() ?? 'specks: none',
       this.drones?.info() ?? 'drones: none',
@@ -875,15 +878,15 @@ export class InteriorView {
     this.simulate(dt, this.current().eye);
     this.place();
     draw(this.stage);
-    this.glass?.step(dt, this.posedAt, this.glassWanted(), this.glassStage);
+    this.glass?.takeViews(dt, this.posedAt, this.glassWanted(), this.glassStage);
   }
 
   /** Where the scene is posed about this frame (world): the eye `place` put it round. */
   private posedAt: Vec3 = [0, 0, 0];
 
   /**
-   * The glass deck wanted below: a hamlet's with it over the eye's bay or one beside it, its views taken on the land
-   * straight over the eye (gen/skies.ts).
+   * The glass deck wanted below: a hamlet's with it over the eye's bay or one beside it, its views taken over the land
+   * straight above the eye, clear of the tallest crowns, so it shows the sky and not a tree (gen/skies.ts).
    */
   private glassWanted(): GlassWant | null {
     if (!this.below) return null;
@@ -891,9 +894,15 @@ export class InteriorView {
     if (!bay) return null;
     for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) {
       const sky = skyOverBay(h, bay.i + di, bay.j + dj), m = sky === GLASS ? u.hamletOf(bay.i + di, bay.j + dj) : null;
-      if (m) return { court: m.court, at: toWorld(h.profile, { theta: at.theta, s: at.s, h: this.terrain.heightAt(at.theta, at.s) + EYE_HEIGHT }) };
+      if (m) return { court: m.court, at: toWorld(h.profile, { theta: at.theta, s: at.s, h: this.terrain.heightAt(at.theta, at.s) + this.overCrowns() }) };
     }
     return null;
+  }
+
+  /** How high over the ground the glass deck's views are taken (m): a little over the climate's tallest trees. */
+  private overCrowns(): number {
+    const tallest = Math.max(0, ...(this.ecology?.climate.biomes.flatMap((b) => b.plants.map((p) => p.height[1])) ?? []));
+    return Math.max(EYE_HEIGHT, tallest * OVER_CROWNS);
   }
 
   /** The land shown, lit and seen as from a point on it, for the glass deck's views, and put back after. */
