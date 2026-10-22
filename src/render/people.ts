@@ -23,7 +23,7 @@ import { fromWorld, toView, toWorld, type Habitat, type Vec3, apart as dist } fr
 import type { Terrain } from '../gen/terrain';
 import { horizonAt } from '../gen/horizon';
 import { MEAN_HEIGHT, SPECK_STRIDE, STAND_IN_STRIDE, speckBands, standInArrays, writeSpeck } from '../gen/standIn';
-import { floorGap, footingOf, personKey, lifeBytes, peopleAt, residentOf, whereIs, type Activity, type Footing, type Person, type Resident } from '../sim';
+import { floorGap, footingOf, personKey, lifeBytes, peopleAt, residentOf, talkerAt, whereIs, type Activity, type Footing, type Person, type Resident } from '../sim';
 import { CROWD, STAND_IN_LAYOUT, layInstances } from './materials';
 import { arraysGeometry, drawnAnywhere, freeMesh, instancedOf, sendInstances } from './geometry';
 import { Figure, castAsWorn, type AnimState } from './actors/figure';
@@ -78,10 +78,13 @@ interface Doing {
   anim: AnimState;
 }
 
-/** What people do at their places, as the figures' clips (a held share for a still pose; the pose is `postureOf`'s). */
+/**
+ * What people do at their places, as the figures' clips (a held share for a still pose; the pose is `postureOf`'s). In a
+ * party that talks, the one whose turn it is speaks (`TALK`) and the others listen (`LISTEN`); someone alone waits.
+ */
 const STILL: Partial<Record<Activity, { clip: string; hold?: number }[]>> = {
-  meet: [{ clip: 'talk' }, { clip: 'nod' }, { clip: 'idle' }, { clip: 'arms folded' }],
-  gather: [{ clip: 'talk' }, { clip: 'idle' }, { clip: 'nod' }],
+  meet: [{ clip: 'idle' }, { clip: 'arms folded' }],
+  gather: [{ clip: 'idle' }, { clip: 'arms folded' }],
   watch: [{ clip: 'idle' }, { clip: 'arms folded' }],
   play: [{ clip: 'dance' }, { clip: 'idle' }],
   make: [{ clip: 'repair (kneeling)' }],
@@ -89,6 +92,11 @@ const STILL: Partial<Record<Activity, { clip: string; hold?: number }[]>> = {
   picnic: [{ clip: 'get up from lying', hold: 0 }],
   stargaze: [{ clip: 'get up from lying', hold: 0 }],
 };
+/** Parties that talk while they stay: who speaks, and how the others listen (standing, or sitting on a seat). */
+const TALKS = new Set<Activity>(['meet', 'gather', 'bench']);
+const TALK = { clip: 'talk' }, LISTEN = [{ clip: 'nod' }, { clip: 'idle' }, { clip: 'idle' }, { clip: 'arms folded' }];
+/** A listener's way of listening changes this often (s), at most. */
+const LISTEN_FOR = 9;
 
 interface Someone {
   person: Person;
@@ -137,6 +145,8 @@ export class PeopleView {
   private lastScan = -Infinity;
   private scannedAt: Vec3 | null = null;
   private clock = 0;
+  /** The simulation's clock this frame (s). */
+  private time = 0;
   private frameNo = 0;
   private readonly loads = new FigureLoads<Figure>(() => this.disposed);
   private drawn = 0;
@@ -176,6 +186,7 @@ export class PeopleView {
   follow(eye: Vec3, t: number, dt: number): void {
     const r = this.residents;
     if (!r || !this.mesh) return;
+    this.time = t;
     this.clock += dt;
     this.frameNo++;
     const h = this.habitat;
@@ -197,6 +208,8 @@ export class PeopleView {
         const still = !fresh && !p.moving && !one.person.moving && p.theta === one.person.theta && p.s === one.person.s && p.activity === one.person.activity;
         one.person = p;
         if (fresh) timed(() => this.stand(one)); else if (!still) this.stand(one);
+        // A figure in a talking party: the turn to speak moves on while they stand still.
+        else if (one.figure && !one.doing.swim) one.doing.anim = animOf(p, one.resident, t);
       }
       if (!one.dress && spent <= NEW_BUDGET) timed(() => { one.dress = r.dressOf(one.resident); if (one.dress) one.bands = speckBands(one.dress.colors); });
     }
@@ -243,7 +256,7 @@ export class PeopleView {
       one.deckAt = [p.theta, p.s];
     }
     const foot = footingOf(this.terrain, p, one.deck, one.dress?.height ?? MEAN_HEIGHT);
-    const doing = doingOf(p, one.resident, foot);
+    const doing = doingOf(p, one.resident, foot, this.time);
     const feet = toWorld(profile, { theta: p.theta, s: p.s, h: foot.h });
     const r = Math.hypot(feet[0], feet[1]) || 1, up: Vec3 = [-feet[0] / r, -feet[1] / r, 0];
     one.turn = turnFor(profile, p.s, p.heading);
@@ -414,14 +427,27 @@ export class PeopleView {
   }
 }
 
-/** What someone is doing, as both levels show it. */
-function doingOf(p: Person, who: Resident, foot: Footing): Doing {
+/** What someone is doing at clock time t, as both levels show it. */
+function doingOf(p: Person, who: Resident, foot: Footing, t: number): Doing {
   if (foot.swim) return { pose: foot.pose, swim: true, anim: { move: 'swim' } };
-  if (p.moving) return { pose: foot.pose, swim: false, anim: { move: 'walk' } };
+  return { pose: foot.pose, swim: false, anim: animOf(p, who, t) };
+}
+
+/** A figure's animation at clock time t (out of the water): walking, or what they do at their place. */
+function animOf(p: Person, who: Resident, t: number): AnimState {
+  if (p.moving) return { move: 'walk' };
+  const seated = p.activity === 'bench';
+  if (TALKS.has(p.activity) && p.size > 1) {
+    // Seated, the speaker talks with their hands and the others sit; standing, the others nod, wait, fold their arms.
+    if (talkerAt(p, t) === p.member) return seated ? { move: 'idle', pose: { clip: 'sit and talk' } } : { move: 'idle', pose: TALK };
+    if (seated) return { move: 'sit' };
+    const k = Math.floor(t / LISTEN_FOR);
+    return { move: 'idle', pose: LISTEN[Math.floor(hashToFloat(hash3i(who.id, 31, p.outing, k)) * LISTEN.length)] };
+  }
+  if (seated) return { move: 'sit' };
   const clips = STILL[p.activity];
-  if (!clips) return { pose: foot.pose, swim: false, anim: { move: 'idle' } };
-  const pick = clips[Math.floor(hashToFloat(hash3i(who.id, 29, p.outing, 0)) * clips.length)];
-  return { pose: foot.pose, swim: false, anim: { move: 'idle', pose: pick } };
+  if (!clips) return { move: 'idle' };
+  return { move: 'idle', pose: clips[Math.floor(hashToFloat(hash3i(who.id, 29, p.outing, 0)) * clips.length)] };
 }
 
 

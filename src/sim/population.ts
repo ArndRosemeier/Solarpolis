@@ -18,7 +18,13 @@
  * day it began.
  *
  * Where. An outing comes up at a court, walks the walk net (sim/walks.ts) to its place, stays, and walks back. Sunwalkers
- * join the Sunwalk where the bright stretch is and walk with it for hours. Pure.
+ * join the Sunwalk where the bright stretch is and walk with it for hours.
+ *
+ * Parties (design "What people do on the land"). Most people go up with others (`life.parties`): neighbouring slots of
+ * the day's shuffle go together (regulars keep the same party every week), the first of them choosing where and when.
+ * A party walks two abreast, the rest behind, and stands in a shape its place asks for (`Form`): a ring facing in to
+ * talk, a row facing the view, side by side on the seat round a court's light well, or loosely near each other. A court
+ * is a stop, not an afternoon (`life.pause`): people meet there and go on. Pure.
  */
 import { hash3i, hashToFloat, deriveSeed } from '@futuremagic/core';
 import { kept } from '../gen/kept';
@@ -27,6 +33,7 @@ import type { Habitat } from '../blueprint';
 import { shuffleOf, type Shuffle } from './permute';
 import { floorGap, pointAlong, sunwalkOf, walksOf, type Route } from './walks';
 import { besideLake, venuesOf, type Activity, type Venue, type Venues } from './venues';
+import { courtFloorOf } from '../gen/courts';
 
 const TURN = 2 * Math.PI;
 const WEEK = 7;
@@ -63,15 +70,62 @@ export interface Person {
   court: number;
   /** Which of the court's outings that day (or which Sunwalker): with `court`, finds them again (`whereIs`). */
   outing: number;
+  /** Their place in their party (0 is the one who chose where to go: `outing − member` is theirs), and its size. */
+  member: number;
+  size: number;
 }
 
-/** One day's outings from one court, in plain arrays. */
+/**
+ * How a party stands at its place: loosely near each other, in a ring facing in (to talk, to dance, round a workbench),
+ * in a row facing one way (the view, the sky), or side by side on the seat round a court's light well, facing out.
+ */
+const FORMS = ['loose', 'ring', 'row', 'bench'] as const;
+type Form = (typeof FORMS)[number];
+
+const FORM: Readonly<Record<Activity, Form>> = {
+  meet: 'ring', gather: 'ring', sit: 'ring', make: 'ring', play: 'ring',
+  picnic: 'row', stargaze: 'row', watch: 'row', bench: 'bench',
+  walk: 'loose', stroll: 'loose', bathe: 'loose', herd: 'loose', wander: 'loose', swim: 'loose',
+  climb: 'loose', fly: 'loose', hike: 'loose', sunwalk: 'loose',
+};
+
+/** How far apart neighbours stand in a ring (m): close to talk, an arm's reach round a bench, wide to dance or play catch. */
+const RING_GAP: Partial<Record<Activity, number>> = { play: 2.2, make: 1.0 };
+const TALK_GAP = 1.1;
+/** Neighbours in a row (m), lying side by side a little wider; walking two abreast, and each pair this far behind the one ahead. */
+const ROW_GAP = 0.7;
+const LIE_GAP = 0.9;
+const ABREAST = 0.7;
+const BEHIND = 1.2;
+/** Of the parties that meet at a court, the share that sits on the seat round its light well; of those standing, the share down on its floor. */
+const ON_SEAT = 0.4;
+const ON_FLOOR = 0.6;
+
+/** A party's size from a draw in [0, 1) by the habitat's shares. */
+function partySize(shares: readonly number[], pick: number): number {
+  let x = pick;
+  for (let k = 0; k < shares.length; k++) { x -= shares[k]; if (x < 0) return k + 1; }
+  return shares.length;
+}
+
+/** Where a member walks in their party: across the way (m, to the left) and behind the first pair. */
+function walkSlot(member: number, size: number): [number, number] {
+  const row = Math.floor(member / 2), alone = size % 2 === 1 && member === size - 1;
+  return [alone ? 0 : ((member % 2) - 0.5) * ABREAST, row * BEHIND];
+}
+
+/** One day's outings from one court, in plain arrays: one entry per person, a party's members one after another. */
 interface Outings {
   resident: Int32Array;
   venue: Int32Array;
   start: Float64Array;
   stay: Float32Array;
   night: Uint8Array;
+  /** Place in the party and its size; the party's pace (its slowest walker's, m/s) and how it stands (`Form`). */
+  member: Uint8Array;
+  size: Uint8Array;
+  pace: Float32Array;
+  form: Uint8Array;
 }
 
 interface Census {
@@ -180,42 +234,57 @@ function timing(h: Habitat, centre: number, stay: number, evening: boolean, nigh
   return [Math.min(Math.max(0.01 * length, start), Math.max(0.01 * length, dusk - 0.25 * stay)), stay];
 }
 
-/** How long an outing lasts: about `life.stay`, more or less. */
+/** How long an outing lasts: about `life.stay`, more or less; a stop at a court about `life.pause`. */
 const stayOf = (h: Habitat, n: number): number => h.params.life.stay * Math.min(3, Math.max(0.25, Math.exp(0.4 * n)));
+const pauseOf = (h: Habitat, n: number): number => h.params.life.pause * Math.min(3, Math.max(0.25, Math.exp(0.5 * n)));
 
-/** One day's outings from one court: its regulars whose weekday it is, and the visitors the shuffle sends it. */
+/** One day's outings from one court: its regulars whose weekday it is, and the visitors the shuffle sends it, in parties. */
 function outingsFrom(h: Habitat, day: number, court: number): Outings {
   const c = censusOf(h), v = venuesOf(h), life = h.params.life, seed = seedsOf(h).outing;
   const resident: number[] = [], venue: number[] = [], start: number[] = [], stay: number[] = [], night: number[] = [];
-  const add = (i: number, k: number, centreJitter: number, n: number, dayPick: number): void => {
-    const place = v.venues[k], atNight = !place.evening && unit(seed, i, day, 11) < life.night;
-    const long = stayOf(h, n) * (place.evening ? 1.2 : 1);
+  const member: number[] = [], size: number[] = [], pace: number[] = [], form: number[] = [];
+  const seats = !!courtFloorOf(h, 1);
+  // A party: its first member chooses the place and the hour; all of them keep the slowest one's pace.
+  const add = (party: readonly number[], k: number, centreJitter: number, n: number, dayPick: number): void => {
+    const lead = party[0], place = v.venues[k], atNight = !place.evening && unit(seed, lead, day, 11) < life.night;
+    const long = (place.kind === 'court' ? pauseOf(h, n) : stayOf(h, n)) * (place.evening ? 1.2 : 1);
     const [t0, dt] = timing(h, localNoon(h, place.s), long, place.evening, atNight, centreJitter, dayPick);
-    resident.push(i); venue.push(k); start.push(day * h.params.day.length + t0); stay.push(Math.min(dt, h.params.day.length - t0)); night.push(atNight ? 1 : 0);
+    const shape: Form = place.kind === 'court' && seats && unit(seed, lead, day, 13) < ON_SEAT ? 'bench' : FORM[place.activity];
+    let slowest = Infinity;
+    for (const i of party) slowest = Math.min(slowest, residentOf(h, i).walk);
+    party.forEach((i, m) => {
+      resident.push(i); venue.push(k); start.push(day * h.params.day.length + t0); stay.push(Math.min(dt, h.params.day.length - t0)); night.push(atNight ? 1 : 0);
+      member.push(m); size.push(party.length); pace.push(slowest); form.push(FORMS.indexOf(shape));
+    });
   };
   const mine = v.byCourt[court];
-  // Regulars: the same weekdays, the same hour, the same place.
+  // Regulars: the same party, the same weekdays, the same hour, the same place.
   const courts = v.courts.length, r0 = Math.ceil((court * c.regulars) / courts), r1 = Math.ceil(((court + 1) * c.regulars) / courts);
   const weekday = ((day % WEEK) + WEEK) % WEEK, rseed = seedsOf(h).rhythm;
-  if (mine.length) for (let i = r0; i < r1; i++) {
-    if (unit(rseed, i, weekday, 0) >= life.outings) continue;
-    const k = favourite(v, mine, unit(rseed, i, 2, 2));
-    add(i, k, normal(rseed, i, 3, 3) + 0.1 * normal(seed, i, day, 4), 0.5 * normal(rseed, i, 5, 5) + 0.3 * normal(seed, i, day, 6), unit(seed, i, day, 7));
+  if (mine.length) for (let i = r0; i < r1;) {
+    const lead = i, n = Math.min(partySize(life.parties, unit(rseed, lead, 6, 6)), r1 - lead);
+    i += n;
+    if (unit(rseed, lead, weekday, 0) >= life.outings) continue;
+    const k = favourite(v, mine, unit(rseed, lead, 2, 2));
+    add(Array.from({ length: n }, (_, q) => lead + q), k, normal(rseed, lead, 3, 3) + 0.1 * normal(seed, lead, day, 4), 0.5 * normal(rseed, lead, 5, 5) + 0.3 * normal(seed, lead, day, 6), unit(seed, lead, day, 7));
   }
-  // Visitors: the slots of the court's blocks, turned back into residents.
+  // Visitors: the slots of the court's blocks, turned back into residents, neighbouring slots together.
   const sh = shuffleFor(h, day);
   for (const b of c.courtBlocks[court]) {
     const k0 = c.blockVenue[b];
     if (k0 < 0 && !mine.length) continue;
-    for (let j = c.blockStart[b]; j < c.blockStart[b + 1]; j++) {
-      const i = c.regulars + sh.unpermute(j);
-      const k = k0 >= 0 ? k0 : favourite(v, mine, unit(seed, i, day, 8));
-      add(i, k, normal(seed, i, day, 9), normal(seed, i, day, 10), unit(seed, i, day, 12));
+    for (let j = c.blockStart[b], end = c.blockStart[b + 1]; j < end;) {
+      const n = Math.min(partySize(life.parties, unit(seed, j, day, 14)), end - j);
+      const party = Array.from({ length: n }, (_, q) => c.regulars + sh.unpermute(j + q)), lead = party[0];
+      j += n;
+      const k = k0 >= 0 ? k0 : favourite(v, mine, unit(seed, lead, day, 8));
+      add(party, k, normal(seed, lead, day, 9), normal(seed, lead, day, 10), unit(seed, lead, day, 12));
     }
   }
   return {
     resident: Int32Array.from(resident), venue: Int32Array.from(venue), start: Float64Array.from(start),
     stay: Float32Array.from(stay), night: Uint8Array.from(night),
+    member: Uint8Array.from(member), size: Uint8Array.from(size), pace: Float32Array.from(pace), form: Uint8Array.from(form),
   };
 }
 
@@ -231,7 +300,8 @@ function favourite(v: Venues, mine: readonly number[], pick: number): number {
 /** Outings kept per habitat, by day and court, within a byte budget (they are cheap to make again). */
 const KEEP_BYTES = 16 * 2 ** 20;
 const outingCache = new WeakMap<Habitat, { bytes: number; days: Map<number, Outings> }>();
-const bytesOf = (o: Outings): number => o.resident.byteLength + o.venue.byteLength + o.start.byteLength + o.stay.byteLength + o.night.byteLength;
+const bytesOf = (o: Outings): number => o.resident.byteLength + o.venue.byteLength + o.start.byteLength + o.stay.byteLength + o.night.byteLength
+  + o.member.byteLength + o.size.byteLength + o.pace.byteLength + o.form.byteLength;
 function outingsOf(h: Habitat, day: number, court: number): Outings {
   let m = outingCache.get(h);
   if (!m) { m = { bytes: 0, days: new Map() }; outingCache.set(h, m); }
@@ -249,7 +319,7 @@ function outingsOf(h: Habitat, day: number, court: number): Outings {
 /** Bytes the population keeps for a habitat (its outings and routes), for the memory watchdog. */
 export function lifeBytes(h: Habitat): number {
   let n = outingCache.get(h)?.bytes ?? 0;
-  for (const w of walkerCache.get(h)?.values() ?? []) n += w.resident.byteLength * 8;
+  for (const w of walkerCache.get(h)?.values() ?? []) n += w.resident.byteLength * 9;
   for (const r of routeCache.get(h)?.values() ?? []) n += r.points.byteLength + r.along.byteLength;
   return n;
 }
@@ -270,7 +340,7 @@ export function routeOf(h: Habitat, from: number, to: number): Route {
   return r;
 }
 
-/** Someone's spot at their place: a seeded offset within its spread (θ, s), kept out of the lake unless they swim or stand on the pavilion. */
+/** A party's middle at its place: a seeded offset within its spread (θ, s), kept out of the lake unless they swim or stand on the pavilion. */
 function spotOf(h: Habitat, place: Venue, i: number, day: number): [number, number] {
   const seed = seedsOf(h).spot, a = TURN * unit(seed, i, day, 0), r = place.spread * Math.sqrt(unit(seed, i, day, 1));
   const ring = Math.max(1, h.profile.at(place.s).r), lake = planOf(h).lake;
@@ -279,29 +349,83 @@ function spotOf(h: Habitat, place: Venue, i: number, day: number): [number, numb
   return [place.theta + (r * Math.cos(a)) / ring, s];
 }
 
+/** Feet this far (m) out from the edge of the seat round a court's light well: sitting on it, facing out. */
+const SEAT_FEET = 0.15;
+
+/**
+ * Where a party meets in a court, standing: down on its open floor or up round it on the land, never on its wall or
+ * stairs. Null in a habitat built without landmarks (no court is built): there the venue's spread, as anywhere.
+ */
+function courtSpotOf(h: Habitat, place: Venue, lead: number, day: number): [number, number] | null {
+  const site = venuesOf(h).courts[place.court], f = courtFloorOf(h, site.size);
+  if (!f) return null;
+  const seed = seedsOf(h).spot, a = TURN * unit(seed, lead, day, 0), u = unit(seed, lead, day, 1);
+  const [r0, r1] = f.free[0] < f.free[1] && unit(seed, lead, day, 3) < ON_FLOOR ? f.free : [f.walk + 2, f.walk + 2 + 0.5 * site.size];
+  const r = Math.sqrt(r0 * r0 + u * (r1 * r1 - r0 * r0)), ring = Math.max(1, h.profile.at(site.s).r);
+  return [site.theta + (r * Math.sin(a)) / ring, site.s + r * Math.cos(a)];
+}
+
+/** Where member m of a party of `size` is at its place (θ, s), and the way they face, by how the party stands. */
+function memberSpot(h: Habitat, place: Venue, form: Form, activity: Activity, lead: number, m: number, size: number, day: number): [number, number, number] {
+  const seed = seedsOf(h).spot, face = seedsOf(h).face;
+  if (form === 'bench') {
+    // Side by side round the seat, facing out over the court.
+    const site = venuesOf(h).courts[place.court], r = courtFloorOf(h, site.size)!.seat + SEAT_FEET, ring = Math.max(1, h.profile.at(site.s).r);
+    const a = TURN * unit(seed, lead, day, 2) + (m * ROW_GAP) / r;
+    return [site.theta + (r * Math.sin(a)) / ring, site.s + r * Math.cos(a), a];
+  }
+  const [ct, cs] = (place.kind === 'court' && courtSpotOf(h, place, lead, day)) || spotOf(h, place, lead, day);
+  const ring = Math.max(1, h.profile.at(cs).r);
+  let ds = 0, dy = 0, heading: number;
+  if (form === 'ring' && size > 1) {
+    const gap = RING_GAP[activity] ?? TALK_GAP, rr = Math.max(gap * 0.6, (size * gap) / TURN), a = TURN * unit(seed, lead, day, 4) + (TURN * m) / size;
+    ds = rr * Math.cos(a); dy = rr * Math.sin(a); heading = a + Math.PI;
+  } else if (form === 'row') {
+    heading = TURN * unit(face, lead, day, 0);
+    const across = (m - (size - 1) / 2) * (activity === 'picnic' || activity === 'stargaze' ? LIE_GAP : ROW_GAP);
+    ds = -across * Math.sin(heading); dy = across * Math.cos(heading);
+  } else {
+    heading = TURN * unit(face, lead, day, 1 + m);
+    if (m > 0) {
+      const a = TURN * unit(seed, lead, day, 20 + m), r = (1.5 + size) * Math.sqrt(unit(seed, lead, day, 40 + m));
+      ds = r * Math.cos(a); dy = r * Math.sin(a);
+    }
+  }
+  // Nobody is put into the lake who did not come to swim.
+  const lake = planOf(h).lake;
+  if (lake && activity !== 'swim' && place.kind !== 'landmark' && fromLake(lake, cs + ds) < 0) ds = -ds;
+  return [ct + dy / ring, cs + ds, heading];
+}
+
 /** Where outing n of a court's day is at clock time t, or null if it is not up on the land then. */
 function placeOf(h: Habitat, o: Outings, n: number, court: number, day: number, t: number): Person | null {
-  const u = t - o.start[n];
-  if (u < 0 || u > o.stay[n]) return null;
-  const v = venuesOf(h), place = v.venues[o.venue[n]], i = o.resident[n], who = residentOf(h, i);
+  const u = t - o.start[n], stay = o.stay[n];
+  if (u < 0 || u > stay) return null;
+  const v = venuesOf(h), place = v.venues[o.venue[n]], i = o.resident[n], R = h.radius;
+  const member = o.member[n], size = o.size[n], lead = o.resident[n - member], pace = o.pace[n];
+  const night = o.night[n] === 1, bench = FORMS[o.form[n]] === 'bench';
+  const activity: Activity = bench ? 'bench' : night && place.activity !== 'watch' ? 'stargaze' : place.activity;
+  const form: Form = night && !bench ? 'row' : FORMS[o.form[n]];
   const route = routeOf(h, v.courtVertex[court], place.vertex);
-  const [st, ss] = spotOf(h, place, i, day);
-  // The last stretch from the paths to the spot, over the land.
-  const end = route.points.length - 2, lt = route.points[end], ls = route.points[end + 1];
-  const dt = st - lt - TURN * Math.round((st - lt) / TURN), R = h.radius;
+  const [st, ss, facing] = memberSpot(h, place, form, activity, lead, member, size, day);
+  // Two abreast along the paths (each keeps their side of the way they walk), then each to their spot over the land.
+  const back = u > stay / 2, [across, behind] = walkSlot(member, size), side = back ? -across : across;
+  const end = pointAlong(route, R, route.length);
+  const lt = end.theta + (side * Math.cos(end.heading)) / R, ls = end.s - side * Math.sin(end.heading);
+  const dt = st - lt - TURN * Math.round((st - lt) / TURN);
   const off = Math.hypot(dt * R, ss - ls), whole = route.length + off;
-  const legs = Math.min(whole / who.walk, o.stay[n] / 2);
-  const activity: Activity = o.night[n] && place.activity !== 'watch' ? 'stargaze' : place.activity;
-  let d: number, back = false;
-  if (u < legs) d = u * who.walk;
-  else if (u > o.stay[n] - legs) { d = (o.stay[n] - u) * who.walk; back = true; }
-  else return { resident: i, theta: st, s: ss, heading: TURN * unit(seedsOf(h).face, i, day, 0), moving: false, speed: 0, activity, court, outing: n };
+  const legs = Math.min((whole + behind) / pace, stay / 2);
+  let d: number;
+  if (u < legs) d = u * pace - behind;
+  else if (u > stay - legs) d = (stay - u) * pace - behind;
+  else return { resident: i, theta: st, s: ss, heading: facing, moving: false, speed: 0, activity, court, outing: n, member, size };
+  d = Math.min(whole, Math.max(0, d));
   if (d <= route.length) {
     const p = pointAlong(route, R, d);
-    return { resident: i, theta: p.theta, s: p.s, heading: back ? p.heading + Math.PI : p.heading, moving: true, speed: who.walk, activity: 'walk', court, outing: n };
+    return { resident: i, theta: p.theta + (side * Math.cos(p.heading)) / R, s: p.s - side * Math.sin(p.heading), heading: back ? p.heading + Math.PI : p.heading, moving: true, speed: pace, activity: 'walk', court, outing: n, member, size };
   }
   const f = (d - route.length) / Math.max(off, 1e-9), heading = Math.atan2(dt * R, ss - ls);
-  return { resident: i, theta: lt + dt * f, s: ls + (ss - ls) * f, heading: back ? heading + Math.PI : heading, moving: true, speed: who.walk, activity: 'walk', court, outing: n };
+  return { resident: i, theta: lt + dt * f, s: ls + (ss - ls) * f, heading: back ? heading + Math.PI : heading, moving: true, speed: pace, activity: 'walk', court, outing: n, member, size };
 }
 
 function sunwalkThetaAt(p: Float64Array, s: number): number {
@@ -314,7 +438,7 @@ function sunwalkThetaAt(p: Float64Array, s: number): number {
   return p[lo * 2] + (d - TURN * Math.round(d / TURN)) * t;
 }
 
-/** One day's Sunwalkers, worked out once: who, when they set out, for how long, where and how fast, and their side. */
+/** One day's Sunwalkers, worked out once: who, when they set out, for how long, where and how fast, their side, their party. */
 interface Sunwalkers {
   resident: Int32Array;
   t0: Float64Array;
@@ -322,6 +446,8 @@ interface Sunwalkers {
   s0: Float64Array;
   speed: Float32Array;
   side: Float32Array;
+  member: Uint8Array;
+  size: Uint8Array;
 }
 
 function sunwalkersFrom(h: Habitat, day: number): Sunwalkers {
@@ -329,18 +455,26 @@ function sunwalkersFrom(h: Habitat, day: number): Sunwalkers {
   const { length, daylight, peakWidth } = h.params.day, L = h.params.length;
   const { floorStart } = h.profile, z0 = h.profile.at(floorStart).z, width = planOf(h).paths[0]?.width ?? 0;
   const pace = ((1 + 2 * peakWidth) * L) / (daylight * length);
-  const w: Sunwalkers = { resident: new Int32Array(n), t0: new Float64Array(n), span: new Float32Array(n), s0: new Float64Array(n), speed: new Float32Array(n), side: new Float32Array(n) };
-  for (let j = 0; j < n; j++) {
-    const i = regulars + sh.unpermute(j);
+  const w: Sunwalkers = {
+    resident: new Int32Array(n), t0: new Float64Array(n), span: new Float32Array(n), s0: new Float64Array(n), speed: new Float32Array(n), side: new Float32Array(n),
+    member: new Uint8Array(n), size: new Uint8Array(n),
+  };
+  // Parties of neighbouring slots: the first sets out, the others walk beside and behind them.
+  for (let j = 0; j < n;) {
+    const size = Math.min(partySize(h.params.life.parties, unit(seed, j, day, 5)), n - j), i = regulars + sh.unpermute(j);
     const t0 = day * length + daylight * length * (0.05 + 0.7 * unit(seed, i, day, 0));
     // The bright stretch's middle, in z, moves at a steady pace through the day; walkers keep near it.
     const zMid = -peakWidth * L + pace * (t0 - day * length);
-    w.resident[j] = i;
-    w.t0[j] = t0;
-    w.span[j] = Math.min(stayOf(h, normal(seed, i, day, 1)) * 2.5, day * length + daylight * length - t0);
-    w.s0[j] = floorStart + (zMid - z0) + normal(seed, i, day, 2) * 0.35 * peakWidth * L;
-    w.speed[j] = pace * (0.85 + 0.3 * unit(seed, i, day, 3));
-    w.side[j] = ((unit(seed, i, day, 4) - 0.5) * width) / Math.max(1, h.radius);
+    const span = Math.min(stayOf(h, normal(seed, i, day, 1)) * 2.5, day * length + daylight * length - t0);
+    const s0 = floorStart + (zMid - z0) + normal(seed, i, day, 2) * 0.35 * peakWidth * L;
+    const speed = pace * (0.85 + 0.3 * unit(seed, i, day, 3)), side = (unit(seed, i, day, 4) - 0.5) * width;
+    for (let m = 0; m < size; m++, j++) {
+      const [across, behind] = walkSlot(m, size);
+      w.resident[j] = regulars + sh.unpermute(j);
+      w.t0[j] = t0; w.span[j] = span; w.s0[j] = s0 - behind; w.speed[j] = speed;
+      w.side[j] = (side + across) / Math.max(1, h.radius);
+      w.member[j] = m; w.size[j] = size;
+    }
   }
   return w;
 }
@@ -368,7 +502,7 @@ function sunwalkerAt(h: Habitat, w: Sunwalkers, j: number, t: number, near?: Nea
   // They keep pace along the axis; where the Sunwalk winds, their way over the floor is longer and they walk faster.
   const theta = sunwalkThetaAt(walk, s), turn = (sunwalkThetaAt(walk, s + 1) - sunwalkThetaAt(walk, s - 1)) / 2;
   const across = h.radius * (turn - TURN * Math.round(turn / TURN));
-  return { resident: w.resident[j], theta: theta + w.side[j], s, heading: Math.atan2(across, 1), moving: true, speed: w.speed[j] * Math.hypot(1, across), activity: 'sunwalk', court: -1, outing: j };
+  return { resident: w.resident[j], theta: theta + w.side[j], s, heading: Math.atan2(across, 1), moving: true, speed: w.speed[j] * Math.hypot(1, across), activity: 'sunwalk', court: -1, outing: j, member: w.member[j], size: w.size[j] };
 }
 
 /** An area to look in: around (θ, s) out to `radius` m over the floor. */
@@ -381,6 +515,23 @@ export interface Near {
 /** One number for someone up on the land today, the same for every level that draws them (court and outing, or the Sunwalker). */
 export function personKey(p: Pick<Person, 'court' | 'outing'>): number {
   return p.court < 0 ? -1 - p.outing : p.court * 2 ** 22 + p.outing;
+}
+
+/** How long one turn to speak lasts in a party that talks (s), at least; a turn runs on to twice this. */
+const TURN_TALK = 4;
+
+/**
+ * Who in someone's party is speaking at clock time t (their `member`), or −1 for a party of one: turns of 4 to 8 s,
+ * passed round at the toss of the party's own coin, so everyone in it agrees. Pure.
+ */
+export function talkerAt(p: Pick<Person, 'court' | 'outing' | 'member' | 'size'>, t: number): number {
+  if (p.size < 2) return -1;
+  const party = personKey({ court: p.court, outing: p.outing - p.member }) | 0;
+  // Turns in steps of TURN_TALK s; a step continues the last turn half the time, so turns run from one step to many.
+  const step = Math.floor(t / TURN_TALK);
+  let k = step;
+  while (k > step - 8 && hashToFloat(hash3i(party, k, 0, 1)) < 0.5) k--;
+  return Math.floor(hashToFloat(hash3i(party, k, 0, 2)) * p.size);
 }
 
 /**

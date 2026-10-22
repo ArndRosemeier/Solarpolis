@@ -116,6 +116,19 @@ export function lightWellOf(h: Habitat, c: PlacedCourt): { radius: number; heigh
   return hr ? { radius: c.radius * PART.well, height: c.floor + (PART.pave - PART.sink) * hr } : null;
 }
 
+/**
+ * Where people can be in a court of this radius (m from its middle; the same for every court of a habitat, whatever its
+ * land): the seat round the light well, from the glass's edge out to `seat`; the open paving from `free[0]` to `free[1]`,
+ * clear of the seat and of the stairs along the wall (free[0] > free[1] where the court is too small to leave any); the
+ * walk on the wall's top out to `walk`. Null in a habitat built without landmarks.
+ */
+export function courtFloorOf(h: Habitat, radius: number): { seat: number; free: [number, number]; walk: number } | null {
+  const hr = h.params.landmarks?.handrail;
+  if (!hr) return null;
+  const seat = radius * PART.well + PART.kerb * hr, inner = radius * 0.9 - (PART.face + PART.stair) * hr;
+  return { seat, free: [seat + 1.5 * hr, inner - 0.6 * hr], walk: radius + PART.walk * hr };
+}
+
 /** The rim's height over a court's dug floor at an angle (between its samples). */
 export function rimAt(l: CourtLayout, a: number): number {
   const u = ((((a / TAU) % 1) + 1) % 1) * RIM, i = Math.floor(u) % RIM, f = u - Math.floor(u);
