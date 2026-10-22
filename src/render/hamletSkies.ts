@@ -62,7 +62,7 @@ function aurora(d: V3, o: { at: V2; rise: F }, clock: F): V3 {
 /** The sky from the Moon: black, dense with stars, Earth hanging low over the across side, lit from one side. */
 function moon(d: V3, up: V3, along: V3, across: V3, clock: F): V3 {
   const toward = normalize(up.mul(0.85).add(across.mul(0.4)).add(along.mul(0.25)));
-  const c = dot(d, toward), r = float(1).sub(c).mul(2).sqrt().div(EARTH);
+  const c = dot(d, toward), r = max(float(1).sub(c), 0).mul(2).sqrt().div(EARTH);
   const disc = float(1).sub(smoothstep(0.96, 1, r));
   // Earth's face: blue sea, white weather, its lit half toward `along`.
   const local = d.sub(toward.mul(c)).div(EARTH);
@@ -101,7 +101,7 @@ function canopy(d: V3, o: { at: V2; rise: F }, day: F, clock: F): V3 {
 function deep(o: { at: V2; rise: F }, day: F, clock: F): V3 {
   const water = mix(vec3(0.1, 0.42, 0.48), vec3(0.3, 0.68, 0.85), smoothstep(0.1, 0.9, o.rise));
   const wave = mx_noise_float(vec3(o.at.mul(1.6), clock.mul(0.15)));
-  const threads = pow(float(1).sub(abs(wave)), 12).mul(smoothstep(0.2, 0.6, o.rise));
+  const threads = pow(clamp(float(1).sub(abs(wave)), 0, 1), 12).mul(smoothstep(0.2, 0.6, o.rise));
   const window = smoothstep(0.82, 0.97, o.rise).mul(0.5);
   const sea = water.add(vec3(0.7, 0.95, 1).mul(threads.mul(0.7).add(window)));
   return mix(vec3(0.004, 0.012, 0.02), sea, day);
@@ -115,12 +115,16 @@ export function hamletSky(d: V3, up: V3, index: F, day: F, clock: F): V3 {
   return Fn(() => {
     const along = vec3(0, 0, 1), across = normalize(vec3(up.y, up.x.negate(), 0)), o = overhead(d, up, along, across);
     const out = vec3(0).toVar(), k = floor(index.add(0.5)), lit = clamp(day, 0, 1);
-    If(k.lessThan(0.5), () => { out.assign(open(d, o, lit, clock)); })
-      .ElseIf(k.lessThan(1.5), () => { out.assign(aurora(d, o, clock)); })
-      .ElseIf(k.lessThan(2.5), () => { out.assign(moon(d, up, along, across, clock)); })
-      .ElseIf(k.lessThan(3.5), () => { out.assign(mars(d, o, up, along, lit)); })
-      .ElseIf(k.lessThan(4.5), () => { out.assign(canopy(d, o, lit, clock)); })
-      .Else(() => { out.assign(deep(o, lit, clock)); });
+    // One plain If per sky (with one ElseIf chain, three of the six skies drew black on the GPU: render 20261022-193635-skies2).
+    const skies: (() => V3)[] = [
+      () => open(d, o, lit, clock),
+      () => aurora(d, o, clock),
+      () => moon(d, up, along, across, clock),
+      () => mars(d, o, up, along, lit),
+      () => canopy(d, o, lit, clock),
+      () => deep(o, lit, clock),
+    ];
+    skies.forEach((sky, n) => If(abs(k.sub(n)).lessThan(0.5), () => { out.assign(sky()); }));
     return out;
   })() as unknown as V3;
 }
