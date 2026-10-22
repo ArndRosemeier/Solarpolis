@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.110 — A slow test warns instead of failing
+
+- Behind the scenes: a single test or test file over its time budget now shows as a warning on the change instead of failing it. Only the whole test run going over its 30 s limit fails. Test machines vary in speed, so one test near its limit used to fail at random and block everyone's changes. Nothing in the game changes.
+
 ## v0.109 — Homes in the hamlets below
 
 - The hamlets under the courts now have their houses: walled homes of tall rooms under the vaults, two to a bay, each with a yard in front and its door facing the wellhead.
