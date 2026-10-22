@@ -8,7 +8,7 @@
  *            glowing, its hood up through the roof;
  *   bath     a raised pool inside a stone kerb, a low wall round it with a gate toward the wellhead, a bath house behind;
  *   shop     a tall workshop with wide doors lit from within and high windows (a forge's chimney in a makers' district);
- *   stage    a stage and its back wall at the far side, tiers of benches rising toward the wellhead;
+ *   stage    side on to the wellhead: a stage and its back wall at one end, tiers of benches rising away from it;
  *   minds    a round pavilion on posts, its walls panels of cool light, a shallow roof;
  *   commons  tables and benches about the floor, two stalls under canopies.
  *
@@ -60,7 +60,7 @@ const CLOTH: readonly RGB[] = [[0.55, 0.22, 0.16], [0.3, 0.42, 0.5], [0.62, 0.52
 const COOL: RGB = [0.72, 0.86, 1];
 const WATER: RGB = [0.12, 0.22, 0.24];
 /** A hearth's fire. */
-const FIRE: RGB = [1, 0.62, 0.3];
+const FIRE: RGB = [1, 0.45, 0.14];
 
 /** How round a post is at each detail. */
 const SIDES: Readonly<Record<BuildDetail, number>> = { far: 6, mid: 8, near: 12 };
@@ -125,8 +125,10 @@ function kitchen(sh: Shape, g: Ground): void {
   upright(sh, mx - (H.hood * hr) / 2, mx + (H.hood * hr) / 2, back - hy * 0.6, back + hy * 0.6, f + H.hearthHigh * hr, z + H.slab * hr + 0.6 * hr, shade(PLINTH, 0.9));
   // The fire's mouth on the hearth's face toward the tables.
   const face = g.toward > 0 ? back + hy + 0.01 * hr : back - hy - 0.01 * hr, m = (H.mouth * hr) / 2, mz = f + 0.4 * hr;
-  sh.finish = FINISH.lamp;
-  sh.faceToward([mx - m, face, mz], [mx + m, face, mz], [mx + m, face, mz + H.mouthHigh * hr], [mx - m, face, mz + H.mouthHigh * hr], [0, g.toward, 0], FIRE);
+  // It glows as a window does (`FINISH.window`: its colour in the lamps' light, so it stays the fire's orange), the pane
+  // read at one spot clear of the sash's bars.
+  sh.finish = FINISH.window;
+  sh.smoothGrid(1, 1, (a, b) => ({ p: [b ? mx + m : mx - m, face, mz + a * H.mouthHigh * hr], n: [0, g.toward, 0], uv: [0.25, 0.35] }), FIRE);
   // Three long tables between the hearth and the square.
   const y0 = sideY(g, r, true, 2 * hr), y1 = back + (g.toward > 0 ? 1 : -1) * (hy + 2 * hr);
   for (let k = 0; k < 3; k++) table(sh, g, r.x0 + 1.5 * hr, r.x1 - 1.5 * hr, y0 + ((y1 - y0) * (k + 0.5)) / 3);
@@ -198,40 +200,39 @@ function shop(sh: Shape, g: Ground): void {
 }
 
 function stage(sh: Shape, g: Ground): void {
-  const hr = g.hr, r = g.r, mx = (r.x0 + r.x1) / 2, half = (r.x1 - r.x0) * 0.35;
-  // The stage and its back wall at the far side.
-  const s0 = sideY(g, r, false), s1 = s0 + (g.toward > 0 ? 1 : -1) * H.stageDeep * hr;
-  const f = Math.max(g.levelsAt(mx - half, s0).floor, g.levelsAt(mx + half, s0).floor, g.levelsAt(mx, s1).floor);
+  // Side on to the wellhead (so the square sees the stage and its tiers, not the tiers' backs): the stage and its back
+  // wall at the +x end, tiers of benches rising from it toward −x.
+  const hr = g.hr, r = g.r, my = (r.y0 + r.y1) / 2, half = (r.y1 - r.y0) * 0.35;
+  const s0 = r.x1, s1 = s0 - H.stageDeep * hr;
+  const f = Math.max(g.levelsAt(s0, my - half).floor, g.levelsAt(s0, my + half).floor, g.levelsAt(s1, my).floor);
   sh.finish = FINISH.timber;
-  upright(sh, mx - half, mx + half, Math.min(s0, s1), Math.max(s0, s1), f - H.bury * hr, f + H.stageHigh * hr, TIMBER);
+  upright(sh, s1, s0, my - half, my + half, f - H.bury * hr, f + H.stageHigh * hr, TIMBER);
   sh.finish = g.build.finish;
-  const wb = s0 + (g.toward > 0 ? -1 : 1) * 0.4 * hr;
-  const back = f + Math.min(H.backHigh * hr, g.room);
-  upright(sh, mx - half - hr, mx + half + hr, Math.min(s0, wb), Math.max(s0, wb), f - H.bury * hr, back, g.build.col);
-  const out = g.toward > 0 ? 1 : -1;
+  const wb = s0 + 0.4 * hr, back = f + Math.min(H.backHigh * hr, g.room);
+  upright(sh, s0, wb, my - half - hr, my + half + hr, f - H.bury * hr, back, g.build.col);
   if (g.detail !== 'far') {
     // Steps up onto the stage at both ends of its front.
     sh.finish = FINISH.timber;
     const n = Math.max(2, Math.round(H.stageHigh / H.rise)), w = (H.stepWide * hr) / 2;
-    for (const x of [mx - half + w + 0.4 * hr, mx + half - w - 0.4 * hr]) for (let k = 0; k < n; k++) {
-      const a = s1 + out * (n - 1 - k) * H.tread * hr, b = a + out * H.tread * hr;
-      upright(sh, x - w, x + w, Math.min(a, b), Math.max(a, b), g.levelsAt(x, b).floor - H.bury * hr, f + ((k + 1) / n) * H.stageHigh * hr - 0.02 * hr, shade(TIMBER, 0.9));
+    for (const y of [my - half + w + 0.4 * hr, my + half - w - 0.4 * hr]) for (let k = 0; k < n; k++) {
+      const x1 = s1 - (n - 1 - k) * H.tread * hr, x0 = x1 - H.tread * hr;
+      upright(sh, x0, x1, y - w, y + w, g.levelsAt(x0, y).floor - H.bury * hr, f + ((k + 1) / n) * H.stageHigh * hr - 0.02 * hr, shade(TIMBER, 0.9));
     }
   }
   if (g.detail === 'near') {
     // The stage's nosing along its front, the back wall's coping.
     const e = H.trim * hr;
-    upright(sh, mx - half - e, mx + half + e, Math.min(s1 - out * e, s1 + out * e), Math.max(s1 - out * e, s1 + out * e), f + (H.stageHigh - 0.12) * hr, f + H.stageHigh * hr + e, shade(TIMBER, 0.75), true);
+    upright(sh, s1 - e, s1 + e, my - half - e, my + half + e, f + (H.stageHigh - 0.12) * hr, f + H.stageHigh * hr + e, shade(TIMBER, 0.75), true);
     sh.finish = g.build.finish;
-    upright(sh, mx - half - hr - e, mx + half + hr + e, Math.min(s0, wb) - e, Math.max(s0, wb) + e, back, back + 0.15 * hr, shade(g.build.col, 0.85), true);
+    upright(sh, s0 - e, wb + e, my - half - hr - e, my + half + hr + e, back, back + 0.15 * hr, shade(g.build.col, 0.85), true);
   }
-  // Tiers of benches rising toward the wellhead.
+  // Tiers of benches rising away from the stage.
   sh.finish = FINISH.stone;
-  const from = s1 + out * 3 * hr, to = sideY(g, r, true), rows = Math.max(1, Math.floor(Math.abs(to - from) / (H.tier * hr)));
+  const from = s1 - 3 * hr, to = r.x0, rows = Math.max(1, Math.floor((from - to) / (H.tier * hr)));
   for (let k = 0; k < rows; k++) {
-    const a = from + (to - from) * (k / rows), b = from + (to - from) * ((k + 1) / rows), w = half * (1 + (0.4 * k) / rows);
-    const fl = Math.min(g.levelsAt(mx - w, a).floor, g.levelsAt(mx + w, b).floor);
-    upright(sh, mx - w, mx + w, Math.min(a, b), Math.max(a, b), fl - H.bury * hr, f + (H.benchHigh + k * H.rise) * hr, shade(PLINTH, 1 - 0.02 * (k % 2)));
+    const x1 = from - (from - to) * (k / rows), x0 = from - (from - to) * ((k + 1) / rows), w = half * (1 + (0.4 * k) / rows);
+    const fl = Math.min(g.levelsAt(x0, my - w).floor, g.levelsAt(x1, my + w).floor);
+    upright(sh, x0, x1, my - w, my + w, fl - H.bury * hr, f + (H.benchHigh + k * H.rise) * hr, shade(PLINTH, 1 - 0.02 * (k % 2)));
   }
 }
 
