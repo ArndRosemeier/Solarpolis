@@ -23,10 +23,14 @@ for (const { name } of MATRIX) {
     assert.deepEqual(hamletSkiesOf({ ...h }), skies);
     // Over many hamlets, several skies; and the styles differ in what they pick.
     if (u.hamlets.length >= 40) assert.ok(new Set(skies).size >= 4, `${new Set(skies).size} skies over ${u.hamlets.length} hamlets`);
+    // The glass deck in some hamlets, not all (Arnd: "a good idea but too uniform").
+    const glass = skies.filter((k) => SKIES[k].name === 'glass').length;
+    if (u.hamlets.length >= 100) assert.ok(glass > 0 && glass < 0.4 * u.hamlets.length, `${glass} glass decks over ${u.hamlets.length} hamlets`);
     const plan = planOf(h);
     for (const m of u.hamlets.slice(0, 30)) {
       const style = plan.districts[m.district].style, sky = SKIES[skies[m.court]].name;
-      if (style === 'grove') assert.ok(sky === 'canopy' || sky === 'open', `a grove hamlet under ${sky}`);
+      if (style === 'grove') assert.ok(sky === 'canopy' || sky === 'open' || sky === 'glass', `a grove hamlet under ${sky}`);
+      if (style === 'stone' || style === 'makers') assert.notEqual(sky, 'glass', 'stone and makers keep to authored skies');
       assert.equal(skyOverBay(h, m.i, m.j), -1, 'the wellhead keeps its stone round the real light');
     }
     // A hamlet's home bay shows its sky on its spandrel; a bay of the Dim shows none.

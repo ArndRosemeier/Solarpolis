@@ -2,6 +2,34 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.102 — Running fast no longer throws you into the air
+
+- Running fast over the floor no longer launches you into long, floaty jumps. Seams between the ground's triangles, kerbs and river banks could pop the body up a few centimetres, and that pop became a launch of 10 m/s or more; now the ground can stop you but never throw you.
+- Running into a river at speed stops you in the water within a few metres, as water does, instead of skimming across and ramping off the far bank.
+- Running downhill keeps you on the slope instead of sailing out over it.
+- What stays is real: in a spinning habitat, running against the spin makes you lighter and running with it heavier. At a full run (40 m/s) in the reference cylinder a jump against the spin hangs about twice as long as one with it.
+
+## v0.101 — Tree trunks stop you
+
+- Trees are no longer walk-through: their trunks stop you, walking or running, exactly where and as thick as they are drawn (a glancing run slides round them). Fallen trunks on the forest floor are solid too: small ones you step over, big ones you climb or go round.
+- Branches, leaves, bushes, grass and fallen branches stay walk-through.
+
+## v0.100 — The plan lays out Rings and Heights
+
+- The habitat mind's plan now holds the first big landforms for the floor (design "Shaped ground"): Rings, ridges running all the way round the cylinder that part the floor into landscape rooms, and Heights, lone mounts on the ridges between the valleys, the tallest a third of the radius high.
+- They show on the Blueprint tab's land map, lighter the higher they stand, with contour lines. The ground itself rises in the next step.
+- Entrances now keep to the landforms' feet, never their tops or steep faces.
+
+## v0.099 — Glass decks show the real land above
+
+- Some hamlets below now have a glass deck instead of a painted sky. Their ceilings show the real view from the land straight above: the far side of the habitat overhead, the sunline and the clouds, as they are at that moment, by day and by night.
+- Orchards, water districts, groves, herding land and wild land choose it now and then. Stone and maker districts keep to painted skies.
+- Debug menu: "Below: under a glass deck (the real sky above)". The debug info shows a "glass deck" line.
+
+## v0.098 — People come up out of the lifts
+
+- People no longer appear in the middle of a court. They step out of the lift's bronze doors, walk round the court and climb its stair to the land, and come back the same way. Those meeting in the court walk round its edge to their spot instead of across the light well.
+
 ## v0.097 — People come up together and stand together
 
 - Most people now go up on the land with others: friends in pairs, small groups of up to six. They walk two abreast and stay together.

@@ -259,26 +259,55 @@ const MAX_TILT = 1.5;
 /** Plant one cell: every lattice spot of the plant whose plant stands inside it. */
 export function plantCell(ecology: Ecology, plants: readonly Species[], k: CellKey): PlantCell {
   const t = ecology.terrain, h = t.habitat, { profile } = h;
-  const sp = plants[k.species], spec = sp.spec;
+  const sp = plants[k.species];
   const b = cellBounds(ecology, sp, k);
   const origin = toWorld(profile, { theta: (b.theta0 + b.theta1) / 2, s: (b.s0 + b.s1) / 2, h: 0 });
   const shapes = LEVELS[k.level].variants;
   const lists: number[][] = Array.from({ length: shapes }, () => []);
-  const trained = ('rowGap' in spec && !!spec.rowGap);
   standsIn(ecology, sp, b, k.level, (pt, ps, ground, f, along0) => {
     const p = toWorld(profile, { theta: pt, s: ps, h: ground });
-    const shape = Math.min(shapes - 1, Math.floor(f(5) * shapes));
-    if (sp.what === 'planted') {
-      lists[shape].push(p[0] - origin[0], p[1] - origin[1], p[2] - origin[2], f(3), f(4), 0, 0);
-      return;
-    }
-    const [tx, tz] = sp.what === 'debris' ? tiltAt(ecology, pt, ps, p) : [0, 0];
-    // A plant trained in a row is turned along it (its x around the axis: `plantFrame`), either way round, give or take
-    // a little; anything else any way.
-    const turn = trained ? along0 + (f(4) < 0.5 ? 0 : Math.PI) + (f(7) - 0.5) * TRAINED_TWIST : f(4) * 2 * Math.PI;
-    lists[shape].push(p[0] - origin[0], p[1] - origin[1], p[2] - origin[2], spec.height[0] + (spec.height[1] - spec.height[0]) * f(3), turn, tx, tz);
+    const { shape, height, turn, tilt } = poseOf(ecology, sp, pt, ps, p, f, along0, shapes);
+    lists[shape].push(p[0] - origin[0], p[1] - origin[1], p[2] - origin[2], height, turn, tilt[0], tilt[1]);
   });
   return finished(t, k, b, origin, lists);
+}
+
+/** How a plant stands: which of `shapes` it is, its height (m), its turn about up (radians) and, for debris, the slope it is sheared by. */
+export interface Pose {
+  shape: number;
+  height: number;
+  turn: number;
+  tilt: [number, number];
+}
+
+/**
+ * How a plant that `standsIn` visits stands (at (θ, s), its foot `p` in the world, its own numbers `f`, a trained
+ * plant's row way `along0`), drawn with one of `shapes`: the same for every cell and level that draws it, and for the
+ * physics (gen/trunks.ts).
+ */
+export function poseOf(ecology: Ecology, sp: Species, theta: number, s: number, p: Vec3, f: (q: number) => number, along0: number, shapes: number): Pose {
+  const shape = Math.min(shapes - 1, Math.floor(f(5) * shapes)), spec = sp.spec;
+  if (sp.what === 'planted') return { shape, height: f(3), turn: f(4), tilt: [0, 0] };
+  const tilt = sp.what === 'debris' ? tiltAt(ecology, theta, s, p) : [0, 0] as [number, number];
+  // A plant trained in a row is turned along it (its x around the axis: `plantFrame`), either way round, give or take
+  // a little; anything else any way.
+  const trained = 'rowGap' in spec && !!spec.rowGap;
+  const turn = trained ? along0 + (f(4) < 0.5 ? 0 : Math.PI) + (f(7) - 0.5) * TRAINED_TWIST : f(4) * 2 * Math.PI;
+  return { shape, height: spec.height[0] + (spec.height[1] - spec.height[0]) * f(3), turn, tilt };
+}
+
+/**
+ * Where a point of a plant's shape (its own space, one unit high or long, y up) stands in the world, for a plant whose
+ * foot is `foot` (world) standing as `pose` says: the CPU's twin of `plantFrame` (render/materials.ts; keep in step).
+ * Up is toward the axis, x around it turned by the plant's turn toward z along it, and debris is sheared by its tilt.
+ */
+export function plantPoint(foot: Vec3, pose: Pose, x: number, y: number, z: number): Vec3 {
+  const r = Math.hypot(foot[0], foot[1]) || 1, ux = -foot[0] / r, uy = -foot[1] / r, sx = uy, sy = -ux;
+  const c = Math.cos(pose.turn), sn = Math.sin(pose.turn), h = pose.height;
+  const lx = x * h, ly = y * h, lz = z * h;
+  const dx = sx * c * lx + ux * ly - sx * sn * lz, dy = sy * c * lx + uy * ly - sy * sn * lz, dz = sn * lx + c * lz;
+  const shear = (dx * sx + dy * sy) * pose.tilt[0] + dz * pose.tilt[1];
+  return [foot[0] + dx + ux * shear, foot[1] + dy + uy * shear, foot[2] + dz];
 }
 
 /**

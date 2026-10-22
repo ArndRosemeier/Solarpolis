@@ -162,7 +162,7 @@ self.onmessage = (e: MessageEvent<GenRequest>) => {
     }
     const { terrain, ecology, layout, plants } = terrainFor(req.params);
     if (req.kind === 'patch') {
-      post({ kind: 'patch', patch: buildPatch(terrain, req.theta, req.s, req.size, req.cell, req.below) });
+      post({ kind: 'patch', patch: buildPatch(terrain, req.theta, req.s, req.size, req.cell, req.below, { ecology, plants }) });
       return;
     }
     if (req.kind === 'landmark') {
