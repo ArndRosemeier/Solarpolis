@@ -192,6 +192,33 @@ export interface LandPlan {
 }
 
 /**
+ * The Understorey: the living layer under the land (design "The Understorey: life below the land", 2026-10-22). The land
+ * rests on pillars on a grid of bays; each pillar fans out into vault ribs that carry the ceiling deck, and every place
+ * below (a home, a hall, a cistern, an empty bay) is that one structure filled differently. Under each entrance court
+ * lies a hamlet: its wellhead under the court's light well, a ring of halls, then homes in lanes; galleries follow the
+ * land's ways from hamlet to hamlet; cisterns hold the water the habitat moves to keep its spin balanced; the rest is the
+ * Dim, open pillar forest. Sizes are structural (the bay) or human (households): they do not grow with the habitat.
+ */
+export interface Understorey {
+  /** Distance between pillar centres, around the axis and along it (m). */
+  bay: number;
+  /** What the pillars are cast from: its density, crushing strength, stiffness (Pa) and safety factor. */
+  stone: { density: number; strength: number; modulus: number; safetyFactor: number };
+  /** What one square metre of the ceiling deck carries: soil, water, roots and the deck itself (kg/m²). */
+  land: number;
+  /** Where the vault ribs spring from a pillar, as a share of the living layer's height (0 … 1). */
+  spring: number;
+  /** People in a household, on average, and how many bays one household's home takes. */
+  household: { people: number; bays: number };
+  /** Bays of halls round each wellhead for every bay of homes. */
+  halls: number;
+  /** Every this-many bay lines through a hamlet's homes stays open as a lane (a whole number, at least 2). */
+  lanes: number;
+  /** Share of the layer under the worked floor (outside the hamlets, galleries and the lake) that is cisterns (0 … 1). */
+  cisterns: number;
+}
+
+/**
  * Who goes up on the land, and how (src/sim; design "Who is out on the land", 2026-10-22). Nobody is simulated: each
  * resident's outings are derived from the seed and the clock. People come up from the living layer at the entrance
  * nearest where they want to be (the city below has its own transit), walk the paths, stay a while and go back down.
@@ -335,6 +362,8 @@ export interface HabitatParams {
   /** The climate and biome profile, by name (`CLIMATES` in climates.ts; laid out by the ecology stage). */
   climate: string;
   population: number;
+  /** The living layer under the land: its pillars, hamlets, galleries and cisterns (gen/under.ts). */
+  under: Understorey;
   /** Who goes up on the land, how often and for how long (src/sim). */
   life: Life;
   /** Years since the habitat was finished: drives history (rebuilds, abandoned chambers, overgrowth). */
