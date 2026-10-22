@@ -2,6 +2,13 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.091 — Riding the lifts down and up
+
+- Click the bronze doors in an entrance court's portal (left button, or a tap) and you step into a lift cabin that rides down its shaft into the Understorey. The pointer turns into a hand over doors you can use.
+- Below, click a lift's open bronze cage: its cabin comes down out of the vault, and you ride it back up to the court.
+- The cabin waits at the top until the pillar forest below is ready, so you never arrive in an empty dark.
+- Debug menu: "To a lift: at its doors" and "Below: at a lift cage" put you in front of one.
+
 ## v0.090 — Light wells and lift cages below the courts
 
 - Under every entrance court, its light well now comes down through the vault: look up from the wellhead and the court's glass glows with the day, and a pool of daylight falls on the floor below.
