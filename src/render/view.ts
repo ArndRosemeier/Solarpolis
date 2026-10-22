@@ -418,7 +418,7 @@ export class InteriorView {
     this.scene.add(this.crossings.group);
     this.halls = new TiledView(hallSource(this.terrain), h, this.stage, this.pool);
     this.scene.add(this.halls.group);
-    this.people = new PeopleView(h, this.terrain, this.stage, this.camera, this.standOn);
+    this.people = new PeopleView(h, this.terrain, this.stage, this.camera, (theta, s) => landmarkTopAt(this.terrain, theta, s));
     this.scene.add(this.people.group);
     this.place();
     // While loading, nothing draws, but the compile cap still counts frames (one new shader per frame): keep its

@@ -12,7 +12,8 @@
  * frame asks the population where each person is now (`whereIs`); the whole area is asked again (`peopleAt`) every
  * second or after a long move, which brings new people in and lets go of those who went below.
  */
-import { Group, Mesh, type InstancedBufferGeometry, type Camera, type InstancedInterleavedBuffer } from 'three/webgpu';
+import { Group, MathUtils, Mesh, type InstancedBufferGeometry, type Camera, type InstancedInterleavedBuffer, type PerspectiveCamera } from 'three/webgpu';
+import { lodForDistance, type LodDef } from '@actors/core';
 import type { Stage } from '@futuremagic/stage';
 import { hash3i, hashToFloat, v3len, v3sub } from '@futuremagic/core';
 import { fromWorld, toView, toWorld, type Habitat, type Vec3 } from '../blueprint';
@@ -32,8 +33,9 @@ const CROWD_RANGE = 1500;
 /** The area is asked again this often (s, real time), or once the eye has moved this far (m). */
 const SCAN_EVERY = 1;
 const SCAN_MOVE = 100;
-/** Closer than this (m), people are placed every frame; further out, a share of them each frame. */
-const EVERY_FRAME = 250;
+/** Closer than this (m), people are placed every frame; out to `HALF_FRAMES` every other frame, further a share each frame. */
+const EVERY_FRAME = 60;
+const HALF_FRAMES = 250;
 const FAR_SHARE = 6;
 /** Figures: how many at most, loaded within `FIGURE_IN` m of the eye and given back beyond `FIGURE_OUT`. */
 const FIGURES = 8;
@@ -47,6 +49,8 @@ const FIGURE_OUT = 40;
 const NEW_BUDGET = 3;
 /** A walker's light (the terrain's horizons where they are) is looked up again once they are this far on (m). */
 const HORIZON_MOVE = 10;
+/** What a walker stands on that is built (a landmark's deck, the Lift Stair's treads) is looked up again this far on (m). */
+const DECK_MOVE = 0.2;
 /** A walking stride: one cycle (two steps) covers this many body heights. */
 const STRIDE_LENGTH = 0.85;
 /** A swimmer treads water with the head out: the feet this share of the height under the surface. */
@@ -89,6 +93,9 @@ interface Someone {
   horizon: [number, number];
   /** Where the horizons were looked up (world). */
   litAt: Vec3;
+  /** What is built under them (height over the profile, or null) and where it was looked up (θ, s). */
+  deck: number | null;
+  deckAt: [number, number];
   doing: Doing;
   /** Their figure: loading, or drawn in place of the stand-in. */
   figure: { figure: Figure | null; shown: boolean; dropped: boolean } | null;
@@ -122,7 +129,7 @@ export class PeopleView {
   private slowestLevels = 0;
   private disposed = false;
 
-  constructor(private readonly habitat: Habitat, private readonly terrain: Terrain, private readonly stage: Stage, private readonly camera: Camera, private readonly standOn: (theta: number, s: number) => number) {
+  constructor(private readonly habitat: Habitat, private readonly terrain: Terrain, private readonly stage: Stage, private readonly camera: Camera, private readonly deckOf: (theta: number, s: number) => number | null) {
     this.group.name = 'people';
     void this.start();
   }
@@ -154,20 +161,25 @@ export class PeopleView {
     this.frameNo++;
     const h = this.habitat;
     if (this.clock - this.lastScan > SCAN_EVERY || !this.scannedAt || dist(eye, this.scannedAt) > SCAN_MOVE) this.rescan(eye, t);
-    const t0 = performance.now(), gone: number[] = [];
-    const room = (): boolean => performance.now() - t0 < NEW_BUDGET;
+    const gone: number[] = [];
+    // Only the work on people new here counts against the budget: those already placed are kept up every frame.
+    let spent = 0;
+    const timed = (work: () => void): void => { const t0 = performance.now(); work(); spent += performance.now() - t0; };
     let k = 0;
     for (const [key, one] of this.people) {
       k++;
-      if (!one.placed && !room()) continue;
-      const near = !one.placed || one.figure || dist(one.feet, eye) < EVERY_FRAME;
-      if (near || (k + this.frameNo) % FAR_SHARE === 0) {
+      const fresh = !one.placed;
+      if (fresh && spent > NEW_BUDGET) continue;
+      const d = fresh ? 0 : dist(one.feet, eye);
+      const due = fresh || one.figure || d < EVERY_FRAME || (d < HALF_FRAMES ? (k + this.frameNo) % 2 === 0 : (k + this.frameNo) % FAR_SHARE === 0);
+      if (due) {
         const p = whereIs(h, t, one.person);
         if (!p) { gone.push(key); continue; }
+        const still = !fresh && !p.moving && !one.person.moving && p.theta === one.person.theta && p.s === one.person.s && p.activity === one.person.activity;
         one.person = p;
-        this.stand(one);
+        if (fresh) timed(() => this.stand(one)); else if (!still) this.stand(one);
       }
-      if (!one.dress && room()) one.dress = r.dressOf(one.resident);
+      if (!one.dress && spent <= NEW_BUDGET) timed(() => { one.dress = r.dressOf(one.resident); });
     }
     for (const key of gone) this.letGo(key);
     this.figures(eye);
@@ -188,7 +200,7 @@ export class PeopleView {
       const resident = residentOf(this.habitat, p.resident);
       this.people.set(key, {
         person: p, resident, dress: null, feet: [0, 0, 0], up: [0, 0, 1], front: [1, 0, 0], turn: 0,
-        phase: 2 * Math.PI * hashToFloat(hash3i(p.resident, 17, 3, 0)), horizon: [0, 0], litAt: [0, 0, 0], doing: { pose: 0, swim: false, anim: { move: 'idle' } },
+        phase: 2 * Math.PI * hashToFloat(hash3i(p.resident, 17, 3, 0)), horizon: [0, 0], litAt: [0, 0, 0], deck: null, deckAt: [0, 0], doing: { pose: 0, swim: false, anim: { move: 'idle' } },
         figure: null, seen: this.scan, placed: false,
       });
     }
@@ -207,7 +219,12 @@ export class PeopleView {
   /** Where someone stands now: on the ground (or a landmark's deck), or treading water; facing their way. */
   private stand(one: Someone): void {
     const h = this.habitat, p = one.person, { profile } = h;
-    const ground = this.terrain.heightAt(p.theta, p.s), top = this.standOn(p.theta, p.s);
+    if (!one.placed || floorGap(h.radius, p.theta, p.s, one.deckAt[0], one.deckAt[1]) > DECK_MOVE) {
+      one.deck = this.deckOf(p.theta, p.s);
+      one.deckAt = [p.theta, p.s];
+    }
+    const ground = this.terrain.heightAt(p.theta, p.s), surface = this.terrain.standAt(p.theta, p.s);
+    const top = one.deck !== null && one.deck > surface ? one.deck : surface;
     const doing = doingOf(p, one.resident, top - ground > SWIM_WATER);
     const height = one.dress?.height ?? 1.7;
     const feet = toWorld(profile, { theta: p.theta, s: p.s, h: doing.swim ? top - SWIM_DEPTH * height : top });
@@ -260,7 +277,7 @@ export class PeopleView {
     // between them never builds a shader on the render path.
     const c = figure.character;
     let made = 0;
-    for (let level = c.lods.length - 1; level >= 0; level--) {
+    for (const level of figureLevels(c.lods).reverse()) {
       const t0 = performance.now();
       c.setLod(level);
       castAsWorn(figure.object);
@@ -268,9 +285,21 @@ export class PeopleView {
       await this.stage.prepare(figure.object, { everyCaster: true });
     }
     this.slowestLevels = Math.max(this.slowestLevels, made);
-    c.lodCamera = this.camera;
-    c.setLod('auto');
     return figure;
+  }
+
+  /**
+   * A figure's level of detail by its distance, as Actors picks it (`lodForDistance`, scaled for the field of view),
+   * among the levels it draws separately: Actors' merged crowd level is never used here, since the stand-in takes over
+   * before it would (and its mesh, made again at each switch, would build its shaders while drawing).
+   */
+  private detailFor(f: Figure, d: number): void {
+    const c = f.character, levels = figureLevels(c.lods);
+    const fov = (this.camera as PerspectiveCamera).isPerspectiveCamera ? (this.camera as PerspectiveCamera).getEffectiveFOV() : 50;
+    const zoom = Math.tan(MathUtils.degToRad(25)) / Math.tan(MathUtils.degToRad(fov / 2));
+    const want = lodForDistance(c.lods, d, zoom);
+    const level = levels.filter((l) => l <= want).pop() ?? levels[0];
+    if (c.lodMode !== level) c.setLod(level);
   }
 
   /** Take someone's figure away (loading: it is let go when it arrives); their stand-in is written again this frame. */
@@ -293,6 +322,7 @@ export class PeopleView {
         figures++;
         // Hand over in this frame: the figure is in and posed, its stand-in is not written.
         if (!slot!.shown) { this.group.add(f.object); slot!.shown = true; }
+        this.detailFor(f, dist(one.feet, eye));
         f.update({ feet: toView(eye, one.feet), up: one.up, front: one.front, speed: one.person.speed, anim: one.doing.anim }, dt, t);
         continue;
       }
@@ -365,3 +395,6 @@ function doingOf(p: Person, who: Resident, deep: boolean): Doing {
 }
 
 const dist = (a: Vec3, b: Vec3): number => v3len(v3sub(a, b));
+
+/** The levels of detail a figure is drawn at: Actors' levels that draw its parts separately (not merged), finest first. */
+const figureLevels = (lods: readonly LodDef[]): number[] => lods.flatMap((l, i) => (l.merge ? [] : [i]));
