@@ -53,6 +53,13 @@ export interface Habitat {
   /** The largest radius this hull material can spin at the given gravity (m). */
   readonly maxRadius: number;
   readonly paddingThickness: number;
+  /**
+   * The Understorey's pillars (`HabitatParams.under`): each carries the land over one bay, and its own weight, down the
+   * living layer's height. Its radius is the larger of what the stone needs not to crush and what it needs not to
+   * buckle (Euler, pinned at the vault and at the floor deck), both with the stone's safety factor. `load` is the force
+   * at its foot (N), `gravity` the gravity half way down the layer (m/s²).
+   */
+  readonly pillars: { radius: number; load: number; gravity: number; governs: 'crushing' | 'buckling' };
   /** Interior floor area 2πRL (m²), without the endcap slopes. */
   readonly floorArea: number;
   /** One endcap disc at the outer radius (m²). */
@@ -124,6 +131,7 @@ export function derive(p: HabitatParams): Habitat {
   const outer = solarSkin + ly.solarSkin;
   const layers: LayerRadii = { surface, ceilingDeck, living, floorDeck, service, hull, padding, solarSkin, outer };
 
+  const pillars = pillarsOf(p, spin * spin * (living + floorDeck) / 2);
   const floorArea = 2 * Math.PI * R * L;
   const endcapArea = Math.PI * outer * outer;
   const paddingMass = p.shieldingDensity * (2 * Math.PI * solarSkin * L + 2 * Math.PI * solarSkin * solarSkin);
@@ -157,6 +165,7 @@ export function derive(p: HabitatParams): Habitat {
     hullStress,
     maxRadius,
     paddingThickness,
+    pillars,
     floorArea,
     endcapArea,
     paddingMass,
@@ -182,4 +191,20 @@ export function derive(p: HabitatParams): Habitat {
       return R * (x - Math.atan(x));
     },
   };
+}
+
+/** A pillar of the Understorey at gravity g: the land over one bay and its own weight, sized against crushing and buckling. */
+function pillarsOf(p: HabitatParams, g: number): Habitat['pillars'] {
+  const u = p.under, st = u.stone, height = p.layers.living;
+  const land = u.land * u.bay * u.bay * g;
+  // Its own weight depends on its radius: a few rounds settle it (the weight is a small share of the land's).
+  let radius = 0, load = land, governs: 'crushing' | 'buckling' = 'crushing';
+  for (let k = 0; k < 6; k++) {
+    load = land + st.density * Math.PI * radius * radius * height * g;
+    const crush = Math.sqrt((load * st.safetyFactor) / st.strength / Math.PI);
+    const buckle = Math.pow((4 * load * st.safetyFactor * height * height) / (Math.PI * Math.PI * st.modulus) / Math.PI, 0.25);
+    radius = Math.max(crush, buckle);
+    governs = buckle > crush ? 'buckling' : 'crushing';
+  }
+  return { radius, load, gravity: g, governs };
 }

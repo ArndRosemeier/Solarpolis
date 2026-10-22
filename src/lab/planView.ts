@@ -3,7 +3,7 @@
  * numbers. Redrawn a moment after the parameters stop changing, since a map takes a few hundred milliseconds.
  */
 import { DISTRICT_STYLES, type Habitat } from '../blueprint';
-import { makePlan, siteOf, type Plan, type Site } from '../gen/plan';
+import { entrancesOf, makePlan, siteOf, type Plan, type Site } from '../gen/plan';
 import { el } from '../app/dom';
 import { FACE_COLORS, STYLE_COLORS, endcapMap, floorMap, floorPixel, type PlanImage } from './planMap';
 
@@ -62,39 +62,57 @@ export function figure(c: HTMLCanvasElement, caption: string): HTMLElement {
   return f;
 }
 
-export class PlanView {
+/**
+ * A Blueprint tab panel of maps under a summary line, redrawn a moment (`settle` ms) after the parameters stop changing,
+ * since a map takes a few hundred milliseconds. Each panel draws its own maps (`draw`) and hands them to `present`.
+ */
+export abstract class MapsPanel {
   readonly root = el('div', 'plan');
   private readonly maps = el('div', 'plan-maps');
   private readonly summary = el('p', 'plan-summary');
   private timer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor() {
-    const key = el('div', 'plan-key');
-    for (const s of DISTRICT_STYLES) key.append(chip(rgb(STYLE_COLORS[s]), s));
-    key.append(chip('rgb(56,92,51)', 'reserve'), chip(rgb(FACE_COLORS.stair), 'Stair face'), chip(rgb(FACE_COLORS.vine), 'Vine face'), chip(rgb(FACE_COLORS.water), 'Water face'));
-    key.append(chip('rgb(255,219,89)', 'Sunwalk', true), chip('rgb(247,242,224)', 'ways', true), chip('rgb(77,140,204)', 'rivers', true), chip('rgb(46,36,26)', 'entrances'), chip('rgb(191,31,26)', 'landmarks'));
-    this.root.append(this.summary, this.maps, key);
+  constructor(private readonly settle: number) {
+    this.root.append(this.summary, this.maps);
   }
 
   /** Redraws the maps for a habitat (null: none to draw), once the parameters have settled. */
   show(h: Habitat | null): void {
     if (this.timer) clearTimeout(this.timer);
-    if (!h) { this.maps.replaceChildren(); this.summary.textContent = ''; return; }
-    this.timer = setTimeout(() => { this.timer = null; this.draw(h); }, SETTLE);
+    if (!h) { this.present(''); return; }
+    this.timer = setTimeout(() => { this.timer = null; this.draw(h); }, this.settle);
   }
 
-  private draw(h: Habitat): void {
+  protected abstract draw(h: Habitat): void;
+
+  /** Shows the summary and the maps (none: why there are none). */
+  protected present(summary: string, ...maps: HTMLElement[]): void {
+    this.summary.textContent = summary;
+    this.maps.replaceChildren(...maps);
+  }
+}
+
+export class PlanView extends MapsPanel {
+  constructor() {
+    super(SETTLE);
+    const key = el('div', 'plan-key');
+    for (const s of DISTRICT_STYLES) key.append(chip(rgb(STYLE_COLORS[s]), s));
+    key.append(chip('rgb(56,92,51)', 'reserve'), chip(rgb(FACE_COLORS.stair), 'Stair face'), chip(rgb(FACE_COLORS.vine), 'Vine face'), chip(rgb(FACE_COLORS.water), 'Water face'));
+    key.append(chip('rgb(255,219,89)', 'Sunwalk', true), chip('rgb(247,242,224)', 'ways', true), chip('rgb(77,140,204)', 'rivers', true), chip('rgb(46,36,26)', 'entrances'), chip('rgb(191,31,26)', 'landmarks'));
+    this.root.append(key);
+  }
+
+  protected draw(h: Habitat): void {
     let plan: Plan;
     try {
       plan = makePlan(h);
     } catch (e) {
-      this.maps.replaceChildren();
-      this.summary.textContent = `No plan for this habitat: ${String(e)}`;
+      this.present(`No plan for this habitat: ${String(e)}`);
       return;
     }
-    const entrances = plan.sites.filter((s) => s.kind === 'entrance').length;
+    const entrances = entrancesOf(plan).length;
     const roles = plan.rivers.map((r) => r.role).join(', ');
-    this.summary.textContent = `${plan.valleys} valleys · ${plan.districts.length} districts · ${entrances} entrances down to the living layer · rivers: ${roles || 'none'} · the wild ${Math.round(h.params.plan.reserve * 100)}% of the floor is reserve`;
+    const summary = `${plan.valleys} valleys · ${plan.districts.length} districts · ${entrances} entrances down to the living layer · rivers: ${roles || 'none'} · the wild ${Math.round(h.params.plan.reserve * 100)}% of the floor is reserve`;
 
     const floor = canvasOf(floorMap(plan, FLOOR_WIDTH));
     const lm = (kind: Site['kind']): Site | undefined => siteOf(plan, kind);
@@ -124,6 +142,6 @@ export class PlanView {
 
     const ends = el('div', 'plan-ends');
     ends.append(figure(wild, 'The Mountain (wild end), seen from the floor: rings are gravity bands'), figure(port, 'The Gate (port end), seen from the floor'));
-    this.maps.replaceChildren(figure(floor, 'The floor unrolled: wild end left, port end right, once round the axis top to bottom'), ends);
+    this.present(summary, figure(floor, 'The floor unrolled: wild end left, port end right, once round the axis top to bottom'), ends);
   }
 }

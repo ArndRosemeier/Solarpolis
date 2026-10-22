@@ -84,7 +84,8 @@ function colorAt(plan: Plan, theta: number, s: number, out: number[]): number {
   return id * 8 + (valley & 7);
 }
 
-function emptyImage(width: number, height: number): PlanImage {
+/** A blank (transparent) map. */
+export function emptyImage(width: number, height: number): PlanImage {
   return { width, height, data: new Uint8ClampedArray(new ArrayBuffer(width * height * 4)) };
 }
 

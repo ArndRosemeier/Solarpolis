@@ -193,6 +193,9 @@ function faceKinds(n: number): FaceKind[] {
 /** A plan's site of a kind: the first (a landmark has one), or undefined. */
 export const siteOf = (plan: Plan, kind: SiteKind): Site | undefined => plan.sites.find((x) => x.kind === kind);
 
+/** The plan's entrances down to the living layer, in the plan's order (the courts residents live under, the hamlets below). */
+export const entrancesOf = (plan: Plan): Site[] => plan.sites.filter((x) => x.kind === 'entrance');
+
 /**
  * An entrance's court: the hole the terrain digs for it, its floor level `depth` m under the lowest ground on its rim
  * out to `COURT.floor` of its `radius`, then a wall at least `COURT.wall` steep up to the ground at the rim (the floor's
