@@ -2,6 +2,11 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.111 — Sharp ground on top of the Heights
+
+- Standing on top of the tallest Height, the ground around you no longer turns coarse to stay within its memory budget. The floor a kilometre below no longer counts as near.
+- Ground tiles on the floor need about a fifth less memory too.
+
 ## v0.110 — A slow test warns instead of failing
 
 - Behind the scenes: a single test or test file over its time budget now shows as a warning on the change instead of failing it. Only the whole test run going over its 30 s limit fails. Test machines vary in speed, so one test near its limit used to fail at random and block everyone's changes. Nothing in the game changes.
