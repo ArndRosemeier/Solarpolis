@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { angleDiff } from '@futuremagic/core';
 import { FLOOR_LAYERS, MATRIX, STYLE_LAND, derive } from '../src/blueprint';
-import { planOf, type PlanPath } from '../src/gen/plan';
+import { GROUND, planOf, type PlanPath } from '../src/gen/plan';
 import { CROWN, pathCover, pathsOf } from '../src/gen/paths';
 import { cellsNear, plantCell, plantsOf, PLANT_STRIDE } from '../src/gen/scatter';
 import { fromWorld, toWorld } from '../src/blueprint';
@@ -31,7 +32,19 @@ for (const { name, params } of MATRIX) {
         most = Math.max(most, Math.abs(u * dv - v * du) / (length || 1));
         if (lake) assert.ok(Math.abs(q[i * 2 + 1] - lake.s) >= lake.halfWidth, 'a way runs into the lake');
       }
-      assert.ok(most <= length * 0.11, `a way swings ${most.toFixed(0)} m off a ${length.toFixed(0)} m line`);
+      // A way bent round a district's work (gen/works.ts) swings out as far as the work's rim, and a little more.
+      let round = 0;
+      for (const w of plan.works) {
+        const u = angleDiff(q[0], w.theta) * R, v = w.s - q[1], t = Math.min(1, Math.max(0, (u * du + v * dv) / (length * length || 1)));
+        if (Math.hypot(u - du * t, v - dv * t) < w.radius * 1.3 + widths.way * 3) round = Math.max(round, w.radius * 1.3 + widths.way * 3);
+      }
+      // And one kept off a Ring's crest and steep front (gen/plan.ts) as far as those reach from its line.
+      for (const g of plan.grounds) {
+        if (g.kind !== 'ring') continue;
+        const keep = g.height * (GROUND.crest / 2 + GROUND.face) + widths.way;
+        for (let k = 0; k <= 20; k++) if (Math.abs(q[1] + (dv * k) / 20 - plan.ringLine(g, q[0] + (du * k) / 20 / R)) < keep * 1.05) round = Math.max(round, keep * 1.05);
+      }
+      assert.ok(most <= length * 0.11 + round, `a way swings ${most.toFixed(0)} m off a ${length.toFixed(0)} m line`);
       if (n > 4) { long++; if (most > length * 0.005) swung++; }
     }
     assert.ok(long === 0 || swung > long * 0.8, `${swung} of ${long} long ways swing`);

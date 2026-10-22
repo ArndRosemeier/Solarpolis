@@ -153,8 +153,7 @@ function grownHalls(t: Terrain, spec: PlantSpec, groves: readonly Grove[]): Hall
   /** A frame where a hall of district `d` may stand, with the best score it could reach (its corners' slope), or null. */
   const hallTry = (d: District, f: FloorFrame): Try | null => {
     if (f.s - reach < plan.reserveEnd || f.s + reach > h.profile.floorEnd || fromLake(t.lake, f.s) < reach) return null;
-    const at = plan.borderAt(f.theta, f.s);
-    if (!at || at.district !== d || at.edge < reach) return null;
+    if (!plan.inside(d, f.theta, f.s, reach)) return null;
     for (const g of groves) {
       const dt = g.theta - f.theta;
       if (Math.hypot((dt - TURN * Math.round(dt / TURN)) * R, g.s - f.s) < g.clear + g.crown + reach) return null;
