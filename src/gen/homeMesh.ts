@@ -29,9 +29,14 @@ const BUILT: Readonly<Record<Build, { col: readonly RGB[]; finish: number }>> = 
 };
 /** How far a house's colour strays from its build's (±, a share). */
 const TINT = 0.06;
+/** A wall's colour (one of its build's, tinted) and finish, drawn from `rng`. */
+export function builtLook(build: Build, rng: Rng): { col: RGB; finish: number } {
+  const b = BUILT[build];
+  return { col: shade(rng.pick(b.col), 1 + rng.range(-TINT, TINT)), finish: b.finish };
+}
 /** The doors (oiled wood), a lit room's light through its window, and an unlit or empty one's dark glass. */
-const DOOR: RGB = [0.28, 0.18, 0.11];
-const ROOM: RGB = [1, 0.74, 0.46];
+export const DOOR: RGB = [0.28, 0.18, 0.11];
+export const ROOM: RGB = [1, 0.74, 0.46];
 const DARK: RGB = [0.05, 0.05, 0.055];
 /** Of a lived-in house's windows, the share lit. */
 const LIT = 0.7;
@@ -48,8 +53,7 @@ const H = {
 
 /** The house as a block: its walls' colour and finish, its windows and door per side (the same at every level: drawn from its seed). */
 function blockOf(house: House, hr: number): Block {
-  const rng = new Rng(house.seed), built = BUILT[house.build];
-  const col = shade(rng.pick(built.col), 1 + rng.range(-TINT, TINT));
+  const rng = new Rng(house.seed), { col, finish } = builtLook(house.build, rng);
   const doorSide = house.door < 0 ? 0 : 1;
   const openings = sidesOf(house.body).map((s, side) => {
     const n = Math.max(1, Math.floor(s.length / (H.rhythm * hr))), out: Opening[] = [];
@@ -72,7 +76,7 @@ function blockOf(house: House, hr: number): Block {
     }
     return out;
   });
-  return { body: house.body, base: house.base, storeys: house.storeys, storey: house.storey, col, finish: built.finish, openings };
+  return { body: house.body, base: house.base, storeys: house.storeys, storey: house.storey, col, finish, openings };
 }
 
 /** Its yard's walls round the plot, the gate (`gate`, along x) in the wall on the door's side. */

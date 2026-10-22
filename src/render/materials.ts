@@ -31,7 +31,7 @@ import { cellHash, floorShare, floorSurface, rockFromAfar, snowOver, woodsFromAf
 import { RISE_RANGE } from '../gen/tiles';
 import { filtered } from './textures';
 import { cloudMarch, cloudShade } from './cloudShaders';
-import { builtAlbedo, roofHorizons, windowPane } from './builtShaders';
+import { builtAlbedo, roofHorizons, stillWater, windowPane } from './builtShaders';
 import { hamletSky } from './hamletSkies';
 import { FINISH } from '../gen/pavilion';
 import { LAMPLIGHT } from '../gen/underMesh';
@@ -768,6 +768,8 @@ export const VAULT = kind('vault', ['position', 'normal', 'color', 'uv', 'finish
     // A window's arguments set before its branch too.
     const pane = uv().toVar(), room = vertexColor().rgb.mul(light).mul(WINDOW_GLOW).toVar(), outside = light.mul(glow.x).toVar();
     If(window, () => out.assign(windowPane(pane, room, outside)));
+    const water = abs(finish.sub(FINISH.water)).lessThan(0.5), still = vertexColor().rgb.mul(outside).toVar(), clock = below.clock.toVar();
+    If(water, () => out.assign(stillWater(pane, still, outside, clock)));
     // A hamlet's sky (only there: the skies are the heaviest part of the kind); its arguments set before the branch
     // (hamletSkies.ts `skyFunction` says why).
     const look = normalize(toward).toVar(), index = finish.sub(FINISH.screen).toVar();

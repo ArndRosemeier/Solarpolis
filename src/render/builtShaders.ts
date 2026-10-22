@@ -134,6 +134,16 @@ export const windowPane = Fn(([st, room, outside]: [V2, V3, V3]) => {
 }).setLayout({ name: 'windowPane', type: 'vec3', inputs: [{ name: 'st', type: 'vec2' }, { name: 'room', type: 'vec3' }, { name: 'outside', type: 'vec3' }] }) as unknown as (st: V2, room: V3, outside: V3) => V3;
 
 /**
+ * Still water under the lamps (`st` across it in metres, `col` its colour as lit, `light` the lamps' light there,
+ * `clock` seconds): dark, with the lamps' light broken on its slow ripples.
+ */
+export const stillWater = Fn(([st, col, light, clock]: [V2, V3, V3, F]) => {
+  const a = mx_noise_float(vec3(st.mul(1.3), clock.mul(0.15))), b = mx_noise_float(vec3(st.mul(3.1).add(7.7), clock.mul(0.23)));
+  const glint = smoothstep(0.35, 0.75, a.mul(0.6).add(b.mul(0.4)).abs()).mul(shows(st.mul(3.1)));
+  return col.add(light.mul(glint.mul(0.35)));
+}).setLayout({ name: 'stillWater', type: 'vec3', inputs: [{ name: 'st', type: 'vec2' }, { name: 'col', type: 'vec3' }, { name: 'light', type: 'vec3' }, { name: 'clock', type: 'float' }] }) as unknown as (st: V2, col: V3, light: V3, clock: F) => V3;
+
+/**
  * A built surface's albedo: its finish over the vertex colour (`FINISH` in gen/pavilion.ts: 0 stone, 1 timber, 2
  * bronze, 3 ceramic, 6 brick, 7 plaster, 8 earth, 9 panel; anything else plain). One plain If each.
  */

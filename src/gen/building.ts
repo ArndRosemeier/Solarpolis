@@ -63,6 +63,11 @@ export interface Side {
 }
 
 /** A block's four walls, always in this order: facing −y, +y, −x, +x. */
+/** A rect's levels at its four corners (what stands on it is level with the highest floor, under the lowest springing). */
+export function cornerLevels(r: Rect, levelsAt: LevelsAt): Levels[] {
+  return [levelsAt(r.x0, r.y0), levelsAt(r.x1, r.y0), levelsAt(r.x0, r.y1), levelsAt(r.x1, r.y1)];
+}
+
 export function sidesOf(b: Rect): Side[] {
   const dx = b.x1 - b.x0, dy = b.y1 - b.y0;
   return [
@@ -88,9 +93,9 @@ export interface Block {
 const UP: Vec3 = [0, 0, 1];
 export const onSide = (s: Side, u: number, out: number, z: number): Vec3 => along([s.o[0], s.o[1], 0], [s.t[0], s.t[1], 0], u, [s.n[0], s.n[1], 0], out, UP, z);
 
-/** An upright box (open underneath) from its extents in the bay's frame. */
-export function upright(sh: Shape, x0: number, x1: number, y0: number, y1: number, z0: number, z1: number, col: RGB): void {
-  sh.block([(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2], [1, 0, 0], [0, 1, 0], [0, 0, 1], [(x1 - x0) / 2, (y1 - y0) / 2, (z1 - z0) / 2], col, true);
+/** An upright box from its extents in the bay's frame: open underneath (standing on the floor), or closed (`under`: seen from below). */
+export function upright(sh: Shape, x0: number, x1: number, y0: number, y1: number, z0: number, z1: number, col: RGB, under = false): void {
+  sh.block([(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2], [1, 0, 0], [0, 1, 0], [0, 0, 1], [(x1 - x0) / 2, (y1 - y0) / 2, (z1 - z0) / 2], col, !under);
 }
 
 /** A flat piece of a side, u0 … u1 along it, z0 … z1, `out` out from it, facing the way the side does. */
