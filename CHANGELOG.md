@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.107 — Faster test run
+
+- The remaining tests that built their own land now share one per habitat too (also the flat test land and the reference in other climates), so the whole test run takes about 20 s of its 30 s limit instead of about 25 s. Nothing in the game changes.
+
 ## v0.106 — A gravity meter: why you weigh less running one way
 
 - Inside, a small meter at the bottom right shows the gravity you feel right now, in g, with a bar against what standing still here would give.
