@@ -64,6 +64,9 @@ export function validate(h: Habitat): Finding[] {
   const rv = rl.rivers;
   if (rv && !(Number.isInteger(rv.count) && rv.count >= 0 && rv.width > 0 && rv.depth > 0 && rv.width < (rl.ringLake?.width ?? Infinity)))
     out.push({ id: 'relief', severity: 'invalid', message: 'rivers need a whole count ≥ 0, a width and depth > 0, and to be narrower than the lake they run into' });
+  const forms = rl.landforms;
+  if (forms && !(forms.ring >= 0 && forms.ring <= 0.2 && forms.ringEvery > 0 && forms.height >= 0 && forms.height <= 0.45 && Number.isInteger(forms.heights) && forms.heights >= 0))
+    out.push({ id: 'relief', severity: 'invalid', message: 'landforms need Rings 0 to 0.2 radii high a spacing > 0 apart, and a whole count ≥ 0 of Heights at most 0.45 radii high' });
   const c = p.clouds;
   if (c && !(c.base > 0 && c.thickness > 0 && c.base + c.thickness < h.radius - p.hubRadius && c.cover >= 0 && c.cover <= 1 && c.size > 0 && Number.isFinite(c.wind.along) && Number.isFinite(c.wind.around)))
     out.push({ id: 'clouds', severity: 'invalid', message: 'clouds need a base and thickness > 0 that stay clear of the axis, a cover from 0 to 1 and a size > 0' });
