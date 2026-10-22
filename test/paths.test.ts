@@ -52,6 +52,8 @@ for (const { name, params } of MATRIX) {
         const left = side(-half * 0.8), mid = side(0), right = side(half * 0.8);
         if (net.pathAt(at.theta + (at.nu * -half * 0.8) / R, at.s + at.ns * -half * 0.8)?.kind !== path.kind) continue;
         if (net.pathAt(at.theta + (at.nu * half * 0.8) / R, at.s + at.ns * half * 0.8)?.kind !== path.kind) continue;
+        // At a ford's edge one side is the river's bed (crossings.ts builds over it).
+        if ([-1, 1].some((k) => t.riverAt(at.theta + (at.nu * k * half * 0.8) / R, at.s + at.ns * k * half * 0.8))) continue;
         assert.ok(Math.abs(left - right) < CROWN * half + 0.05, `${path.kind} tilts ${(left - right).toFixed(2)} m across`);
         assert.ok(mid >= Math.min(left, right) - 1e-6, `${path.kind} crowned`);
         checked++;

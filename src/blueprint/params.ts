@@ -101,6 +101,13 @@ export interface Relief {
    * their depth (m); null (or no lake) for none.
    */
   rivers: { count: number; width: number; depth: number } | null;
+  /**
+   * The big landforms the habitat mind built on the floor (design "Shaped ground", Arnd 2026-10-22): the Rings, ridges
+   * running round the whole cylinder across its axis, `ringEvery` radii apart along it and at most `ring` radii high;
+   * and `heights` lone mounts on the ridges between the valleys, the tallest `height` radii high. Absent or null: none.
+   * Built hollow (the living layer's great halls stand in them) and placed by the plan (gen/plan.ts, `grounds`).
+   */
+  landforms?: { ring: number; ringEvery: number; height: number; heights: number } | null;
 }
 
 export type AxisOrientation = 'side-on' | 'end-on';

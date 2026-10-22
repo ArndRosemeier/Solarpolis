@@ -79,7 +79,10 @@ function colorAt(plan: Plan, theta: number, s: number, out: number[]): number {
     c = d ? STYLE_COLORS[d.style] : RESERVE;
     id = d ? d.id : 4001;
   }
-  const k = c === LAKE || c === SNOW ? 1 : relief;
+  let k = c === LAKE || c === SNOW ? 1 : relief;
+  // The landforms (the Rings, the Heights) lighter the higher they stand, with a contour every fifth of their height.
+  const on = c === LAKE || s < profile.floorStart || s > profile.floorEnd ? null : plan.landformAt(theta, s);
+  if (on) k *= (1 + 0.35 * on.share) * (on.share * 5 - Math.floor(on.share * 5) < 0.08 ? 0.7 : 1);
   out[0] = c[0] * k; out[1] = c[1] * k; out[2] = c[2] * k;
   return id * 8 + (valley & 7);
 }
