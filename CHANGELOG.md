@@ -2,6 +2,11 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.101 — Tree trunks stop you
+
+- Trees are no longer walk-through: their trunks stop you, walking or running, exactly where and as thick as they are drawn (a glancing run slides round them). Fallen trunks on the forest floor are solid too: small ones you step over, big ones you climb or go round.
+- Branches, leaves, bushes, grass and fallen branches stay walk-through.
+
 ## v0.100 — The plan lays out Rings and Heights
 
 - The habitat mind's plan now holds the first big landforms for the floor (design "Shaped ground"): Rings, ridges running all the way round the cylinder that part the floor into landscape rooms, and Heights, lone mounts on the ridges between the valleys, the tallest a third of the radius high.
