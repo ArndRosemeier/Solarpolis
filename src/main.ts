@@ -20,7 +20,7 @@ import { InteriorView } from './render/view';
 import { speckMark } from './render/crowdShaders';
 import { OutsideView } from './render/outside';
 import { hubView } from './space';
-import { fromWorld, toWorld, type DebrisSpec, type Habitat } from './blueprint';
+import { fromWorld, toWorld, type DebrisSpec, type Habitat, type Vec3 } from './blueprint';
 import { levelRunOf, nearestOf, onRow, plantsOf, slopeAt, type Level } from './gen/scatter';
 import { frameOf, landmarksOf, type Hut, type Pavilion } from './gen/landmarks';
 import { plantingsOf, type Grove, type Hall } from './gen/planted';
@@ -114,6 +114,7 @@ const insideSlot = new ViewSlot('Hold the right mouse button to look around · W
   memory.track('player body', () => v.bodyBytes());
   memory.track('people', () => v.peopleBytes());
   memory.track('drones', () => v.droneBytes());
+  memory.track('animals', () => v.animalBytes());
   return v;
 });
 const outsideSlot = new ViewSlot('Hold the right mouse button to swing around · wheel to come closer · 1 habitat, 2 Earth, 3 Moon, 4 nearest neighbour · F to fly (W A S D, E up, Q down, Shift faster)', 'Building the sky…', 'sky maps, stars and skin detail', (h) => OutsideView.create(h));
@@ -257,6 +258,20 @@ const toDrone = (label: string, back: number): void => debug.add({
 });
 toDrone('Fly: beside the nearest drone at work', 4);
 toDrone('Fly: the nearest drone at work from 60 m', 60);
+/** Low beside the nearest squirrel down on the ground around the player, `back` m off its side, looking at it. */
+const toSquirrel = (label: string, back: number): void => debug.add({
+  label, group: 'Go', run: () => {
+    const v = view(), eye = v?.eye(), q = v && eye && v.animals?.nearest(eye);
+    if (!v || !q) return;
+    const side: Vec3 = [q.up[1] * q.front[2] - q.up[2] * q.front[1], q.up[2] * q.front[0] - q.up[0] * q.front[2], q.up[0] * q.front[1] - q.up[1] * q.front[0]];
+    const at: Vec3 = [q.feet[0] + q.up[0] * 0.12, q.feet[1] + q.up[1] * 0.12, q.feet[2] + q.up[2] * 0.12];
+    const from: Vec3 = [at[0] + side[0] * back + q.up[0] * back * 0.3, at[1] + side[1] * back + q.up[1] * back * 0.3, at[2] + side[2] * back + q.up[2] * back * 0.3];
+    const d = Math.hypot(at[0] - from[0], at[1] - from[1], at[2] - from[2]);
+    v.floatAt(from, [(at[0] - from[0]) / d, (at[1] - from[1]) / d, (at[2] - from[2]) / d]);
+  },
+});
+toSquirrel('Fly: beside the nearest squirrel', 1.2);
+toSquirrel('Fly: the nearest squirrel from 15 m', 15);
 /** Ground one can stand on (a terrace's ledge, not its wall). */
 const ledge = (eco: Ecology) => (pt: number, ps: number): boolean => slopeAt(eco, pt, ps, eco.terrain.heightAt(pt, ps), 2) < 0.2;
 toPlace('Into the nearest orchard', -10, (eco, t, s) => nearestPlace(eco.terrain, 'orchard', t, s, ledge(eco)));

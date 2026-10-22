@@ -163,7 +163,7 @@ export function residentOf(h: Habitat, i: number): Resident {
 }
 
 /** Where in the day the bright stretch is over a place along the profile (phase 0 … daylight). */
-function localNoon(h: Habitat, s: number): number {
+export function localNoon(h: Habitat, s: number): number {
   const { daylight, peakWidth } = h.params.day, z = h.profile.at(s).z / h.params.length;
   return (daylight * (z + peakWidth)) / (1 + 2 * peakWidth);
 }

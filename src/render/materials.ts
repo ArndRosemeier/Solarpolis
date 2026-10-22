@@ -9,8 +9,8 @@
  * Everything is drawn relative to the camera (`toView`), so `positionWorld` is the offset from the eye; the eye's own
  * world position is the `view.eye` uniform, for whatever needs the true place (the axis, ground patterns).
  */
-import { MeshBasicNodeMaterial, DoubleSide, BackSide, FrontSide, AdditiveBlending, type Material } from 'three/webgpu';
-import { abs, atan, attribute, screenCoordinate, cross, dFdx, dFdy, floor, fract, inverseSqrt, log2, mx_noise_float, uv, cameraPosition, hash, normalLocal, step, time, varying, clamp, color, cos, log, select, sign, sqrt, dot, exp, float, max, mix, normalize, min, modelWorldMatrix, normalWorld, positionLocal, positionWorld, pow, sin, smoothstep, texture, uniform, vec2, vec3, vec4, vertexColor } from 'three/tsl';
+import { MeshBasicNodeMaterial, MeshPhysicalNodeMaterial, MeshStandardNodeMaterial, DoubleSide, BackSide, FrontSide, AdditiveBlending, type Material } from 'three/webgpu';
+import { abs, atan, attribute, screenCoordinate, cross, dFdx, dFdy, floor, fwidth, length, fract, inverseSqrt, log2, mx_noise_float, uv, cameraPosition, hash, normalLocal, step, time, varying, clamp, color, cos, log, select, sign, sqrt, dot, exp, float, max, mix, normalize, min, modelWorldMatrix, normalWorld, positionLocal, positionWorld, pow, sin, smoothstep, texture, uniform, vec2, vec3, vec4, vertexColor } from 'three/tsl';
 import { DataTexture, Uint8BufferAttribute, RGBAFormat, UnsignedByteType, Vector4, DataUtils, Float32BufferAttribute, HalfFloatType, InstancedBufferAttribute, InstancedInterleavedBuffer, InterleavedBufferAttribute, RedFormat, Vector2, Vector3, type BufferGeometry } from 'three/webgpu';
 import { PLANT_STRIDE } from '../gen/scatter';
 import { BARK_STRIPS } from '../gen/trees';
@@ -19,6 +19,7 @@ import { LEAF_ATLAS_SIZE, LEAF_CUT } from '../workers/leaves';
 import { PICK_HEIGHT, PICK_TURNS } from '../gen/handover';
 import type { Node } from 'three/webgpu';
 import type { StageKind } from '@futuremagic/stage';
+import { useNodeDqs } from '@actors/three/webgpu';
 import { REFERENCE } from '../blueprint';
 import { SHADOW_HALF, sunShadow } from './lights';
 import { CLOSED_RAISE, UNDER_CROWNS } from '../gen/ecology';
@@ -817,6 +818,53 @@ export function layInstances(g: BufferGeometry, data: Float32Array | InstancedIn
   const buffer = data instanceof InstancedInterleavedBuffer ? data : new InstancedInterleavedBuffer(data, layout.stride);
   layout.attributes.forEach((name, k) => g.setAttribute(name, new InterleavedBufferAttribute(buffer, 4, k * 4)));
   return buffer;
+}
+
+/**
+ * Animals' fur and eyes (render/actors/animal.ts). Like the humans' materials (docs/SHADERS.md), these are drawn on
+ * Actors' skinned bodies (dual-quaternion skinning, `useNodeDqs`), lit by three's lights, and compiled when a figure
+ * enters with `stage.prepare`; unlike them they are made here, since Actors' WebGPU kit draws fur in one flat colour.
+ * One material each, shared by every animal figure: what differs per animal comes in the `coat` attribute.
+ */
+let furMade: Material | null = null, eyeMade: Material | null = null;
+
+/** How fine the hair's locks are (per m of the coat's pattern, the shader's `furStreak`), and their two octaves' shares. */
+const LOCKS = [230, 520] as const;
+
+/**
+ * Fur: the coat's colour baked per vertex (gen/coat.ts, the attribute `coat`: linear RGB, and the hair's grain in w),
+ * with locks of lighter and darker hair laid along the way the hair lies (`furFlow`, on the coat's own pattern
+ * positions `coatPos`, so they stay put as the body moves); locks finer than a pixel blend into their mean.
+ */
+export function furMaterial(): Material {
+  if (furMade) return furMade;
+  const m = new MeshStandardNodeMaterial({ roughness: 0.85, metalness: 0 });
+  const coat = attribute<'vec4'>('coat', 'vec4'), flow = normalize(attribute<'vec3'>('furFlow', 'vec3').add(1e-5));
+  const p = attribute<'vec3'>('coatPos', 'vec3').div(coat.w), q = varying(p.sub(flow.mul(dot(p, flow).mul(0.86))));
+  const octave = (k: number, at: number): Node<'float'> => mx_noise_float(q.mul(at).add(k * 3)).mul(0.5).add(0.5);
+  const locks = octave(0, LOCKS[0]).mul(0.6).add(octave(1, LOCKS[1]).mul(0.4));
+  const px = length(fwidth(q.mul(LOCKS[0])));
+  const grain = mix(locks, float(0.5), smoothstep(0.35, 1, px));
+  m.colorNode = vec4(coat.rgb.mul(grain.mul(0.28).add(0.86)), 1);
+  furMade = useNodeDqs(Object.assign(m, { name: 'animal fur' }));
+  return furMade;
+}
+
+/**
+ * An animal's eye on its UV sphere (v from the front pole): a dark pupil, a large iris in the coat's iris colour (the
+ * `coat` attribute's rgb on the eyes), a dark limbal ring and a little brown sclera, under a wet clear coat.
+ */
+export function animalEyeMaterial(): Material {
+  if (eyeMade) return eyeMade;
+  const m = new MeshPhysicalNodeMaterial({ roughness: 0.1, clearcoat: 1, clearcoatRoughness: 0.03, ior: 1.376 });
+  const e = uv(), r = e.y, iris = attribute<'vec4'>('coat', 'vec4').rgb;
+  const rays = sin(e.x.mul(2 * Math.PI * 23)).mul(sin(e.x.mul(2 * Math.PI * 7).add(r.mul(40)))).mul(0.15).add(0.85);
+  let c: Node<'vec3'> = mix(vec3(0.005, 0.005, 0.005), iris.mul(rays).mul(mix(float(1.3), float(0.6), smoothstep(0.1, 0.34, r))), smoothstep(0.09, 0.11, r));
+  c = mix(c, vec3(0.03, 0.02, 0.015), smoothstep(0.33, 0.37, r));
+  c = mix(c, vec3(0.2, 0.12, 0.08), smoothstep(0.45, 0.55, r));
+  m.colorNode = vec4(c, 1);
+  eyeMade = useNodeDqs(Object.assign(m, { name: 'animal eye' }));
+  return eyeMade;
 }
 
 /** Every kind, for the Stage's warm-up. */

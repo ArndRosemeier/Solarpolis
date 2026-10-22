@@ -15,20 +15,22 @@
  * frame asks the population where each person is now (`whereIs`); the whole area is asked again (`peopleAt`) every
  * second or after a long move, which brings new people in and lets go of those who went below.
  */
-import { Group, InstancedBufferAttribute, MathUtils, Mesh, Vector2, type InstancedBufferGeometry, type Camera, type InstancedInterleavedBuffer, type PerspectiveCamera } from 'three/webgpu';
+import { Group, MathUtils, Mesh, Vector2, type InstancedBufferGeometry, type Camera, type InstancedInterleavedBuffer, type PerspectiveCamera } from 'three/webgpu';
 import { lodForDistance, type LodDef } from '@actors/core';
 import type { Stage } from '@futuremagic/stage';
-import { hash3i, hashToFloat, v3len, v3sub } from '@futuremagic/core';
-import { fromWorld, toView, toWorld, type Habitat, type Vec3 } from '../blueprint';
+import { hash3i, hashToFloat } from '@futuremagic/core';
+import { fromWorld, toView, toWorld, type Habitat, type Vec3, apart as dist } from '../blueprint';
 import type { Terrain } from '../gen/terrain';
 import { horizonAt } from '../gen/horizon';
-import { MEAN_HEIGHT, SPECK_SHOWN, SPECK_STRIDE, STAND_IN_STRIDE, speckBands, standInArrays, writeSpeck } from '../gen/standIn';
+import { MEAN_HEIGHT, SPECK_STRIDE, STAND_IN_STRIDE, speckBands, standInArrays, writeSpeck } from '../gen/standIn';
 import { floorGap, footingOf, personKey, lifeBytes, peopleAt, residentOf, whereIs, type Activity, type Footing, type Person, type Resident } from '../sim';
-import { CROWD, SPECK, SPECK_LAYOUT, STAND_IN_LAYOUT, layInstances } from './materials';
-import { arraysGeometry, drawnAnywhere, freeMesh, instancedOf, quadInstances, sendInstances } from './geometry';
+import { CROWD, STAND_IN_LAYOUT, layInstances } from './materials';
+import { arraysGeometry, drawnAnywhere, freeMesh, instancedOf, sendInstances } from './geometry';
 import { Figure, castAsWorn, type AnimState } from './actors/figure';
+import { FigureLoads, type FigureSlot } from './actors/slots';
 import { humanCatalog } from './actors/pack';
 import { Residents, type Dress } from './actors/residents';
+import { drawSpecks, ownSpecks, pxPerMetre, roomForSpecks, type OwnSpecks } from './specks';
 import HumanWorker from '@actors/human/worker?worker';
 
 /** People are placed out to here (m), each by their exact whereabouts; beyond, the far specks draw them. */
@@ -106,7 +108,7 @@ interface Someone {
   speck: boolean;
   bands: [number, number, number] | null;
   /** Their figure: loading, or drawn in place of the stand-in. */
-  figure: { figure: Figure | null; shown: boolean; dropped: boolean } | null;
+  figure: FigureSlot<Figure> | null;
   /** The last scan that found them. */
   seen: number;
   /** Placed on the land at least once. */
@@ -121,10 +123,8 @@ export class PeopleView {
   private mesh: Mesh | null = null;
   private buffer: InstancedInterleavedBuffer | null = null;
   private data = new Float32Array(0);
-  /** The specks of those placed here but too small for a stand-in: their mesh, instances and shown flags (all on). */
-  private speckMesh: Mesh | null = null;
-  private speckData = new Float32Array(0);
-  private speckBuffer: InstancedInterleavedBuffer | null = null;
+  /** The specks of those placed here but too small for a stand-in. */
+  private specks: OwnSpecks | null = null;
   private specksDrawn = 0;
   /** Everyone these levels drew this frame (`personKey`): the far specks leave them out. */
   readonly near: number[] = [];
@@ -134,7 +134,7 @@ export class PeopleView {
   private scannedAt: Vec3 | null = null;
   private clock = 0;
   private frameNo = 0;
-  private loading = 0;
+  private readonly loads = new FigureLoads<Figure>(() => this.disposed);
   private drawn = 0;
   private figuresDrawn = 0;
   private waiting = 0;
@@ -159,13 +159,11 @@ export class PeopleView {
     g.instanceCount = 0;
     const mesh = drawnAnywhere(g, CROWD.material, 'stand-ins');
     mesh.castShadow = true;
-    const specks = drawnAnywhere(quadInstances(), SPECK.material, 'near specks');
-    this.speckMesh = specks;
-    this.growSpecks(64);
-    (specks.geometry as InstancedBufferGeometry).instanceCount = 0;
-    await Promise.all([this.stage.prepare(mesh), this.stage.prepare(specks)]);
-    if (this.disposed) { freeMesh(mesh); freeMesh(specks); return; }
-    this.group.add(mesh, specks);
+    const specks = ownSpecks('near specks', 64);
+    await Promise.all([this.stage.prepare(mesh), this.stage.prepare(specks.mesh)]);
+    if (this.disposed) { freeMesh(mesh); freeMesh(specks.mesh); return; }
+    this.specks = specks;
+    this.group.add(mesh, specks.mesh);
     this.mesh = mesh;
     this.residents = new Residents(catalog, base, human);
   }
@@ -267,17 +265,9 @@ export class PeopleView {
     }
     let count = 0;
     for (const one of this.people.values()) if (one.figure) count++;
-    if (this.loading > 0 || count >= FIGURES) return;
+    if (this.loads.loading > 0 || count >= FIGURES) return;
     const next = wanted.find((one) => !one.figure);
-    if (!next) return;
-    const slot = { figure: null as Figure | null, shown: false, dropped: false };
-    next.figure = slot;
-    this.loading++;
-    void this.loadFigure(r, next.resident).then((f) => {
-      this.loading--;
-      if (slot.dropped || this.disposed) { f?.dispose(); return; }
-      slot.figure = f;
-    }, () => { this.loading--; });
+    if (next) next.figure = this.loads.load(() => this.loadFigure(r, next.resident));
   }
 
   /** A resident's figure, compiled at every level of detail and its shadows warmed, not yet in the scene. */
@@ -316,7 +306,7 @@ export class PeopleView {
 
   /** Take someone's figure away (loading: it is let go when it arrives); their stand-in is written again this frame. */
   private dropFigure(one: Someone): void {
-    if (one.figure) { one.figure.dropped = true; one.figure.figure?.dispose(); }
+    this.loads.drop(one.figure);
     one.figure = null;
   }
 
@@ -328,12 +318,11 @@ export class PeopleView {
     let n = 0, m = 0, waiting = 0, figures = 0, dressed = 0;
     const need = this.people.size;
     if (this.data.length < need * STAND_IN_STRIDE) this.grow(need * STAND_IN_STRIDE);
-    if (this.speckData.length < need * SPECK_STRIDE) this.growSpecks(need);
-    const d = this.data, sd = this.speckData, near = this.near;
+    roomForSpecks(this.specks!, need);
+    const d = this.data, sd = this.specks!.data, near = this.near;
     near.length = 0;
     // A body's height on screen at distance d is its height times this over d (px).
-    const fov = (this.camera as PerspectiveCamera).isPerspectiveCamera ? (this.camera as PerspectiveCamera).getEffectiveFOV() : 50;
-    const pxPerMetre = this.stage.renderer.getDrawingBufferSize(this.screen).y / 2 / Math.tan(MathUtils.degToRad(fov / 2));
+    const perMetre = pxPerMetre(this.stage, this.camera, this.screen);
     for (const one of this.people.values()) {
       if (!one.placed) continue;
       if (one.dress) dressed++;
@@ -351,7 +340,7 @@ export class PeopleView {
       if (!dress) { waiting++; continue; }
       near.push(personKey(one.person));
       // Stand-in or speck, by the body's height on screen; both are written from the same place, size and colours.
-      const px = (dress.height * pxPerMetre) / Math.max(1e-3, dist(one.feet, eye));
+      const px = (dress.height * perMetre) / Math.max(1e-3, dist(one.feet, eye));
       one.speck = one.speck ? px < HANDOVER_PX * HANDOVER_BACK : px < HANDOVER_PX;
       if (one.speck) {
         writeSpeck(sd, m * SPECK_STRIDE, one.feet, dress.height, [0, 0, 0], one.doing.pose, one.bands ?? speckBands(dress.colors), one.horizon, dress.width);
@@ -377,22 +366,13 @@ export class PeopleView {
     this.holes = dressed - figures - n - m;
     if (this.holes > 0) this.holeFrames++;
     upload(this.mesh!, this.buffer!, n, STAND_IN_STRIDE);
-    upload(this.speckMesh!, this.speckBuffer!, m, SPECK_STRIDE);
+    drawSpecks(this.specks!, m);
   }
 
   private grow(need: number): void {
     this.data = new Float32Array(Math.max(need, this.data.length * 2));
     // The instance attributes are set again on the new buffer (the old one is let go with them).
     this.buffer = layInstances(this.mesh!.geometry, this.data, STAND_IN_LAYOUT);
-  }
-
-  /** Room for `need` specks: their instances, and their shown flags (all on: these are drawn just as written). */
-  private growSpecks(need: number): void {
-    const count = Math.max(need, (this.speckData.length / SPECK_STRIDE) * 2);
-    this.speckData = new Float32Array(count * SPECK_STRIDE);
-    const g = this.speckMesh!.geometry;
-    this.speckBuffer = layInstances(g, this.speckData, SPECK_LAYOUT);
-    g.setAttribute(SPECK_SHOWN, new InstancedBufferAttribute(new Float32Array(count).fill(1), 1));
   }
 
   /** The measured looks, once loaded (the far specks take the colours of those already measured). */
@@ -402,7 +382,7 @@ export class PeopleView {
 
   /** Bytes held: the stand-ins' instances, the residents' measures, the figures and the population's caches (memory watchdog). */
   bytes(): number {
-    let n = this.data.byteLength + this.speckData.byteLength * 1.25 + (this.residents?.heldBytes() ?? 0) + this.people.size * 400 + lifeBytes(this.habitat);
+    let n = this.data.byteLength + (this.specks?.data.byteLength ?? 0) * 1.25 + (this.residents?.heldBytes() ?? 0) + this.people.size * 400 + lifeBytes(this.habitat);
     for (const one of this.people.values()) n += one.figure?.figure?.bytes() ?? 0;
     return n;
   }
@@ -414,15 +394,16 @@ export class PeopleView {
 
   /** The debug menu's line. */
   info(): string {
-    return `people: ${this.people.size} up within ${(CROWD_RANGE / 1000).toFixed(1)} km · ${this.figuresDrawn} figures (${this.loading} loading) · ${this.drawn} stand-ins · ${this.specksDrawn} specks · ${this.waiting} waiting for their look · handover holes ${this.holes}, frames with holes ${this.holeFrames} · figure levels made in ${this.slowestLevels.toFixed(0)} ms at most`;
+    return `people: ${this.people.size} up within ${(CROWD_RANGE / 1000).toFixed(1)} km · ${this.figuresDrawn} figures (${this.loads.loading} loading) · ${this.drawn} stand-ins · ${this.specksDrawn} specks · ${this.waiting} waiting for their look · handover holes ${this.holes}, frames with holes ${this.holeFrames} · figure levels made in ${this.slowestLevels.toFixed(0)} ms at most`;
   }
 
   dispose(): void {
     this.disposed = true;
     for (const key of [...this.people.keys()]) this.letGo(key);
     if (this.mesh) freeMesh(this.mesh);
-    if (this.speckMesh) freeMesh(this.speckMesh);
-    this.mesh = this.speckMesh = null;
+    if (this.specks) freeMesh(this.specks.mesh);
+    this.mesh = null;
+    this.specks = null;
     this.group.removeFromParent();
   }
 }
@@ -437,7 +418,6 @@ function doingOf(p: Person, who: Resident, foot: Footing): Doing {
   return { pose: foot.pose, swim: false, anim: { move: 'idle', pose: pick } };
 }
 
-const dist = (a: Vec3, b: Vec3): number => v3len(v3sub(a, b));
 
 /** Draw the first n instances of a mesh, uploading only those. */
 /**

@@ -5,3 +5,4 @@ export { walksOf, pointAlong, floorGap, sunwalkOf, type Route, type WalkNet } fr
 export { shuffleOf, type Shuffle } from './permute';
 export { footingOf, postureOf, SWIM_DEPTH, SWIM_WATER, type Footing } from './footing';
 export { fleetOf, flierAt, fliersAt, airBytes, ROLES, type Role, type Job, type Flier, type Doing } from './air';
+export { densNear, squirrelAt, densBytes, SLOT, HOP, RUN, type Den, type Squirrel, type SquirrelDoing } from './fauna';

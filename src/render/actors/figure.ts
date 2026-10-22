@@ -14,13 +14,32 @@ import { FigureAnimator, type AnimState } from './animator';
 
 export type { AnimState, MoveState, Mood } from './animator';
 
-/** One frame of a figure: its feet relative to the eye, its up and front (unit, world axes), speed (m/s), what it does. */
-export interface FigureFrame {
+/** Where something stands: its feet relative to the eye, its up and front (unit, world axes). */
+export interface Stance {
   feet: Vec3;
   up: Vec3;
   front: Vec3;
+}
+
+/** One frame of a figure: where it stands, speed (m/s), what it does. */
+export interface FigureFrame extends Stance {
   speed: number;
   anim: AnimState;
+}
+
+const basis = new Matrix4(), axes = [new Vector3(), new Vector3(), new Vector3()] as const;
+
+/**
+ * Stand an Actors body (figures, animals) on the curved floor: its object at the feet, along up, facing front. Actors'
+ * bodies stand along +Y and face +Z.
+ */
+export function standAt(object: Object3D, f: Stance): void {
+  const [ux, uy, uz] = f.up, [fx, fy, fz] = f.front;
+  // x = up × front, so (x, up, front) is right-handed like (X, Y, Z).
+  const [X, Y, Z] = axes;
+  basis.makeBasis(X.set(uy * fz - uz * fy, uz * fx - ux * fz, ux * fy - uy * fx), Y.set(ux, uy, uz), Z.set(fx, fy, fz));
+  object.quaternion.setFromRotationMatrix(basis);
+  object.position.set(f.feet[0], f.feet[1], f.feet[2]);
 }
 
 /**
@@ -60,8 +79,6 @@ export class Figure {
   /** The scene object: at the feet, standing along up, facing front. */
   readonly object = new Group();
   readonly animator: FigureAnimator;
-  private readonly basis = new Matrix4();
-  private readonly axes = [new Vector3(), new Vector3(), new Vector3()] as const;
 
   private constructor(readonly character: Character) {
     this.object.name = 'actors-figure';
@@ -108,14 +125,9 @@ export class Figure {
     return n;
   }
 
-  /** Pose for this frame. Actors' bodies stand along +Y and face +Z. */
+  /** Pose for this frame. */
   update(f: FigureFrame, dt: number, time: number): void {
-    const [ux, uy, uz] = f.up, [fx, fy, fz] = f.front;
-    // x = up × front, so (x, up, front) is right-handed like (X, Y, Z).
-    const [X, Y, Z] = this.axes;
-    this.basis.makeBasis(X.set(uy * fz - uz * fy, uz * fx - ux * fz, ux * fy - uy * fx), Y.set(ux, uy, uz), Z.set(fx, fy, fz));
-    this.object.quaternion.setFromRotationMatrix(this.basis);
-    this.object.position.set(f.feet[0], f.feet[1], f.feet[2]);
+    standAt(this.object, f);
     this.animator.update({ anim: f.anim, speed: f.speed, time }, dt);
     this.character.update(dt);
   }

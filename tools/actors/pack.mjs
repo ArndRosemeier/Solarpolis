@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Ported from Dunfinity tools/actors/pack.mjs.
 // Fetches the Actors asset pack (bodies, skins, wardrobe, hair, clips) that matches the installed
-// @actors/generator into .actors-pack/<version>/human, once per version. Vite serves it under
+// @actors/generator into .actors-pack/<version>/human, and the animal packs beside it (squirrel; the
+// dog pack is left out of the build, vite.config.ts), once per version. Vite serves it under
 // /actors/ and copies it into the build (vite.config.ts). The CMU mocap library (~200 MB) is left
 // out: the game plays the pack's own clips.
 //
@@ -28,7 +29,7 @@ if (existsSync(join(packDir, 'human/manifest.json'))) {
   }
   rmSync(packDir, { recursive: true, force: true });
   mkdirSync(packDir, { recursive: true });
-  // The archive holds packs/human/...; keep human/, without the CMU library.
+  // The archive holds packs/human/, packs/squirrel/, ...; keep them, without the CMU library.
   execFileSync('tar', ['-xzf', archive, '-C', packDir, '--strip-components=1', '--exclude=packs/human/clips/cmu'], { stdio: 'inherit' });
   if (!process.env.ACTORS_PACK_FILE) rmSync(archive, { force: true });
   writeFileSync(join(packDir, '.version'), version + '\n');

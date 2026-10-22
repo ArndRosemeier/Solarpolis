@@ -84,6 +84,9 @@ export function validate(h: Habitat): Finding[] {
   const dr = lf.drones, counts = [dr.couriers, dr.tenders, dr.surveyors, dr.lifters, dr.gliders, dr.guardians];
   if (!(counts.every((c) => c >= 0) && dr.cruise > 0 && dr.lane > 0 && dr.lane < p.radius / 4 && dr.round > 0 && dr.round < p.day.length && Number.isInteger(dr.designs) && dr.designs >= 1))
     out.push({ id: 'life', severity: 'invalid', message: 'drones need counts ≥ 0, a cruise speed > 0, a lane > 0 under a quarter of the radius, a round > 0 under a day and a whole number of designs (at least 1)' });
+  const an = lf.animals;
+  if (!(an.squirrels >= 0 && an.range > 0 && an.out >= 0 && an.out <= 1))
+    out.push({ id: 'life', severity: 'invalid', message: 'animals need squirrels ≥ 0 per hectare, a range > 0 and a share of the day out between 0 and 1' });
   if (!(p.population >= 0)) out.push({ id: 'population', severity: 'invalid', message: 'the population must not be negative' });
   return out;
 }
