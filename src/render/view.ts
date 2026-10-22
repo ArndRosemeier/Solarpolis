@@ -31,8 +31,8 @@ import { setFloorEye, setRockBeds, setSnow } from './groundShaders';
 import { UNDER_CROWNS, crownsClosed, makeEcology, type Ecology } from '../gen/ecology';
 import { FrameLoop, clickToUse, dragToLook, draw, fitCanvas, moveKeys } from './surface';
 import { freeMesh } from './geometry';
-import { cloudSpan, cloudsAt } from '../world/clouds';
-import { setCloudSpan, setCloudState } from './cloudShaders';
+import { cloudClearings, cloudSpan, cloudsAt } from '../world/clouds';
+import { setCloudClearings, setCloudSpan, setCloudState } from './cloudShaders';
 import { LandmarkView } from './landmarks';
 import { TiledView, courtSource, crossingSource, hallSource, stairSource, underSource } from './tiled';
 import { underFloorAt } from '../gen/underMesh';
@@ -514,6 +514,7 @@ export class InteriorView {
   private cloudLayer(): Group | null {
     const h = this.habitat, span = cloudSpan(h);
     setCloudSpan(span, h.params.clouds?.size ?? 1);
+    setCloudClearings(cloudClearings(h));
     setCloudState(cloudsAt(h, this.time));
     if (!span) return null;
     // Fine enough around that its faces lie within a metre of the true cylinder (the march itself is exact).

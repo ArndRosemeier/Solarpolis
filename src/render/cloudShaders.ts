@@ -9,10 +9,10 @@
  * of a cylinder at the base radius (`CLOUDS_NEAR` its outer faces, `CLOUDS_FAR` its inner ones, in materials.ts). The
  * same field shades the land below (`cloudShade`).
  */
-import { Vector2, type Node } from 'three/webgpu';
+import { Vector2, Vector4, type Node } from 'three/webgpu';
 import { Break, Fn, If, Loop, abs, ceil, clamp, int, min, dot, exp, float, max, mx_fractal_noise_float, mx_noise_float, pow, select, smoothstep, sqrt, uniform, vec2, vec3 } from 'three/tsl';
 import { band } from './shaderMath';
-import { coverThreshold, type CloudSpan, type CloudState } from '../world/clouds';
+import { MAX_CLEARINGS, coverThreshold, type CloudClearing, type CloudSpan, type CloudState } from '../world/clouds';
 
 type F = Node<'float'>;
 type V3 = Node<'vec3'>;
@@ -36,6 +36,9 @@ const cloud = {
   fineAlong: uniform(0),
   fineTurn: uniform(new Vector2(1, 0)),
 };
+
+/** The Heights the clouds part round (world/clouds.ts): each its axis (x, y unit; z) and its inner and outer reach. */
+const clearings = Array.from({ length: MAX_CLEARINGS }, () => ({ axis: uniform(new Vector4(1, 0, 0, 0)), reach: uniform(new Vector2(-2, -1)) }));
 
 /** How widely the field's values spread (their standard deviation): four octaves of MaterialX noise. */
 const FIELD_SPREAD = 0.3;
@@ -77,6 +80,31 @@ export function setCloudSpan(span: CloudSpan | null, size: number): void {
   cloud.middle.value = (span.top + span.base) / 2;
 }
 
+export function setCloudClearings(list: readonly CloudClearing[]): void {
+  clearings.forEach((c, i) => {
+    const k = list[i];
+    c.axis.value.set(k ? k.dir[0] : 1, k ? k.dir[1] : 0, k ? k.z : 0, 0);
+    // An unused one clears nothing: everything lies beyond its reach.
+    c.reach.value.set(k ? k.inner : -2, k ? k.outer : -1);
+  });
+}
+
+/**
+ * How much of the clouds a point keeps by the Heights (0 … 1): none within a clearing's inner reach, all beyond its
+ * outer. The distance is from the Height's axis, round the cylinder at the point's radius and along it.
+ */
+function cleared(p: V3): F {
+  const r = max(p.xy.length(), 1e-3), x = p.x.div(r), y = p.y.div(r);
+  let keep: F = float(1);
+  for (const c of clearings) {
+    const a = c.axis, facing = x.mul(a.x).add(y.mul(a.y)), side = x.mul(a.y).sub(y.mul(a.x));
+    // Round the cylinder: the chord's sine is enough on the near side; the far side is far from every Height.
+    const around = select(facing.greaterThan(0), abs(side).mul(r), float(1e9)), along = p.z.sub(a.z);
+    keep = keep.mul(smoothstep(c.reach.x, c.reach.y, sqrt(around.mul(around).add(along.mul(along)))));
+  }
+  return keep;
+}
+
 export function setCloudState(state: CloudState | null): void {
   if (!state) { cloud.threshold.value = 1e3; return; }
   cloud.threshold.value = coverThreshold(state.cover) * FIELD_SPREAD;
@@ -106,7 +134,7 @@ const inFine = (p: V3, radius: F): V3 => carried(p, radius, cloud.fineAlong, clo
 function column(p: V3, octaves: number): F {
   const f = mx_fractal_noise_float(inField(p, cloud.middle), 2, 2, 0.5).add(mx_fractal_noise_float(inFine(p, cloud.middle).mul(4), octaves - 2, 2, 0.5).mul(0.25));
   const ends = band(p.z, cloud.z0, cloud.z0.add(cloud.fade), cloud.z1.sub(cloud.fade), cloud.z1);
-  return clamp(f.sub(cloud.threshold).div(COLUMN), 0, 1).mul(ends);
+  return clamp(f.sub(cloud.threshold).div(COLUMN), 0, 1).mul(ends).mul(cleared(p));
 }
 
 /**

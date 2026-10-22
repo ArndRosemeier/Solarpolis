@@ -476,13 +476,24 @@ function groundsOf(h: Habitat, base: GroundBase): Pick<Landform, 'grounds' | 'ri
     return k <= 0 || k >= 1 ? 0 : (6 * k * (1 - k)) / (e1 - e0);
   };
   const riverWidth = h.params.relief.rivers?.width ?? 0;
+  // Each Ring's gorges: every river's gorge width there (as wide as the river may wander from its route, `meander`
+  // widths and its banks, or a share of the Ring), its route's angle at the Ring, and how far round the axis from that
+  // a point may lie and still be near it over the Ring's reach (so a point far from every river skips them).
+  const gorges = grounds.map((g) => g.kind !== 'ring' ? [] : rivers.map((river) => {
+    const w = Math.max(g.height * GROUND.gorge, riverWidth * (GROUND.gorgeMin + river.meander)), mid = routeOf(river, g.s);
+    let stray = 0;
+    for (let i = 0; i <= 64; i++) stray = Math.max(stray, Math.abs(wrap(routeOf(river, g.s + g.radius * (i / 32 - 1)) - mid)));
+    return { river, w, mid, near: stray * 1.2 + (w * 2) / R };
+  }));
   const landformAt = (theta: number, s: number): OnGround | null => {
-    let best: OnGround | null = null;
-    for (const g of grounds) {
+    // The highest form over the point (made into an `OnGround` once, at the end).
+    let best = -1, bestTop = 0, bestShare = 0, bestFace = 0, bestSlope = 0;
+    for (let n = 0; n < grounds.length; n++) {
+      const g = grounds[n];
+      if (Math.abs(s - g.s) >= g.radius) continue;
       // Its share at the point, and how fast that changes across the form and along its edges (per metre).
       let share = 0, face = 0, across = 0, edge = 0;
       if (g.kind === 'ring') {
-        if (Math.abs(s - g.s) > g.radius) continue;
         const d = (s - ringLine(g, theta)) * g.facing, H = g.height, c = (H * GROUND.crest) / 2;
         if (Math.abs(d) - c >= H * GROUND.slope) continue;
         // Saddles over the valleys, high and steep over the ridges between them; the long slope the same everywhere.
@@ -490,8 +501,10 @@ function groundsOf(h: Habitat, base: GroundBase): Pick<Landform, 'grounds' | 'ri
         const front = H * GROUND.face + (H * GROUND.slope - H * GROUND.face) * (1 - smoothstep(0.3, 0.8, high));
         const run = d >= 0 ? front : H * GROUND.slope, u = Math.max(0, Math.abs(d) - c) / run;
         if (u >= 1) continue;
-        share = high * (d >= 0 ? 1 - smoothstep(0, 1, u) : Math.pow(1 - u, 1.6));
-        across = u > 0 ? (high * (d >= 0 ? 6 * u * (1 - u) : 1.6 * Math.pow(1 - u, 0.6))) / run : 0;
+        // The long slope falls as (1 − u)^1.5: steepest under the crest, easing out at its foot.
+        const q = 1 - u, rq = Math.sqrt(q);
+        share = high * (d >= 0 ? 1 - smoothstep(0, 1, u) : q * rq);
+        across = u > 0 ? (high * (d >= 0 ? 6 * u * q : 1.5 * rq)) / run : 0;
         // A saddle's front falls as gently as the long slope, but ends at the lake's shore.
         if (lake) {
           const shore = fromLake(lake, s), k = smoothstep(0, H * GROUND.face, shore);
@@ -500,10 +513,11 @@ function groundsOf(h: Habitat, base: GroundBase): Pick<Landform, 'grounds' | 'ri
         }
         face = smoothstep(-c, c, d) * smoothstep(0.5, 0.8, high);
         // Open to the land where a river runs through.
-        for (const r of rivers) {
-          // As wide as the river may wander from its route (`meander` widths and its banks), or a share of the Ring.
-          const w = Math.max(H * GROUND.gorge, riverWidth * (GROUND.gorgeMin + r.meander));
-          const off = Math.abs(wrap(theta - routeOf(r, s))) * R;
+        const near = gorges[g.id];
+        for (let i = 0; i < near.length; i++) {
+          const x = near[i];
+          if (Math.abs(wrap(theta - x.mid)) > x.near) continue;
+          const off = Math.abs(wrap(theta - routeOf(x.river, s))) * R, w = x.w;
           if (off < w * 2) {
             const k = smoothstep(w, w * 2, off);
             edge = Math.max(edge * k, share * smoothRise(w, w * 2, off));
@@ -515,13 +529,15 @@ function groundsOf(h: Habitat, base: GroundBase): Pick<Landform, 'grounds' | 'ri
         const r = Math.hypot(wrap(theta - g.theta) * R, s - g.s);
         if (r >= g.radius) continue;
         const plateau = (g.height * GROUND.plateau) / 2, run = g.radius - plateau, u = Math.max(0, r - plateau) / run;
-        share = 0.5 + 0.5 * Math.cos(Math.PI * Math.pow(u, 0.8));
-        across = u > 0 ? (0.4 * Math.PI * Math.sin(Math.PI * Math.pow(u, 0.8)) * Math.pow(u, -0.2)) / run : 0;
+        // Sheer flanks under a rounded brink: half a cosine over u^0.75.
+        const v = Math.sqrt(u) * Math.sqrt(Math.sqrt(u));
+        share = 0.5 + 0.5 * Math.cos(Math.PI * v);
+        across = u > 0 ? (0.375 * Math.PI * Math.sin(Math.PI * v) * v) / u / run : 0;
       }
       const top = share * g.height;
-      if (top > 0 && (!best || top > best.top)) best = { form: g, top, share, face, slope: g.height * Math.hypot(across, edge) };
+      if (top > bestTop) { best = n; bestTop = top; bestShare = share; bestFace = face; bestSlope = g.height * Math.hypot(across, edge); }
     }
-    return best;
+    return best < 0 ? null : { form: grounds[best], top: bestTop, share: bestShare, face: bestFace, slope: bestSlope };
   };
   return { grounds, ringLine, landformAt };
 }
@@ -765,8 +781,9 @@ export function makePlan(h: Habitat): Plan {
     for (const side of sides) if (side[i] !== side[j]) return true;
     for (const g of mounts) {
       const a = g.theta - nt[i], gu = (a - TURN * Math.round(a / TURN)) * R, gv = g.s - ns[i];
-      const t = Math.min(1, Math.max(0, (gu * u + gv * v) / Math.max(u * u + v * v, 1e-9)));
-      if (Math.hypot(gu - u * t, gv - v * t) < g.radius * WAY_CLEAR) return true;
+      // Nearer than its clearance, and nearer than the way's own ends (an entrance at a Height's foot is left its way).
+      const t = (gu * u + gv * v) / Math.max(u * u + v * v, 1e-9);
+      if (t > 0 && t < 1 && Math.hypot(gu - u * t, gv - v * t) < g.radius * WAY_CLEAR) return true;
     }
     return false;
   };

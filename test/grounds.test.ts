@@ -70,9 +70,13 @@ for (const { name, params } of MATRIX) {
         const a = q[1] - plan.ringLine(r, q[0]), b = q[last + 1] - plan.ringLine(r, q[last]);
         assert.ok(a * b > 0, `a way from s ${q[1].toFixed(0)} to ${q[last + 1].toFixed(0)} over the Ring at ${r.s.toFixed(0)}`);
       }
-      for (const g of heights) for (let i = 0; i < q.length; i += 2) {
-        const off = Math.hypot(wrap(q[i] - g.theta) * R, q[i + 1] - g.s);
-        assert.ok(off >= g.radius * WAY_CLEAR * 0.85, `a way ${off.toFixed(0)} m from a Height reaching ${g.radius.toFixed(0)} m`);
+      // Its line keeps clear; the way swings off its line by a tenth of its length at most.
+      const swing = Math.hypot(wrap(q[last] - q[0]) * R, q[last + 1] - q[1]) * 0.1;
+      for (const g of heights) {
+        // No nearer than its clearance, or than its own ends (an entrance at a Height's foot).
+        const from = (i: number): number => Math.hypot(wrap(q[i] - g.theta) * R, q[i + 1] - g.s);
+        const keep = Math.min(g.radius * WAY_CLEAR, from(0), from(last)) - swing - 1e-6;
+        for (let i = 0; i < q.length; i += 2) assert.ok(from(i) >= keep, `a way ${from(i).toFixed(0)} m from a Height reaching ${g.radius.toFixed(0)} m`);
       }
     }
     const walk = plan.paths.find((p) => p.kind === 'sunwalk')!.points;
