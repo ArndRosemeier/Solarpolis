@@ -1,26 +1,20 @@
 /**
  * Where someone up on the land has their feet, and how they hold themselves: on the ground, on what is built there (a
- * landmark's deck, the Lift Stair's treads), or treading water with the head out; upright, kneeling or lying by what
- * they do. Someone whose body is a drone hovers instead, over ground, deck or water alike, at the height of the faces
+ * landmark's deck, the Lift Stair's treads), or treading water with the head out; upright, kneeling or lying as the
+ * beat they are in has them (sim/beats.ts). Someone whose body is a drone hovers instead, over ground, deck or water alike, at the height of the faces
  * of those they are with. Every level that draws people (the figures, the stand-ins, the specks far off, the drones'
  * view) places them by this. Pure.
  */
 import type { Terrain } from '../gen/terrain';
 import { MEAN_HEIGHT, POSE } from '../gen/standIn';
-import type { Activity } from './venues';
 import { residentOf, type Person } from './population';
+
+export { postureOf } from './beats';
 
 /** Deeper water than this (m) is swum in. */
 export const SWIM_WATER = 0.6;
 /** A swimmer treads water with the head out: the feet this share of the height under the surface. */
 export const SWIM_DEPTH = 0.85;
-
-/** How people hold themselves at what they do while staying put (`POSE`); walking, everyone is upright. */
-const POSTURE: Partial<Record<Activity, number>> = { make: POSE.kneel, sit: POSE.kneel, bench: POSE.kneel, picnic: POSE.lie, stargaze: POSE.lie };
-
-export function postureOf(activity: Activity): number {
-  return POSTURE[activity] ?? POSE.upright;
-}
 
 /**
  * Where a drone body's middle hovers over what is under it: at the eyes of those it is with, standing, sitting (or
@@ -40,7 +34,7 @@ export interface Footing {
  * `height` theirs (a swimmer's feet hang that far under the surface; a drone body's own height).
  */
 export function footingOf(terrain: Terrain, p: Person, deck: number | null, height: number): Footing {
-  const surface = terrain.standAt(p.theta, p.s), still = p.moving ? POSE.upright : postureOf(p.activity);
+  const surface = terrain.standAt(p.theta, p.s), still = p.moving ? POSE.upright : p.posture;
   if (residentOf(terrain.habitat, p.resident).body === 'drone') {
     const under = deck !== null && deck > surface ? deck : surface;
     return { h: under + AT_EYES[still] * MEAN_HEIGHT - height / 2, pose: POSE.upright, swim: false };

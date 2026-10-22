@@ -2,6 +2,17 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.109 — Homes in the hamlets below
+
+- The hamlets under the courts now have their houses: walled homes of tall rooms under the vaults, two to a bay, each with a yard in front and its door facing the wellhead.
+- Every district builds in its own way today (plaster in the orchards, pale stone by the water, timber in the groves, rammed earth with the herds, brick for the makers), and older houses from the founders' cast stone and the screen era's bare panels still stand among them.
+- Lived-in houses glow from their windows; a district that let its land go has let some houses stand empty too.
+- Debug menu: "Below: in a street among a hamlet's homes"; the position line names the houses of the bay you stand in.
+
+## v0.108 — A stay is a chain of beats
+
+- People out on the land no longer hold one pose for hours. A party now does one thing after another, a few minutes each: they talk standing, sit down in the grass and talk on, eat and drink, lie back at a picnic, or stroll off a little way to look about and come back. Before leaving they get up. Figures nearby sit down and stand up on the seat round a court's light well, and lie down and get up again on the grass.
+
 ## v0.107 — Faster test run
 
 - The remaining tests that built their own land now share one per habitat too (also the flat test land and the reference in other climates), so the whole test run takes about 20 s of its 30 s limit instead of about 25 s. Nothing in the game changes.
