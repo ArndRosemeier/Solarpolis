@@ -499,14 +499,17 @@ function placeOf(h: Habitat, o: Outings, n: number, court: number, day: number, 
     const b = beatAt(seedsOf(h).beat, activity, lead, day, u, legs, stay - legs, pace, reach);
     let toward = b.toward, off = b.away > 0;
     // Nobody strolls into the lake who did not come to swim: the other way, or not at all.
-    const lake = planOf(h).lake, wet = (a: number): boolean => !!lake && activity !== 'swim' && fromLake(lake, ss + Math.cos(a) * reach) < 0;
-    if (off && wet(toward)) { toward += Math.PI; if (wet(toward)) off = false; }
+    const lake = off && activity !== 'swim' ? planOf(h).lake : null;
+    if (lake && fromLake(lake, ss + Math.cos(toward) * reach) < 0) {
+      toward += Math.PI;
+      if (fromLake(lake, ss + Math.cos(toward) * reach) < 0) off = false;
+    }
     const away = off ? b.away : 0, moving = off && b.moving, act: Act = b.act === 'stroll' && !off ? 'quiet' : b.act;
     // Looking about where they stand faces away from the ring; at the end of a stroll, on the way they went.
     const heading = moving ? toward + (b.back ? Math.PI : 0) : off ? toward : act === 'look' && form === 'ring' ? facing + Math.PI : facing;
-    const ring = Math.max(1, h.profile.at(ss).r);
+    const dTheta = away > 0 ? (away * Math.sin(toward)) / Math.max(1, h.profile.at(ss).r) : 0;
     return {
-      resident: i, theta: st + (away * Math.sin(toward)) / ring, s: ss + away * Math.cos(toward), heading, moving, speed: moving ? pace : 0,
+      resident: i, theta: st + dTheta, s: ss + away * Math.cos(toward), heading, moving, speed: moving ? pace : 0,
       activity, court, outing: n, member, size, act, posture: b.posture, from: b.from, since: b.since,
     };
   }

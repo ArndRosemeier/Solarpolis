@@ -54,6 +54,15 @@ const REPERTOIRE: Partial<Record<Activity, readonly Offer[]>> = {
   stroll: [offer('stroll', UP, 2), offer('look', UP, 1)],
 };
 
+/** The repertoires with their weights summed, once. */
+interface Repertoire {
+  offers: readonly Offer[];
+  total: number;
+}
+const REPERTOIRES: Partial<Record<Activity, Repertoire>> = Object.fromEntries(
+  Object.entries(REPERTOIRE).map(([a, offers]) => [a, { offers: offers!, total: offers!.reduce((t, o) => t + o.weight, 0) }]),
+);
+
 /** Every act some place offers (the tests go through them). */
 export const OFFERED: readonly Act[] = [...new Set(Object.values(REPERTOIRE).flatMap((r) => r!.map((o) => o.act)))];
 
@@ -83,23 +92,25 @@ export interface Beat {
   back: boolean;
 }
 
-/** A draw in [0, 1) for beat k of a party's day: `salt` tells the draws apart. */
-const draw = (seed: number, lead: number, day: number, k: number, salt: number): number => hashToFloat(hash3i(hash3i(seed, lead, day, salt), k, 0, 0));
+/** A draw in [0, 1) for beat k of a party (`party`: its own seed), `salt` telling a beat's draws apart. */
+function beatDraw(party: number, k: number, salt: number): number {
+  return hashToFloat(hash3i(party, k, salt, 0));
+}
 
-/** The party's beat length (s). */
-const lengthOf = (seed: number, lead: number, day: number): number => BEAT.mean * (0.5 + draw(seed, lead, day, 0, 1));
-
-/** Where beat k starts, s after the outing starts: its place on the party's grid, jittered. */
-const startOf = (seed: number, lead: number, day: number, k: number, length: number): number =>
-  k <= 0 ? 0 : (k + BEAT.jitter * (draw(seed, lead, day, k, 2) - 0.5)) * length;
+/** When beat k starts on the party's grid of `length` s, jittered (beat 0 starts with the outing). */
+function startOf(party: number, k: number, length: number): number {
+  return k <= 0 ? 0 : (k + BEAT.jitter * (beatDraw(party, k, 2) - 0.5)) * length;
+}
 
 /** Beat k's offer from the place's repertoire. */
-function offerOf(repertoire: readonly Offer[], seed: number, lead: number, day: number, k: number): Offer {
-  let total = 0;
-  for (const o of repertoire) total += o.weight;
-  let x = draw(seed, lead, day, k, 3) * total;
-  for (const o of repertoire) { x -= o.weight; if (x < 0) return o; }
-  return repertoire[repertoire.length - 1];
+function offerOf(repertoire: Repertoire, party: number, k: number): Offer {
+  let x = beatDraw(party, k, 3) * repertoire.total;
+  for (const o of repertoire.offers) { x -= o.weight; if (x < 0) return o; }
+  return repertoire.offers[repertoire.offers.length - 1];
+}
+
+function still(act: Act, posture: number, from: number, since: number): Beat {
+  return { act, posture, from, since, away: 0, toward: 0, moving: false, back: false };
 }
 
 /**
@@ -107,19 +118,17 @@ function offerOf(repertoire: readonly Offer[], seed: number, lead: number, day: 
  * (s after the start), and stroll at `pace` (m/s) at most `reach` m off their spot. `lead` and `day` pick the party's beats.
  */
 export function beatAt(seed: number, activity: Activity, lead: number, day: number, u: number, arrive: number, leave: number, pace: number, reach: number): Beat {
-  const own = postureOf(activity), repertoire = REPERTOIRE[activity];
-  const still = (act: Act, posture: number, from: number, since: number): Beat => ({ act, posture, from, since, away: 0, toward: 0, moving: false, back: false });
-  if (!repertoire) return still('quiet', own, UP, u - arrive);
-  const length = lengthOf(seed, lead, day);
-  let k = Math.floor(u / length);
-  if (u < startOf(seed, lead, day, k, length)) k--;
-  else if (u >= startOf(seed, lead, day, k + 1, length)) k++;
+  const repertoire = REPERTOIRES[activity];
+  if (!repertoire) return still('quiet', postureOf(activity), UP, u - arrive);
+  const party = hash3i(seed, lead, day, 0), length = BEAT.mean * (0.5 + beatDraw(party, 0, 1));
+  let k = Math.floor(u / length), b0 = startOf(party, k, length), b1 = startOf(party, k + 1, length);
+  if (u < b0) { k--; b1 = b0; b0 = startOf(party, k, length); } else if (u >= b1) { k++; b0 = b1; b1 = startOf(party, k + 1, length); }
   // No beat starts in the last moments before they get up to leave: the one before runs on to then.
-  while (k > 0 && startOf(seed, lead, day, k, length) > Math.max(arrive, leave - RISE - SHORTEST)) k--;
-  const b0 = startOf(seed, lead, day, k, length), b1 = startOf(seed, lead, day, k + 1, length);
-  const now = offerOf(repertoire, seed, lead, day, k);
+  const last = Math.max(arrive, leave - RISE - SHORTEST);
+  while (k > 0 && b0 > last) { k--; b1 = b0; b0 = startOf(party, k, length); }
+  const now = offerOf(repertoire, party, k);
   // How they held themselves before: the last beat's way, or upright as they came.
-  const first = b0 <= arrive, before = first ? UP : offerOf(repertoire, seed, lead, day, k - 1).pose;
+  const first = b0 <= arrive, before = first ? UP : offerOf(repertoire, party, k - 1).pose;
   const began = Math.max(b0, arrive);
   // Getting up to leave (a stroll is upright already).
   if (u >= leave - RISE) {
@@ -130,7 +139,7 @@ export function beatAt(seed: number, activity: Activity, lead: number, day: numb
   // A stroll: up first if they sat or lay, out at their pace, a look round, and back; too short a beat, they stay.
   const w0 = began + (before === UP ? 0 : RISE), w1 = Math.min(b1, leave - RISE), span = w1 - w0;
   if (u < w0 || span < SHORTEST) return still('quiet', UP, before, u - began);
-  const far = Math.min(reach, (span * pace) / 3), out = far / pace, f = u - w0, toward = 2 * Math.PI * draw(seed, lead, day, k, 4);
+  const far = Math.min(reach, (span * pace) / 3), out = far / pace, f = u - w0, toward = 2 * Math.PI * beatDraw(party, k, 4);
   if (f < out) return { act: 'stroll', posture: UP, from: before, since: u - began, away: f * pace, toward, moving: true, back: false };
   if (f > span - out) return { act: 'stroll', posture: UP, from: before, since: u - began, away: Math.max(0, (span - f) * pace), toward, moving: true, back: true };
   return { act: 'look', posture: UP, from: before, since: u - began, away: far, toward, moving: false, back: false };
