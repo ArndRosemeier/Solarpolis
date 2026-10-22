@@ -15,7 +15,7 @@
  * join when the people are drawn (the terrain knows them). Pure, made once per habitat.
  */
 import { kept } from '../gen/kept';
-import { fromLake, planOf, type Lake, type Site, type SiteKind } from '../gen/plan';
+import { entrancesOf, fromLake, planOf, type Lake, type Site, type SiteKind } from '../gen/plan';
 import type { DistrictStyle, Habitat } from '../blueprint';
 import { floorGap, sunwalkOf, walksOf } from './walks';
 
@@ -78,7 +78,7 @@ export interface Venues {
 
 function makeVenues(h: Habitat): Venues {
   const plan = planOf(h), net = walksOf(h), R = h.radius, life = h.params.life, { profile } = h;
-  const courts = plan.sites.filter((x) => x.kind === 'entrance');
+  const courts = entrancesOf(plan);
   const apart = (t0: number, s0: number, t1: number, s1: number): number => floorGap(R, t0, s0, t1, s1);
   const nearestCourt = (theta: number, s: number, among: readonly Site[] = courts): number => {
     let best = 0, g = Infinity;

@@ -77,6 +77,7 @@ export const views = {
     steps: [{ run: async (page) => page.click('.title-start') }, { wait: 5000 }, { shot: 'corridor' }, { wait: 14000 }, { shot: 'berth' }, { wait: 9000 }, { shot: 'bore' }, { wait: 8000 }, { shot: 'sleeve' }, { wait: 14000 }],
   },
   lab: { query: 'view=lab', about: 'the Blueprint Lab', settle: 1000, default: true },
+  'lab-under': { query: 'view=lab', about: 'the Blueprint Lab scrolled to "Under the floor": the Understorey plan, the whole floor and one hamlet close up', settle: 3000, steps: [{ run: async (page) => page.evaluate(() => { [...document.querySelectorAll('h2')].find((e) => e.textContent === 'Under the floor')?.scrollIntoView(); }) }, { wait: 1500 }] },
   inside: { query: 'view=inside', about: 'standing on the floor, first look', default: true },
   'inside-up': { query: 'view=inside', about: 'from the floor, looking up across the cylinder', steps: [{ look: [0, -250] }] },
   'inside-wild-endcap': { query: 'view=inside', about: 'halfway up the wild endcap', steps: [{ debug: 'Halfway up the wild endcap' }, { wait: 4000 }] },

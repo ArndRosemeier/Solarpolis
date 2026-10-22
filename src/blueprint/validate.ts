@@ -9,7 +9,7 @@ import { CULTURES, cultureOf } from './cultures';
 export type Severity = 'invalid' | 'unusual';
 
 export interface Finding {
-  id: 'spin' | 'hull' | 'hull-thick' | 'axis-air' | 'haze' | 'heat' | 'light' | 'layers' | 'population' | 'sunline' | 'relief' | 'day' | 'brims' | 'collectors' | 'climate' | 'clouds' | 'landmarks' | 'culture' | 'plan' | 'life';
+  id: 'spin' | 'hull' | 'hull-thick' | 'axis-air' | 'haze' | 'heat' | 'light' | 'layers' | 'population' | 'sunline' | 'relief' | 'day' | 'brims' | 'collectors' | 'climate' | 'clouds' | 'landmarks' | 'culture' | 'plan' | 'life' | 'under';
   severity: Severity;
   message: string;
 }
@@ -22,6 +22,10 @@ export const FLYABLE_AXIS_PRESSURE = 0.5;
 export const BIG_FINS = 10;
 /** A hull thicker than this share of the radius is a structure of its own. */
 export const THICK_HULL = 0.002;
+
+/** Pillars thicker than this share of the bay crowd the Understorey; past the second share there is no room between them. */
+export const PILLAR_STOUT = 0.15;
+export const PILLAR_MOST = 0.4;
 
 const pct = (x: number): string => `${(x * 100).toFixed(0)}%`;
 const km = (m: number): string => `${(m / 1000).toFixed(1)} km`;
@@ -87,6 +91,14 @@ export function validate(h: Habitat): Finding[] {
   const an = lf.animals;
   if (!(an.squirrels >= 0 && an.range > 0 && an.out >= 0 && an.out <= 1 && an.deer >= 0 && an.herd >= 1 && an.roam > 0))
     out.push({ id: 'life', severity: 'invalid', message: 'animals need squirrels ≥ 0 per hectare, a range > 0, a share of the day out between 0 and 1, deer ≥ 0 per km², herds of at least 1 and a roam > 0' });
+  const u = p.under, us = u.stone;
+  if (!(u.bay > 0 && u.bay < pl.entranceSpacing / 2 && us.density > 0 && us.strength > 0 && us.modulus > 0 && us.safetyFactor >= 1 && u.land >= 0 && u.spring > 0 && u.spring < 1
+    && u.household.people > 0 && u.household.bays > 0 && u.halls >= 0 && Number.isInteger(u.lanes) && u.lanes >= 2 && u.cisterns >= 0 && u.cisterns <= 1))
+    out.push({ id: 'under', severity: 'invalid', message: 'the Understorey needs a bay > 0 under half the entrance spacing, a stone with density, strength and stiffness > 0 and a safety factor ≥ 1, a load ≥ 0, ribs springing between floor and ceiling, households and their homes > 0, halls ≥ 0, lanes every 2 bays or more and a cistern share from 0 to 1' });
+  else if (2 * h.pillars.radius > u.bay * PILLAR_MOST)
+    out.push({ id: 'under', severity: 'invalid', message: `the pillars must be ${(2 * h.pillars.radius).toFixed(1)} m thick to hold the land: more than ${pct(PILLAR_MOST)} of the ${u.bay} m bay` });
+  else if (2 * h.pillars.radius > u.bay * PILLAR_STOUT)
+    out.push({ id: 'under', severity: 'unusual', message: `the pillars are ${(2 * h.pillars.radius).toFixed(1)} m thick: a crowded hall of stone, more than ${pct(PILLAR_STOUT)} of the ${u.bay} m bay` });
   if (!(p.population >= 0)) out.push({ id: 'population', severity: 'invalid', message: 'the population must not be negative' });
   return out;
 }
