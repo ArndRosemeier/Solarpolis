@@ -52,11 +52,13 @@ async function logPeople(page) {
   await page.locator('.dbg-panel .dbg-close').click().catch(() => {});
   const lines = text.split('\n').filter((l) => l.startsWith('people') || l.startsWith('specks') || l.startsWith('drones') || l.startsWith('animals') || l.startsWith('squirrels') || l.startsWith('deer') || l.startsWith('shaders') || l.startsWith('memory') || l.includes('MB') || l.includes('fps'));
   await page.evaluate((ls) => { for (const l of ls) console.warn(l); }, lines.length ? lines : ['(no people line)']);
-  // Builds after the warm-up that started too close together: which, and how (a node-sync one was drawn uncompiled).
+  // Builds after the warm-up that started sooner than twice the last one's time after it (the cap, docs/SHADERS.md):
+  // which, and how (a node-sync one was drawn uncompiled).
   await page.evaluate(() => {
     const run = (window.shaders?.events ?? []).filter((e) => e.phase === 'run' && (e.kind === 'node-sync' || e.kind === 'node-async')).sort((a, b) => a.t - b.t);
     for (let i = 1; i < run.length; i++) {
-      if (run[i].t - run[i - 1].t < 199) console.warn(`close builds ${(run[i].t - run[i - 1].t).toFixed(0)} ms apart: ${run[i - 1].kind} "${run[i - 1].what}" then ${run[i].kind} "${run[i].what}"`);
+      const a = run[i - 1], b = run[i], gap = b.t - a.t - a.ms;
+      if (gap < 2 * a.ms - 1) console.warn(`close builds: ${gap.toFixed(0)} ms after ${a.kind} "${a.what}" (${a.ms.toFixed(0)} ms), ${b.kind} "${b.what}"`);
     }
     for (const e of run) if (e.kind === 'node-sync') console.warn(`drawn uncompiled: "${e.what}" (${e.ms.toFixed(0)} ms)`);
   });
