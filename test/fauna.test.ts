@@ -8,7 +8,7 @@ import { ecologyOf } from './worlds';
 
 test('fauna: a habitat without sensible animal parameters is invalid', () => {
   const animals = (change: Partial<typeof REFERENCE.life.animals>) => withParams({ life: { ...REFERENCE.life, animals: { ...REFERENCE.life.animals, ...change } } });
-  for (const bad of [{ squirrels: -1 }, { range: 0 }, { out: 1.5 }, { out: -0.1 }])
+  for (const bad of [{ squirrels: -1 }, { range: 0 }, { out: 1.5 }, { out: -0.1 }, { deer: -1 }, { herd: 0 }, { roam: 0 }])
     assert.ok(validate(derive(animals(bad))).some((f) => f.id === 'life' && f.severity === 'invalid'), JSON.stringify(bad));
 });
 

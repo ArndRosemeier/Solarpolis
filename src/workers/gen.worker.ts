@@ -31,6 +31,7 @@ import { specksAt, type Specks } from '../sim/specks';
 import type { Role } from '../sim/air';
 import { droneDesign, type DroneDesign } from '../gen/drone';
 import { densNear, type Den } from '../sim/fauna';
+import { herdsNear, type Herd } from '../sim/herds';
 import { coatsOf, type CoatAsk, type Coats } from '../gen/coat';
 
 /** The built things that stream in tiles. */
@@ -56,6 +57,8 @@ export type GenRequest =
   | { kind: 'drone'; params: HabitatParams; role: Role; index: number }
   /** The squirrels whose trees stand within `radius` m of (θ, s) (sim/fauna.ts). */
   | { kind: 'squirrels'; params: HabitatParams; theta: number; s: number; radius: number }
+  /** The deer herds whose homes lie within `radius` m of (θ, s), with their places (sim/herds.ts). */
+  | { kind: 'herds'; params: HabitatParams; theta: number; s: number; radius: number }
   /** An Actors animal pack's coats, one per look, baked per vertex (gen/coat.ts). */
   | { kind: 'coats'; ask: CoatAsk };
 export type GenAnswer =
@@ -73,7 +76,9 @@ export type GenAnswer =
   | { kind: 'tiled'; part: TiledPart; built: StairTile | SiteTile }
   | { kind: 'specks'; specks: Specks }
   | { kind: 'drone'; design: DroneDesign }
-  | { kind: 'squirrels'; dens: Den[] }
+  /** The homes animals live from round a point: squirrels' trees, deer herds' ranges. */
+  | { kind: 'squirrels'; homes: Den[] }
+  | { kind: 'herds'; homes: Herd[] }
   | { kind: 'coats'; coats: Coats }
   | { error: string };
 
@@ -169,7 +174,11 @@ self.onmessage = (e: MessageEvent<GenRequest>) => {
       return;
     }
     if (req.kind === 'squirrels') {
-      post({ kind: 'squirrels', dens: densNear(ecology, plants, req.theta, req.s, req.radius) });
+      post({ kind: 'squirrels', homes: densNear(ecology, plants, req.theta, req.s, req.radius) });
+      return;
+    }
+    if (req.kind === 'herds') {
+      post({ kind: 'herds', homes: herdsNear(ecology, req.theta, req.s, req.radius) });
       return;
     }
     if (req.kind === 'specks') {

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Ported from Dunfinity tools/actors/pack.mjs.
 // Fetches the Actors asset pack (bodies, skins, wardrobe, hair, clips) that matches the installed
-// @actors/generator into .actors-pack/<version>/human, and the animal packs beside it (squirrel; the
-// dog pack is left out of the build, vite.config.ts), once per version. Vite serves it under
+// @actors/generator into .actors-pack/<version>/human, and the animal packs beside it (squirrel, deer;
+// the dog and cat packs are left out of the build, vite.config.ts), once per version. Vite serves it under
 // /actors/ and copies it into the build (vite.config.ts). The CMU mocap library (~200 MB) is left
 // out: the game plays the pack's own clips.
 //

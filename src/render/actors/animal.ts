@@ -5,10 +5,10 @@
  * it faces, as a person's figure does (figure.ts).
  */
 import { Group, BufferAttribute, type Mesh, type SkinnedMesh } from 'three/webgpu';
-import { Animal, breedParams } from '@actors/animal';
+import { Animal } from '@actors/animal';
 import { ThreeActor, type ActorMaterialKit, type PlayableClip } from '@actors/three';
 import { nodeMaterials } from '@actors/three/webgpu';
-import type { Look } from '../../gen/coat';
+import { paramsOf, type Look } from '../../gen/coat';
 import { animalEyeMaterial, furMaterial } from '../materials';
 import { freeMesh } from '../geometry';
 import { packFetch } from './pack';
@@ -18,33 +18,39 @@ import AnimalWorker from '@actors/animal/worker?worker';
 /** An animal pack's manifest, by its name (`squirrel`, …): served and built under /actors/ with the humans' (pack.ts). */
 export const animalPack = (name: string): string => `${import.meta.env?.BASE_URL ?? '/'}actors/${name}/manifest.json`;
 
-/** Fur and animal eyes from the game's materials, everything else as Actors' WebGPU kit makes it. */
-const animalKit: ActorMaterialKit = {
+/** Fur (spotted where the look has spots) and animal eyes from the game's materials, everything else as Actors' WebGPU kit makes it. */
+const kitFor = (spotted: boolean): ActorMaterialKit => ({
   ...nodeMaterials,
   mesh: (data, actor) => {
     const { kind } = data.def.material;
-    if (kind === 'fur') return furMaterial();
+    if (kind === 'fur') return furMaterial(spotted);
     if (kind === 'eye' && data.def.tags?.includes('animal')) return animalEyeMaterial();
     return nodeMaterials.mesh(data, actor);
   },
-};
+});
+const kits = [kitFor(false), kitFor(true)];
 
-/** One pack, loaded once: its runtime and shape worker, shared by every animal drawn from it, and its clips. */
+/**
+ * One pack, loaded once: its runtime and shape worker, shared by every animal drawn from it. (Actors' shape worker
+ * holds one pack at a time, so each pack has its own.)
+ */
 export class AnimalPack {
-  private readonly clips = new Map<string, Promise<PlayableClip>>();
-  private constructor(readonly kind: string, readonly base: Animal) {}
+  private constructor(readonly kind: string, readonly base: Animal, private readonly worker: Worker) {}
 
   static async load(name: string): Promise<AnimalPack> {
-    const base = await Animal.load(animalPack(name), packFetch);
-    await base.useWorker(new AnimalWorker());
-    return new AnimalPack(base.extra.kind, base);
+    const base = await Animal.load(animalPack(name), packFetch), worker = new AnimalWorker();
+    await base.useWorker(worker);
+    return new AnimalPack(base.extra.kind, base, worker);
   }
 
-  /** A clip of the pack (loaded once). */
+  /** A clip of the pack (Actors loads each once a runtime). */
   clip(name: string): Promise<PlayableClip> {
-    let c = this.clips.get(name);
-    if (!c) { c = this.base.runtime.loadClip(name); this.clips.set(name, c); }
-    return c;
+    return this.base.runtime.loadClip(name);
+  }
+
+  /** Stop its shape worker. */
+  dispose(): void {
+    this.worker.terminate();
   }
 
   /** How long a clip of the pack runs (s). */
@@ -75,16 +81,18 @@ export class AnimalFigure {
   /** An animal in a look (its preset, `size` × the preset's), its coat baked (`look.coat`, on the pack's fur mesh `fur`). */
   static async load(pack: AnimalPack, look: Look, fur: string, size: number): Promise<AnimalFigure> {
     const animal = Animal.share(pack.base);
-    animal.params = breedParams(look.preset, pack.kind);
+    animal.params = paramsOf(pack.kind, look.preset) as typeof animal.params;
     animal.shape.size *= size;
     const shape = await animal.evaluate();
-    const actor = new ThreeActor(animal.runtime, animalKit);
+    const actor = new ThreeActor(animal.runtime, kits[look.dapple ? 1 : 0]);
     actor.applyShape(shape);
     actor.object.position.y = actor.groundOffset();
     for (const [name, mesh] of actor.meshes) {
       const n = mesh.geometry.getAttribute('position').count;
-      if (name === fur) mesh.geometry.setAttribute('coat', new BufferAttribute(look.coat, 4));
-      else {
+      if (name === fur) {
+        mesh.geometry.setAttribute('coat', new BufferAttribute(look.coat, 4));
+        if (look.dapple) mesh.geometry.setAttribute('dapple', new BufferAttribute(look.dapple, 4));
+      } else {
         // Eyes (and anything else): the iris colour, which the eye material draws.
         const c = new Float32Array(n * 4);
         for (let i = 0; i < n; i++) c.set([...look.iris, 1], i * 4);
@@ -142,6 +150,7 @@ export class AnimalFigure {
   /** Let go of its meshes and skeleton; the fur and eye materials are shared, and stay. */
   dispose(): void {
     this.actor.mixer.stopAllAction();
+    this.actor.dispose();
     const meshes: Mesh[] = [];
     this.object.traverse((o) => { if ((o as Mesh).isMesh) meshes.push(o as Mesh); });
     (meshes[0] as SkinnedMesh | undefined)?.skeleton?.dispose();
