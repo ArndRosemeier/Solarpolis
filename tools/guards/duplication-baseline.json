@@ -44,7 +44,7 @@
     "reason": "TSL arithmetic (a.mul(b).sub(c)) is how every shader is written; the formulas differ."
   },
   {
-    "key": "idiom: [.mul .sub] in solarpolis/render/crowdShaders.ts + solarpolis/render/hullShaders.ts + solarpolis/render/skyShaders.ts",
+    "key": "idiom: [.mul .sub] in solarpolis/render/crowdShaders.ts + solarpolis/render/hullShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
     "reason": "TSL has no operators: every shader file does its arithmetic with .mul and .sub. The stand-ins' pose (render/crowdShaders.ts) is its own step; the shared ones (sunlit, throughAir) are used from materials.ts, not copied."
   },
   {

@@ -201,6 +201,28 @@ export class Shape {
   }
 
   /**
+   * A smooth surface (a vault, a shell, a sloping floor): a grid of `rows` + 1 by `columns` + 1 points, each with its
+   * own normal and surface coordinates (`at(a, b)`), the normals carried smoothly across it. Each quad faces the way
+   * its points' normals do (its winding is chosen per quad), so `at` may run either way round.
+   */
+  smoothGrid(rows: number, columns: number, at: (a: number, b: number) => { p: Vec3; n: Vec3; uv: [number, number] }, c?: RGB): void {
+    const base = this.vertices, row = columns + 1, pts: Vec3[] = [], nrm: Vec3[] = [];
+    for (let a = 0; a <= rows; a++) for (let b = 0; b <= columns; b++) {
+      const q = at(a, b);
+      pts.push(q.p);
+      nrm.push(q.n);
+      this.put(q.p, q.n, c, q.uv);
+    }
+    for (let a = 0; a < rows; a++) for (let b = 0; b < columns; b++) {
+      const i0 = a * row + b, i1 = i0 + 1, i2 = i0 + row + 1, i3 = i0 + row;
+      const n = v3cross(v3sub(pts[i2], pts[i0]), v3sub(pts[i3], pts[i1]));
+      const m = [0, 1, 2].map((k) => nrm[i0][k] + nrm[i1][k] + nrm[i2][k] + nrm[i3][k]) as Vec3;
+      if (v3dot(n, m) >= 0) this.idx.push(base + i0, base + i1, base + i2, base + i0, base + i2, base + i3);
+      else this.idx.push(base + i0, base + i2, base + i1, base + i0, base + i3, base + i2);
+    }
+  }
+
+  /**
    * Another shape put into this one: its x, y and z axes become `ex`, `ey`, `ez` (unit, right-handed, so front faces
    * stay front) and its origin `at`. With `colored`, its colours come along.
    */
@@ -233,6 +255,11 @@ export class Shape {
       colors: this.colored ? new Float32Array(this.col) : null,
       index: new Uint32Array(this.idx),
     };
+  }
+
+  /** What the physics needs of it: positions and the index. */
+  solid(): { positions: Float32Array; index: Uint32Array } {
+    return { positions: new Float32Array(this.pos), index: new Uint32Array(this.idx) };
   }
 
   /** The arrays with the surface coordinates and finishes (a `mapped` shape). */
@@ -351,8 +378,7 @@ export function bendInto(target: Shape, h: Habitat, f: FloorFrame, sh: Shape, pl
 export function solidOnFloor(h: Habitat, f: FloorFrame, sh: Shape): { positions: Float32Array; index: Uint32Array } {
   const out = new Shape(8, false);
   bendInto(out, h, f, sh, { at: [0, 0, 0], ex: [1, 0, 0], ey: [0, 1, 0], ez: [0, 0, 1] });
-  const a = out.arrays();
-  return { positions: a.positions, index: a.index };
+  return out.solid();
 }
 
 /**

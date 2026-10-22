@@ -156,8 +156,7 @@ export function buildStairSolid(h: Habitat, origin: Vec3, reach: number): { posi
   const b = new StairBuilder(st, ramp, (p) => v3sub(p, origin), 'solid');
   b.lay(near);
   if (!b.shape.idx.length) return null;
-  const a = b.shape.arrays();
-  return { positions: a.positions, index: a.index };
+  return b.shape.solid();
 }
 
 /** Builds the parts a tile owns at one detail, in plan (z along, w across, e up), into a frame. */

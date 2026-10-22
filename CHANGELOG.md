@@ -2,6 +2,12 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.088 — The pillar forest below the land
+
+- Below the land there is now a place to stand: the Understorey, a forest of stone pillars whose fan vaults hold up the land above, lit by warm lamps under each capital and fading into lamp-lit mist.
+- It follows the land: under a hill its ceiling rises, under a lake it dips, and its floor never gets steeper than a gentle walk.
+- For now the debug menu takes you down ("Below: …") and back up; the lifts in the entrance courts come next.
+
 ## v0.087 — People turn detailed sooner, and come in every skin tone
 
 - Walking up to someone, their detailed figure is there in moments instead of about ten seconds. Shader builds may now use a third of the time, spread evenly, so quick builds no longer wait a fifth of a second each.

@@ -40,7 +40,7 @@ export const REFERENCE: HabitatParams = {
   // Three valleys (O'Neill's three land strips), the wild fifth of the floor a reserve, districts of ten thousand.
   plan: { valleys: 3, reserve: 0.22, districtPeople: 10000, entranceSpacing: 1200, spiral: 0.6, pathWidth: { sunwalk: 12, way: 3, trail: 1.2 }, places: { orchard: 120, parcel: 150, hall: 72 } },
   // Bays of 30 m between pillars of cast regolith; two people to a household, half a bay of home each.
-  under: { bay: 30, stone: { density: 2600, strength: 8e7, modulus: 4e10, safetyFactor: 3 }, land: 9000, spring: 0.65, household: { people: 2.1, bays: 0.5 }, halls: 0.25, lanes: 4, cisterns: 0.04 },
+  under: { bay: 30, stone: { density: 2600, strength: 8e7, modulus: 4e10, safetyFactor: 3 }, land: 9000, spring: 0.65, household: { people: 2.1, bays: 0.5 }, halls: 0.25, lanes: 4, cisterns: 0.04, grade: 0.125, lamp: 0.1, mist: 150 },
   population: 300000,
   // About one in ten residents up on the land on a fine afternoon, for two and a half hours; most keep a rhythm.
   life: { outings: 0.35, stay: 9000, regulars: 0.6, sunwalk: 0.03, night: 0.04, shells: 0.15, minds: 0.3, walk: 1.3, reach: 1500,
