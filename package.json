@@ -17,10 +17,10 @@
     "shots": "node scripts/shots/shots.mjs"
   },
   "dependencies": {
-    "@actors/core": "https://github.com/ArndRosemeier/Actors/releases/download/v0.5.0/actors-core-0.5.0.tgz",
-    "@actors/generator": "https://github.com/ArndRosemeier/Actors/releases/download/v0.5.0/actors-generator-0.5.0.tgz",
-    "@actors/human": "https://github.com/ArndRosemeier/Actors/releases/download/v0.5.0/actors-human-0.5.0.tgz",
-    "@actors/three": "https://github.com/ArndRosemeier/Actors/releases/download/v0.5.0/actors-three-0.5.0.tgz",
+    "@actors/core": "https://github.com/ArndRosemeier/Actors/releases/download/v0.6.0/actors-core-0.6.0.tgz",
+    "@actors/generator": "https://github.com/ArndRosemeier/Actors/releases/download/v0.6.0/actors-generator-0.6.0.tgz",
+    "@actors/human": "https://github.com/ArndRosemeier/Actors/releases/download/v0.6.0/actors-human-0.6.0.tgz",
+    "@actors/three": "https://github.com/ArndRosemeier/Actors/releases/download/v0.6.0/actors-three-0.6.0.tgz",
     "@dimforge/rapier3d-compat": "0.19.3",
     "@futuremagic/core": "file:vendor/assetgenerator/packages/core",
     "@futuremagic/stage": "file:vendor/assetgenerator/packages/stage",

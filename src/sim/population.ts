@@ -56,9 +56,13 @@ export interface Person {
   heading: number;
   /** Walking, or staying put at their place. */
   moving: boolean;
+  /** How fast they go over the floor (m/s; 0 staying put). */
+  speed: number;
   activity: Activity;
   /** The court they came up at, or −1 for a Sunwalker. */
   court: number;
+  /** Which of the court's outings that day (or which Sunwalker): with `court`, finds them again (`whereIs`). */
+  outing: number;
 }
 
 /** One day's outings from one court, in plain arrays. */
@@ -92,6 +96,12 @@ function normal(seed: number, a: number, b: number, c: number): number {
   const u = Math.max(1e-9, unit(seed, a, b, c)), v = unit(seed, a, b, c + 7919);
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(TURN * v);
 }
+
+/** The population's seeds, derived once per habitat (hashing their names each time would cost more than the rest). */
+const seedsOf = kept((h: Habitat) => {
+  const of = (name: string): number => deriveSeed(h.seed, 'life', name);
+  return { resident: of('resident'), outing: of('outing'), rhythm: of('rhythm'), spot: of('spot'), face: of('face'), sunwalk: of('sunwalk') };
+});
 
 function makeCensus(h: Habitat): Census {
   const life = h.params.life, v = venuesOf(h);
@@ -140,7 +150,7 @@ function shuffleFor(h: Habitat, day: number): Shuffle {
 
 /** Resident i: the same person every time. */
 export function residentOf(h: Habitat, i: number): Resident {
-  const c = censusOf(h), life = h.params.life, courts = venuesOf(h).courts.length, seed = deriveSeed(h.seed, 'life', 'resident');
+  const c = censusOf(h), life = h.params.life, courts = venuesOf(h).courts.length, seed = seedsOf(h).resident;
   const regular = i < c.regulars;
   const home = courts ? Math.min(courts - 1, Math.floor(regular ? (i * courts) / Math.max(1, c.regulars) : ((i - c.regulars) * courts) / Math.max(1, c.residents - c.regulars))) : 0;
   return {
@@ -175,7 +185,7 @@ const stayOf = (h: Habitat, n: number): number => h.params.life.stay * Math.min(
 
 /** One day's outings from one court: its regulars whose weekday it is, and the visitors the shuffle sends it. */
 function outingsFrom(h: Habitat, day: number, court: number): Outings {
-  const c = censusOf(h), v = venuesOf(h), life = h.params.life, seed = deriveSeed(h.seed, 'life', 'outing');
+  const c = censusOf(h), v = venuesOf(h), life = h.params.life, seed = seedsOf(h).outing;
   const resident: number[] = [], venue: number[] = [], start: number[] = [], stay: number[] = [], night: number[] = [];
   const add = (i: number, k: number, centreJitter: number, n: number, dayPick: number): void => {
     const place = v.venues[k], atNight = !place.evening && unit(seed, i, day, 11) < life.night;
@@ -186,7 +196,7 @@ function outingsFrom(h: Habitat, day: number, court: number): Outings {
   const mine = v.byCourt[court];
   // Regulars: the same weekdays, the same hour, the same place.
   const courts = v.courts.length, r0 = Math.ceil((court * c.regulars) / courts), r1 = Math.ceil(((court + 1) * c.regulars) / courts);
-  const weekday = ((day % WEEK) + WEEK) % WEEK, rseed = deriveSeed(h.seed, 'life', 'rhythm');
+  const weekday = ((day % WEEK) + WEEK) % WEEK, rseed = seedsOf(h).rhythm;
   if (mine.length) for (let i = r0; i < r1; i++) {
     if (unit(rseed, i, weekday, 0) >= life.outings) continue;
     const k = favourite(v, mine, unit(rseed, i, 2, 2));
@@ -239,6 +249,7 @@ function outingsOf(h: Habitat, day: number, court: number): Outings {
 /** Bytes the population keeps for a habitat (its outings and routes), for the memory watchdog. */
 export function lifeBytes(h: Habitat): number {
   let n = outingCache.get(h)?.bytes ?? 0;
+  for (const w of walkerCache.get(h)?.values() ?? []) n += w.resident.byteLength * 8;
   for (const r of routeCache.get(h)?.values() ?? []) n += r.points.byteLength + r.along.byteLength;
   return n;
 }
@@ -261,7 +272,7 @@ function routeOf(h: Habitat, from: number, to: number): Route {
 
 /** Someone's spot at their place: a seeded offset within its spread (θ, s), kept out of the lake unless they swim or stand on the pavilion. */
 function spotOf(h: Habitat, place: Venue, i: number, day: number): [number, number] {
-  const seed = deriveSeed(h.seed, 'life', 'spot'), a = TURN * unit(seed, i, day, 0), r = place.spread * Math.sqrt(unit(seed, i, day, 1));
+  const seed = seedsOf(h).spot, a = TURN * unit(seed, i, day, 0), r = place.spread * Math.sqrt(unit(seed, i, day, 1));
   const ring = Math.max(1, h.profile.at(place.s).r), lake = planOf(h).lake;
   let s = place.s + r * Math.sin(a);
   if (lake && place.activity !== 'swim' && place.kind !== 'landmark' && fromLake(lake, s) < 0) s = besideLake(lake, place.s, r * 0.1);
@@ -284,13 +295,13 @@ function placeOf(h: Habitat, o: Outings, n: number, court: number, day: number, 
   let d: number, back = false;
   if (u < legs) d = u * who.walk;
   else if (u > o.stay[n] - legs) { d = (o.stay[n] - u) * who.walk; back = true; }
-  else return { resident: i, theta: st, s: ss, heading: TURN * unit(deriveSeed(h.seed, 'life', 'face'), i, day, 0), moving: false, activity, court };
+  else return { resident: i, theta: st, s: ss, heading: TURN * unit(seedsOf(h).face, i, day, 0), moving: false, speed: 0, activity, court, outing: n };
   if (d <= route.length) {
     const p = pointAlong(route, R, d);
-    return { resident: i, theta: p.theta, s: p.s, heading: back ? p.heading + Math.PI : p.heading, moving: true, activity: 'walk', court };
+    return { resident: i, theta: p.theta, s: p.s, heading: back ? p.heading + Math.PI : p.heading, moving: true, speed: who.walk, activity: 'walk', court, outing: n };
   }
   const f = (d - route.length) / Math.max(off, 1e-9), heading = Math.atan2(dt * R, ss - ls);
-  return { resident: i, theta: lt + dt * f, s: ls + (ss - ls) * f, heading: back ? heading + Math.PI : heading, moving: true, activity: 'walk', court };
+  return { resident: i, theta: lt + dt * f, s: ls + (ss - ls) * f, heading: back ? heading + Math.PI : heading, moving: true, speed: who.walk, activity: 'walk', court, outing: n };
 }
 
 function sunwalkThetaAt(p: Float64Array, s: number): number {
@@ -303,25 +314,61 @@ function sunwalkThetaAt(p: Float64Array, s: number): number {
   return p[lo * 2] + (d - TURN * Math.round(d / TURN)) * t;
 }
 
-/** Sunwalker j of a day at clock time t, or null if they are not walking then. */
-function sunwalkerAt(h: Habitat, day: number, j: number, t: number): Person | null {
-  const walk = sunwalkOf(h);
-  if (!walk) return null;
-  const { length, daylight, peakWidth } = h.params.day, L = h.params.length, seed = deriveSeed(h.seed, 'life', 'sunwalk');
-  const i = censusOf(h).regulars + shuffleFor(h, day).unpermute(j);
-  const t0 = day * length + daylight * length * (0.05 + 0.7 * unit(seed, i, day, 0));
-  const span = Math.min(stayOf(h, normal(seed, i, day, 1)) * 2.5, day * length + daylight * length - t0);
-  const u = t - t0;
-  if (u < 0 || u > span) return null;
-  // The bright stretch's middle, in z, moves at a steady pace through the day; walkers keep near it.
-  const pace = ((1 + 2 * peakWidth) * L) / (daylight * length), zMid = -peakWidth * L + pace * (t0 - day * length);
-  const { floorStart, floorEnd } = h.profile, z0 = h.profile.at(floorStart).z;
-  const s0 = floorStart + (zMid - z0) + normal(seed, i, day, 2) * 0.35 * peakWidth * L;
-  const speed = pace * (0.85 + 0.3 * unit(seed, i, day, 3));
-  const s = s0 + speed * u;
-  if (s < floorStart || s > floorEnd) return null;
-  const theta = sunwalkThetaAt(walk, s), side = (unit(seed, i, day, 4) - 0.5) * planOf(h).paths[0].width / Math.max(1, h.radius);
-  return { resident: i, theta: theta + side, s, heading: 0, moving: true, activity: 'sunwalk', court: -1 };
+/** One day's Sunwalkers, worked out once: who, when they set out, for how long, where and how fast, and their side. */
+interface Sunwalkers {
+  resident: Int32Array;
+  t0: Float64Array;
+  span: Float32Array;
+  s0: Float64Array;
+  speed: Float32Array;
+  side: Float32Array;
+}
+
+function sunwalkersFrom(h: Habitat, day: number): Sunwalkers {
+  const n = censusOf(h).sunwalk, regulars = censusOf(h).regulars, sh = shuffleFor(h, day), seed = seedsOf(h).sunwalk;
+  const { length, daylight, peakWidth } = h.params.day, L = h.params.length;
+  const { floorStart } = h.profile, z0 = h.profile.at(floorStart).z, width = planOf(h).paths[0]?.width ?? 0;
+  const pace = ((1 + 2 * peakWidth) * L) / (daylight * length);
+  const w: Sunwalkers = { resident: new Int32Array(n), t0: new Float64Array(n), span: new Float32Array(n), s0: new Float64Array(n), speed: new Float32Array(n), side: new Float32Array(n) };
+  for (let j = 0; j < n; j++) {
+    const i = regulars + sh.unpermute(j);
+    const t0 = day * length + daylight * length * (0.05 + 0.7 * unit(seed, i, day, 0));
+    // The bright stretch's middle, in z, moves at a steady pace through the day; walkers keep near it.
+    const zMid = -peakWidth * L + pace * (t0 - day * length);
+    w.resident[j] = i;
+    w.t0[j] = t0;
+    w.span[j] = Math.min(stayOf(h, normal(seed, i, day, 1)) * 2.5, day * length + daylight * length - t0);
+    w.s0[j] = floorStart + (zMid - z0) + normal(seed, i, day, 2) * 0.35 * peakWidth * L;
+    w.speed[j] = pace * (0.85 + 0.3 * unit(seed, i, day, 3));
+    w.side[j] = ((unit(seed, i, day, 4) - 0.5) * width) / Math.max(1, h.radius);
+  }
+  return w;
+}
+
+/** Sunwalker tables kept per habitat: today's and yesterday's are all a clock needs. */
+const walkerCache = new WeakMap<Habitat, Map<number, Sunwalkers>>();
+function sunwalkersOf(h: Habitat, day: number): Sunwalkers {
+  let m = walkerCache.get(h);
+  if (!m) { m = new Map(); walkerCache.set(h, m); }
+  let w = m.get(day);
+  if (!w) {
+    if (m.size >= 2) m.clear();
+    w = sunwalkersFrom(h, day);
+    m.set(day, w);
+  }
+  return w;
+}
+
+/** Sunwalker j of a day at clock time t, or null if they are not walking then (or not within `near`). */
+function sunwalkerAt(h: Habitat, w: Sunwalkers, j: number, t: number, near?: Near): Person | null {
+  const walk = sunwalkOf(h), u = t - w.t0[j];
+  if (!walk || u < 0 || u > w.span[j]) return null;
+  const s = w.s0[j] + w.speed[j] * u;
+  if (s < h.profile.floorStart || s > h.profile.floorEnd || (near && Math.abs(s - near.s) > near.radius)) return null;
+  // They keep pace along the axis; where the Sunwalk winds, their way over the floor is longer and they walk faster.
+  const theta = sunwalkThetaAt(walk, s), turn = (sunwalkThetaAt(walk, s + 1) - sunwalkThetaAt(walk, s - 1)) / 2;
+  const across = h.radius * (turn - TURN * Math.round(turn / TURN));
+  return { resident: w.resident[j], theta: theta + w.side[j], s, heading: Math.atan2(across, 1), moving: true, speed: w.speed[j] * Math.hypot(1, across), activity: 'sunwalk', court: -1, outing: j };
 }
 
 /** An area to look in: around (θ, s) out to `radius` m over the floor. */
@@ -349,9 +396,36 @@ export function peopleAt(h: Habitat, t: number, near?: Near): Person[] {
       if (p && inArea(p.theta, p.s, 0)) out.push(p);
     }
   }
+  const w = sunwalkersOf(h, day);
   for (let j = 0; j < c.sunwalk; j++) {
-    const p = sunwalkerAt(h, day, j, t);
+    const p = sunwalkerAt(h, w, j, t, near);
     if (p && inArea(p.theta, p.s, 0)) out.push(p);
   }
   return out;
+}
+
+/**
+ * Someone found by `peopleAt` (their court and outing), at another clock time of the same day: where they are now, or
+ * null once they have gone below. Cheap enough to ask for everyone in view every frame.
+ */
+export function whereIs(h: Habitat, t: number, who: Pick<Person, 'court' | 'outing'>): Person | null {
+  const day = Math.floor(t / h.params.day.length);
+  if (who.court < 0) return who.outing < censusOf(h).sunwalk ? sunwalkerAt(h, sunwalkersOf(h, day), who.outing, t) : null;
+  const o = outingsOf(h, day, who.court);
+  return who.outing < o.resident.length ? placeOf(h, o, who.outing, who.court, day, t) : null;
+}
+
+/** The busiest spot within an area at clock time t: the middle of the `cell`-metre square of floor with the most people. */
+export function busiestNear(h: Habitat, t: number, near: Near, cell = 20): { theta: number; s: number; count: number } | null {
+  const R = h.radius, counts = new Map<string, { n: number; theta: number; s: number }>();
+  let best: { n: number; theta: number; s: number } | null = null;
+  for (const p of peopleAt(h, t, near)) {
+    // Squares on the unrolled floor around the area's middle, so θ wraps nowhere inside it.
+    const d = p.theta - near.theta, x = Math.floor(((d - TURN * Math.round(d / TURN)) * R) / cell), y = Math.floor((p.s - near.s) / cell);
+    const key = `${x},${y}`, c = counts.get(key) ?? { n: 0, theta: near.theta + ((x + 0.5) * cell) / R, s: near.s + (y + 0.5) * cell };
+    c.n++;
+    counts.set(key, c);
+    if (!best || c.n > best.n) best = c;
+  }
+  return best && { theta: best.theta, s: best.s, count: best.n };
 }

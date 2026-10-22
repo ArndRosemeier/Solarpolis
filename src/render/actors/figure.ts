@@ -4,9 +4,10 @@
  *
  * A drawn person or humanoid of Actors: its Character (body, skin, hair, clothes, face) and the game's animator.
  */
-import { Group, Matrix4, Vector3, type Material, type Mesh, type Object3D } from 'three/webgpu';
+import { DoubleSide, FrontSide, Group, Matrix4, Vector3, type Material, type Mesh, type Object3D } from 'three/webgpu';
 import { nodeMaterials } from '@actors/three/webgpu';
 import type { CharacterPatch } from '@actors/generator';
+import type { Human } from '@actors/human';
 import type { Vec3 } from '../../blueprint';
 import { Character, HUMAN_PACK, packFetch } from './pack';
 import { FigureAnimator, type AnimState } from './animator';
@@ -41,6 +42,20 @@ function reverseDepthBias(root: Object3D): void {
   });
 }
 
+/**
+ * Ready a figure for the near shadow map (docs/SHADERS.md): it takes shadows; the parts it wears cast (the pack's other
+ * garments stay hidden; a change of clothes would prepare it again); a see-through two-sided part (lashes, brows) is
+ * drawn in two passes, one shader each, so its shadow is cast from one side.
+ */
+export function castAsWorn(root: Object3D): void {
+  root.traverse((o) => {
+    o.receiveShadow = true;
+    o.castShadow = o.visible;
+    const m = (o as Mesh).material as Material | undefined;
+    if (m && !Array.isArray(m) && m.transparent && m.side === DoubleSide) m.shadowSide = FrontSide;
+  });
+}
+
 export class Figure {
   /** The scene object: at the feet, standing along up, facing front. */
   readonly object = new Group();
@@ -54,15 +69,21 @@ export class Figure {
     this.animator = new FigureAnimator(character);
   }
 
-  /** Builds a figure with a look (missing fields: Actors' defaults) and loads its clips. */
-  static async load(look: CharacterPatch): Promise<Figure> {
+  /**
+   * Builds a figure with a look (missing fields: Actors' defaults) and loads its clips. `share`: an already loaded
+   * human (pack.ts `humanCatalog`) whose pack, targets and worker the figure uses instead of loading its own.
+   */
+  static async load(look: CharacterPatch, share?: Human): Promise<Figure> {
+    const config = { anatomy: false, ...look, animation: null };
     const character = await Character.load({
       pack: HUMAN_PACK,
       renderer: null,
       materials: nodeMaterials,
       clipLibraries: false,
       fetcher: packFetch,
-      config: { anatomy: false, ...look, animation: null },
+      config,
+      // Actors reads only the other character's human (and its kit, given here as `materials`).
+      ...(share ? { shareWith: { human: share } as unknown as Character } : {}),
     });
     reverseDepthBias(character.object);
     const figure = new Figure(character);

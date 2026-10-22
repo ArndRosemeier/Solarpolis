@@ -464,12 +464,18 @@ function inside(p: PlanPoint, poly: readonly PlanPoint[]): boolean {
 export function stairTopAt(st: LiftStair, p: PlanPoint, margin = 0): number | null {
   let best: number | null = null;
   const higher = (e: number): void => { if (best === null || e > best) best = e; };
-  for (const q of st.platforms) {
+  // Only the platforms and legs whose span along the axis holds the point (all of them for a widened footprint).
+  const index = margin === 0 ? reachesOf(st) : null;
+  if (index && (p[0] < index.z0 || p[0] > index.z1 || p[1] < index.w0 || p[1] > index.w1)) return null;
+  const bin = index ? Math.min(index.bins - 1, Math.floor((p[0] - index.z0) / index.size)) : 0;
+  const platforms = index ? index.platforms[bin] : st.platforms;
+  const legs = index ? index.legs[bin] : legShapesOf(st);
+  for (const q of platforms) {
     if (p[0] < q.z0 - margin || p[0] > q.z1 + margin || p[1] < q.w0 - margin || p[1] > q.w1 + margin) continue;
     const rim = p[0] < q.z0 + st.parapet || p[0] > q.z1 - st.parapet || p[1] < q.w0 + st.parapet || p[1] > q.w1 - st.parapet;
     higher(q.e + (rim && margin === 0 ? st.handrail : 0));
   }
-  for (const s of legShapesOf(st)) {
+  for (const s of legs) {
     const [a, l] = intoLeg(s, p), half = s.leg.width / 2;
     if (Math.abs(l) > half + margin || a < -half - margin || a > s.run + half + margin) continue;
     const rim = Math.abs(l) > half - st.parapet && margin === 0;
@@ -483,6 +489,38 @@ export function stairTopAt(st: LiftStair, p: PlanPoint, margin = 0): number | nu
   }
   return best;
 }
+
+/**
+ * Which platforms and legs reach each stretch of the axis (bins along z), and the box in plan the stair stands in:
+ * `stairTopAt` looks only at the few over a point, not at every one (made once).
+ */
+const reachesOf = kept((st: LiftStair) => {
+  const spans: { z0: number; z1: number; w0: number; w1: number; top: number }[] = [
+    ...st.platforms.map((q) => ({ z0: q.z0, z1: q.z1, w0: q.w0, w1: q.w1, top: q.e + st.handrail })),
+    // A leg's footprint lies within its width of the line between its ends; nothing on it stands above its high end's
+    // parapet.
+    ...legShapesOf(st).map((l) => ({
+      z0: Math.min(l.leg.from.z, l.leg.to.z) - l.leg.width, z1: Math.max(l.leg.from.z, l.leg.to.z) + l.leg.width,
+      w0: Math.min(l.leg.from.w, l.leg.to.w) - l.leg.width, w1: Math.max(l.leg.from.w, l.leg.to.w) + l.leg.width,
+      top: Math.max(l.leg.e0, l.leg.e1, ...l.aprons.map((a) => a.e), ...l.steps.map((x) => x.top)) + st.handrail,
+    })),
+  ];
+  const z0 = Math.min(...spans.map((b) => b.z0)), z1 = Math.max(...spans.map((b) => b.z1));
+  const bins = Math.max(1, st.legs.length * 2), size = Math.max(1e-6, (z1 - z0) / bins);
+  const platforms: StairPlatform[][] = Array.from({ length: bins }, () => []), legs: LegShape[][] = Array.from({ length: bins }, () => []);
+  // Each bin's reach across the ramp and its highest top.
+  const across = Array.from({ length: bins }, () => ({ w0: Infinity, w1: -Infinity, top: -Infinity }));
+  const shapes = legShapesOf(st);
+  spans.forEach((b, i) => {
+    const from = Math.max(0, Math.floor((b.z0 - z0) / size)), to = Math.min(bins - 1, Math.floor((b.z1 - z0) / size));
+    for (let k = from; k <= to; k++) {
+      if (i < st.platforms.length) platforms[k].push(st.platforms[i]); else legs[k].push(shapes[i - st.platforms.length]);
+      const a = across[k];
+      a.w0 = Math.min(a.w0, b.w0); a.w1 = Math.max(a.w1, b.w1); a.top = Math.max(a.top, b.top);
+    }
+  });
+  return { z0, z1, w0: Math.min(...spans.map((b) => b.w0)), w1: Math.max(...spans.map((b) => b.w1)), bins, size, platforms, legs, across };
+});
 
 /** A stair's reach over the profile and across the ramp, for quick tests: its rows' s, and how high it stands (made once). */
 const boundsOf = kept((h: Habitat) => {
@@ -513,8 +551,23 @@ export function stairStandAt(h: Habitat, theta: number, s: number): number | nul
   const b = boundsOf(h), ramp = rampOf(h);
   if (s < b.s0 - b.tall * 4 || s > b.s1 + b.tall) return null;
   if (Math.abs(ramp.plan(toWorld(h.profile, { theta, s, h: 0 })).w) > ramp.halfWidth + b.tall) return null;
+  const index = reachesOf(st);
   return standThrough(h, theta, s, 0, b.tall * 4, st.handrail / 4, (p) => {
     const q = ramp.plan(p), top = stairTopAt(st, [q.z, q.w]);
     return top === null ? null : top - q.e;
+  }, (pa, pb) => {
+    // Clear where every bin the stretch passes has nothing across where it goes, or nothing as high (the stretch is
+    // nearly straight in plan: half its length in slack covers its bend).
+    const a = ramp.plan(pa), c = ramp.plan(pb);
+    const slack = Math.max(Math.abs(c.z - a.z), Math.abs(c.w - a.w), Math.abs(c.e - a.e)) / 2 + st.handrail;
+    const za = Math.min(a.z, c.z) - slack, zb = Math.max(a.z, c.z) + slack;
+    if (zb < index.z0 || za > index.z1) return true;
+    const wa = Math.min(a.w, c.w) - slack, wb = Math.max(a.w, c.w) + slack, low = Math.min(a.e, c.e) - slack;
+    const from = Math.max(0, Math.floor((za - index.z0) / index.size)), to = Math.min(index.bins - 1, Math.floor((zb - index.z0) / index.size));
+    for (let k = from; k <= to; k++) {
+      const x = index.across[k];
+      if (wb >= x.w0 && wa <= x.w1 && low <= x.top) return false;
+    }
+    return true;
   });
 }

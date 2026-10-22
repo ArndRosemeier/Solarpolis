@@ -27,8 +27,16 @@ export interface ActionAnim {
   dur: number;
 }
 
+/** What a figure does while it stands still, in place of the plain idle: a pack clip, looping, or held at a share of it. */
+export interface Pose {
+  clip: string;
+  hold?: number;
+}
+
 export interface AnimState {
   move: MoveState;
+  /** Standing still ('idle'): this clip instead of the idle. */
+  pose?: Pose;
   action?: ActionAnim;
   mood?: Mood;
 }
@@ -52,10 +60,12 @@ interface MoveClip {
   /** Plays once, from this share of the clip on, fitted into `span` seconds (take-off and landing). */
   from?: number;
   span?: number;
+  /** Holds still at this share of the clip (a pose: lying on the grass). */
+  hold?: number;
 }
 
 /** The pack clip for each move state (a crouch that moves walks crouched). */
-function moveClip(move: MoveState, speed: number, combat: boolean): MoveClip {
+function moveClip(move: MoveState, speed: number, combat: boolean, pose?: Pose): MoveClip {
   switch (move) {
     case 'walk': return { clip: 'walk', stride: true };
     case 'run': return { clip: 'jog', stride: true };
@@ -68,7 +78,7 @@ function moveClip(move: MoveState, speed: number, combat: boolean): MoveClip {
     case 'dead': return { clip: 'death', once: true };
     case 'knockdown': return { clip: 'knocked back', once: true };
     case 'stunned': return { clip: 'zombie idle' };
-    default: return { clip: combat ? 'sword idle' : 'idle' };
+    default: return combat ? { clip: 'sword idle' } : pose ? { clip: pose.clip, hold: pose.hold } : { clip: 'idle' };
   }
 }
 
@@ -175,7 +185,7 @@ export class FigureAnimator {
       }
       this.hit = 0;
     }
-    this.updateMove(this.withJumps(moveClip(anim.move, speed, !!input.combat), anim.move, speed, dt), speed, dt);
+    this.updateMove(this.withJumps(moveClip(anim.move, speed, !!input.combat, anim.pose), anim.move, speed, dt), speed, dt);
     const actionWeight = this.updateAction(anim.action, time, dt);
     const flinchWeight = this.updateFlinch(dt);
     const upperFree = Math.max(0, 1 - actionWeight - flinchWeight);
@@ -253,6 +263,8 @@ export class FigureAnimator {
     const scale = want.span !== undefined ? (length * (1 - (want.from ?? 0))) / want.span
       : want.stride && top.speed > 0 ? Math.min(1.6, Math.max(0.6, speed / top.speed)) : 1;
     top.lower.timeScale = top.upper.timeScale = scale;
+    if (want.hold !== undefined) for (const a of [top.lower, top.upper]) a.time = want.hold * length;
+    top.lower.paused = top.upper.paused = want.hold !== undefined;
   }
 
   /** Poses the action at its place on the game clock; returns how much of the upper body it takes. */

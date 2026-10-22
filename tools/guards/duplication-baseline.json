@@ -12,14 +12,6 @@
     "reason": "The leaf atlas (ported from Scale's getLeafAtlas) draws each cell with its own little leaf recipe: the twig cells share drawTwigCell and differ only in their numbers (shape, size, colour). That data reads best one recipe per cell, as in Scale."
   },
   {
-    "key": "idiom: [.add .mul] in solarpolis/render/builtShaders.ts + solarpolis/render/groundShaders.ts + solarpolis/render/materials.ts",
-    "reason": "TSL has no operators: every shader file does its arithmetic with .add and .mul. Shared shader steps already live in one place each (sunlit, throughAir, the hull and sky pieces); this pair is the language, not a copied procedure. (It surfaced when render/liftStair.ts became render/tiled.ts, which moved the finder's corpus-wide counts.)"
-  },
-  {
-    "key": "idiom: [.add .mul] in solarpolis/render/groundShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
-    "reason": "TSL has no operators: every shader file does its arithmetic with .add and .mul. Shared shader steps already live in one place each (sunlit, throughAir, the hull and sky pieces); this pair is the language, not a copied procedure. (It surfaced when render/liftStair.ts became render/tiled.ts, which moved the finder's corpus-wide counts.)"
-  },
-  {
     "key": "idiom: [.all Promise] in solarpolis/render/actors/animator.ts + solarpolis/render/necklace.ts + solarpolis/render/terrain.ts",
     "reason": "Plain JavaScript: each waits for its own different loads at once (animation clips, stage meshes, streamed tiles). Nothing to fold; it surfaced when the plan's files raised the file count (the finder weighs names by how few files use them)."
   },
@@ -40,6 +32,10 @@
     "reason": "TSL has no operators: every shader file does its arithmetic with .mul and .sub. Shared shader steps already live in one place each (sunlit, throughAir, the hull and sky pieces); this pair is the language, not a copied procedure."
   },
   {
+    "key": "idiom: [.mul .sub] in solarpolis/render/crowdShaders.ts + solarpolis/render/hullShaders.ts + solarpolis/render/skyShaders.ts",
+    "reason": "TSL has no operators: every shader file does its arithmetic with .mul and .sub. The stand-ins' pose (render/crowdShaders.ts) is its own step; the shared ones (sunlit, throughAir) are used from materials.ts, not copied."
+  },
+  {
     "key": "idiom: [.mul .sub] in solarpolis/render/hullShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
     "reason": "TSL has no operators: every shader file does its arithmetic with .mul and .sub. Shared shader steps already live in one place each (sunlit, throughAir, the hull and sky pieces); this pair is the language, not a copied procedure."
   },
@@ -50,6 +46,38 @@
   {
     "key": "same name: solarpolis/app/memory.ts#stop + solarpolis/render/actors/animator.ts#stop",
     "reason": "The Actors figure and animator are ported from Dunfinity with their method names, which follow Actors' own Character API (load, update, stop, dispose); the plan moves the animator into Actors, and keeping the names keeps that swap a drop-in."
+  },
+  {
+    "key": "same name: solarpolis/app/title.ts#show + solarpolis/lab/lifeView.ts#show",
+    "reason": "The Blueprint Lab's map views (PlanView, LifeView) share one shape: show(habitat | null) from the Lab, then a private draw once the parameters settle. The title card's show is the app's own panel call. Same verbs, different things shown."
+  },
+  {
+    "key": "same name: solarpolis/gen/courts.ts#frame + solarpolis/main.ts#frame",
+    "reason": "Different things that share a short name: a SiteKind member (gen/siteTiles.ts) and an unrelated local helper."
+  },
+  {
+    "key": "same name: solarpolis/gen/crossings.ts#at + solarpolis/gen/grownHall.ts#at",
+    "reason": "The members of a SiteKind (gen/siteTiles.ts): each kind of thing at sites on the floor (courts, crossings, grown halls) says its frame, build, at and top under the seam's own names; siteParts does everything else once."
+  },
+  {
+    "key": "same name: solarpolis/gen/crossings.ts#at + solarpolis/gen/terrain.ts#at",
+    "reason": "Different things that share a short name: a SiteKind member (gen/siteTiles.ts) and an unrelated local helper."
+  },
+  {
+    "key": "same name: solarpolis/gen/crossings.ts#build + solarpolis/gen/grownHall.ts#build",
+    "reason": "The members of a SiteKind (gen/siteTiles.ts): each kind of thing at sites on the floor (courts, crossings, grown halls) says its frame, build, at and top under the seam's own names; siteParts does everything else once."
+  },
+  {
+    "key": "same name: solarpolis/gen/crossings.ts#frame + solarpolis/gen/grownHall.ts#frame",
+    "reason": "The members of a SiteKind (gen/siteTiles.ts): each kind of thing at sites on the floor (courts, crossings, grown halls) says its frame, build, at and top under the seam's own names; siteParts does everything else once."
+  },
+  {
+    "key": "same name: solarpolis/gen/crossings.ts#top + solarpolis/gen/grownHall.ts#top",
+    "reason": "The members of a SiteKind (gen/siteTiles.ts): each kind of thing at sites on the floor (courts, crossings, grown halls) says its frame, build, at and top under the seam's own names; siteParts does everything else once."
+  },
+  {
+    "key": "same name: solarpolis/gen/grownHall.ts#at + solarpolis/gen/terrain.ts#at",
+    "reason": "Different things that share a short name: a SiteKind member (gen/siteTiles.ts) and an unrelated local helper."
   },
   {
     "key": "same name: solarpolis/gen/shapes.ts#band + solarpolis/render/shaderMath.ts#band",
@@ -66,6 +94,14 @@
   {
     "key": "same name: solarpolis/lab/blueprintLab.ts#update + solarpolis/render/actors/figure.ts#update",
     "reason": "The Actors figure and animator are ported from Dunfinity with their method names, which follow Actors' own Character API (load, update, stop, dispose); the plan moves the animator into Actors, and keeping the names keeps that swap a drop-in."
+  },
+  {
+    "key": "same name: solarpolis/lab/lifeView.ts#draw + solarpolis/lab/planView.ts#draw",
+    "reason": "The Blueprint Lab's map views (PlanView, LifeView) share one shape: show(habitat | null) from the Lab, then a private draw once the parameters settle. The title card's show is the app's own panel call. Same verbs, different things shown."
+  },
+  {
+    "key": "same name: solarpolis/lab/lifeView.ts#show + solarpolis/lab/planView.ts#show",
+    "reason": "The Blueprint Lab's map views (PlanView, LifeView) share one shape: show(habitat | null) from the Lab, then a private draw once the parameters settle. The title card's show is the app's own panel call. Same verbs, different things shown."
   },
   {
     "key": "same name: solarpolis/main.ts#make + solarpolis/render/streamed.ts#make",
@@ -100,10 +136,6 @@
     "reason": "dispose() is the usual name for giving resources back."
   },
   {
-    "key": "same name: solarpolis/render/actors/animator.ts#load + solarpolis/render/actors/figure.ts#load",
-    "reason": "The Actors figure and animator are ported from Dunfinity with their method names, which follow Actors' own Character API (load, update, stop, dispose); the plan moves the animator into Actors, and keeping the names keeps that swap a drop-in."
-  },
-  {
     "key": "same name: solarpolis/render/actors/animator.ts#load + solarpolis/render/terrain.ts#load",
     "reason": "The Actors figure and animator are ported from Dunfinity with their method names, which follow Actors' own Character API (load, update, stop, dispose); the plan moves the animator into Actors, and keeping the names keeps that swap a drop-in."
   },
@@ -132,10 +164,6 @@
     "reason": "dispose() is the usual name for giving resources back."
   },
   {
-    "key": "same name: solarpolis/render/actors/figure.ts#load + solarpolis/render/terrain.ts#load",
-    "reason": "dispose() frees what an object holds and load() fetches it: the common lifecycle names (three.js, Rapier, Actors), with bodies of their own."
-  },
-  {
     "key": "same name: solarpolis/render/hullDetail.ts#bytes + solarpolis/render/plants.ts#bytes",
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
@@ -160,6 +188,10 @@
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
+    "key": "same name: solarpolis/render/hullDetail.ts#dispose + solarpolis/render/people.ts#dispose",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
+  },
+  {
     "key": "same name: solarpolis/render/hullDetail.ts#dispose + solarpolis/render/plants.ts#dispose",
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
@@ -178,6 +210,10 @@
   {
     "key": "same name: solarpolis/render/hullDetail.ts#follow + solarpolis/render/necklace.ts#follow",
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/hullDetail.ts#follow + solarpolis/render/people.ts#follow",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
   },
   {
     "key": "same name: solarpolis/render/hullDetail.ts#follow + solarpolis/render/plants.ts#follow",
@@ -220,6 +256,10 @@
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
+    "key": "same name: solarpolis/render/hullDetail.ts#info + solarpolis/render/people.ts#info",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
+  },
+  {
     "key": "same name: solarpolis/render/hullDetail.ts#make + solarpolis/render/plants.ts#make",
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
@@ -230,6 +270,10 @@
   {
     "key": "same name: solarpolis/render/hullDetail.ts#make + solarpolis/render/tiled.ts#make",
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/hullDetail.ts#shed + solarpolis/render/people.ts#shed",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
   },
   {
     "key": "same name: solarpolis/render/hullDetail.ts#shed + solarpolis/render/plants.ts#shed",
@@ -248,8 +292,16 @@
     "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
   },
   {
+    "key": "same name: solarpolis/render/landmarks.ts#dispose + solarpolis/render/people.ts#dispose",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
+  },
+  {
     "key": "same name: solarpolis/render/landmarks.ts#follow + solarpolis/render/necklace.ts#follow",
     "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
+  },
+  {
+    "key": "same name: solarpolis/render/landmarks.ts#follow + solarpolis/render/people.ts#follow",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
   },
   {
     "key": "same name: solarpolis/render/landmarks.ts#follow + solarpolis/render/plants.ts#follow",
@@ -272,12 +324,20 @@
     "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
   },
   {
+    "key": "same name: solarpolis/render/necklace.ts#dispose + solarpolis/render/people.ts#dispose",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
+  },
+  {
     "key": "same name: solarpolis/render/necklace.ts#dispose + solarpolis/render/tiled.ts#dispose",
     "reason": "dispose() is the usual name for giving resources back."
   },
   {
     "key": "same name: solarpolis/render/necklace.ts#dispose + solarpolis/render/traffic.ts#dispose",
     "reason": "The ship traffic view (render/traffic.ts) has the views' own interface (follow each frame, dispose), like the streamed and necklace views, with a body of its own."
+  },
+  {
+    "key": "same name: solarpolis/render/necklace.ts#follow + solarpolis/render/people.ts#follow",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
   },
   {
     "key": "same name: solarpolis/render/necklace.ts#follow + solarpolis/render/plants.ts#follow",
@@ -300,8 +360,16 @@
     "reason": "Everything that can give memory back does so through a shed() method the memory watchdog calls (CLAUDE.md rule 12); each sheds its own buffers."
   },
   {
+    "key": "same name: solarpolis/render/necklace.ts#shed + solarpolis/render/people.ts#shed",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
+  },
+  {
     "key": "same name: solarpolis/render/outside.ts#create + solarpolis/render/view.ts#create",
     "reason": "Both 3D views implement the page's view interface (PageView in main.ts: create, setHabitat, setRunning, bytes, shed, info, skip); their shared machinery is in render/surface.ts."
+  },
+  {
+    "key": "same name: solarpolis/render/outside.ts#place + solarpolis/render/view.ts#place",
+    "reason": "Each view's own: InteriorView and OutsideView put their camera and world relative to the eye, each for its own world (the habitat inside, space outside). It surfaced when InteriorView.place gained the people's line."
   },
   {
     "key": "same name: solarpolis/render/outside.ts#setHabitat + solarpolis/render/view.ts#setHabitat",
@@ -314,6 +382,38 @@
   {
     "key": "same name: solarpolis/render/outside.ts#skip + solarpolis/render/view.ts#skip",
     "reason": "Both 3D views implement the page's view interface (PageView in main.ts: create, setHabitat, setRunning, bytes, shed, info, skip); their shared machinery is in render/surface.ts."
+  },
+  {
+    "key": "same name: solarpolis/render/people.ts#bytes + solarpolis/render/view.ts#bytes",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
+  },
+  {
+    "key": "same name: solarpolis/render/people.ts#follow + solarpolis/render/plants.ts#follow",
+    "reason": "The views' per-frame step around the eye shares only its name and the shape of a budgeted loop: plants choose and stream cells through the worker pool, people ask the population where each person is and measure their looks."
+  },
+  {
+    "key": "same name: solarpolis/render/people.ts#follow + solarpolis/render/terrain.ts#follow",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
+  },
+  {
+    "key": "same name: solarpolis/render/people.ts#follow + solarpolis/render/tiled.ts#follow",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
+  },
+  {
+    "key": "same name: solarpolis/render/people.ts#follow + solarpolis/render/traffic.ts#follow",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
+  },
+  {
+    "key": "same name: solarpolis/render/people.ts#shed + solarpolis/render/plants.ts#shed",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
+  },
+  {
+    "key": "same name: solarpolis/render/people.ts#shed + solarpolis/render/terrain.ts#shed",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
+  },
+  {
+    "key": "same name: solarpolis/render/people.ts#shed + solarpolis/render/tiled.ts#shed",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
   },
   {
     "key": "same name: solarpolis/render/plants.ts#bytes + solarpolis/render/terrain.ts#bytes",
@@ -450,45 +550,5 @@
   {
     "key": "same name: solarpolis/space/flyer.ts#turn + solarpolis/world/walker.ts#turn",
     "reason": "Each camera turns by pointer movement in its own frame (walker: heading on the curved floor; flyer outside: yaw around the ecliptic pole)."
-  },
-  {
-    "key": "same name: solarpolis/gen/crossings.ts#at + solarpolis/gen/grownHall.ts#at",
-    "reason": "The members of a SiteKind (gen/siteTiles.ts): each kind of thing at sites on the floor (courts, crossings, grown halls) says its frame, build, at and top under the seam's own names; siteParts does everything else once."
-  },
-  {
-    "key": "same name: solarpolis/gen/crossings.ts#build + solarpolis/gen/grownHall.ts#build",
-    "reason": "The members of a SiteKind (gen/siteTiles.ts): each kind of thing at sites on the floor (courts, crossings, grown halls) says its frame, build, at and top under the seam's own names; siteParts does everything else once."
-  },
-  {
-    "key": "same name: solarpolis/gen/crossings.ts#frame + solarpolis/gen/grownHall.ts#frame",
-    "reason": "The members of a SiteKind (gen/siteTiles.ts): each kind of thing at sites on the floor (courts, crossings, grown halls) says its frame, build, at and top under the seam's own names; siteParts does everything else once."
-  },
-  {
-    "key": "same name: solarpolis/gen/crossings.ts#top + solarpolis/gen/grownHall.ts#top",
-    "reason": "The members of a SiteKind (gen/siteTiles.ts): each kind of thing at sites on the floor (courts, crossings, grown halls) says its frame, build, at and top under the seam's own names; siteParts does everything else once."
-  },
-  {
-    "key": "same name: solarpolis/gen/courts.ts#frame + solarpolis/main.ts#frame",
-    "reason": "Different things that share a short name: a SiteKind member (gen/siteTiles.ts) and an unrelated local helper."
-  },
-  {
-    "key": "same name: solarpolis/gen/crossings.ts#at + solarpolis/gen/terrain.ts#at",
-    "reason": "Different things that share a short name: a SiteKind member (gen/siteTiles.ts) and an unrelated local helper."
-  },
-  {
-    "key": "same name: solarpolis/gen/grownHall.ts#at + solarpolis/gen/terrain.ts#at",
-    "reason": "Different things that share a short name: a SiteKind member (gen/siteTiles.ts) and an unrelated local helper."
-  },
-  {
-    "key": "same name: solarpolis/app/title.ts#show + solarpolis/lab/lifeView.ts#show",
-    "reason": "The Blueprint Lab's map views (PlanView, LifeView) share one shape: show(habitat | null) from the Lab, then a private draw once the parameters settle. The title card's show is the app's own panel call. Same verbs, different things shown."
-  },
-  {
-    "key": "same name: solarpolis/lab/lifeView.ts#draw + solarpolis/lab/planView.ts#draw",
-    "reason": "The Blueprint Lab's map views (PlanView, LifeView) share one shape: show(habitat | null) from the Lab, then a private draw once the parameters settle. The title card's show is the app's own panel call. Same verbs, different things shown."
-  },
-  {
-    "key": "same name: solarpolis/lab/lifeView.ts#show + solarpolis/lab/planView.ts#show",
-    "reason": "The Blueprint Lab's map views (PlanView, LifeView) share one shape: show(habitat | null) from the Lab, then a private draw once the parameters settle. The title card's show is the app's own panel call. Same verbs, different things shown."
   }
 ]

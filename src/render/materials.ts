@@ -31,6 +31,8 @@ import { RISE_RANGE } from '../gen/tiles';
 import { filtered } from './textures';
 import { cloudMarch, cloudShade } from './cloudShaders';
 import { builtAlbedo, roofHorizons } from './builtShaders';
+import { standInHorizon, standInPose } from './crowdShaders';
+import { STAND_IN_ATTRIBUTES, STAND_IN_STRIDE } from '../gen/standIn';
 import { boreColor, flameColor, hardwareColor, lampColor, radiatorColor, skinColor, skinDetailColor, skinShown } from './hullShaders';
 
 /** The air's look, shared by every kind (uniforms: changing them never builds a shader). */
@@ -640,6 +642,8 @@ export function standInAttribute(g: BufferGeometry, name: string): boolean {
   else if (name === 'corner') g.setAttribute('corner', new Float32BufferAttribute([-1, -1, 1, -1, 1, 1], 2));
   else if (name === 'horizon') g.setAttribute('horizon', new Float32BufferAttribute([OPEN_SKY, OPEN_SKY, 0, 0, OPEN_SKY, OPEN_SKY, 0, 0, OPEN_SKY, OPEN_SKY, 0, 0], 4));
   else if (name === 'plant') plantInstances(g, new Float32Array([0, 0, 0, 1, 0, 0, 0]));
+  else if ((STAND_IN_ATTRIBUTES as readonly string[]).includes(name)) { if (name === STAND_IN_ATTRIBUTES[0]) crowdInstances(g, new Float32Array(STAND_IN_STRIDE)); }
+  else if (name === 'part') g.setAttribute('part', new Float32BufferAttribute(new Array(6).fill(0), 2));
   else if (name === 'uv') g.setAttribute('uv', new Float32BufferAttribute(new Array(6).fill(0), 2));
   else if (name === 'floorA' || name === 'floorB') g.setAttribute(name, new Uint8BufferAttribute(new Array(12).fill(name === 'floorA' ? 255 : 0), 4, true));
   else if (name === 'canopy') g.setAttribute('canopy', new Float32BufferAttribute([0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0], 4));
@@ -693,7 +697,37 @@ export const BALL = kind('ball', ['position', 'normal'], { cast: true, receive: 
   return m;
 });
 
+/**
+ * People beyond the near figures (render/people.ts): one small body (gen/standIn.ts) per person, instanced, posed and
+ * coloured per instance (crowdShaders.ts) from the look their figure is built from, lit by the sunline past the
+ * terrain's horizons where they stand, as the figures are by the key and sky lights. They cast shadows, as figures do.
+ */
+export const CROWD = kind('crowd', ['position', 'normal', 'part', ...STAND_IN_ATTRIBUTES], { cast: true, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial({ side: DoubleSide });
+  const pose = standInPose(time);
+  const stand = attribute<'vec4'>('stand', 'vec4'), turn = attribute<'vec4'>('gait', 'vec4').x;
+  const foot = modelWorldMatrix.mul(vec4(stand.xyz, 1)).xyz;
+  const world = foot.add(view.eye);
+  const up = normalize(vec3(world.x.negate(), world.y.negate(), 0));
+  const side = vec3(up.y, up.x.negate(), 0), axis = vec3(0, 0, 1);
+  const c = cos(turn), sn = sin(turn);
+  const ax = side.mul(c).add(axis.mul(sn)), az = side.mul(sn.negate()).add(axis.mul(c));
+  const turned = (v: Node<'vec3'>): Node<'vec3'> => ax.mul(v.x).add(up.mul(v.y)).add(az.mul(v.z));
+  const scale = vec3(pose.width, 1, pose.width).mul(pose.height);
+  m.positionNode = stand.xyz.add(turned(pose.local.mul(scale)));
+  const n = varying(normalize(turned(pose.normal.div(scale))));
+  m.colorNode = throughAir(varying(pose.color).mul(sunlit(standInHorizon(), normalize(n), 0, float(1), true, true)));
+  return m;
+});
+
+/** Put people on a stand-in geometry as its instances: `STAND_IN_STRIDE` floats each (gen/standIn.ts). The one way. */
+export function crowdInstances(g: BufferGeometry, data: Float32Array | InstancedInterleavedBuffer): InstancedInterleavedBuffer {
+  const buffer = data instanceof InstancedInterleavedBuffer ? data : new InstancedInterleavedBuffer(data, STAND_IN_STRIDE);
+  STAND_IN_ATTRIBUTES.forEach((name, k) => g.setAttribute(name, new InterleavedBufferAttribute(buffer, 4, k * 4)));
+  return buffer;
+}
+
 /** Every kind, for the Stage's warm-up. */
 export function allKinds(): readonly Kind[] {
-  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS, STONE, BUILT, CLOUDS_FAR, CLOUDS_NEAR];
+  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS, STONE, BUILT, CROWD, CLOUDS_FAR, CLOUDS_NEAR];
 }
