@@ -2,6 +2,11 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.104 — Ready for a taller floor
+
+- Ridges and the crests of the new Rings and Heights show no slits of sky between near and far ground.
+- Your eyes now see a sunlit landform on the floor and adjust to it, as they already did for the Mountain.
+
 ## v0.103 — People in drone bodies
 
 - About one in twelve residents now wears a drone instead of a body: one of six small, quiet drones of their own choosing. They go out with their friends like anyone, walk along with their party and hover at eye height in the talking rings (lower beside those sitting or lying on the grass), and nod when it is their turn to speak. From far off they are specks in their drone's colours.

@@ -67,6 +67,9 @@ export function unpackRelief(w: number): [number, number] {
   return [((a - 127.5) / 127.5) * RISE_RANGE, ((b - 127.5) / 127.5) * RISE_RANGE];
 }
 
+/** A skirt hangs at least this many of its tile's errors below the edge (a coarser neighbour strays by about its own). */
+const SKIRT_ERRORS = 2;
+
 /** Horizon angles are baked every this many cells (TILE_CELLS must divide by it). */
 const HORIZON_STEP = 8;
 
@@ -448,13 +451,32 @@ export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): Til
   // The woods, after the horizons.
   for (let v = 0; v < row * row; v++) { horizon[v * 4 + 2] = Math.min(1, woodAt[v * 2]); horizon[v * 4 + 3] = woodAt[v * 2 + 1]; }
 
-  // Skirts: each edge point again, sunk below the ground by about a cell, so a coarser neighbour's gap is covered.
+  // The error: at cell centres (every other one), the true ground against the cell's four corners averaged. This
+  // catches both the relief between the points and the cylinder's own curve across the cell.
+  let error = 0;
+  for (let j = 0; j < N; j += 2) {
+    const s = Math.min(profile.length, b.s0 + (j + 0.5) * dS);
+    for (let i = 0; i < N; i += 2) {
+      const theta = b.theta0 + (i + 0.5) * dT;
+      const p = toWorld(profile, { theta, s, h: terrain.heightAt(theta, s) });
+      const c = [((j + 1) * W + (i + 1)) * 3, ((j + 1) * W + (i + 2)) * 3, ((j + 2) * W + (i + 1)) * 3, ((j + 2) * W + (i + 2)) * 3];
+      const ex = p[0] - (world[c[0]] + world[c[1]] + world[c[2]] + world[c[3]]) / 4;
+      const ey = p[1] - (world[c[0] + 1] + world[c[1] + 1] + world[c[2] + 1] + world[c[3] + 1]) / 4;
+      const ez = p[2] - (world[c[0] + 2] + world[c[1] + 2] + world[c[2] + 2] + world[c[3] + 2]) / 4;
+      error = Math.max(error, Math.sqrt(ex * ex + ey * ey + ez * ez));
+    }
+  }
+  // A tile that has children never claims to be finer than its cells can show at all.
+  error = Math.max(error, cellSize(layout, k) * 0.02);
+  // Skirts: each edge point again, sunk below the ground by about a cell, so a coarser neighbour's gap is covered. On a
+  // sharp crest a coarser neighbour's edge strays from the true ground by about its own error, up to a few times this
+  // tile's: so the skirt reaches at least twice this tile's error down, or the sky shows through along the crest.
   const edge: number[] = [];
   for (let i = 0; i < N; i++) edge.push(i);                       // s0 edge
   for (let j = 0; j < N; j++) edge.push(j * row + N);             // θ1 edge
   for (let i = N; i > 0; i--) edge.push(N * row + i);             // s1 edge
   for (let j = N; j > 0; j--) edge.push(j * row);                 // θ0 edge
-  const sink = Math.max(dS, dT * profile.at((b.s0 + b.s1) / 2).r) * 0.5 + 0.5;
+  const sink = Math.max(Math.max(dS, dT * profile.at((b.s0 + b.s1) / 2).r) * 0.5 + 0.5, SKIRT_ERRORS * error);
   edge.forEach((e, n) => {
     const v = (row * row + n) * 3, src = e * 3;
     for (let c = 0; c < 3; c++) {
@@ -482,23 +504,6 @@ export function buildTile(ecology: Ecology, layout: TileLayout, k: TileKey): Til
     index.push(a, sa, bb, bb, sa, sb, a, bb, sa, bb, sb, sa);
   }
 
-  // The error: at cell centres (every other one), the true ground against the cell's four corners averaged. This
-  // catches both the relief between the points and the cylinder's own curve across the cell.
-  let error = 0;
-  for (let j = 0; j < N; j += 2) {
-    const s = Math.min(profile.length, b.s0 + (j + 0.5) * dS);
-    for (let i = 0; i < N; i += 2) {
-      const theta = b.theta0 + (i + 0.5) * dT;
-      const p = toWorld(profile, { theta, s, h: terrain.heightAt(theta, s) });
-      const c = [((j + 1) * W + (i + 1)) * 3, ((j + 1) * W + (i + 2)) * 3, ((j + 2) * W + (i + 1)) * 3, ((j + 2) * W + (i + 2)) * 3];
-      const ex = p[0] - (world[c[0]] + world[c[1]] + world[c[2]] + world[c[3]]) / 4;
-      const ey = p[1] - (world[c[0] + 1] + world[c[1] + 1] + world[c[2] + 1] + world[c[3] + 1]) / 4;
-      const ez = p[2] - (world[c[0] + 2] + world[c[1] + 2] + world[c[2] + 2] + world[c[3] + 2]) / 4;
-      error = Math.max(error, Math.sqrt(ex * ex + ey * ey + ez * ez));
-    }
-  }
-  // A tile that has children never claims to be finer than its cells can show at all.
-  error = Math.max(error, cellSize(layout, k) * 0.02);
   let relief = 0;
   for (const g of heights) relief = Math.max(relief, Math.abs(g));
   relief += error;

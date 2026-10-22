@@ -77,7 +77,7 @@ const CHASE_RISE = 3.5;
 const CHASE_STEP = 0.003;
 const CHASE_GLIDE = 10;
 /** The eyes' meter inside: a grid of rays over the frame, a few of them metered each frame (`glare`). */
-const GLARE_COLUMNS = 5, GLARE_ROWS = 4, GLARE_PER_FRAME = 4;
+const GLARE_COLUMNS = 5, GLARE_ROWS = 4, GLARE_PER_FRAME = 3;
 /** The layer the player's body is drawn on: the shadow map always sees it, the camera only from behind. */
 const BODY_LAYER = 1;
 /** How far (in handrails) one steps out of a lift's doors on arriving (`outside`). */
@@ -659,7 +659,7 @@ export class InteriorView {
 
   /**
    * The eyes' stop-down in the air's glow and the light near the axis (`glareOf`), metered over the frame on a coarse
-   * grid against the land itself: a few rays each frame (each walks the terrain, some tens of microseconds), the whole
+   * grid against the land itself: a few rays each frame (each walks the terrain, about a quarter of a millisecond), the whole
    * grid several times a second, which the eyes, taking most of a second to follow, do not outpace.
    */
   private glare(eye: Vec3): number {

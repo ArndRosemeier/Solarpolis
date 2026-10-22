@@ -8,7 +8,7 @@
  */
 import { v3add, v3cross, v3dot, v3len, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
 import { fluxOfMagnitude, type SkyView } from '../space';
-import { fromWorld, groundNormal, type Habitat } from '../blueprint';
+import { fromWorld, type Habitat } from '../blueprint';
 import { hazeAlong } from '../world/air';
 import { emissionMean, rawIrradiance } from '../world/sunline';
 import { OPEN_SKY } from '../gen/horizon';
@@ -246,18 +246,21 @@ export function landAlbedo(ecology: Ecology): (p: Vec3) => number {
   return (p) => {
     if (snowCover(field, p[0], p[1], p[2]) === 0) return LAND_ALBEDO;
     const q = fromWorld(h.profile, p[0], p[1], p[2]), ground = ecology.terrain.heightAt(q.theta, q.s);
-    const n = normalAt(ecology, q.theta, q.s, ground, 8), r = Math.max(Math.hypot(p[0], p[1]), 1e-6);
+    const n = normalAt(ecology.terrain, q.theta, q.s, ground, NORMAL_STEP), r = Math.max(Math.hypot(p[0], p[1]), 1e-6);
     const lies = snowLies(field, p[0], p[1], p[2], -(n[0] * p[0] + n[1] * p[1]) / r);
     return LAND_ALBEDO + (SNOW_LUMINANCE - LAND_ALBEDO) * lies;
   };
 }
 
 /** Steps a ray takes toward the tube's wall looking for the land (closer together near the eye), then halvings. */
-const MARCH = 16, HALVINGS = 3;
+const MARCH = 24, HALVINGS = 3;
+/** The land's normal where a ray lands is taken over this (m): the shape of a hill or a face, not its stones. */
+const NORMAL_STEP = 8;
 
 /**
  * Where a ray inside first meets the land, and the land's normal there: with `heightAt`, the first step under the
- * ground on the way to the tube's wall or an end wall (a massif near the axis, a hill), else that wall itself.
+ * ground on the way to the tube's wall or an end wall (a massif near the axis, a ring or height on the floor), else
+ * that wall itself.
  */
 function landHit(m: InsideMeterable, eye: Vec3, d: Vec3): { p: Vec3; n: Vec3 } | null {
   const h = m.habitat, R = h.radius, L = h.length;
@@ -266,14 +269,13 @@ function landHit(m: InsideMeterable, eye: Vec3, d: Vec3): { p: Vec3; n: Vec3 } |
   if (d[2] > 1e-9 && (L - eye[2]) / d[2] < t) { t = (L - eye[2]) / d[2]; n = [0, 0, -1]; }
   else if (d[2] < -1e-9 && -eye[2] / d[2] < t) { t = -eye[2] / d[2]; n = [0, 0, 1]; }
   if (!Number.isFinite(t) || t <= 0) return null;
-  // The land rises far from the profile only on the endcaps (the massif, the Gate): a ray from over the floor that
-  // reaches the floor's tube meets only its gentle hills, where the tube is, near enough for the meter.
-  const heightAt = m.heightAt, z0 = h.profile.at(h.profile.floorStart).z, z1 = h.profile.at(h.profile.floorEnd).z;
-  const between = (z: number): boolean => z > z0 && z < z1;
-  if (heightAt && !(n === null && between(eye[2]) && between(eye[2] + d[2] * t))) {
-    const above = (u: number): { over: number; theta: number; s: number } => {
-      const q = fromWorld(h.profile, eye[0] + d[0] * u, eye[1] + d[1] * u, eye[2] + d[2] * u);
-      return { over: q.h - heightAt(q.theta, q.s), theta: q.theta, s: q.s };
+  // The land itself: the first step under the ground, wherever it rises (the massif, the Gate, the floor's rings and
+  // heights), and its own normal there, so a face lit from the side reads as lit.
+  const heightAt = m.heightAt;
+  if (heightAt) {
+    const above = (u: number): { over: number; theta: number; s: number; h: number } => {
+      const q = fromWorld(h.profile, eye[0] + d[0] * u, eye[1] + d[1] * u, eye[2] + d[2] * u), ground = heightAt(q.theta, q.s);
+      return { over: q.h - ground, theta: q.theta, s: q.s, h: ground };
     };
     let lo = 0;
     for (let k = 1; k <= MARCH; k++) {
@@ -282,7 +284,7 @@ function landHit(m: InsideMeterable, eye: Vec3, d: Vec3): { p: Vec3; n: Vec3 } |
       let under = hi;
       for (let j = 0; j < HALVINGS; j++) { const mid = (lo + under) / 2; if (above(mid).over >= 0) lo = mid; else under = mid; }
       const at = above(under);
-      return { p: v3add(eye, v3scale(d, under)), n: groundNormal(h.profile, at.theta, at.s) };
+      return { p: v3add(eye, v3scale(d, under)), n: normalAt({ habitat: h, heightAt }, at.theta, at.s, at.h, NORMAL_STEP) };
     }
   }
   const p: Vec3 = v3add(eye, v3scale(d, t));

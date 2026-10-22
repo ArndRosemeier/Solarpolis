@@ -42,3 +42,20 @@ for (const { name, params } of MATRIX) {
     if ((2 * R) / h.params.air.hazeDistance >= 0.1) assert.ok(tube < 0.85, `from the axis the eyes stop down (×${tube.toFixed(2)})`);
   });
 }
+
+for (const { name, params } of MATRIX) {
+  test(`eyes inside (${name}): a ray along the floor meets a ring rising across it, and sees its face`, () => {
+    const h = derive(params), p = h.profile, R = h.radius, day = h.params.day;
+    const mid = (p.floorStart + p.floorEnd) / 2, ringAt = mid + R, wide = 0.1 * R, tall = 0.1 * R;
+    // A ring around the axis, a tenth of the radius high, R along the floor from the eye.
+    const ring = (_theta: number, s: number): number => tall * Math.exp(-(((s - ringAt) / wide) ** 2));
+    const meter: InsideMeterable = {
+      habitat: h, emission: sunlineEmission(h, day.length * day.daylight * 0.5), norm: sunlineNorm(h),
+      extinction: Math.log(4) / h.params.air.hazeDistance, sky: 0.35, hazeLuminance: 0.67,
+    };
+    const eye = toWorld(p, { theta: 0, s: mid, h: tall * 0.3 }), along: Vec3 = [0, 0, 1];
+    const flat = insideRayLuminance({ ...meter, heightAt: () => 0 }, eye, along), ringed = insideRayLuminance({ ...meter, heightAt: ring }, eye, along);
+    assert.ok(Number.isFinite(ringed) && ringed > 0);
+    assert.ok(Math.abs(ringed - flat) > 1e-3 * Math.max(flat, 1e-3), `the ring is seen (${ringed.toFixed(3)} against ${flat.toFixed(3)} past it)`);
+  });
+}
