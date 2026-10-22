@@ -10,3 +10,17 @@ export function kept<K extends object, V>(make: (k: K) => V): (k: K) => V {
     return v;
   };
 }
+
+/**
+ * A result per object and number, each made when first asked for and kept as long as the object lives: one court's
+ * layout of a terrain's courts, one court's lift below.
+ */
+export function keptEach<K extends object, V>(make: (k: K, n: number) => V): (k: K, n: number) => V {
+  const made = new WeakMap<K, Map<number, V>>();
+  return (k, n) => {
+    let all = made.get(k);
+    if (!all) { all = new Map(); made.set(k, all); }
+    if (!all.has(n)) all.set(n, make(k, n));
+    return all.get(n)!;
+  };
+}

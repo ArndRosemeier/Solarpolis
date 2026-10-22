@@ -2,8 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MATRIX, fromWorld, toWorld, type Vec3 } from '../src/blueprint';
 import { levelsOf } from '../src/gen/underLevels';
-import { buildUnderTile, isBelow, underSolid, underTilesFor, type UnderDetail } from '../src/gen/underMesh';
+import { buildUnderTile, isBelow, underLiftOf, underSolid, underTilesFor, type UnderDetail } from '../src/gen/underMesh';
 import { buildPatch } from '../src/gen/patch';
+import { courtLayoutOf, lightWellOf } from '../src/gen/courts';
+import { angleDiff } from '@futuremagic/core';
 import { outOfPlace } from '../src/gen/shapes';
 import { windingOk } from './meshChecks';
 import { terrainOf } from './worlds';
@@ -44,18 +46,59 @@ for (const { name } of MATRIX) {
   test(`under tiles (${name}): a bay up close is whole, faces the room, lies between floor and ceiling, and its lamps light it`, () => {
     const { t, lv } = of(), h = t.habitat, at = spots(lv)[0];
     const tile = buildUnderTile(t, { level: 0, i: at.i, j: at.j }), m = tile.mesh, nv = m.positions.length / 3;
+    // The bay is a hamlet's, under its court: its light well comes down through the vault there.
+    const hamlet = lv.under.hamlets.find((x) => x.i === at.i && x.j === at.j)!, middle = lv.under.centreOf(at.i, at.j);
+    const well = t.courts.length ? lightWellOf(h, t.courts[hamlet.court]) : null;
+    let wellUp = 0;
     assert.equal(windingOk(m.positions, m.normals, m.index).bad, 0, 'every face toward the room');
     assert.equal(tile.glow.length, nv * 2);
     assert.ok(m.uvs.length === nv * 2 && m.finishes.length === nv && m.colors!.length === nv * 3);
     let glowSum = 0;
     for (let v = 0; v < nv; v++) {
       const w = outOfPlace(tile.origin, [m.positions[v * 3], m.positions[v * 3 + 1], m.positions[v * 3 + 2]]), p = fromWorld(h.profile, w[0], w[1], w[2]);
-      const l = lv.levelAt(p.theta, p.s);
-      assert.ok(Number.isFinite(p.h) && p.h <= l.ceiling + 0.25 && p.h >= l.floor - h.pillars.radius, `vertex ${p.h.toFixed(2)} m, the layer ${l.floor.toFixed(2)} … ${l.ceiling.toFixed(2)}`);
-      assert.ok(tile.glow[v * 2] > 0.3 && tile.glow[v * 2] <= 8 + 1e-6);
+      const l = lv.levelAt(p.theta, p.s), up = p.h > l.ceiling + 0.25;
+      // Only the light well's shaft rises over the ceiling, up to the court's glass.
+      const inWell = !!well && Math.hypot(angleDiff(p.theta, middle.theta) * h.radius, p.s - middle.s) <= well.radius + 1e-6 && p.h <= well.height + 1e-6;
+      assert.ok(Number.isFinite(p.h) && (!up || inWell) && p.h >= l.floor - h.pillars.radius, `vertex ${p.h.toFixed(2)} m, the layer ${l.floor.toFixed(2)} … ${l.ceiling.toFixed(2)}`);
+      wellUp += up ? 1 : 0;
+      assert.ok(tile.glow[v * 2] > 0.2 && tile.glow[v * 2] <= 8 + 1e-6);
       glowSum += tile.glow[v * 2];
     }
     assert.ok(glowSum / nv > 0.8, 'lit about as the floor mid-bay, brighter by the lamps');
+    if (well) {
+      assert.ok(wellUp > 0, 'the light well goes up to the court');
+      // The day comes down the well: the floor under it gets its pool of daylight.
+      let day = 0;
+      for (let v = 0; v < nv; v++) {
+        const w = outOfPlace(tile.origin, [m.positions[v * 3], m.positions[v * 3 + 1], m.positions[v * 3 + 2]]), p = fromWorld(h.profile, w[0], w[1], w[2]);
+        if (Math.abs(p.h - lv.levelAt(p.theta, p.s).floor) < 1e-3) day = Math.max(day, tile.glow[v * 2 + 1]);
+      }
+      assert.ok(day > 0.001 && day < 0.5, `daylight on the floor ${day.toFixed(3)} of the land's`);
+    }
+  });
+
+  test(`under tiles (${name}): each court's lift comes down in the next bay its portal faces, a cage from floor to vault`, () => {
+    const { t, lv } = of(), h = t.habitat, u = lv.under;
+    if (!t.courts.length) return;
+    const some = u.hamlets.slice(0, 40), lifts = some.map((m) => underLiftOf(t, m.court));
+    assert.ok(lifts.filter(Boolean).length >= some.length * 0.8, `${lifts.filter(Boolean).length} of ${some.length} courts with a lift`);
+    const m = u.hamlets.find((x) => underLiftOf(t, x.court))!, lift = underLiftOf(t, m.court)!;
+    // Next to the court's own bay, the way its portal faces, and facing back toward it.
+    const a = courtLayoutOf(t, m.court)!.portal.angle;
+    assert.ok(Math.abs(angleDiff(a, Math.round(a / (Math.PI / 2)) * (Math.PI / 2))) < 1e-9, 'the portal faces along the bays');
+    const di = Math.round(angleDiff(lift.i * u.dTheta, m.i * u.dTheta) / u.dTheta);
+    assert.equal(Math.abs(di) + Math.abs(lift.j - m.j), 1);
+    assert.deepEqual([lift.toward[0], lift.toward[1]], [m.j - lift.j, di]);
+    const tile = buildUnderTile(t, { level: 0, i: lift.i, j: lift.j }), mesh = tile.mesh, mid = u.centreOf(lift.i, lift.j);
+    assert.equal(windingOk(mesh.positions, mesh.normals, mesh.index).bad, 0, 'every face toward the room');
+    let up = 0;
+    for (let v = 0; v < mesh.positions.length / 3; v++) {
+      const w = outOfPlace(tile.origin, [mesh.positions[v * 3], mesh.positions[v * 3 + 1], mesh.positions[v * 3 + 2]]), p = fromWorld(h.profile, w[0], w[1], w[2]), l = lv.levelAt(p.theta, p.s);
+      if (p.h <= l.ceiling + 0.25) continue;
+      up++;
+      assert.ok(Math.hypot(angleDiff(p.theta, mid.theta) * h.radius, p.s - mid.s) <= lift.side + 1e-6 && p.h <= lift.above + 1e-6, 'only its shaft rises over the vault, up to the court');
+    }
+    assert.ok(up > 0, 'its shaft goes up to the court');
   });
 
   test(`under tiles (${name}): wanted around an eye below the land, none for one up on it; the physics stands on the floor`, () => {
