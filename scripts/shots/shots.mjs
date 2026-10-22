@@ -77,7 +77,8 @@ export function pickViews(catalogue, names) {
 }
 
 // ---- the source to build ------------------------------------------------------------------------------
-const run = (cmd, args, cwd, env) => execFileSync(cmd, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', env: { ...process.env, ...env }, maxBuffer: 64 << 20 }).trim();
+/** Every child process gets a time limit (10 min): a hung network call must not stop the watcher for good. */
+const run = (cmd, args, cwd, env) => execFileSync(cmd, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', env: { ...process.env, ...env }, maxBuffer: 64 << 20, timeout: 600_000 }).trim();
 /** npm is a .cmd on Windows, which only runs through a shell. */
 const npm = (line, cwd) => execFileSync(`npm ${line}`, { cwd, stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', shell: true, maxBuffer: 64 << 20 });
 const git = (args, cwd = REPO, env) => run('git', args, cwd, env);
@@ -323,7 +324,8 @@ function publish(out, id, summary) {
   add(indexFile, 'index.json');
   const tree = git(['write-tree'], REPO, env);
   const commit = git(['commit-tree', tree, '-m', `renders: ${id}`], REPO);
-  git(['push', '--quiet', '--force', 'origin', `${commit}:refs/heads/${BRANCH}`]);
+  // PNGs do not delta: without this, packing searched deltas against the whole branch (hundreds of MB) for minutes.
+  git(['-c', 'pack.window=0', '-c', 'core.bigFileThreshold=256k', 'push', '--quiet', '--force', 'origin', `${commit}:refs/heads/${BRANCH}`]);
   rmSync(index, { force: true });
   return commit;
 }
