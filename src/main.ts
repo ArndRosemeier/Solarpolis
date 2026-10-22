@@ -21,9 +21,10 @@ import { hubView } from './space';
 import { fromWorld, toWorld, type DebrisSpec, type Habitat } from './blueprint';
 import { levelRunOf, nearestOf, onRow, plantsOf, slopeAt, type Level } from './gen/scatter';
 import { frameOf, landmarksOf, type Hut, type Pavilion } from './gen/landmarks';
-import { plantingsOf, type Grove } from './gen/planted';
+import { plantingsOf, type Grove, type Hall } from './gen/planted';
+import { daisOf } from './gen/grownHall';
 import type { Terrain } from './gen/terrain';
-import { floorAt, floorPoint, outOfPlace, placeAt } from './gen/shapes';
+import { floorAt, floorPoint, outOfPlace, placeAt, type FloorFrame } from './gen/shapes';
 import { crossingsOf, type Crossing, type CrossingKind } from './gen/crossings';
 import { landformOf } from './gen/plan';
 import { pavilionPlan } from './gen/pavilion';
@@ -418,14 +419,18 @@ const overCourt = (label: string, out: number, up: number): void => debug.add({
 });
 overCourt('Fly: over an entrance court', 1.5, 0.9);
 overCourt('Fly: entrance courts from afar', 12, 5);
+/** Of the things built on the floor in a frame (crossings, halls) that `list` gives, the one nearest the walker. */
+function nearestOnFloor<T extends { frame: FloorFrame }>(list: (t: Terrain) => readonly T[]): { v: InteriorView; x: T } | null {
+  const at = view()?.walker.at;
+  return inView((t) => {
+    if (!at) return undefined;
+    const R = t.habitat.radius, away = (x: T): number => Math.hypot(Math.atan2(Math.sin(x.frame.theta - at.theta), Math.cos(x.frame.theta - at.theta)) * R, x.frame.s - at.s);
+    return [...list(t)].sort((a, b) => away(a) - away(b))[0];
+  });
+}
 /** The river crossing (gen/crossings.ts) of a kind nearest the walker. */
 const nearestCrossing = (kind?: CrossingKind): { v: InteriorView; c: Crossing } | null => {
-  const at = view()?.walker.at;
-  const f = inView((t) => {
-    if (!at) return undefined;
-    const R = t.habitat.radius, far = (c: Crossing): number => Math.hypot(Math.atan2(Math.sin(c.frame.theta - at.theta), Math.cos(c.frame.theta - at.theta)) * R, c.frame.s - at.s);
-    return crossingsOf(t).filter((c) => !kind || c.kind === kind).sort((a, b) => far(a) - far(b))[0];
-  });
+  const f = nearestOnFloor((t) => crossingsOf(t).filter((c) => !kind || c.kind === kind));
   return f && { v: f.v, c: f.x };
 };
 debug.add({
@@ -452,6 +457,34 @@ byCrossing('Fly: by the nearest stone arch bridge', 'arch');
 byCrossing('Fly: by the nearest timber bridge', 'timber');
 byCrossing('Fly: by the nearest stepping stones', 'stepping');
 byCrossing('Fly: by the nearest log across a river', 'log');
+/** The grown hall (gen/planted.ts, gen/grownHall.ts) nearest the walker. */
+const nearestHall = (): { v: InteriorView; hall: Hall } | null => {
+  const f = nearestOnFloor((t) => plantingsOf(t).halls);
+  return f && { v: f.v, hall: f.x };
+};
+/** Stand in the nearest hall at (x, y) of its frame, facing along its nave toward the hearth. */
+const inHallAt = (label: string, spot: (hall: Hall) => [number, number]): void => debug.add({
+  label, group: 'Go', run: () => {
+    const f = nearestHall(), h = lab.habitat;
+    if (!f || !h) return;
+    const [x, y] = spot(f.hall), at = floorAt(h, f.hall.frame, x, y);
+    f.v.goTo(at.theta, at.s, -f.hall.frame.heading);
+  },
+});
+inHallAt('To a grown hall: in its nave, by the table', (hall) => [-hall.half + hall.bay * 1.2, hall.span * 0.22]);
+inHallAt('To a grown hall: on its dais', (hall) => { const d = daisOf(hall); return [(d.x0 + d.x1) / 2, 0]; });
+/** Float by the nearest hall: (x, y, z) in its frame as shares of its length, its span and its trees' height. */
+const byHall = (label: string, x: number, y: number, z: number): void => debug.add({
+  label, group: 'Go', run: () => {
+    const f = nearestHall(), h = lab.habitat;
+    if (!f || !h) return;
+    const hall = f.hall, eye = floorPoint(h, hall.frame, [x * hall.half, y * hall.span, z * hall.height]), at = floorPoint(h, hall.frame, [0, 0, hall.height * 0.3]);
+    const d = Math.hypot(at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]);
+    f.v.floatAt(eye, [(at[0] - eye[0]) / d, (at[1] - eye[1]) / d, (at[2] - eye[2]) / d]);
+  },
+});
+byHall('Fly: beside a grown hall', -1.25, 2.4, 0.35);
+byHall('Fly: a grown hall from afar', -5, 12, 2.5);
 /** The founders' grove (gen/planted.ts). */
 const grove = (): { v: InteriorView; g: Grove } | null => {
   const f = inView((t) => plantingsOf(t).groves[0]);

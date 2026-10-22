@@ -34,7 +34,7 @@ import { freeMesh } from './geometry';
 import { cloudSpan, cloudsAt } from '../world/clouds';
 import { setCloudSpan, setCloudState } from './cloudShaders';
 import { LandmarkView } from './landmarks';
-import { TiledView, courtSource, crossingSource, stairSource } from './tiled';
+import { TiledView, courtSource, crossingSource, hallSource, stairSource } from './tiled';
 import { landmarkTopAt, landmarksOf } from '../gen/landmarks';
 import { snowFieldOf } from '../gen/snow';
 
@@ -89,6 +89,7 @@ export class InteriorView {
   private stair: TiledView | null = null;
   private courts: TiledView | null = null;
   private crossings: TiledView | null = null;
+  private halls: TiledView | null = null;
   /** In the air, or null on foot. */
   private flyer: Flyer | null = null;
   private readonly loop = new FrameLoop((dt) => this.frame(dt), (e) => {
@@ -186,7 +187,7 @@ export class InteriorView {
 
   /** Bytes of geometry this view holds (memory watchdog). */
   bytes(): number {
-    return (this.tiles?.bytes() ?? 0) + (this.plants?.bytes() ?? 0) + (this.landmarks?.bytes() ?? 0) + (this.stair?.bytes() ?? 0) + (this.courts?.bytes() ?? 0) + (this.crossings?.bytes() ?? 0);
+    return (this.tiles?.bytes() ?? 0) + (this.plants?.bytes() ?? 0) + (this.landmarks?.bytes() ?? 0) + (this.stair?.bytes() ?? 0) + (this.courts?.bytes() ?? 0) + (this.crossings?.bytes() ?? 0) + (this.halls?.bytes() ?? 0);
   }
 
   /** Give memory back (memory watchdog): drop every cached tile and plant cell not on screen. */
@@ -197,6 +198,7 @@ export class InteriorView {
     this.stair?.shed();
     this.courts?.shed();
     this.crossings?.shed();
+    this.halls?.shed();
   }
 
   /** Lines for the debug menu. */
@@ -214,6 +216,7 @@ export class InteriorView {
       this.stair?.info() ?? 'lift stair: none',
       this.courts?.info() ?? 'entrance courts: none',
       this.crossings?.info() ?? 'river crossings: none',
+      this.halls?.info() ?? 'grown halls: none',
       `θ ${(a.theta * 180 / Math.PI).toFixed(1)}°, s ${(a.s / 1000).toFixed(2)} of ${(this.habitat.profile.length / 1000).toFixed(2)} km, ground ${this.standOn(a.theta, a.s).toFixed(1)} m, ${mode}, eyes ×${this.exposure.toFixed(2)}`,
     ].join('\n');
   }
@@ -374,6 +377,7 @@ export class InteriorView {
     if (this.stair) { this.scene.remove(this.stair.group); this.stair.dispose(); }
     if (this.courts) { this.scene.remove(this.courts.group); this.courts.dispose(); }
     if (this.crossings) { this.scene.remove(this.crossings.group); this.crossings.dispose(); }
+    if (this.halls) { this.scene.remove(this.halls.group); this.halls.dispose(); }
     if (this.sunline) { this.stage.remove(this.sunline); freeMesh(this.sunline); }
     if (this.clouds) { this.stage.remove(this.clouds); [...this.clouds.children].forEach((m, i) => freeMesh(m as Mesh, i === 0 ? 'all' : 'none')); }
     const h = this.habitat;
@@ -408,6 +412,8 @@ export class InteriorView {
     this.scene.add(this.courts.group);
     this.crossings = new TiledView(crossingSource(this.terrain), h, this.stage, this.pool);
     this.scene.add(this.crossings.group);
+    this.halls = new TiledView(hallSource(this.terrain), h, this.stage, this.pool);
+    this.scene.add(this.halls.group);
     this.place();
     // While loading, nothing draws, but the compile cap still counts frames (one new shader per frame): keep its
     // frames ticking, or a second build here (a shadow pass's own shader) would wait for a frame that never comes.
@@ -465,6 +471,7 @@ export class InteriorView {
     this.stair?.follow(v.eye);
     this.courts?.follow(v.eye);
     this.crossings?.follow(v.eye);
+    this.halls?.follow(v.eye);
   }
 
   private current(): View {

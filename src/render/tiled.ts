@@ -1,6 +1,6 @@
 /**
  * Built things that stream in tiles over a quadtree (gen/detailTree.ts): the Lift Stair (gen/liftStairMesh.ts), the
- * entrance courts (gen/courts.ts), the river crossings (gen/crossings.ts). The root tiles are the far form, built once and always kept; around the eye the
+ * entrance courts (gen/courts.ts), the river crossings (gen/crossings.ts), the grown halls (gen/grownHall.ts). The root tiles are the far form, built once and always kept; around the eye the
  * quadtree's finer tiles stream in through a `StreamCache`. A tile is drawn once it is built, and until all four of its
  * children are, it stands in for them itself (`coverOf`): no level is taken away before the one replacing it is there
  * (Arnd, 2026-10-21), so nothing ever shows a hole or vanishes.
@@ -10,8 +10,10 @@ import type { Stage } from '@futuremagic/stage';
 import { toView, type Habitat, type Vec3 } from '../blueprint';
 import { coverOf, rootTiles, tileId, type Grid, type TileKey, type WantedTile } from '../gen/detailTree';
 import { stairGridOf, stairTilesFor } from '../gen/liftStairMesh';
-import { courtGridOf, courtTilesFor } from '../gen/courts';
-import { crossingGridOf, crossingTilesFor } from '../gen/crossings';
+import { courtSites } from '../gen/courts';
+import { crossingSites } from '../gen/crossings';
+import { hallSites } from '../gen/grownHall';
+import type { SiteParts } from '../gen/siteTiles';
 import type { Terrain } from '../gen/terrain';
 import { mappedBytes, type MappedArrays, type Place } from '../gen/shapes';
 import type { Mat3 } from '../space';
@@ -142,8 +144,14 @@ export class TiledView {
 /** The Lift Stair's tiles. */
 export const stairSource = (h: Habitat): TiledSource => ({ name: 'lift stair', part: 'stair', grid: stairGridOf(h), tilesFor: (eye) => stairTilesFor(h, eye) });
 
+/** A kind of thing at sites on the floor (gen/siteTiles.ts) as a source of tiles. */
+const siteSource = (name: string, part: Exclude<TiledPart, 'stair'>, parts: SiteParts, t: Terrain): TiledSource => ({ name, part, grid: parts.gridOf(t), tilesFor: (eye) => parts.tilesFor(t, eye) });
+
 /** The entrance courts' tiles. */
-export const courtSource = (t: Terrain): TiledSource => ({ name: 'entrance courts', part: 'courts', grid: courtGridOf(t), tilesFor: (eye) => courtTilesFor(t, eye) });
+export const courtSource = (t: Terrain): TiledSource => siteSource('entrance courts', 'courts', courtSites, t);
 
 /** The river crossings' tiles. */
-export const crossingSource = (t: Terrain): TiledSource => ({ name: 'river crossings', part: 'crossings', grid: crossingGridOf(t), tilesFor: (eye) => crossingTilesFor(t, eye) });
+export const crossingSource = (t: Terrain): TiledSource => siteSource('river crossings', 'crossings', crossingSites, t);
+
+/** The grown halls' tiles (their vaults, screens and furniture; the trees are planted plants). */
+export const hallSource = (t: Terrain): TiledSource => siteSource('grown halls', 'halls', hallSites, t);

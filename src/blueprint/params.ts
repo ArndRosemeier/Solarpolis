@@ -185,9 +185,10 @@ export interface LandPlan {
   pathWidth: { sunwalk: number; way: number; trail: number };
   /**
    * How big the planted places are (m, gen/places.ts): an orchard block's length near an entrance, and how wide one
-   * parcel of the Vine face's terraces is around the axis (vines, an orchard or meadow). Human sizes, like the paths.
+   * parcel of the Vine face's terraces is around the axis (vines, an orchard or meadow); how long a grown hall's nave is
+   * (gen/planted.ts, at least three bays). Human sizes, like the paths.
    */
-  places: { orchard: number; parcel: number };
+  places: { orchard: number; parcel: number; hall: number };
 }
 
 export interface HabitatParams {

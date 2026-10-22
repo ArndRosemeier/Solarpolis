@@ -75,8 +75,8 @@ export function validate(h: Habitat): Finding[] {
   if (!([pw.sunwalk, pw.way, pw.trail].every((w) => w > 0 && w < pl.entranceSpacing / 8)))
     out.push({ id: 'plan', severity: 'invalid', message: 'paths need widths > 0, each under an eighth of the entrance spacing' });
   const pp = pl.places;
-  if (!(pp.orchard > 0 && pp.orchard < pl.entranceSpacing / 2 && pp.parcel > 0))
-    out.push({ id: 'plan', severity: 'invalid', message: 'planted places need sizes > 0, an orchard under half the entrance spacing' });
+  if (!(pp.orchard > 0 && pp.orchard < pl.entranceSpacing / 2 && pp.parcel > 0 && pp.hall > 0 && pp.hall < pl.entranceSpacing / 2))
+    out.push({ id: 'plan', severity: 'invalid', message: 'planted places need sizes > 0, an orchard and a grown hall each under half the entrance spacing' });
   if (!(p.population >= 0)) out.push({ id: 'population', severity: 'invalid', message: 'the population must not be negative' });
   return out;
 }

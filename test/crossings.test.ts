@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MATRIX } from '../src/blueprint';
 import {
-  PART, STYLE_CROSSING, buildCrossing, buildCrossingTile, crossingGridOf, crossingKeepsClear, crossingSolids, crossingTop, crossingTopAt, crossingsIn, crossingsOf,
+  PART, STYLE_CROSSING, buildCrossing, crossingKeepsClear, crossingSites, crossingTop, crossingsOf,
   deckTop, groundAt, logTopAt, soffitAt, type Crossing,
 } from '../src/gen/crossings';
 import { childrenOf, rootTiles, type TileKey } from '../src/gen/detailTree';
@@ -19,7 +19,7 @@ const overWater = (c: Crossing, n = 24): number[] => Array.from({ length: n + 1 
 for (const { name, params } of MATRIX) {
   test(`crossings (${name}): where a way fords a river, built the way its district builds, from dry bank to dry bank`, () => {
     const t = terrainOf(name, params), h = t.habitat, all = crossingsOf(t);
-    if (!params.landmarks || !t.rivers.length) { assert.equal(all.length, 0); assert.equal(crossingGridOf(t), null); return; }
+    if (!params.landmarks || !t.rivers.length) { assert.equal(all.length, 0); assert.equal(crossingSites.gridOf(t), null); return; }
     assert.ok(all.length > 0, 'the ways cross the rivers somewhere');
     for (const c of all) {
       const hr = c.handrail;
@@ -85,9 +85,9 @@ for (const { name, params } of MATRIX) {
   });
 
   test(`crossings (${name}): tiles own each crossing once; each is whole at every detail, finer up close`, () => {
-    const t = terrainOf(name, params), g = crossingGridOf(t), all = crossingsOf(t);
+    const t = terrainOf(name, params), g = crossingSites.gridOf(t), all = crossingsOf(t);
     if (!g) return;
-    const roots = rootTiles(g), owned = roots.map((k) => crossingsIn(t, k));
+    const roots = rootTiles(g), owned = roots.map((k) => crossingSites.thingsIn(t, k));
     assert.equal(owned.reduce((n, x) => n + x.length, 0), all.length, 'the roots own every crossing once');
     assert.equal(new Set(owned.flat()).size, all.length);
     const hr = t.habitat.params.landmarks!.handrail;
@@ -105,11 +105,11 @@ for (const { name, params } of MATRIX) {
       assert.ok(counts[0] > 0 && counts[1] >= counts[0] && counts[2] > counts[1], `${c.kind}: ${counts.join(' < ')} triangles`);
     }
     // The finest tile holding a crossing, bent onto the floor: still wound to its normals, near its origin.
-    const busy = roots[owned.findIndex((x) => x.length > 0)], i = crossingsIn(t, busy)[0];
+    const busy = roots[owned.findIndex((x) => x.length > 0)], i = crossingSites.thingsIn(t, busy)[0];
     let k: TileKey = busy;
-    while (k.level > g.finest) k = childrenOf(g, k).find((c) => crossingsIn(t, c).includes(i))!;
-    const tile = buildCrossingTile(t, k), m = tile.mesh;
-    assert.equal(tile.crossings, crossingsIn(t, k).length);
+    while (k.level > g.finest) k = childrenOf(g, k).find((c) => crossingSites.thingsIn(t, c).includes(i))!;
+    const tile = crossingSites.buildTile(t, k), m = tile.mesh;
+    assert.equal(tile.count, crossingSites.thingsIn(t, k).length);
     assert.equal(windingOk(m.positions, m.normals, m.index).bad, 0, 'bent onto the floor, still wound right');
     const edge = Math.pow(2, k.level) * Math.max(g.edgeU, g.edgeV);
     assert.ok(m.positions.every((x) => Math.abs(x) < edge * 2 + all[i].half * 2), 'in the tile\'s frame');
@@ -121,15 +121,15 @@ for (const { name, params } of MATRIX) {
       const [x, y] = c.kind === 'stepping' ? [c.stones[0].x, c.stones[0].y] : [0, 0], at = floorAt(h, c.frame, x, y), top = crossingTop(c, x, y);
       assert.ok(top !== null, `${c.kind}: something to stand on`);
       const want = c.frame.height + top;
-      assert.ok(Math.abs(crossingTopAt(t, at.theta, at.s)! - want) < c.handrail * 0.01, `${c.kind}: on it`);
-      assert.equal(landmarkTopAt(t, at.theta, at.s), crossingTopAt(t, at.theta, at.s), `${c.kind}: the view stands people on it`);
+      assert.ok(Math.abs(crossingSites.topAt(t, at.theta, at.s)! - want) < c.handrail * 0.01, `${c.kind}: on it`);
+      assert.equal(landmarkTopAt(t, at.theta, at.s), crossingSites.topAt(t, at.theta, at.s), `${c.kind}: the view stands people on it`);
       assert.ok(crossingKeepsClear(t, at.theta, at.s) && keptClear(t, at.theta, at.s), `${c.kind}: no plants on it`);
       if (c.kind === 'arch' || c.kind === 'timber') {
         const off = floorAt(h, c.frame, 0, c.width / 2 + 3 * c.handrail);
-        assert.equal(crossingTopAt(t, off.theta, off.s), null, 'nothing beside it');
+        assert.equal(crossingSites.topAt(t, off.theta, off.s), null, 'nothing beside it');
       }
       // Its solid parts reach the physics: in the world near it, and in a patch around it.
-      const solids = crossingSolids(t, floorPoint(h, c.frame, [0, 0, 0]), 10);
+      const solids = crossingSites.solids(t, floorPoint(h, c.frame, [0, 0, 0]), 10);
       assert.ok(solids.length >= 1 && solids.every((a) => a.index.length > 0 && a.positions.every(Number.isFinite)), `${c.kind}: solid`);
       const plain = Math.pow(Math.round(20 / 2), 2) * 2, patch = buildPatch(t, at.theta, at.s, 20, 2);
       assert.ok(patch.index.length / 3 > plain, `${c.kind}: ${patch.index.length / 3} triangles in the patch`);

@@ -11,9 +11,9 @@
  *   log is crossed on stepping stones there too.
  *
  * Each in its frame lying on the floor (`FloorFrame`: x along the way from bank to bank, y to its left, z up from the
- * water's surface), sized from the river it fords and the way's width, its parts in handrails. They stream in tiles
- * over the floor (gen/siteTiles.ts; `crossingTilesFor`, `buildCrossingTile`); `crossingTopAt` is what people walk on,
- * `crossingSolids` what the physics touches, `crossingKeepsClear` where plants keep off. Pure.
+ * water's surface), sized from the river it fords and the way's width, its parts in handrails. They are things at
+ * sites (`crossingSites`, gen/siteTiles.ts: tiles over the floor, `topAt` what people walk on, `solids` what the
+ * physics touches); `crossingKeepsClear` is where plants keep off. Pure.
  */
 import { Rng, deriveSeed, v3cross, v3norm, type Vec3 } from '@futuremagic/core';
 import type { DistrictStyle, Habitat } from '../blueprint';
@@ -22,9 +22,8 @@ import { planOf } from './plan';
 import { kept } from './kept';
 import { STYLE_STONE } from './courts';
 import { FINISH } from './pavilion';
-import { Shape, bendInto, floorAt, inFloorFrame, placeAt, shade, solidOnFloor, topOnFloor, type FloorFrame, type MappedArrays, type Place, type RGB } from './shapes';
-import type { TileKey, WantedTile } from './detailTree';
-import { siteDetailOf, siteGrid, siteTileMiddle, siteTilesFor, sitesIn, sitesNear, type Site, type SiteDetail, type SiteGrid } from './siteTiles';
+import { Shape, floorAt, inFloorFrame, shade, type FloorFrame, type RGB } from './shapes';
+import { siteParts, type Site, type SiteDetail } from './siteTiles';
 
 export type CrossingKind = 'arch' | 'timber' | 'stepping' | 'log';
 
@@ -496,71 +495,26 @@ export function crossingTop(c: Crossing, x: number, y: number): number | null {
 /** Each crossing as a site on the floor. */
 const sitesOf = kept((t: Terrain): Site[] => crossingsOf(t).map((c) => ({ theta: c.frame.theta, s: c.frame.s, reach: Math.hypot(c.half, c.width / 2 + PART.line * c.handrail) })));
 
-/** The crossings' tiles: cells `CELL` handrails a side, roots 2^ROOT cells. */
-const CELL = 23;
-const ROOT = 7;
-const FINEST = 2;
-
-/** A terrain's crossing grid (null without crossings), made once. */
-export const crossingGridOf: (t: Terrain) => SiteGrid | null = kept((t: Terrain) => {
-  const hr = t.habitat.params.landmarks?.handrail;
-  return hr ? siteGrid(t.habitat, sitesOf(t), CELL * hr, ROOT, FINEST) : null;
-});
-
-/** The crossings a tile owns (by index). */
-export function crossingsIn(t: Terrain, key: TileKey): number[] {
-  const g = crossingGridOf(t);
-  return g ? sitesIn(g, sitesOf(t), key) : [];
-}
-
-/** The tiles wanted around an eye (world, m). */
-export function crossingTilesFor(t: Terrain, eye: Vec3): WantedTile[] {
-  const g = crossingGridOf(t);
-  return g ? siteTilesFor(t.habitat, g, eye) : [];
-}
-
-export interface CrossingTile {
-  key: TileKey;
-  origin: Place;
-  mesh: MappedArrays;
-  crossings: number;
-}
-
-/** A tile of a terrain's crossings: every crossing it owns at the tile's detail, in a frame at the tile's middle. */
-export function buildCrossingTile(t: Terrain, key: TileKey): CrossingTile {
-  const g = crossingGridOf(t), h = t.habitat;
-  if (!g) throw new Error('buildCrossingTile: this terrain has no crossings');
-  const m = siteTileMiddle(g, key), origin = placeAt(h, m.theta, m.s, 0), out = new Shape(8, true, true);
-  const detail = siteDetailOf(g, key.level, h.params.landmarks!.handrail), all = crossingsOf(t), mine = crossingsIn(t, key);
-  for (const i of mine) bendInto(out, h, all[i].frame, buildCrossing(all[i], detail), origin);
-  return { key, origin, mesh: out.mappedArrays(), crossings: mine.length };
-}
-
-/** A crossing's solid parts in the world (m), built once. */
-const solidOf = kept((c: Crossing) => solidOnFloor(c.habitat, c.frame, buildCrossing(c, 'solid')));
-
-/** The solid parts (world, m) of every crossing within `reach` of a point. */
-export function crossingSolids(t: Terrain, at: Vec3, reach: number): { positions: Float32Array; index: Uint32Array }[] {
-  const all = crossingsOf(t);
-  return sitesNear(t.habitat, sitesOf(t), at, reach).map((i) => solidOf(all[i]));
-}
-
-/** The crossing over (θ, s) (within `margin` of it), or null. */
-function crossingNear(t: Terrain, theta: number, s: number, margin: number): Crossing | null {
-  const h = t.habitat;
-  for (const c of crossingsOf(t)) {
+/** The index of the crossing over (θ, s) (within `margin` of it), or null. */
+function crossingNear(t: Terrain, theta: number, s: number, margin: number): number | null {
+  const h = t.habitat, all = crossingsOf(t);
+  for (let i = 0; i < all.length; i++) {
+    const c = all[i];
     if (Math.abs(s - c.frame.s) > c.half + c.width + margin) continue;
     const [x, y] = inFloorFrame(h, c.frame, theta, s);
-    if (Math.abs(x) <= c.half + margin && Math.abs(y) <= c.width / 2 + PART.line * c.handrail + margin) return c;
+    if (Math.abs(x) <= c.half + margin && Math.abs(y) <= c.width / 2 + PART.line * c.handrail + margin) return i;
   }
   return null;
 }
 
-/** The height over the profile of the walkable top of a crossing at (θ, s), or null off every crossing. */
-export function crossingTopAt(t: Terrain, theta: number, s: number): number | null {
-  const c = crossingNear(t, theta, s, 0);
-  return topOnFloor(t.habitat, theta, s, c && { thing: c, frame: c.frame }, crossingTop);
-}
+/** The crossings as things at sites (gen/siteTiles.ts): their grid, tiles, solids and the top one stands on. */
+export const crossingSites = siteParts({
+  sites: sitesOf,
+  frame: (t, i) => crossingsOf(t)[i].frame,
+  build: (t, i, detail) => buildCrossing(crossingsOf(t)[i], detail),
+  at: (t, theta, s) => crossingNear(t, theta, s, 0),
+  top: (t, i, x, y) => crossingTop(crossingsOf(t)[i], x, y),
+});
 
 /** Whether plants keep off a point: on a crossing or within a handrail of it (reeds and trees out of the way). */
 export function crossingKeepsClear(t: Terrain, theta: number, s: number): boolean {

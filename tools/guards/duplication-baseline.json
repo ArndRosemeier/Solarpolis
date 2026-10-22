@@ -312,10 +312,6 @@
     "reason": "Both 3D views implement the page's view interface (PageView in main.ts: create, setHabitat, setRunning, bytes, shed, info, skip); their shared machinery is in render/surface.ts."
   },
   {
-    "key": "same name: solarpolis/render/outside.ts#shed + solarpolis/render/view.ts#shed",
-    "reason": "Both 3D views implement the page's view interface (PageView in main.ts: create, setHabitat, setRunning, bytes, shed, info, skip); their shared machinery is in render/surface.ts."
-  },
-  {
     "key": "same name: solarpolis/render/outside.ts#skip + solarpolis/render/view.ts#skip",
     "reason": "Both 3D views implement the page's view interface (PageView in main.ts: create, setHabitat, setRunning, bytes, shed, info, skip); their shared machinery is in render/surface.ts."
   },
@@ -456,7 +452,31 @@
     "reason": "Each camera turns by pointer movement in its own frame (walker: heading on the curved floor; flyer outside: yaw around the ecliptic pole)."
   },
   {
-    "key": "idiom: [.find .kind] in solarpolis/gen/places.ts + solarpolis/gen/plan.ts + solarpolis/lab/planView.ts",
-    "reason": "Looking one thing up by its kind in three different lists (the Gate's faces, the plan's faces, the plan's paths): a plain Array.find, not a copied procedure; the plan's sites already have siteOf."
+    "key": "same name: solarpolis/gen/crossings.ts#at + solarpolis/gen/grownHall.ts#at",
+    "reason": "The members of a SiteKind (gen/siteTiles.ts): each kind of thing at sites on the floor (courts, crossings, grown halls) says its frame, build, at and top under the seam's own names; siteParts does everything else once."
+  },
+  {
+    "key": "same name: solarpolis/gen/crossings.ts#build + solarpolis/gen/grownHall.ts#build",
+    "reason": "The members of a SiteKind (gen/siteTiles.ts): each kind of thing at sites on the floor (courts, crossings, grown halls) says its frame, build, at and top under the seam's own names; siteParts does everything else once."
+  },
+  {
+    "key": "same name: solarpolis/gen/crossings.ts#frame + solarpolis/gen/grownHall.ts#frame",
+    "reason": "The members of a SiteKind (gen/siteTiles.ts): each kind of thing at sites on the floor (courts, crossings, grown halls) says its frame, build, at and top under the seam's own names; siteParts does everything else once."
+  },
+  {
+    "key": "same name: solarpolis/gen/crossings.ts#top + solarpolis/gen/grownHall.ts#top",
+    "reason": "The members of a SiteKind (gen/siteTiles.ts): each kind of thing at sites on the floor (courts, crossings, grown halls) says its frame, build, at and top under the seam's own names; siteParts does everything else once."
+  },
+  {
+    "key": "same name: solarpolis/gen/courts.ts#frame + solarpolis/main.ts#frame",
+    "reason": "Different things that share a short name: a SiteKind member (gen/siteTiles.ts) and an unrelated local helper."
+  },
+  {
+    "key": "same name: solarpolis/gen/crossings.ts#at + solarpolis/gen/terrain.ts#at",
+    "reason": "Different things that share a short name: a SiteKind member (gen/siteTiles.ts) and an unrelated local helper."
+  },
+  {
+    "key": "same name: solarpolis/gen/grownHall.ts#at + solarpolis/gen/terrain.ts#at",
+    "reason": "Different things that share a short name: a SiteKind member (gen/siteTiles.ts) and an unrelated local helper."
   }
 ]

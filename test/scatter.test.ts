@@ -17,7 +17,8 @@ function cellAt(name: string, params = MATRIX[0].params, at?: (lake: number, flo
 
 for (const { name, params } of MATRIX) {
   test(`scatter (${name}): cells near the eye are within sight, plants stand on the ground inside their cell, the same each time`, () => {
-    const h = derive(params), eco = makeEcology(makeTerrain(h)), plants = plantsOf(eco);
+    // The land every file shares: planting a cell twice over it is the same each time.
+    const eco = ecologyOf(name, params), h = eco.terrain.habitat, plants = plantsOf(eco);
     const s = (h.profile.floorStart + h.profile.floorEnd) / 2, eye = toWorld(h.profile, { theta: 1, s, h: eco.terrain.heightAt(1, s) + 1.7 });
     let planted = 0;
     for (const sp of plants) {

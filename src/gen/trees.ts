@@ -481,6 +481,19 @@ function formCfg(form: PlantForm, variant: number): FormCfg {
         ],
         farColor: [0.3, 0.4, 0.15], along: 0.2,
       };
+    case 'hall-linden': {
+      // A linden trained for two centuries as a grown hall's column (gen/grownHall.ts): a straight, clean bole up to the
+      // vault, where its limbs were grafted across; its crown held above, a broad roof over the nave.
+      const linden = formCfg('linden', variant);
+      return {
+        ...linden, crownBase: 0.58, width: 4.2, lean: 0, trunkCurve: 0.02, trunkUp: 0, flare: 0.45, lobes: 0.06,
+        prof: (t) => Math.pow(Math.sin(Math.PI * Math.min(1, 0.12 + Math.pow(t, 0.8))), 0.45),
+        levels: [
+          L({ n: [12, 15], start: 0.6, end: 0.94, angle: 64, angleVar: 10, len: 1.45, lenRef: 'width', rr: 0.42, segs: 5, radial: 6, up: 0.06, curve: 0.25 }),
+          L({ n: [5, 7], start: 0.2, end: 0.95, angle: 48, angleVar: 14, len: 0.5, rr: 0.55, segs: 3, radial: 4, up: -0.04, curve: 0.3 }),
+        ],
+      };
+    }
     case 'evergreen-shrub':
     case 'shrub': {
       const box = form === 'evergreen-shrub';
