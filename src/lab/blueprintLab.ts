@@ -5,13 +5,12 @@
  */
 import { derive, validate, isValid, MATRIX, type Habitat, type HabitatParams, type Finding } from '../blueprint';
 import { habitatFromUrl, habitatToUrl, presetOf } from '../app/params';
-import { el } from '../app/dom';
+import { el, km, svg } from '../app/dom';
 import { PlanView } from './planView';
 import { LifeView } from './lifeView';
 import { UnderView } from './underView';
 
 const G = 9.80665;
-const SVG = 'http://www.w3.org/2000/svg';
 
 /** A slider: label, range (log or linear), how it reads and writes the parameters, and how its value is shown. */
 interface Control {
@@ -25,7 +24,6 @@ interface Control {
   show: (v: number) => string;
 }
 
-const km = (m: number): string => (m >= 1000 ? `${(m / 1000).toFixed(m >= 10000 ? 0 : 1)} km` : `${m.toFixed(0)} m`);
 const si = (v: number, unit: string): string => {
   const a = Math.abs(v);
   if (a >= 1e12) return `${(v / 1e12).toFixed(1)} T${unit}`;
@@ -176,12 +174,6 @@ export class BlueprintLab {
       return tr;
     }));
   }
-}
-
-function svg<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string | number>): SVGElementTagNameMap[K] {
-  const e = document.createElementNS(SVG, tag);
-  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, String(v));
-  return e;
 }
 
 /** A to-scale longitudinal section: the axis across the middle, both halves of the interior, the endcap slopes, and the outside (radiator brims, dock spindle, mast). */
