@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MATRIX, derive, validate, withParams } from '../src/blueprint';
 import { terrainOf } from './worlds';
-import { GROUND, WAY_CLEAR, courtCap, entrancesOf, fromLake, planOf } from '../src/gen/plan';
+import { COURT, GROUND, WAY_CLEAR, courtCap, entrancesOf, fromLake, planOf } from '../src/gen/plan';
 
 const TURN = 2 * Math.PI;
 const wrap = (a: number): number => a - TURN * Math.round(a / TURN);
@@ -81,13 +81,33 @@ for (const { name, params } of MATRIX) {
     }
     const walk = plan.paths.find((p) => p.kind === 'sunwalk')!.points;
     for (const r of rings) assert.ok(walk[1] < r.s && walk[walk.length - 1] > r.s, 'the Sunwalk runs over every Ring');
-    // Each way joins the net where it starts (a point of the Sunwalk or an entrance) and ends at an entrance.
+    // Each way joins the net where it starts (a point of the Sunwalk or of another way, clear of that way's court) and
+    // ends at an entrance.
     const key = (theta: number, s: number): string => `${Math.round(wrap(theta) * R * 100)}:${Math.round(s * 100)}`;
-    const entrances = new Set(entrancesOf(plan).map((e) => key(e.theta, e.s))), joins = new Set(entrances);
+    const entrances = new Set(entrancesOf(plan).map((e) => key(e.theta, e.s))), joins = new Set<string>();
     for (let i = 0; i < walk.length; i += 2) joins.add(key(walk[i], walk[i + 1]));
+    for (const w of ways) for (let i = 0; i < w.points.length; i += 2) joins.add(key(w.points[i], w.points[i + 1]));
     for (const w of ways) {
       const q = w.points;
-      assert.ok(joins.has(key(q[0], q[1])) && entrances.has(key(q[q.length - 2], q[q.length - 1])), 'a way that joins nothing');
+      assert.ok(entrances.has(key(q[q.length - 2], q[q.length - 1])), 'a way that ends at no entrance');
+      assert.ok(joins.has(key(q[0], q[1])) && (!params.landmarks || !entrances.has(key(q[0], q[1]))), 'a way that joins nothing, or starts in a court');
+    }
+    // And it goes round every court but its ends' (nobody walks down into another court, over its well).
+    if (!params.landmarks) return;
+    const cell = params.plan.entranceSpacing, rows = new Map<number, ReturnType<typeof entrancesOf>>();
+    for (const e of entrancesOf(plan)) { const r = Math.floor(e.s / cell); rows.set(r, [...(rows.get(r) ?? []), e]); }
+    const clear = (e: { size: number }): number => e.size + COURT.clear * params.landmarks!.handrail + params.plan.pathWidth.way;
+    for (const w of ways) {
+      const q = w.points, ends = [key(q[0], q[1]), key(q[q.length - 2], q[q.length - 1])];
+      for (let i = 0; i + 3 < q.length; i += 2) {
+        const r = Math.floor(q[i + 1] / cell);
+        for (const e of [-1, 0, 1].flatMap((d) => rows.get(r + d) ?? [])) {
+          if (ends.includes(key(e.theta, e.s))) continue;
+          const pu = wrap(q[i + 2] - q[i]) * R, pv = q[i + 3] - q[i + 1], eu = wrap(e.theta - q[i]) * R, ev = e.s - q[i + 1];
+          const k = Math.min(1, Math.max(0, (eu * pu + ev * pv) / Math.max(pu * pu + pv * pv, 1e-9)));
+          assert.ok(Math.hypot(eu - pu * k, ev - pv * k) >= clear(e) - 1e-6, 'a way through another court');
+        }
+      }
     }
   });
 
@@ -120,10 +140,15 @@ for (const { name, params } of MATRIX) {
   });
 
   test(`landforms (${name}): entrances keep to the landforms' feet, never their tops or faces`, () => {
-    const cap = courtCap(h);
+    const cap = courtCap(h), walk = plan.paths.find((p) => p.kind === 'sunwalk')!.points;
     for (const e of entrancesOf(plan)) {
       const on = plan.landformAt(e.theta, e.s);
       assert.ok(!on || on.top <= cap + 1e-9, `an entrance ${on?.top.toFixed(0)} m up a ${on?.form.kind}`);
+      // And its court clear of the Sunwalk (its line between the two points either side along the axis).
+      let i = 0;
+      while (i + 3 < walk.length && walk[i + 3] < e.s) i += 2;
+      const f = (e.s - walk[i + 1]) / Math.max(walk[i + 3] - walk[i + 1], 1e-9), line = walk[i] + wrap(walk[i + 2] - walk[i]) * f;
+      if (params.landmarks) assert.ok(Math.abs(wrap(e.theta - line)) * R >= e.size + params.plan.pathWidth.sunwalk / 2, 'a court on the Sunwalk');
     }
   });
 }

@@ -666,6 +666,11 @@ export function makePlan(h: Habitat): Plan {
     const top = (t: number, u: number): number => landformAt(t, u)?.top ?? 0;
     return Math.abs(top(theta, s + court) - top(theta, s - court)) + Math.abs(top(theta + court / R, s) - top(theta - court / R, s)) <= court * COURT_SLOPE * 2;
   };
+  // Nor in the Sunwalk's way: its court stands clear of the walk's edge.
+  const sunwalkSide = 0.25 * gap / 2;
+  const walkTheta = (s: number): number => valleyAt(0, s) + sunwalkSide;
+  const walkClear = court + COURT.clear * (params.landmarks?.handrail ?? 0) + spec.pathWidth.sunwalk / 2;
+  const fits = (theta: number, s: number): boolean => Math.abs(wrap(theta - walkTheta(s))) * R >= walkClear && onFoot(theta, s);
   const firstEntrance = reserveEnd + spacing * 0.15, lastEntrance = Math.max(firstEntrance, floorEnd - spacing * 0.15);
   // Entrances filed by a grid a spacing wide (around the axis, along it), so a new one checks only its neighbours.
   const bin = new Map<number, Site[]>(), grid = floorGrid(R, spacing);
@@ -683,7 +688,7 @@ export function makePlan(h: Habitat): Plan {
       // light well can come down through it; the cheap checks first, and each must pass them all where it lands.
       const at = bays.middleNear(k.theta + (erng.range(-0.75, 0.75) * reach) / R, k.s + erng.range(-0.75, 0.75) * reach), theta = wrap(at.theta), s = at.s;
       if (fromLake(lake, s) < spacing * 0.15 || s < firstEntrance || s > lastEntrance) continue;
-      if (tooClose(theta, s) || districtAt(theta, s) !== k || nearRiver(theta, s) || !onFoot(theta, s)) continue;
+      if (tooClose(theta, s) || districtAt(theta, s) !== k || nearRiver(theta, s) || !fits(theta, s)) continue;
       const site: Site = { kind: 'entrance', theta, s, size: spacing * 0.025, facing: erng.range(0, TURN), district: k.id };
       k.entrances.push(site);
       placed.push(site);
@@ -692,9 +697,9 @@ export function makePlan(h: Habitat): Plan {
     }
     if (!k.entrances.length) {
       // Too cramped to keep apart: one entrance at the seed itself (its bay's middle), kept off the floor's ends, or
-      // the nearest bay round it at a landform's foot.
+      // the nearest bay round it at a landform's foot and clear of the Sunwalk.
       let at = bays.middleNear(k.theta, k.s, firstEntrance, lastEntrance);
-      for (let ring = 1; ring < 64 && !onFoot(wrap(at.theta), at.s); ring++) {
+      for (let ring = 1; ring < 64 && !fits(wrap(at.theta), at.s); ring++) {
         const a = ring * 2.399963, d = Math.sqrt(ring) * bays.bay;
         at = bays.middleNear(k.theta + (Math.sin(a) * d) / R, k.s + Math.cos(a) * d, firstEntrance, lastEntrance);
       }
@@ -706,8 +711,6 @@ export function makePlan(h: Habitat): Plan {
 
   // The Sunwalk: along the main valley's side, from the Mountain's foot to the foot of the Lift Stair, a quarter of
   // the way out to the ridge so the great river stays in sight below it. It crosses the lake through the pavilion.
-  const sunwalkSide = 0.25 * gap / 2;
-  const walkTheta = (s: number): number => valleyAt(0, s) + sunwalkSide;
   const walkStep = Math.max(floor / 200, 1);
   const walk: number[] = [];
   for (let s = floorStart; s < floorEnd; s += walkStep) walk.push(walkTheta(s), s);
@@ -743,6 +746,61 @@ export function makePlan(h: Habitat): Plan {
   // lake.
   const wrng = new Rng(deriveSeed(h.seed, 'plan', 'ways'));
   const wayStep = Math.max(spacing / 12, widths.way * 4);
+  // The courts a way passes, filed by cell over the floor unrolled: a way goes round every court but its own ends', so
+  // nobody walks down into another hamlet's court and over its light well.
+  const courtCell = Math.max(spacing, 1), courtColumns = Math.max(1, Math.floor((TURN * R) / courtCell));
+  const courtKey = (column: number, row: number): number => row * courtColumns + (((column % courtColumns) + courtColumns) % courtColumns);
+  const courtFiles = new Map<number, Site[]>();
+  const columnOf = (theta: number): number => Math.floor((((theta % TURN) + TURN) % TURN) * R / courtCell);
+  for (const e of placed) {
+    const key = courtKey(columnOf(e.theta), Math.floor(e.s / courtCell)), list = courtFiles.get(key);
+    if (list) list.push(e); else courtFiles.set(key, [e]);
+  }
+  const keepOff = (e: Site): number => e.size + COURT.clear * (h.params.landmarks?.handrail ?? 0) + widths.way;
+  /** The courts near a point, but those at `a` and `b`. */
+  const courtsNear = (theta: number, s: number, a: { theta: number; s: number }, b: { theta: number; s: number }): Site[] => {
+    const out: Site[] = [], column = columnOf(theta), row = Math.floor(s / courtCell);
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) for (const e of courtFiles.get(courtKey(column + dc, row + dr)) ?? []) {
+      if ((e.theta === a.theta && e.s === a.s) || (e.theta === b.theta && e.s === b.s)) continue;
+      out.push(e);
+    }
+    return out;
+  };
+  /** A way's points (θ unwrapped from `a`, s) bent round the courts they pass: points pushed out, pieces split round. */
+  const roundCourts = (way: Float64Array, a: { theta: number; s: number }, b: { theta: number; s: number }): Float64Array => {
+    if (!placed.length || !h.params.landmarks) return way;
+    const pts = Array.from(way);
+    /** Push point i out of every court it is in (not the ends). */
+    const pushOut = (i: number): void => {
+      for (const e of courtsNear(pts[i * 2], pts[i * 2 + 1], a, b)) {
+        const keep = keepOff(e) * 1.2, du = wrap(pts[i * 2] - e.theta) * R, dv = pts[i * 2 + 1] - e.s, d = Math.hypot(du, dv);
+        if (d >= keep) continue;
+        const ux = d > 1e-6 ? du / d : 1, vx = d > 1e-6 ? dv / d : 0;
+        pts[i * 2] += (ux * keep - du) / R;
+        pts[i * 2 + 1] = e.s + vx * keep;
+      }
+    };
+    for (let i = 1; i < pts.length / 2 - 1; i++) pushOut(i);
+    // Each piece that still cuts a court: split at its middle, pushed out; a few times over.
+    for (let round = 0; round < 4; round++) {
+      let split = false;
+      for (let i = 0; i + 3 < pts.length; i += 2) {
+        const mt = (pts[i] + pts[i + 2]) / 2, ms = (pts[i + 1] + pts[i + 3]) / 2;
+        const pu = (pts[i + 2] - pts[i]) * R, pv = pts[i + 3] - pts[i + 1], l2 = Math.max(pu * pu + pv * pv, 1e-9);
+        const cuts = courtsNear(mt, ms, a, b).some((e) => {
+          const eu = wrap(e.theta - pts[i]) * R, ev = e.s - pts[i + 1], k = Math.min(1, Math.max(0, (eu * pu + ev * pv) / l2));
+          return Math.hypot(eu - pu * k, ev - pv * k) < keepOff(e);
+        });
+        if (!cuts) continue;
+        pts.splice(i + 2, 0, mt, ms);
+        pushOut(i / 2 + 1);
+        split = true;
+        i += 2;
+      }
+      if (!split) break;
+    }
+    return Float64Array.from(pts);
+  };
   const wayPoints = (a: { theta: number; s: number }, b: { theta: number; s: number }): Float64Array => {
     const du = wrap(b.theta - a.theta) * R, dv = b.s - a.s, length = Math.hypot(du, dv);
     const n = Math.max(1, Math.ceil(length / wayStep)), out = new Float64Array((n + 1) * 2);
@@ -762,7 +820,7 @@ export function makePlan(h: Habitat): Plan {
       out[i * 2] = a.theta + (du * t + nu * off) / R;
       out[i * 2 + 1] = Math.min(floorEnd, Math.max(reserveEnd, ps));
     }
-    return out;
+    return roundCourts(out, a, b);
   };
   const anchors: { theta: number; s: number }[] = [];
   // The Sunwalk's points a way may join: on the worked floor, and on land (over the lake it is the pavilion's bridges).
@@ -799,13 +857,28 @@ export function makePlan(h: Habitat): Plan {
     }
   };
   for (let i = 0; i < anchors.length; i++) relax(i);
+  // Each entrance's way to it, by node.
+  const wayTo = new Map<number, Float64Array>();
   for (let added = anchors.length; added < n; added++) {
     let pick = -1;
     for (let j = anchors.length; j < n; j++) if (!inTree[j] && (pick < 0 || cost[j] < cost[pick])) pick = j;
     if (pick < 0) break;
     inTree[pick] = 1;
-    const a = nodes[from[pick]], b = nodes[pick];
-    paths.push({ kind: 'way', width: widths.way, points: wayPoints(a, b) });
+    const b = nodes[pick];
+    let a = nodes[from[pick]];
+    // From another entrance: it leaves that entrance's way where it is clear of its court, so those who pass keep out
+    // of the court (a court is its hamlet's door, not a crossroads).
+    const before = wayTo.get(from[pick]);
+    if (before) {
+      const e = nodes[from[pick]] as Site, keep = keepOff(e) * 1.2;
+      // (Its first point beyond the court, or where it starts if it is all that short.)
+      let k = before.length - 4;
+      while (k > 0 && Math.hypot(wrap(before[k] - e.theta) * R, before[k + 1] - e.s) < keep) k -= 2;
+      a = { theta: before[Math.max(0, k)], s: before[Math.max(0, k) + 1] };
+    }
+    const points = wayPoints(a, b);
+    wayTo.set(pick, points);
+    paths.push({ kind: 'way', width: widths.way, points });
     relax(pick);
   }
 

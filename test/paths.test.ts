@@ -50,8 +50,9 @@ for (const { name, params } of MATRIX) {
         if (t.riverAt(at.theta, at.s) || t.courtAt(at.theta, at.s) || (t.lake && Math.abs(at.s - t.lake.s) < t.lake.halfWidth * 1.2)) continue;
         const side = (k: number) => t.heightAt(at.theta + (at.nu * k) / R, at.s + at.ns * k);
         const left = side(-half * 0.8), mid = side(0), right = side(half * 0.8);
-        if (net.pathAt(at.theta + (at.nu * -half * 0.8) / R, at.s + at.ns * -half * 0.8)?.kind !== path.kind) continue;
-        if (net.pathAt(at.theta + (at.nu * half * 0.8) / R, at.s + at.ns * half * 0.8)?.kind !== path.kind) continue;
+        // Where two ways meet, each is levelled along its own line.
+        if (net.pathAt(at.theta + (at.nu * -half * 0.8) / R, at.s + at.ns * -half * 0.8)?.piece !== hit.piece) continue;
+        if (net.pathAt(at.theta + (at.nu * half * 0.8) / R, at.s + at.ns * half * 0.8)?.piece !== hit.piece) continue;
         // At a ford's edge one side is the river's bed (crossings.ts builds over it).
         if ([-1, 1].some((k) => t.riverAt(at.theta + (at.nu * k * half * 0.8) / R, at.s + at.ns * k * half * 0.8))) continue;
         assert.ok(Math.abs(left - right) < CROWN * half + 0.05, `${path.kind} tilts ${(left - right).toFixed(2)} m across`);
