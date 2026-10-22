@@ -28,7 +28,7 @@ import { daisOf } from './gen/grownHall';
 import type { Terrain } from './gen/terrain';
 import { floorAt, floorPoint, outOfPlace, placeAt, type FloorFrame } from './gen/shapes';
 import { crossingsOf, type Crossing, type CrossingKind } from './gen/crossings';
-import { landformOf, planOf } from './gen/plan';
+import { entrancesOf, landformOf, planOf } from './gen/plan';
 import { underOf, type Hamlet } from './gen/under';
 import { underLiftOf } from './gen/underMesh';
 import { pavilionPlan } from './gen/pavilion';
@@ -233,6 +233,14 @@ toPlace('Before the nearest crowd', 12, (eco, t, s) => {
   if (!b) return null;
   const d = b.theta - t, dx = (d - 2 * Math.PI * Math.round(d / (2 * Math.PI))) * h.radius, dy = b.s - s, l = Math.hypot(dx, dy) || 1;
   return { theta: b.theta, s: b.s, way: [dx / l, dy / l] };
+});
+/** In the nearest entrance court, 12 m from its light well, facing it. */
+toPlace('In the nearest court', 12, (eco, t, s) => {
+  const h = eco.terrain.habitat, r = h.radius;
+  const c = entrancesOf(planOf(h)).sort((a, b) => floorGap(r, t, s, a.theta, a.s) - floorGap(r, t, s, b.theta, b.s))[0];
+  if (!c) return null;
+  const d = c.theta - t, dx = (d - 2 * Math.PI * Math.round(d / (2 * Math.PI))) * r, dy = c.s - s, l = Math.hypot(dx, dy) || 1;
+  return { theta: c.theta, s: c.s, way: [dx / l, dy / l] };
 });
 /** Before the nearest herd of deer (within a few km, or else in the wild reserve), approached from where the player stands. */
 toPlace('Before the nearest herd', 60, (eco, t, s) => {

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { MATRIX, derive, validate, withParams, REFERENCE } from '../src/blueprint';
 import { fromLake, planOf } from '../src/gen/plan';
 import { pathsOf } from '../src/gen/paths';
-import { floorGap, peopleAt, residentOf, shuffleOf, venuesOf, walksOf, whereIs, type Person } from '../src/sim';
+import { floorGap, peopleAt, personKey, residentOf, shuffleOf, talkerAt, venuesOf, walksOf, whereIs, type Person } from '../src/sim';
 
 const HOUR = 3600;
 
@@ -79,6 +79,48 @@ for (const { name, params } of MATRIX) {
     }
     assert.ok(walkers === 0 || onPaths === walkers, `${walkers - onPaths} of ${walkers} walkers off the paths, far from their place`);
     assert.ok(v.venues.every((x) => x.vertex >= 0 && x.vertex < walksOf(h).size));
+  });
+
+  test(`life (${name}): parties come up together, walk two abreast and stand in rings facing in`, () => {
+    const parties = new Map<string, Person[]>();
+    for (const t of [at(5), at(8)]) for (const p of (whole ? peopleAt(h, t) : sample(t)).filter((q) => q.court >= 0)) {
+      const key = `${t}:${personKey({ court: p.court, outing: p.outing - p.member })}`;
+      const list = parties.get(key) ?? [];
+      list.push(p);
+      parties.set(key, list);
+    }
+    let rings = 0, together = 0, groups = 0;
+    for (const list of parties.values()) {
+      const size = list[0].size;
+      assert.ok(list.every((p) => p.size === size && p.member < size), 'a party disagrees on its size');
+      if (list.length < 2 || list.length !== size) continue;
+      groups++;
+      // Everyone near the first: walking a few steps apart, staying within their shape (a ring to dance in is the widest).
+      const far = Math.max(...list.map((p) => near(p, list[0])));
+      if (far <= 4 + 2.5 * size) together++;
+      if (list.some((p) => p.moving) || !['meet', 'gather'].includes(list[0].activity)) continue;
+      // A talking ring: each faces its middle.
+      const R0 = list[0];
+      const xy = list.map((p) => { const d = p.theta - R0.theta; return [p.s - R0.s, (d - 2 * Math.PI * Math.round(d / (2 * Math.PI))) * R]; });
+      const mx = xy.reduce((a, q) => a + q[0], 0) / size, my = xy.reduce((a, q) => a + q[1], 0) / size;
+      list.forEach((p, k) => {
+        const to = [mx - xy[k][0], my - xy[k][1]], l = Math.hypot(to[0], to[1]);
+        assert.ok((to[0] * Math.cos(p.heading) + to[1] * Math.sin(p.heading)) / l > 0.95, `someone in a ring of ${size} faces away from it`);
+      });
+      rings++;
+      // One of them speaks at a time, the same one for all of them.
+      const talker = talkerAt(list[0], at(8));
+      assert.ok(talker >= 0 && talker < size && list.every((p) => talkerAt(p, at(8)) === talker));
+    }
+    assert.ok(groups > 0 && together >= groups * 0.9, `${together} of ${groups} parties together`);
+    if (whole) assert.ok(rings > 0, 'no talking rings');
+  });
+
+  test(`life (${name}): every court has a green; few spend their outing in a court`, () => {
+    const v = venuesOf(h);
+    assert.ok(v.byCourt.every((ks) => ks.some((k) => v.venues[k].kind === 'green')), 'a court without a green');
+    const out = sample(at(8)), inCourts = out.filter((p) => p.activity === 'meet' || p.activity === 'bench').length;
+    assert.ok(inCourts < out.length * 0.3, `${inCourts} of ${out.length} up are in the courts`);
   });
 
   function sample(t: number): Person[] {

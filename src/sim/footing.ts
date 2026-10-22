@@ -14,7 +14,7 @@ export const SWIM_WATER = 0.6;
 export const SWIM_DEPTH = 0.85;
 
 /** How people hold themselves at what they do while staying put (`POSE`); walking, everyone is upright. */
-const POSTURE: Partial<Record<Activity, number>> = { make: POSE.kneel, sit: POSE.kneel, picnic: POSE.lie, stargaze: POSE.lie };
+const POSTURE: Partial<Record<Activity, number>> = { make: POSE.kneel, sit: POSE.kneel, bench: POSE.kneel, picnic: POSE.lie, stargaze: POSE.lie };
 
 export function postureOf(activity: Activity): number {
   return POSTURE[activity] ?? POSE.upright;

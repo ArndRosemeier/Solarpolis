@@ -2,7 +2,8 @@
  * Where people go when they come up on the land (design "Who is out on the land"): the places the habitat plan made
  * room for, each with the court people come up at to reach it, how strongly it draws them and what they do there.
  *
- *   court      the rim of every entrance court: people meet, talk, sit on the steps;
+ *   court      every entrance court, in it and round its rim: people meet there on their way, a short stop (`life.pause`);
+ *   green      the land along every court's way out, a little off the court: used as its district uses its commons;
  *   commons    the middle of each district's commons, used in the district's style (`STYLE_ACTIVITY`);
  *   stroll     the Sunwalk where it passes near a court;
  *   shore      the ring lake's shore below a court in reach of it: bathing;
@@ -17,22 +18,28 @@
 import { kept } from '../gen/kept';
 import { entrancesOf, fromLake, planOf, type Lake, type Site, type SiteKind } from '../gen/plan';
 import type { DistrictStyle, Habitat } from '../blueprint';
-import { floorGap, sunwalkOf, walksOf } from './walks';
+import { floorGap, pointAlong, sunwalkOf, walksOf } from './walks';
 
 
 /** What someone is doing. */
 export type Activity =
   | 'walk' | 'meet' | 'stroll' | 'picnic' | 'bathe' | 'sit' | 'gather' | 'herd' | 'play' | 'make' | 'wander'
-  | 'swim' | 'climb' | 'watch' | 'fly' | 'hike' | 'stargaze' | 'sunwalk';
+  | 'swim' | 'climb' | 'watch' | 'fly' | 'hike' | 'stargaze' | 'sunwalk' | 'bench';
 
-export const ACTIVITIES: readonly Activity[] = ['walk', 'meet', 'stroll', 'picnic', 'bathe', 'sit', 'gather', 'herd', 'play', 'make', 'wander', 'swim', 'climb', 'watch', 'fly', 'hike', 'stargaze', 'sunwalk'];
+/** What someone is doing ('bench': sitting on a seat built for it, the seat round a court's light well). */
+export const ACTIVITIES: readonly Activity[] = ['walk', 'meet', 'stroll', 'picnic', 'bathe', 'sit', 'gather', 'herd', 'play', 'make', 'wander', 'swim', 'climb', 'watch', 'fly', 'hike', 'stargaze', 'sunwalk', 'bench'];
 
 /** What a district's people do on its commons, by its style (blueprint/cultures.ts). */
 export const STYLE_ACTIVITY: Readonly<Record<DistrictStyle, Activity>> = {
   orchard: 'picnic', water: 'bathe', stone: 'sit', grove: 'gather', herd: 'herd', play: 'play', makers: 'make', 'let-go': 'wander',
 };
 
-export type VenueKind = 'court' | 'commons' | 'stroll' | 'shore' | 'reserve' | 'landmark';
+export type VenueKind = 'court' | 'green' | 'commons' | 'stroll' | 'shore' | 'reserve' | 'landmark';
+
+/** How strongly each kind of place draws people from its court. */
+const PULL = { court: 0.6, green: 1.5, commons: 1.5, stroll: 1, shore: 1.2, reserve: 0.4 } as const;
+/** The green: its middle this share of the entrance spacing along the court's way out, its spread this share. */
+const GREEN = { along: 0.15, spread: 0.1 };
 
 /** Share of all the habitat's outings each landmark draws, from anywhere, and when. */
 export const LANDMARK_SHARE: Partial<Record<SiteKind, { share: number; activity: Activity; evening?: boolean }[]>> = {
@@ -91,11 +98,19 @@ function makeVenues(h: Habitat): Venues {
   const venues: Venue[] = [];
   const keep = (v: Omit<Venue, 'vertex'>): void => { venues.push({ ...v, vertex: net.vertexNear(v.theta, v.s) }); };
   const spacing = h.params.plan.entranceSpacing, lake = plan.lake;
+  const courtVertex = courts.map((c) => { const v = net.vertexAt(c.theta, c.s); return v >= 0 ? v : net.vertexNear(c.theta, c.s); });
 
-  courts.forEach((c, i) => keep({ kind: 'court', activity: 'meet', theta: c.theta, s: c.s, spread: c.size * 1.5, court: i, pull: 1, share: 0, evening: false }));
+  courts.forEach((c, i) => keep({ kind: 'court', activity: 'meet', theta: c.theta, s: c.s, spread: c.size * 1.5, court: i, pull: PULL.court, share: 0, evening: false }));
+  // Every court's green: along its way out toward the Sunwalk (the net's root), used in its district's style.
+  courts.forEach((_, i) => {
+    const way = net.between(courtVertex[i], 0);
+    if (way.length <= 0) return;
+    const at = pointAlong(way, R, Math.min(way.length / 2, spacing * GREEN.along)), d = plan.districtAt(at.theta, at.s);
+    keep({ kind: 'green', activity: d ? STYLE_ACTIVITY[d.style] : 'wander', theta: at.theta, s: at.s, spread: spacing * GREEN.spread, court: i, pull: PULL.green, share: 0, evening: false });
+  });
   for (const d of plan.districts) {
     if (!courts.length || fromLake(lake, d.s) < 0 || d.s < profile.floorStart || d.s > profile.floorEnd) continue;
-    keep({ kind: 'commons', activity: STYLE_ACTIVITY[d.style], theta: d.theta, s: d.s, spread: spacing * 0.15, court: nearestCourt(d.theta, d.s, d.entrances.length ? d.entrances : courts), pull: 1.5, share: 0, evening: false });
+    keep({ kind: 'commons', activity: STYLE_ACTIVITY[d.style], theta: d.theta, s: d.s, spread: spacing * 0.15, court: nearestCourt(d.theta, d.s, d.entrances.length ? d.entrances : courts), pull: PULL.commons, share: 0, evening: false });
   }
   const walk = sunwalkOf(h);
   if (walk) {
@@ -106,7 +121,7 @@ function makeVenues(h: Habitat): Venues {
         const d = apart(c.theta, c.s, walk[k], walk[k + 1]);
         if (d < g) { g = d; best = k; }
       }
-      if (best >= 0 && g < life.reach) keep({ kind: 'stroll', activity: 'stroll', theta: walk[best], s: walk[best + 1], spread: spacing * 0.1, court: i, pull: 1, share: 0, evening: false });
+      if (best >= 0 && g < life.reach) keep({ kind: 'stroll', activity: 'stroll', theta: walk[best], s: walk[best + 1], spread: spacing * 0.1, court: i, pull: PULL.stroll, share: 0, evening: false });
     });
     // Hikes into the reserve: along the Sunwalk where it runs through it, a reach apart.
     let last = -Infinity;
@@ -115,7 +130,7 @@ function makeVenues(h: Habitat): Venues {
       if (s >= plan.reserveEnd) break;
       if (s - last < life.reach) continue;
       last = s;
-      if (courts.length) keep({ kind: 'reserve', activity: 'hike', theta: walk[k], s, spread: spacing * 0.05, court: nearestCourt(walk[k], s), pull: 0.4, share: 0, evening: false });
+      if (courts.length) keep({ kind: 'reserve', activity: 'hike', theta: walk[k], s, spread: spacing * 0.05, court: nearestCourt(walk[k], s), pull: PULL.reserve, share: 0, evening: false });
     }
   }
   if (lake) {
@@ -124,7 +139,7 @@ function makeVenues(h: Habitat): Venues {
       if (off > life.reach) return;
       // The shore straight down the axis from the court, just at the water.
       const s = besideLake(lake, c.s, -lake.halfWidth * 0.03);
-      keep({ kind: 'shore', activity: 'swim', theta: c.theta, s, spread: Math.min(spacing * 0.08, lake.halfWidth * 0.5), court: i, pull: 1.2, share: 0, evening: false });
+      keep({ kind: 'shore', activity: 'swim', theta: c.theta, s, spread: Math.min(spacing * 0.08, lake.halfWidth * 0.5), court: i, pull: PULL.shore, share: 0, evening: false });
     });
   }
   for (const site of plan.sites) {
@@ -140,7 +155,6 @@ function makeVenues(h: Habitat): Venues {
 
   const byCourt: number[][] = courts.map(() => []), reach = new Float64Array(courts.length), draw = new Float64Array(courts.length);
   // A court's reach: the farthest any of its people gets, along the route to a venue or around it.
-  const courtVertex = courts.map((c) => { const v = net.vertexAt(c.theta, c.s); return v >= 0 ? v : net.vertexNear(c.theta, c.s); });
   venues.forEach((v, k) => {
     byCourt[v.court].push(k);
     const c = courts[v.court], p = net.between(courtVertex[v.court], v.vertex).points;

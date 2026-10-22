@@ -38,7 +38,7 @@ for (const { name } of MATRIX) {
 
   test(`footing (${name}): on a deck over water, on the ground, or treading water with the head out`, () => {
     const terrain = terrainOf(name), h = terrain.habitat;
-    const p0: Person = { resident: 0, theta: 0, s: 0, heading: 0, moving: false, speed: 0, activity: 'meet', court: 0, outing: 0 };
+    const p0: Person = { resident: 0, theta: 0, s: 0, heading: 0, moving: false, speed: 0, activity: 'meet', court: 0, outing: 0, member: 0, size: 1 };
     // A dry place and a deep one, along a ring of the floor.
     let dry: [number, number] | null = null, wet: [number, number] | null = null;
     const R = h.radius, { floorStart, floorEnd } = h.profile;
