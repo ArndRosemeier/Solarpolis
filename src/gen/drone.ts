@@ -13,7 +13,7 @@
  * Kept out: weapons (never fitted) and jets (no jet blast among people); roles pick their kit (`KIT`). Pure: runs in
  * the generation worker.
  */
-import { buildDrone, designDrone, type ArchetypeId, type DroneModel, type DroneSlot, type PropKind, type RGB } from '@actors/drone';
+import { buildDrone, designDrone, type ArchetypeId, type DroneModel, type DroneSlot, type DroneSpec, type PropKind, type RGB } from '@actors/drone';
 import { deriveSeed, hash3i, hashToFloat } from '@futuremagic/core';
 import type { DroneRole, Habitat, Vec3 } from '../blueprint';
 type Role = DroneRole;
@@ -21,15 +21,32 @@ import { simplify, type Shape } from './simplify';
 
 export type { Shape };
 
-/** Which of Actors' archetypes, propulsions and palettes each role is built from (a civil, unarmed fleet). */
-export const KIT: Readonly<Record<Role, { archetype: ArchetypeId; propulsion: readonly PropKind[]; palettes: readonly string[] }>> = {
-  courier: { archetype: 'courier', propulsion: ['ducted', 'rotor'], palettes: ['corporate', 'medical', 'explorer'] },
-  tender: { archetype: 'worker', propulsion: ['ducted', 'rotor'], palettes: ['industrial', 'explorer', 'desert'] },
-  surveyor: { archetype: 'surveyor', propulsion: ['ring', 'ducted'], palettes: ['explorer', 'arctic'] },
-  lifter: { archetype: 'lifter', propulsion: ['rotor', 'ducted'], palettes: ['industrial', 'corporate'] },
-  glider: { archetype: 'manta', propulsion: ['ion', 'ducted'], palettes: ['chrome', 'arctic'] },
-  guardian: { archetype: 'sentinel', propulsion: ['ducted', 'ring'], palettes: ['medical', 'arctic'] },
+/**
+ * Which of Actors' archetypes, propulsions and palettes each role is built from (a civil, unarmed fleet). A person's
+ * body is one they chose: small, quiet (rings, ducts and ion lift, no open rotors) and in any colours.
+ */
+export const KIT: Readonly<Record<Role, { archetypes: readonly ArchetypeId[]; propulsion: readonly PropKind[]; palettes: readonly string[] }>> = {
+  courier: { archetypes: ['courier'], propulsion: ['ducted', 'rotor'], palettes: ['corporate', 'medical', 'explorer'] },
+  tender: { archetypes: ['worker'], propulsion: ['ducted', 'rotor'], palettes: ['industrial', 'explorer', 'desert'] },
+  surveyor: { archetypes: ['surveyor'], propulsion: ['ring', 'ducted'], palettes: ['explorer', 'arctic'] },
+  lifter: { archetypes: ['lifter'], propulsion: ['rotor', 'ducted'], palettes: ['industrial', 'corporate'] },
+  glider: { archetypes: ['manta'], propulsion: ['ion', 'ducted'], palettes: ['chrome', 'arctic'] },
+  guardian: { archetypes: ['sentinel'], propulsion: ['ducted', 'ring'], palettes: ['medical', 'arctic'] },
+  person: { archetypes: ['sentinel', 'scout', 'sentinel'], propulsion: ['ring', 'ducted', 'ion'], palettes: ['chrome', 'corporate', 'medical', 'arctic', 'explorer', 'desert', 'racing', 'neon'] },
 };
+
+/** How many designs a role is built in: the working roles `designs` each, the bodies residents wear `bodies`. */
+export function designsOf(h: Habitat, role: Role): number {
+  const d = h.params.life.drones;
+  return role === 'person' ? d.bodies : d.designs;
+}
+
+/** The spec of a role's design `index` (Actors' `designDrone`, unbuilt): a pure function of the habitat's seed. */
+function specOf(h: Habitat, role: Role, index: number): DroneSpec {
+  const kit = KIT[role], seed = deriveSeed(h.seed, 'drone', role, index), chance = (k: number): number => hashToFloat(hash3i(seed, k, 0, 0));
+  const byChance = <T>(list: readonly T[], k: number): T => list[Math.floor(chance(k) * list.length)];
+  return designDrone({ seed, archetype: byChance(kit.archetypes, 3), propulsion: byChance(kit.propulsion, 2), palette: byChance(kit.palettes, 1), armed: false });
+}
 
 /**
  * A mesh of a design, ready to draw (the DRONE and DRONE_VEIL kinds): per vertex its position and normal (the drone's
@@ -82,15 +99,14 @@ const NAV = 5;
 const BLUR = 0.12;
 const PLUME = 1.4;
 const BEAM = 0.16;
+/** A guess from the spec (`designGuess`): height and width over its length, its primary colour's share against the secondary. */
+const GUESS = { height: 0.8, across: 1.4, primary: 0.6 };
 /** The coarse level's cells: the drone's size over this many. */
 const COARSE_CELLS = 10;
 
 /** The design of a role's drone `index` in a habitat (a pure function of its seed). */
 export function droneDesign(h: Habitat, role: Role, index: number): DroneDesign {
-  const kit = KIT[role], seed = deriveSeed(h.seed, 'drone', role, index), chance = (k: number): number => hashToFloat(hash3i(seed, k, 0, 0));
-  const palette = kit.palettes[Math.floor(chance(1) * kit.palettes.length)];
-  const propulsion = kit.propulsion[Math.floor(chance(2) * kit.propulsion.length)];
-  const spec = designDrone({ seed, archetype: kit.archetype, propulsion, palette, armed: false });
+  const spec = specOf(h, role, index);
   const model = buildDrone(spec);
   const { body, veil } = flatten(model);
   const ext = Math.max(...model.bounds.max.map((v, k) => v - model.bounds.min[k]));
@@ -103,11 +119,21 @@ export function droneDesign(h: Habitat, role: Role, index: number): DroneDesign 
   };
 }
 
-/** Every design of a habitat, role by role (`ROLES` order), `designs` each. */
+/** Every design of a habitat, role by role (`ROLES` order), `designsOf` each. */
 export function droneDesigns(h: Habitat, roles: readonly Role[]): DroneDesign[] {
   const out: DroneDesign[] = [];
-  for (const role of roles) for (let k = 0; k < h.params.life.drones.designs; k++) out.push(droneDesign(h, role, k));
+  for (const role of roles) for (let k = 0; k < designsOf(h, role); k++) out.push(droneDesign(h, role, k));
   return out;
+}
+
+/**
+ * How a design looks from afar before it is built (the far specks of the drones people wear, made in a worker that
+ * builds no drones): its height and width across (m) and its colour (linear), from its spec alone. Once built, its
+ * measured size and `albedo` take over (render/fliers.ts).
+ */
+export function designGuess(h: Habitat, role: Role, index: number): { height: number; across: number; albedo: Vec3 } {
+  const spec = specOf(h, role, index), p = spec.palette;
+  return { height: GUESS.height * spec.size, across: GUESS.across * spec.size, albedo: linear(p.primary.map((v, k) => GUESS.primary * v + (1 - GUESS.primary) * p.secondary[k]) as RGB) };
 }
 
 /** sRGB to linear. */

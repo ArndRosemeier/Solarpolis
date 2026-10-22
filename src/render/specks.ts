@@ -12,13 +12,12 @@
 import { Group, InstancedBufferAttribute, MathUtils, type Camera, type InstancedBufferGeometry, type InstancedInterleavedBuffer, type Mesh, type PerspectiveCamera, type Vector2 } from 'three/webgpu';
 import type { Stage } from '@futuremagic/stage';
 import type { Habitat } from '../blueprint';
-import { SPECK_SHOWN, SPECK_STRIDE, speckBands } from '../gen/standIn';
+import { SPECK_SHOWN, SPECK_STRIDE } from '../gen/standIn';
 import type { Specks } from '../sim/specks';
 import type { WorkerPool } from '../workers/pool';
 import { SPECK, SPECK_LAYOUT, layInstances } from './materials';
 import { speckClock } from './crowdShaders';
 import { drawnAnywhere, dropUploaded, freeMesh, quadInstances, sendInstances } from './geometry';
-import type { Residents } from './actors/residents';
 
 /** A new list is asked for this often (s, real time), or once the clock is this far from the drawn one's (s). */
 const SPECKS_EVERY = 3;
@@ -67,6 +66,9 @@ export function drawSpecks(own: OwnSpecks, n: number): void {
   sendInstances(own.buffer, n, SPECK_STRIDE);
 }
 
+/** A resident's measured size and colours (`writeSpeck`'s bands), once known: their look's, or (`design` ≥ 0) their drone body's. */
+export type Measured = (resident: number, design: number) => { height: number; width: number; bands: [number, number, number] } | null;
+
 /** A list on the GPU: its mesh, who is in it (by key, ascending) and which of them are drawn. */
 interface Drawn {
   mesh: Mesh;
@@ -97,12 +99,12 @@ export class SpeckView {
 
   /**
    * Bring the specks up to clock time t (s). `near`: the keys (`personKey`) of everyone a nearer level draws this frame;
-   * `residents`: the measured looks (their colours and size replace the guess), once loaded. `dt`: the frame's (s).
+   * `measured`: a resident's measured size and colours (they replace the guess), once known. `dt`: the frame's (s).
    */
-  follow(t: number, dt: number, near: Iterable<number>, residents: Residents | null): void {
+  follow(t: number, dt: number, near: Iterable<number>, measured: Measured): void {
     this.clock += dt;
     this.frameNo++;
-    if (!this.asking && (this.clock - this.askedAt > SPECKS_EVERY || (this.drawn && Math.abs(t - this.drawn.t) > SPECKS_AHEAD))) this.askList(t, residents);
+    if (!this.asking && (this.clock - this.askedAt > SPECKS_EVERY || (this.drawn && Math.abs(t - this.drawn.t) > SPECKS_AHEAD))) this.askList(t, measured);
     if (this.ready) {
       // The new list is on the GPU: it takes over in this frame.
       if (this.drawn) freeMesh(this.drawn.mesh);
@@ -116,14 +118,14 @@ export class SpeckView {
     this.hide(d, near);
   }
 
-  private askList(t: number, residents: Residents | null): void {
+  private askList(t: number, measured: Measured): void {
     this.asking = true;
     this.askedAt = this.clock;
     const t0 = performance.now();
     void this.pool.job({ kind: 'specks', params: this.habitat.params, t }).then(async (answer) => {
       if (this.disposed || !('kind' in answer) || answer.kind !== 'specks') return;
       this.slowest = Math.max(this.slowest, performance.now() - t0);
-      const ready = await this.upload(answer.specks, residents);
+      const ready = await this.upload(answer.specks, measured);
       if (this.disposed) { freeMesh(ready.mesh); return; }
       if (this.ready) freeMesh(this.ready.mesh);
       this.ready = ready;
@@ -132,17 +134,15 @@ export class SpeckView {
   }
 
   /** A list onto the GPU: those whose look is measured take its colours and size; the CPU's copy is let go. */
-  private async upload(s: Specks, residents: Residents | null): Promise<Drawn> {
+  private async upload(s: Specks, measured: Measured): Promise<Drawn> {
     const data = s.data;
-    if (residents) {
-      for (let i = 0; i < s.count; i++) {
-        const dress = residents.measured(s.resident[i]);
-        if (!dress) continue;
-        const o = i * SPECK_STRIDE, bands = speckBands(dress.colors);
-        data[o + 3] = dress.height;
-        data[o + 8] = bands[0]; data[o + 9] = bands[1]; data[o + 10] = bands[2];
-        data[o + 14] = dress.width;
-      }
+    for (let i = 0; i < s.count; i++) {
+      const m = measured(s.resident[i], s.design[i]);
+      if (!m) continue;
+      const o = i * SPECK_STRIDE;
+      data[o + 3] = m.height;
+      data[o + 8] = m.bands[0]; data[o + 9] = m.bands[1]; data[o + 10] = m.bands[2];
+      data[o + 14] = m.width;
     }
     const g = quadInstances();
     layInstances(g, data, SPECK_LAYOUT);

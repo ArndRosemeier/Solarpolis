@@ -1,6 +1,10 @@
 /**
  * The drones that work the land (design "Who is out on the land"; who flies where: sim/air.ts; their designs: Actors'
- * drone kit, gen/drone.ts). Every drone of the habitat is drawn, at one of three levels by how big it is on screen:
+ * drone kit, gen/drone.ts), and the people whose body is a drone: the people's view finds and follows them as anyone
+ * (`Aloft`, render/people.ts) and hands them here each frame, placed by their footing (sim/footing.ts: hovering at
+ * the eyes of those they are with), facing as they face, nodding while it is their turn to talk; `near` lists them for
+ * the far specks, which draw them beyond (`measured` gives those their built size and colour). Every drone of the
+ * habitat is drawn, at one of three levels by how big it is on screen:
  *
  *   near     the whole build of its design (DRONE and DRONE_VEIL kinds): rotors spinning, strobes flashing, the
  *            body bobbing, pitched into its way and banked into its turns as its gravity there asks;
@@ -20,12 +24,12 @@ import { toView, toWorld, type Habitat, type Vec3, apart as away } from '../blue
 import type { Terrain } from '../gen/terrain';
 import { horizonAt, OPEN_SKY } from '../gen/horizon';
 import { BODY_WIDTH, POSE, SPECK_STRIDE, packColor, writeSpeck } from '../gen/standIn';
-import { designBytes, type DesignMesh, type DroneDesign } from '../gen/drone';
-import { ROLES, airBytes, fleetOf, flierAt, type Flier } from '../sim';
+import { designBytes, designsOf, type DesignMesh, type DroneDesign } from '../gen/drone';
+import { ROLES, airBytes, fleetOf, flierAt, footingOf, talkerAt, type Flier } from '../sim';
 import type { WorkerPool } from '../workers/pool';
 import { DRONE, DRONE_VEIL, FLIER_LAYOUT, layInstances } from './materials';
-import { drawSpecks, ownSpecks, pxPerMetre, type OwnSpecks } from './specks';
-import { turnFor } from './people';
+import { drawSpecks, ownSpecks, pxPerMetre, roomForSpecks, type OwnSpecks } from './specks';
+import { turnFor, type Aloft } from './people';
 import { FLIER_STRIDE, writeFlier } from './droneShaders';
 import { drawnAnywhere, dropUploaded, freeMesh, instancedOf, meshGeometry, sendInstances } from './geometry';
 
@@ -44,8 +48,21 @@ const BANK = 0.35;
 const LOW = 40;
 /** Its light is looked up again once it is this far on (m). */
 const LIGHT_MOVE = 10;
+/** Room for this many people in drone bodies per design at first (doubled when more are near). */
+const PERSONS_ROOM = 8;
+/** A person in a drone body nods while it is their turn to talk: this far (rad), once in this long (s). */
+const NOD = 0.07;
+const NOD_EVERY = 1.3;
 
 type Level = 0 | 1 | 2;
+
+/** What a frame's drawing carries from drone to drone: the eye, pixels per metre at a metre, specks and drones written. */
+interface Frame {
+  eye: Vec3;
+  perMetre: number;
+  specks: number;
+  written: number;
+}
 const LEVELS = ['near', 'coarse', 'speck'] as const;
 
 /** One design's meshes on the GPU: per level (near, coarse) its body and veil sharing one instance buffer. */
@@ -58,6 +75,8 @@ interface Drawn {
   across: number;
   color: number;
   gpuBytes: number;
+  /** How many of the fleet are of this design. */
+  fleet: number;
 }
 
 /** A drone as last placed. */
@@ -79,6 +98,10 @@ export class FlierView {
   private drawn: Drawn[] | null = null;
   private specks: OwnSpecks | null = null;
   private readonly ones: One[] = [];
+  /** The people in drone bodies drawn here, by `personKey`. */
+  private readonly persons = new Map<number, One>();
+  /** Whom of them this frame drew (`personKey`): the far specks leave them out. */
+  readonly near: number[] = [];
   private readonly screen = new Vector2();
   private frameNo = 0;
   private holes = 0;
@@ -94,25 +117,29 @@ export class FlierView {
 
   /** Every design built in the workers, put on the GPU and compiled; then the drones are shown. */
   private async start(): Promise<void> {
-    const h = this.habitat, n = h.params.life.drones.designs, t0 = performance.now();
-    const asks = ROLES.flatMap((role) => Array.from({ length: n }, (_, index) => this.pool.job({ kind: 'drone', params: h.params, role, index })));
+    const h = this.habitat, t0 = performance.now();
+    const asks = ROLES.flatMap((role) => Array.from({ length: designsOf(h, role) }, (_, index) => this.pool.job({ kind: 'drone', params: h.params, role, index })));
     const designs = (await Promise.all(asks)).map((a) => ('kind' in a && a.kind === 'drone' ? a.design : null));
     this.slowest = performance.now() - t0;
     if (this.disposed || designs.some((d) => !d)) return;
     const fleet = fleetOf(this.terrain);
-    const drawn = await Promise.all(designs.map((d) => this.onGpu(d!, Math.max(1, fleet.filter((j) => j.role === d!.role && j.design === d!.index).length))));
-    const specks = ownSpecks('drone specks', fleet.length);
+    const drawn = await Promise.all(designs.map((d) => this.onGpu(d!, fleet.filter((j) => j.role === d!.role && j.design === d!.index).length)));
+    const specks = ownSpecks('drone specks', fleet.length + PERSONS_ROOM);
     await this.stage.prepare(specks.mesh);
     if (this.disposed) { for (const d of drawn) this.letGo(d); freeMesh(specks.mesh); return; }
     this.specks = specks;
     for (const d of drawn) for (const l of d.levels) this.group.add(l.body, l.veil);
     this.group.add(specks.mesh);
-    fleet.forEach((_, id) => this.ones.push({ flier: null, at: [0, 0, 0], low: [0, 0, 0], turn: 0, roll: 0, horizon: [OPEN_SKY, OPEN_SKY], litAt: [Infinity, 0, 0], level: 2, phase: 1000 * hashToFloat(hash3i(h.seed, id, 41, 0)) }));
+    fleet.forEach((_, id) => this.ones.push(this.unplaced(hash3i(h.seed, id, 41, 0))));
     this.drawn = drawn;
   }
 
-  /** A design's two levels on the GPU, room for `most` drones of it in each; the shapes' CPU copies let go. */
-  private async onGpu(design: DroneDesign, most: number): Promise<Drawn> {
+  /**
+   * A design's two levels on the GPU, room in each for the `fleet` drones of it and a few people wearing it (more is
+   * made when needed: `room`); the shapes' CPU copies let go.
+   */
+  private async onGpu(design: DroneDesign, fleet: number): Promise<Drawn> {
+    const most = fleet + (design.role === 'person' ? PERSONS_ROOM : 0) || 1;
     const meshFor = (m: DesignMesh, name: string, body: boolean, buffer: Float32Array | InstancedInterleavedBuffer): { mesh: Mesh; buffer: InstancedInterleavedBuffer } => {
       const g = instancedOf(meshGeometry(m.index, { position: [m.positions, 3], normal: [m.normals, 3], paint: [m.paint, 4], spin: body ? [m.spin, 4] : undefined }));
       const shared = layInstances(g, buffer, FLIER_LAYOUT);
@@ -133,52 +160,100 @@ export class FlierView {
     for (const l of levels) for (const m of [l.body, l.veil]) dropUploaded(m, this.stage.renderer, [...FLIER_LAYOUT.attributes]);
     const ext = design.max.map((v, k) => v - design.min[k]);
     return {
-      design, levels, gpuBytes, size: Math.max(...ext), height: ext[1], across: Math.hypot(ext[0], ext[2]) / Math.SQRT2,
+      design, levels, gpuBytes, fleet, size: Math.max(...ext), height: ext[1], across: Math.hypot(ext[0], ext[2]) / Math.SQRT2,
       color: packColor(design.albedo.map((v) => Math.pow(v, 1 / 2.2)) as [number, number, number]),
     };
   }
 
-  /** Bring every drone up to clock time t (s), drawn relative to the eye (world). `dt`: the frame's (s). */
-  follow(eye: Vec3, t: number, dt: number): void {
+  /**
+   * Bring every drone up to clock time t (s), drawn relative to the eye (world), and the people in drone bodies the
+   * people's view placed (`aloft`). `dt`: the frame's (s).
+   */
+  follow(eye: Vec3, t: number, dt: number, aloft: readonly Aloft[] = []): void {
     const drawn = this.drawn, specks = this.specks;
+    this.near.length = 0;
     if (!drawn || !specks) return;
     this.frameNo++;
-    const cruise = this.habitat.params.life.drones.cruise;
     const byDesign = new Map<string, Drawn>(drawn.map((d) => [`${d.design.role}/${d.design.index}`, d]));
-    const perMetre = pxPerMetre(this.stage, this.camera, this.screen);
+    const bodyOf = (a: Aloft): Drawn => byDesign.get(`person/${a.resident.design}`)!;
+    // Room for everyone of each design here now (more people in one body than ever before: its buffers grow).
+    const wearing = new Map<Drawn, number>();
+    for (const a of aloft) wearing.set(bodyOf(a), (wearing.get(bodyOf(a)) ?? 0) + 1);
+    for (const [d, n] of wearing) this.room(d, d.fleet + n);
+    roomForSpecks(specks, this.ones.length + aloft.length);
+    const frame: Frame = { eye, perMetre: pxPerMetre(this.stage, this.camera, this.screen), specks: 0, written: 0 };
     for (const d of drawn) for (const l of d.levels) l.count = 0;
-    let speckCount = 0, written = 0;
     this.counts = [0, 0, 0];
     this.ones.forEach((one, id) => {
       const due = !one.flier || away(one.at, eye) < EVERY_FRAME || (id + this.frameNo) % FAR_SHARE === 0;
       if (due) this.putDrone(one, flierAt(this.terrain, id, t), one.flier ? dt : 0);
-      const f = one.flier!, d = byDesign.get(`${f.role}/${f.design}`)!;
-      // Its level by its size on screen, with a margin each way so it does not flicker at the line.
-      const px = (d.size * perMetre) / Math.max(1e-3, away(one.at, eye));
-      const level: Level = one.level === 0 ? (px >= NEAR_PX / BACK ? 0 : px >= SPECK_PX ? 1 : 2)
-        : one.level === 1 ? (px >= NEAR_PX ? 0 : px >= SPECK_PX / BACK ? 1 : 2)
-        : px >= NEAR_PX ? 0 : px >= SPECK_PX ? 1 : 2;
-      one.level = level;
-      this.counts[level]++;
-      if (level === 2) {
-        writeSpeck(specks.data, speckCount++ * SPECK_STRIDE, one.low, d.height, [0, 0, 0], POSE.upright, [d.color, d.color, d.color], one.horizon, d.across / (d.height * BODY_WIDTH));
-        written++;
-        return;
-      }
-      const l = d.levels[level], design = d.design, running = f.doing === 'rest' ? 0 : 1;
-      const pitch = f.doing === 'fly' ? PITCH * Math.min(1.2, f.speed / cruise) : 0;
-      writeFlier(l.data, l.count++ * FLIER_STRIDE, {
-        at: toView(eye, one.at), turn: one.turn, pitch, roll: one.roll, running, phase: one.phase,
-        bob: design.bob, body: design.hover, horizon: one.horizon,
-      });
-      written++;
+      this.write(one, byDesign.get(`${one.flier!.role}/${one.flier!.design}`)!, frame, 0);
     });
-    if (written !== this.ones.length) { this.holes += this.ones.length - written; this.holeFrames++; }
+    // The people in drone bodies: every frame, from the people's view's latest word on where they are.
+    const here = new Set<number>();
+    for (const a of aloft) {
+      const d = bodyOf(a), p = a.person, foot = footingOf(this.terrain, p, a.deck, d.height);
+      let one = this.persons.get(a.key);
+      if (!one) this.persons.set(a.key, (one = this.unplaced(hash3i(this.habitat.seed, p.resident, 43, 0))));
+      this.putDrone(one, {
+        id: -1, role: 'person', design: a.resident.design, theta: p.theta, s: p.s, h: foot.h, heading: p.heading,
+        speed: p.moving ? p.speed : 0, climb: 0, doing: p.moving ? 'fly' : 'work',
+      }, one.flier ? dt : 0);
+      const talking = !p.moving && talkerAt(p, t) === p.member;
+      this.write(one, d, frame, talking ? NOD * Math.sin((2 * Math.PI * (t + one.phase)) / NOD_EVERY) : 0);
+      this.near.push(a.key);
+      here.add(a.key);
+    }
+    for (const key of this.persons.keys()) if (!here.has(key)) this.persons.delete(key);
+    const all = this.ones.length + aloft.length;
+    if (frame.written !== all) { this.holes += all - frame.written; this.holeFrames++; }
     for (const d of drawn) for (const l of d.levels) {
       for (const m of [l.body, l.veil]) (m.geometry as InstancedBufferGeometry).instanceCount = l.count;
       sendInstances(l.buffer, l.count, FLIER_STRIDE);
     }
-    drawSpecks(specks, speckCount);
+    drawSpecks(specks, frame.specks);
+  }
+
+  /** A drone not yet placed. */
+  private unplaced(seed: number): One {
+    return { flier: null, at: [0, 0, 0], low: [0, 0, 0], turn: 0, roll: 0, horizon: [OPEN_SKY, OPEN_SKY], litAt: [Infinity, 0, 0], level: 2, phase: 1000 * hashToFloat(seed) };
+  }
+
+  /** Write a placed drone at its level by its size on screen (a margin each way, so it does not flicker at the line); `nod` tips it forward (rad). */
+  private write(one: One, d: Drawn, frame: Frame, nod: number): void {
+    const f = one.flier!, px = (d.size * frame.perMetre) / Math.max(1e-3, away(one.at, frame.eye));
+    const level: Level = one.level === 0 ? (px >= NEAR_PX / BACK ? 0 : px >= SPECK_PX ? 1 : 2)
+      : one.level === 1 ? (px >= NEAR_PX ? 0 : px >= SPECK_PX / BACK ? 1 : 2)
+      : px >= NEAR_PX ? 0 : px >= SPECK_PX ? 1 : 2;
+    one.level = level;
+    this.counts[level]++;
+    frame.written++;
+    if (level === 2) {
+      writeSpeck(this.specks!.data, frame.specks++ * SPECK_STRIDE, one.low, d.height, [0, 0, 0], POSE.upright, [d.color, d.color, d.color], one.horizon, d.across / (d.height * BODY_WIDTH));
+      return;
+    }
+    const l = d.levels[level], design = d.design, running = f.doing === 'rest' ? 0 : 1, cruise = this.habitat.params.life.drones.cruise;
+    const pitch = (f.doing === 'fly' ? PITCH * Math.min(1.2, f.speed / cruise) : 0) + nod;
+    writeFlier(l.data, l.count++ * FLIER_STRIDE, {
+      at: toView(frame.eye, one.at), turn: one.turn, pitch, roll: one.roll, running, phase: one.phase,
+      bob: design.bob, body: design.hover, horizon: one.horizon,
+    });
+  }
+
+  /** Room in both of a design's levels for `need` drones: new instances on the same meshes, so nothing is compiled again. */
+  private room(d: Drawn, need: number): void {
+    for (const l of d.levels) {
+      if (l.data.length >= need * FLIER_STRIDE) continue;
+      l.data = new Float32Array(Math.max(need, (2 * l.data.length) / FLIER_STRIDE) * FLIER_STRIDE);
+      l.buffer = layInstances(l.body.geometry, l.data, FLIER_LAYOUT);
+      layInstances(l.veil.geometry, l.buffer, FLIER_LAYOUT);
+    }
+  }
+
+  /** A drone body's size and colour as the far specks draw it (`design`: which of the bodies people wear), once built. */
+  measured(design: number): { height: number; width: number; bands: [number, number, number] } | null {
+    const d = this.drawn?.find((x) => x.design.role === 'person' && x.design.index === design);
+    return d ? { height: d.height, width: d.across / (d.height * BODY_WIDTH), bands: [d.color, d.color, d.color] } : null;
   }
 
   /** Put a drone where the fleet says it is now: its ground point, its turn eased toward its way, its bank, its light. */
@@ -211,7 +286,7 @@ export class FlierView {
 
   /** Bytes held: the designs on the GPU, the instances and the drones' state on the CPU, the fleet (memory watchdog). */
   bytes(): number {
-    let n = (this.specks?.data.byteLength ?? 0) + this.ones.length * 200 + airBytes(this.terrain);
+    let n = (this.specks?.data.byteLength ?? 0) + (this.ones.length + this.persons.size) * 200 + airBytes(this.terrain);
     for (const d of this.drawn ?? []) { n += d.gpuBytes; for (const l of d.levels) n += l.data.byteLength; }
     return n;
   }
@@ -220,7 +295,7 @@ export class FlierView {
   info(): string {
     if (!this.drawn) return `drones: ${this.disposed ? 'gone' : 'designs being built'}`;
     const [near, coarse, specks] = this.counts;
-    return `drones: ${this.ones.length} (${this.drawn.length} designs, built in ${this.slowest.toFixed(0)} ms) · ${near} near · ${coarse} coarse · ${specks} specks · handover holes ${this.holes}, frames with holes ${this.holeFrames}`;
+    return `drones: ${this.ones.length} and ${this.persons.size} people in drone bodies (${this.drawn.length} designs, built in ${this.slowest.toFixed(0)} ms) · ${near} near · ${coarse} coarse · ${specks} specks · handover holes ${this.holes}, frames with holes ${this.holeFrames}`;
   }
 
   dispose(): void {

@@ -616,20 +616,12 @@
     "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
   },
   {
-    "key": "same name: solarpolis/render/fliers.ts#follow + solarpolis/render/tiled.ts#follow",
-    "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
-  },
-  {
     "key": "same name: solarpolis/render/fliers.ts#follow + solarpolis/render/traffic.ts#follow",
     "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
   },
   {
     "key": "same name: solarpolis/render/fliers.ts#info + solarpolis/render/specks.ts#info",
     "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
-  },
-  {
-    "key": "idiom: [.camera .screen .stage] in solarpolis/render/animals.ts + solarpolis/render/fliers.ts + solarpolis/render/people.ts",
-    "reason": "The views that draw creatures (people, drones, squirrels) name the same things the same way (stage, camera, screen, specks, each one's horizon and litAt, a start promise, a group): their shared steps are seams (ownSpecks, roomForSpecks, drawSpecks, pxPerMetre in render/specks.ts; FigureLoads in render/actors/slots.ts; standAt in render/actors/figure.ts); what is left is each view's own."
   },
   {
     "key": "idiom: [.horizon .litAt .s .terrain .theta] in solarpolis/render/animals.ts + solarpolis/render/fliers.ts + solarpolis/render/people.ts",
@@ -834,6 +826,10 @@
   {
     "key": "idiom: [.mul .sub] in solarpolis/render/hamletSkies.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
     "reason": "TSL arithmetic (mul, sub on nodes) is how every shader writes a formula; each is its own (a hamlet sky's Earth disc, the VAULT's sky screen, the outside sky's discs)."
+  },
+  {
+    "key": "same name: solarpolis/render/animals.ts#start + solarpolis/render/fliers.ts#start",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the animals' view and the drones' view each build and upload their own meshes in start."
   },
   {
     "key": "same name: solarpolis/render/actors/animal.ts#dispose + solarpolis/render/glassDeck.ts#dispose",

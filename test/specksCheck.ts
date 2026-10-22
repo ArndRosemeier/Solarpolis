@@ -1,13 +1,14 @@
 /**
  * The speck list of a habitat at two moments a little apart (the second takes the still people's footing from the
  * first): everyone up on the land, each once, in key order, where the near levels stand them, carried on the way
- * they walk. `sample`: how many people to check of each list (all by default).
+ * they walk; those in drone bodies hovering, their body's size guessed. `sample`: how many people to check of each
+ * list (all by default).
  */
 import assert from 'node:assert/strict';
 import { toWorld } from '../src/blueprint';
 import { landmarkTopAt } from '../src/gen/landmarks';
 import { MEAN_HEIGHT, SPECK_STRIDE } from '../src/gen/standIn';
-import { footingOf, peopleAt, whereIs } from '../src/sim';
+import { footingOf, peopleAt, residentOf, whereIs } from '../src/sim';
 import { specksAt } from '../src/sim/specks';
 import { terrainOf } from './worlds';
 
@@ -22,7 +23,10 @@ export function checkSpecks(name: string, day: number, sample = Infinity): void 
     const every = Math.max(1, Math.floor(list.count / Math.min(sample, list.count)));
     for (let i = 0; i < list.count; i += every) {
       const p = people.find((q) => q.resident === list.resident[i])!;
-      const o = i * SPECK_STRIDE, foot = footingOf(terrain, p, landmarkTopAt(terrain, p.theta, p.s), MEAN_HEIGHT);
+      const o = i * SPECK_STRIDE, drone = list.design[i] >= 0, height = drone ? list.data[o + 3] : MEAN_HEIGHT;
+      const foot = footingOf(terrain, p, landmarkTopAt(terrain, p.theta, p.s), height);
+      assert.equal(list.design[i], residentOf(h, p.resident).design);
+      if (drone) assert.ok(height > 0.1 && height < 1.5 && foot.h > terrain.standAt(p.theta, p.s), `a drone body ${height} m high, hovering`);
       const feet = toWorld(h.profile, { theta: p.theta, s: p.s, h: foot.h });
       for (let k = 0; k < 3; k++) assert.ok(Math.abs(list.data[o + k] - feet[k]) < 0.01, `resident ${p.resident}: feet off by ${list.data[o + k] - feet[k]}`);
       assert.equal(list.data[o + 7], foot.pose);

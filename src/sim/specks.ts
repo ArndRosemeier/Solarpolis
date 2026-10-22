@@ -2,14 +2,17 @@
  * Everyone up on the land at once, as the far view needs them (render/specks.ts): where their feet are in the world,
  * which way and how fast they go (so a list made every few seconds can be carried on between), how they hold
  * themselves, the terrain's horizons where they stand (their light), and their colours as far as their look's seed
- * tells without measuring it. Made in a worker for the whole habitat: some
+ * tells without measuring it (those in drone bodies: their design's size and colours as its spec tells). Made in a worker for the whole habitat: some
  * tens of thousands of people, each about a pixel or less from where the near levels end. Pure.
  */
 import { toWorld, type Vec3 } from '../blueprint';
 import type { Terrain } from '../gen/terrain';
 import { horizonAt } from '../gen/horizon';
 import { landmarkTopAt } from '../gen/landmarks';
-import { MEAN_HEIGHT, POSE, SPECK_STRIDE, guessBands, writeSpeck } from '../gen/standIn';
+import { BODY_WIDTH, MEAN_HEIGHT, POSE, SPECK_STRIDE, guessBands, packColor, writeSpeck } from '../gen/standIn';
+import { designGuess } from '../gen/drone';
+import { kept } from '../gen/kept';
+import type { Habitat } from '../blueprint';
 import { footingOf, postureOf } from './footing';
 import { peopleAt, personKey, residentOf } from './population';
 
@@ -23,6 +26,8 @@ export interface Specks {
   key: Float64Array;
   /** Who they are (`residentOf`): their measured look, where it is known, replaces the guess. */
   resident: Int32Array;
+  /** The drone body they wear (`Resident.design`), or −1: once built, its measure replaces the guess. */
+  design: Int8Array;
 }
 
 /** Horizons are shared by everyone within a cell this wide (m): far off, the light changes slowly over the land. */
@@ -61,11 +66,17 @@ interface Still {
 const KEPT = 250000;
 const stills = new WeakMap<Terrain, Still>();
 
+/** The drone bodies residents wear as their specks guess them: height, width (as `writeSpeck` takes it) and colour. */
+const bodiesOf = kept((h: Habitat) => Array.from({ length: h.params.life.drones.bodies }, (_, k) => {
+  const g = designGuess(h, 'person', k);
+  return { height: g.height, width: g.across / (g.height * BODY_WIDTH), color: packColor(g.albedo.map((v) => Math.pow(v, 1 / 2.2)) as [number, number, number]) };
+}));
+
 /** Everyone up on the land at clock time t (s). */
 export function specksAt(terrain: Terrain, t: number): Specks {
   const h = terrain.habitat, { profile } = h, people = peopleAt(h, t, undefined, terrain), n = people.length;
   const keys = people.map(personKey), order = Array.from(people.keys()).sort((a, b) => keys[a] - keys[b]);
-  const out: Specks = { t, count: n, data: new Float32Array(n * SPECK_STRIDE), key: new Float64Array(n), resident: new Int32Array(n) };
+  const out: Specks = { t, count: n, data: new Float32Array(n * SPECK_STRIDE), key: new Float64Array(n), resident: new Int32Array(n), design: new Int8Array(n) };
   const before = stills.get(terrain), still = order.filter((at) => !people[at].moving).length;
   const next: Still | null = still <= KEPT ? { key: new Float64Array(still), theta: new Float64Array(still), s: new Float64Array(still), h: new Float32Array(still), swim: new Uint8Array(still), horizon: new Float32Array(still * 2) } : null;
   let j = 0, kept = 0;
@@ -81,7 +92,8 @@ export function specksAt(terrain: Terrain, t: number): Specks {
         horizon = [before.horizon[j * 2], before.horizon[j * 2 + 1]];
       }
     }
-    foot ??= footingOf(terrain, p, landmarkTopAt(terrain, p.theta, p.s), MEAN_HEIGHT);
+    const who = residentOf(h, p.resident), body = who.design >= 0 ? bodiesOf(h)[who.design] : null;
+    foot ??= footingOf(terrain, p, landmarkTopAt(terrain, p.theta, p.s), body?.height ?? MEAN_HEIGHT);
     horizon ??= horizonOf(terrain, p.theta, p.s);
     if (!p.moving && next) {
       next.key[kept] = key; next.theta[kept] = p.theta; next.s[kept] = p.s; next.h[kept] = foot.h; next.swim[kept] = foot.swim ? 1 : 0;
@@ -98,10 +110,11 @@ export function specksAt(terrain: Terrain, t: number): Specks {
       const c = Math.cos(p.heading) * p.speed, sn = Math.sin(p.heading) * p.speed;
       drift = [along[0] * c + around[0] * sn, along[1] * c + around[1] * sn, along[2] * c + around[2] * sn];
     }
-    const who = residentOf(h, p.resident);
-    writeSpeck(out.data, i * SPECK_STRIDE, feet, MEAN_HEIGHT, drift, foot.pose, guessBands(who.look, who.body === 'shell'), horizon, 1);
+    if (body) writeSpeck(out.data, i * SPECK_STRIDE, feet, body.height, drift, POSE.upright, [body.color, body.color, body.color], horizon, body.width);
+    else writeSpeck(out.data, i * SPECK_STRIDE, feet, MEAN_HEIGHT, drift, foot.pose, guessBands(who.look, who.body === 'shell'), horizon, 1);
     out.key[i] = key;
     out.resident[i] = p.resident;
+    out.design[i] = who.design;
   });
   if (next) stills.set(terrain, next); else stills.delete(terrain);
   return out;

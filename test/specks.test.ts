@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MATRIX } from '../src/blueprint';
-import { DYES, POSE, SLOT, SPECK_ATTRIBUTES, SPECK_STRIDE, guessBands, hexColor, packColor, speckBands, unpackColor, writeSpeck } from '../src/gen/standIn';
-import { SWIM_DEPTH, SWIM_WATER, footingOf, postureOf, type Person } from '../src/sim';
+import { DYES, MEAN_HEIGHT, POSE, SLOT, SPECK_ATTRIBUTES, SPECK_STRIDE, guessBands, hexColor, packColor, speckBands, unpackColor, writeSpeck } from '../src/gen/standIn';
+import { SWIM_DEPTH, SWIM_WATER, footingOf, postureOf, residentOf, type Person } from '../src/sim';
+import { derive, REFERENCE } from '../src/blueprint';
 import { terrainOf } from './worlds';
 import { checkSpecks } from './specksCheck';
 
@@ -64,7 +65,34 @@ for (const { name } of MATRIX) {
     const bridge = footingOf(terrain, at(wet), surface + 1, 1.8);
     assert.ok(!bridge.swim && bridge.h === surface + 1, 'on a deck over the water, not in it');
   });
+
+  test(`footing (${name}): someone in a drone body hovers at the eyes of those they are with, over land or water`, () => {
+    const terrain = terrainOf(name), h = terrain.habitat;
+    let i = 0;
+    while (residentOf(h, i).body !== 'drone') i++;
+    const body = 0.5, base: Person = { resident: i, theta: 0, s: h.profile.floorStart + 0.3 * (h.profile.floorEnd - h.profile.floorStart), heading: 0, moving: false, speed: 0, activity: 'meet', court: 0, outing: 0, member: 0, size: 1 };
+    const middle = (p: Person, deck: number | null = null): number => footingOf(terrain, p, deck, body).h + body / 2;
+    const ground = terrain.standAt(base.theta, base.s), standing = middle(base) - ground;
+    assert.ok(Math.abs(standing - 0.93 * MEAN_HEIGHT) < 1e-9, `at a standing person's eyes: ${standing.toFixed(2)} m`);
+    assert.ok(middle({ ...base, activity: 'bench' }) - ground < standing && middle({ ...base, activity: 'picnic' }) - ground < middle({ ...base, activity: 'bench' }) - ground, 'lower beside those sitting, lower still beside those lying');
+    assert.equal(middle({ ...base, moving: true, speed: 1 }) - ground, standing, 'flying along at the height of the faces');
+    assert.equal(footingOf(terrain, base, null, body).swim, false);
+    assert.ok(Math.abs(middle(base, ground + 3) - (ground + 3 + standing)) < 1e-9, 'over a deck, from the deck');
+  });
 }
+
+test('residents: a share wears drone bodies, one of the bodies each; the shells stay as they were', () => {
+  const h = derive(REFERENCE), life = REFERENCE.life, n = 20000, seen = new Set<number>();
+  let drones = 0, shells = 0;
+  for (let i = 0; i < n; i++) {
+    const r = residentOf(h, i);
+    if (r.body === 'drone') { drones++; seen.add(r.design); assert.ok(Number.isInteger(r.design) && r.design >= 0 && r.design < life.drones.bodies); } else assert.equal(r.design, -1);
+    if (r.body === 'shell') shells++;
+  }
+  assert.ok(Math.abs(drones / n - life.drones.persons) < 0.01, `${drones} of ${n}`);
+  assert.ok(Math.abs(shells / n - life.shells) < 0.01, `${shells} shells of ${n}`);
+  assert.equal(seen.size, life.drones.bodies, 'every body is worn');
+});
 
 test('specks (small): everyone up on the land, in key order, standing where the near levels stand them', () => {
   checkSpecks('small', MATRIX.find((m) => m.name === 'small')!.params.day.length);
