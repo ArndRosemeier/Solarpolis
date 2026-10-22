@@ -44,8 +44,8 @@ export const REFERENCE: HabitatParams = {
   population: 300000,
   // About one in ten residents up on the land on a fine afternoon, for two and a half hours; most keep a rhythm. Half
   // the parties are one person, a third two, a few up to six (so about three in ten people come alone); a court is a
-  // stop of twenty minutes.
-  life: { outings: 0.35, stay: 9000, pause: 1200, parties: [0.5, 0.33, 0.09, 0.05, 0.02, 0.01], regulars: 0.6, sunwalk: 0.03, night: 0.04, shells: 0.15, minds: 0.3, walk: 1.3, reach: 1500,
+  // stop of half an hour.
+  life: { outings: 0.35, stay: 9000, pause: 1800, parties: [0.5, 0.33, 0.09, 0.05, 0.02, 0.01], regulars: 0.6, sunwalk: 0.03, night: 0.04, shells: 0.15, minds: 0.3, walk: 1.3, reach: 1500,
     drones: { couriers: 1, tenders: 1, surveyors: 2, lifters: 6, gliders: 0.4, guardians: 0.2, cruise: 12, lane: 35, round: 1200, designs: 2 },
     animals: { squirrels: 8, range: 25, out: 0.7, deer: 7, herd: 8, roam: 400 } },
   age: 200,

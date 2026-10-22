@@ -37,7 +37,7 @@ export const STYLE_ACTIVITY: Readonly<Record<DistrictStyle, Activity>> = {
 export type VenueKind = 'court' | 'green' | 'commons' | 'stroll' | 'shore' | 'reserve' | 'landmark';
 
 /** How strongly each kind of place draws people from its court. */
-const PULL = { court: 0.6, green: 1.5, commons: 1.5, stroll: 1, shore: 1.2, reserve: 0.4 } as const;
+const PULL = { court: 2, green: 1.5, commons: 1.5, stroll: 1, shore: 1.2, reserve: 0.4 } as const;
 /** The green: its middle this share of the entrance spacing along the court's way out, its spread this share. */
 const GREEN = { along: 0.15, spread: 0.1 };
 

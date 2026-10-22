@@ -5,7 +5,7 @@
  */
 import { nearestFloor, nearestWood, type Ecology, type Found } from './gen/ecology';
 import { nearestOnPath } from './gen/paths';
-import { busiestNear, deerAt, fleetOf, flierAt, floorGap, herdsNear } from './sim';
+import { busiestNear, deerAt, fleetOf, flierAt, floorGap, herdsNear, peopleAt, personKey, venuesOf, type Person } from './sim';
 import { nearestPlace, vineFaceFoot } from './gen/places';
 import { besideRiver, nearestSample, type River } from './gen/rivers';
 import './app/style.css';
@@ -28,7 +28,7 @@ import { daisOf } from './gen/grownHall';
 import type { Terrain } from './gen/terrain';
 import { floorAt, floorPoint, outOfPlace, placeAt, type FloorFrame } from './gen/shapes';
 import { crossingsOf, type Crossing, type CrossingKind } from './gen/crossings';
-import { entrancesOf, landformOf, planOf } from './gen/plan';
+import { landformOf, planOf } from './gen/plan';
 import { underOf, type Hamlet } from './gen/under';
 import { underLiftOf } from './gen/underMesh';
 import { pavilionPlan } from './gen/pavilion';
@@ -234,13 +234,36 @@ toPlace('Before the nearest crowd', 12, (eco, t, s) => {
   const d = b.theta - t, dx = (d - 2 * Math.PI * Math.round(d / (2 * Math.PI))) * h.radius, dy = b.s - s, l = Math.hypot(dx, dy) || 1;
   return { theta: b.theta, s: b.s, way: [dx / l, dy / l] };
 });
-/** In the nearest entrance court, 12 m from its light well, facing it. */
-toPlace('In the nearest court', 12, (eco, t, s) => {
-  const h = eco.terrain.habitat, r = h.radius;
-  const c = entrancesOf(planOf(h)).sort((a, b) => floorGap(r, t, s, a.theta, a.s) - floorGap(r, t, s, b.theta, b.s))[0];
+/** In the busiest entrance court within 3 km now (most people meeting or sitting in it), 12 m from its light well, facing it. */
+toPlace('In the busiest court nearby', 12, (eco, t, s) => {
+  const h = eco.terrain.habitat, r = h.radius, v = view();
+  if (!v) return null;
+  const count = new Map<number, number>();
+  for (const p of peopleAt(h, v.time, { theta: t, s, radius: 3000 })) if (p.activity === 'meet' || p.activity === 'bench') count.set(p.court, (count.get(p.court) ?? 0) + 1);
+  const best = [...count].sort((a, b) => b[1] - a[1])[0], c = best && venuesOf(h).courts[best[0]];
   if (!c) return null;
   const d = c.theta - t, dx = (d - 2 * Math.PI * Math.round(d / (2 * Math.PI))) * r, dy = c.s - s, l = Math.hypot(dx, dy) || 1;
   return { theta: c.theta, s: c.s, way: [dx / l, dy / l] };
+});
+/** 5 m from the nearest party of three or more standing in a ring to talk, facing its middle. */
+toPlace('Beside the nearest talking ring', 5, (eco, t, s) => {
+  const h = eco.terrain.habitat, r = h.radius, v = view();
+  if (!v) return null;
+  const rings = new Map<number, Person[]>();
+  for (const p of peopleAt(h, v.time, { theta: t, s, radius: 1500 })) {
+    if (p.moving || p.size < 3 || (p.activity !== 'meet' && p.activity !== 'gather')) continue;
+    const key = personKey({ court: p.court, outing: p.outing - p.member });
+    rings.set(key, [...(rings.get(key) ?? []), p]);
+  }
+  let best: { theta: number; s: number } | null = null, gap = Infinity;
+  for (const ring of rings.values()) {
+    const m = { theta: ring.reduce((a, p) => a + p.theta, 0) / ring.length, s: ring.reduce((a, p) => a + p.s, 0) / ring.length };
+    const g = floorGap(r, t, s, m.theta, m.s);
+    if (g < gap) { gap = g; best = m; }
+  }
+  if (!best) return null;
+  const d = best.theta - t, dx = (d - 2 * Math.PI * Math.round(d / (2 * Math.PI))) * r, dy = best.s - s, l = Math.hypot(dx, dy) || 1;
+  return { theta: best.theta, s: best.s, way: [dx / l, dy / l] };
 });
 /** Before the nearest herd of deer (within a few km, or else in the wild reserve), approached from where the player stands. */
 toPlace('Before the nearest herd', 60, (eco, t, s) => {
