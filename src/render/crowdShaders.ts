@@ -5,7 +5,7 @@
  * arms against the legs) or folded into a pose (kneeling, lying on the back), scaled to the person and stood up along
  * their up (toward the axis), like a plant (`plantFrame`).
  */
-import { attribute, cameraProjectionMatrix, cameraViewMatrix, cos, dot, float, floor, length, max, mix, mod, normalize, pow, screenSize, select, sin, smoothstep, uniform, varying, vec2, vec3, vec4 } from 'three/tsl';
+import { attribute, cameraProjectionMatrix, cameraViewMatrix, cos, dot, float, floor, length, max, min, mix, mod, normalize, pow, screenSize, select, sin, smoothstep, uniform, varying, vec2, vec3, vec4 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { BODY_DEPTH, BODY_FILL, BODY_WIDTH, JOINT, LIMB, NECK, POSE, SLOT, SPECK_SHOWN, WAIST } from '../gen/standIn';
 
@@ -98,6 +98,13 @@ export const standInHorizon = (): Node<'vec2'> => vec2(attribute<'vec4'>('light'
 /** Seconds since the far specks' list was made (render/specks.ts sets it each frame): walkers are carried on by it. */
 export const speckClock = uniform(0);
 
+/**
+ * How specks are shown (debug menu): 0 as they look, 1 marked (bright, at least `MARKED_PX` across, opaque) so a
+ * picture shows where everyone is, 2 hidden.
+ */
+export const speckMark = uniform(0);
+const MARKED_PX = 4;
+
 /** The smallest a speck is drawn across (px): below it, it is drawn this big and as faint as it is small. */
 const SPECK_MIN_PX = 1.5;
 /**
@@ -132,20 +139,22 @@ export function speckLook(eye: V3): { position: V3; clip: V4; color: V3; opacity
   // Pixels per metre at the body: the projection's scale over the depth.
   const scale = cameraProjectionMatrix.mul(vec4(0, 1, 0, 0)).y.mul(screenSize.y).mul(0.5).div(clip.w);
   const pxTall = max(riseLen.mul(2), H.mul(BODY_DEPTH).mul(scale)), pxWide = wide.mul(scale);
-  const qTall = max(pxTall, SPECK_MIN_PX), qWide = max(pxWide, SPECK_MIN_PX);
+  const least = mix(float(SPECK_MIN_PX), float(MARKED_PX), min(speckMark, 1));
+  const qTall = max(pxTall, least), qWide = max(pxWide, least);
   const offset = along.mul(corner.y.mul(qTall).mul(0.5)).add(across.mul(corner.x.mul(qWide).mul(0.5)));
   const moved = clip.xy.add(offset.div(screenSize).mul(2).mul(clip.w));
   // Not shown (a nearer level draws them): the quad is put outside the view, so it is not drawn at all.
   const shifted = select(shown.greaterThan(0.5), vec4(moved.x, moved.y, clip.z, clip.w), vec4(0, 0, 2, 1));
   const faded = float(1).sub(smoothstep(SPECK_FADE_PX[0], SPECK_FADE_PX[1], pxTall));
-  const opacity = varying(pxTall.mul(pxWide).mul(BODY_FILL).div(qTall.mul(qWide)).mul(faded));
+  const cover = select(speckMark.greaterThan(1.5), float(0), select(speckMark.greaterThan(0.5), float(1), pxTall.mul(pxWide).mul(BODY_FILL).div(qTall.mul(qWide))));
+  const opacity = varying(cover.mul(faded));
   // Colours: the bands up the body where it is a few pixels tall, their mean where it is less.
   const head = unpack(tint.x), shirt = unpack(tint.y), legs = unpack(tint.z);
   const mean = head.mul(1 - NECK).add(shirt.mul(NECK - WAIST)).add(legs.mul(WAIST));
   const f = varying(corner.y.mul(0.5).add(0.5));
   const band = select(f.greaterThan(NECK), head, select(f.greaterThan(WAIST), shirt, legs));
   const banded = varying(smoothstep(2, 4, pxTall).mul(float(1).sub(lie)));
-  const color = mix(varying(mean), band, banded);
+  const color = mix(mix(varying(mean), band, banded), vec3(1, 0, 1), min(speckMark, 1));
   // Lit facing the eye, as the stand-in's front is.
   const toEye = normalize(centre.negate()), normal = normalize(toEye.sub(up.mul(dot(toEye, up))));
   return { position: centre, clip: shifted, color, opacity, horizon: varying(sky.xy), normal: varying(normal) };
