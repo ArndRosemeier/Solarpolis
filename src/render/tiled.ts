@@ -22,7 +22,7 @@ import { mappedBytes, type MappedArrays, type Place } from '../gen/shapes';
 import type { Mat3 } from '../space';
 import type { WorkerPool } from '../workers/pool';
 import type { GenAnswer, GenRequest, TiledPart } from '../workers/gen.worker';
-import { arraysGeometry, freeMesh, posedMesh, setPose, uploadStatic } from './geometry';
+import { axesOf, builtGeometry, freeMesh, posedMesh, setPose, uploadStatic } from './geometry';
 import { BUILT, VAULT, type Kind } from './materials';
 import { StreamCache, type Streamed } from './streamed';
 
@@ -62,8 +62,6 @@ const KEEP = 600;
 const KEEP_BYTES = 96 * 1024 * 1024;
 const IN_FLIGHT = 8;
 
-const axesOf = (p: Place): Mat3 => [p.ex[0], p.ey[0], p.ez[0], p.ex[1], p.ey[1], p.ez[1], p.ex[2], p.ey[2], p.ez[2]];
-
 export class TiledView {
   readonly group = new Group();
   private readonly cache: StreamCache<Entry>;
@@ -99,12 +97,19 @@ export class TiledView {
     return this.source.grid ? `${name}: ${this.drawn.length} tiles drawn, ${this.cache.built.size} kept (${(this.cache.bytes / 1048576).toFixed(1)} MB), ${this.cache.building} building` : `${name}: none`;
   }
 
-  /** Each frame: ask for the tiles the eye wants, and draw the finest built cover, the roots where nothing finer is. */
-  follow(eye: Vec3): void {
+  /** Whether the last frame's tiles covered all the eye wanted (an `inside` source draws nothing until they do). */
+  complete = false;
+
+  /**
+   * Each frame: ask for the tiles the eye wants (or a point `want` will soon be at: a lift's floor below, while the
+   * cabin waits for them), and draw the finest built cover, the roots where nothing finer is.
+   */
+  follow(eye: Vec3, want: Vec3 = eye): void {
     if (!this.source.grid) return;
     this.cache.frame();
-    const wanted = this.source.tilesFor(eye);
+    const wanted = this.source.tilesFor(want);
     const cover = coverOf(wanted, (id) => !!this.cache.get(id));
+    this.complete = cover.complete;
     for (const e of this.drawn) if (e.mesh) e.mesh.visible = false;
     this.drawn = [];
     const drawTile = (id: string): void => {
@@ -144,7 +149,7 @@ export class TiledView {
     const a = t.mesh;
     if (!a.index.length) return { key: t.key, at: t.origin.at, axes: axesOf(t.origin), mesh: null, bytes: 0, lastDrawn: 0 };
     const kind = this.source.kind ?? BUILT;
-    const g = arraysGeometry(a, { uv: [a.uvs, 2], finish: [a.finishes, 1], ...(t.glow ? { glow: [t.glow, 2] as [Float32Array, number] } : {}) });
+    const g = builtGeometry(a, t.glow);
     const mesh = posedMesh(g, kind.material, `${this.source.name} ${id}`);
     mesh.castShadow = kind.shadow.cast;
     await uploadStatic(this.stage, mesh);

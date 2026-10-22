@@ -6,7 +6,7 @@ import { BufferAttribute, BufferGeometry, InstancedBufferGeometry, InterleavedBu
 import type { Stage } from '@futuremagic/stage';
 import type { Vec3 } from '@futuremagic/core';
 import type { Mat3 } from '../space';
-import { Shape } from '../gen/shapes';
+import { Shape, type MappedArrays } from '../gen/shapes';
 
 /** An indexed geometry from named attributes: each one its data and its item size. Absent ones are left out. */
 export function meshGeometry(index: Uint32Array, attributes: Record<string, readonly [Float32Array | Uint8Array, number] | undefined>): BufferGeometry {
@@ -170,6 +170,12 @@ export function posedMesh(geometry: BufferGeometry, material: Material, name: st
   m.matrixAutoUpdate = false;
   return m;
 }
+
+/** The geometry of built things (the BUILT and VAULT kinds): a shape's arrays with its uvs and finishes, and the light baked per vertex (`glow`, VAULT's) if given. */
+export const builtGeometry = (a: MappedArrays, glow?: Float32Array): BufferGeometry => arraysGeometry(a, { uv: [a.uvs, 2], finish: [a.finishes, 1], ...(glow ? { glow: [glow, 2] as const } : {}) });
+
+/** A frame's axes (its x, y, z as the world's) as `setPose` takes them. */
+export const axesOf = (p: { ex: Vec3; ey: Vec3; ez: Vec3 }): Mat3 => [p.ex[0], p.ey[0], p.ez[0], p.ex[1], p.ey[1], p.ez[1], p.ex[2], p.ey[2], p.ez[2]];
 
 /** The one way to pose a mesh: its matrix from axes (columns: its own axes in the scene) and an origin relative to the eye. */
 export function setPose(mesh: Mesh, a: Mat3, o: Vec3): void {

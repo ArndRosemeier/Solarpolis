@@ -46,11 +46,17 @@ async function logPlantLod(page) {
  * Read the debug menu's people line and shader line once and log them as console warnings (report.json): handover
  * holes must stay 0; the shader line says how many shaders the figures built after the warm-up, and the worst.
  */
+/** Click (the left button) the middle of the view, where the eye looks. */
+async function clickMiddle(page) {
+  const box = await page.locator('canvas.view-canvas').first().boundingBox();
+  if (box) await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+}
+
 async function logPeople(page) {
   await page.keyboard.press('Control+Shift+F12');
   const text = await page.locator('.dbg-panel .dbg-info').innerText({ timeout: 3000 }).catch(() => '');
   await page.locator('.dbg-panel .dbg-close').click().catch(() => {});
-  const lines = text.split('\n').filter((l) => l.startsWith('people') || l.startsWith('specks') || l.startsWith('drones') || l.startsWith('animals') || l.startsWith('squirrels') || l.startsWith('deer') || l.startsWith('shaders') || l.startsWith('memory') || l.includes('MB') || l.includes('fps'));
+  const lines = text.split('\n').filter((l) => l.startsWith('people') || l.startsWith('understorey') || l.startsWith('θ') || l.startsWith('specks') || l.startsWith('drones') || l.startsWith('animals') || l.startsWith('squirrels') || l.startsWith('deer') || l.startsWith('shaders') || l.startsWith('memory') || l.includes('MB') || l.includes('fps'));
   await page.evaluate((ls) => { for (const l of ls) console.warn(l); }, lines.length ? lines : ['(no people line)']);
   // Builds after the warm-up that started sooner than twice the last one's time after it (the cap, docs/SHADERS.md):
   // which, and how (a node-sync one was drawn uncompiled).
@@ -122,6 +128,8 @@ export const views = {
   'hut-far': { query: 'view=inside', about: 'the summit hut from a few hundred metres out, small on the Mountain\'s face', settle: 6000, steps: [{ debug: 'Fly: the summit hut from afar' }, { wait: 12000 }] },
   'under-dim': { query: 'view=inside', about: 'below the land, in the Understorey\'s pillar forest under the start: ahead (-ahead), up into the fan vaults (-vaults), then after walking on a few seconds; logs the understorey line', settle: 6000, steps: [{ debug: 'Below: the pillar forest under here' }, { wait: 10000 }, { shot: 'ahead' }, { look: [0, -260] }, { wait: 1500 }, { shot: 'vaults' }, { look: [0, 260] }, { key: 'KeyW', hold: 3000 }, { wait: 3000 }, { run: logPeople }] },
   'under-hamlet': { query: 'view=inside', about: 'below the land under the nearest entrance court, at its wellhead under the light well: up into the oculus (-up), then round the four ways along the bays (-0, -1, -2, -3; a quarter turn is 393 px), one of them toward the court\'s lift cage', settle: 6000, steps: [{ debug: 'Below: under the nearest entrance court' }, { wait: 10000 }, { look: [0, -300] }, { wait: 1500 }, { shot: 'up' }, { look: [0, 300] }, { wait: 800 }, { shot: '0' }, { look: [393, 0] }, { wait: 1200 }, { shot: '1' }, { look: [393, 0] }, { wait: 1200 }, { shot: '2' }, { look: [393, 0] }, { wait: 1200 }, { shot: '3' }, { run: logPeople }] },
+  // The lifts (gen/lifts.ts, render/lift.ts): click a court's portal, ride down, step out, turn to the cabin, ride up.
+  'lift-ride': { query: 'view=inside', about: 'a lift ride: at a court\'s portal doors (-doors), clicked: in the cabin (-in), going down the shaft (-shaft), stepped out below (-below), turned round to the cabin in its cage (-cabin), clicked again: going up (-up), back in the court (-court); logs the position and understorey lines', settle: 6000, steps: [{ debug: 'To a lift: at its doors in an entrance court (click them to ride down)' }, { wait: 9000 }, { shot: 'doors' }, { run: clickMiddle }, { wait: 1200 }, { shot: 'in' }, { wait: 3500 }, { shot: 'shaft' }, { run: logPeople }, { wait: 9000 }, { shot: 'below' }, { look: [786, 0] }, { wait: 1500 }, { shot: 'cabin' }, { run: clickMiddle }, { wait: 3000 }, { shot: 'up' }, { wait: 9000 }, { shot: 'court' }, { run: logPeople }] },
   'court-floor': { query: 'view=inside', about: 'standing on an entrance court\'s paved floor, facing the portal with its bronze lift doors, then turning to the stairs', settle: 6000, steps: [{ debug: 'To an entrance court: on its floor' }, { wait: 9000 }, { shot: 'portal' }, { look: [1800, 0] }, { wait: 1500 }] },
   'court-rim': { query: 'view=inside', about: 'on an entrance court\'s rim walk, looking down into it: wall, stairs, portal, benches', settle: 6000, steps: [{ debug: 'To an entrance court: on its rim walk' }, { wait: 9000 }, { look: [0, 140] }, { wait: 1500 }] },
   'court-over': { query: 'view=inside', about: 'floating over an entrance court, the whole hollow in view', settle: 6000, steps: [{ debug: 'Fly: over an entrance court' }, { wait: 12000 }] },

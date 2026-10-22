@@ -78,6 +78,28 @@ export function dragToLook(canvas: HTMLCanvasElement, drag: (dx: number, dy: num
   });
 }
 
+/**
+ * Left-button (or tap) clicks on the canvas, the pointer free and visible (Arnd, 2026-10-21: the left button clicks
+ * things in the world): `use(x, y)` with the click's place in the canvas (pixels), unless the pointer moved between
+ * press and release (a drag). Over something `usable(x, y)` says can be used, the pointer shows a hand.
+ */
+export function clickToUse(canvas: HTMLCanvasElement, use: (x: number, y: number) => void, usable: (x: number, y: number) => boolean): void {
+  let down: { x: number; y: number; id: number } | null = null;
+  const clicks = (e: PointerEvent): boolean => (e.pointerType === 'touch' ? e.isPrimary : e.button === 0);
+  canvas.addEventListener('pointerdown', (e) => { if (clicks(e)) down = { x: e.offsetX, y: e.offsetY, id: e.pointerId }; });
+  canvas.addEventListener('pointerup', (e) => {
+    const d = down;
+    down = null;
+    if (d && e.pointerId === d.id && Math.hypot(e.offsetX - d.x, e.offsetY - d.y) < CLICK_SLOP) use(e.offsetX, e.offsetY);
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (e.buttons === 0) canvas.style.cursor = usable(e.offsetX, e.offsetY) ? 'pointer' : '';
+  });
+}
+
+/** How far (pixels) the pointer may move between press and release and still click. */
+const CLICK_SLOP = 6;
+
 /** Draw one frame of a Stage: its per-frame work (the compile cap), then the scene through its camera. */
 export function draw(stage: Stage): void {
   stage.frame();

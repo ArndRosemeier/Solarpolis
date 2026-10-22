@@ -30,6 +30,7 @@ import { floorAt, floorPoint, outOfPlace, placeAt, type FloorFrame } from './gen
 import { crossingsOf, type Crossing, type CrossingKind } from './gen/crossings';
 import { landformOf, planOf } from './gen/plan';
 import { underOf, type Hamlet } from './gen/under';
+import { underLiftOf } from './gen/underMesh';
 import { pavilionPlan } from './gen/pavilion';
 import { hutPlan } from './gen/summitHut';
 import { courtLayoutOf, courtWorld, type CourtLayout } from './gen/courts';
@@ -487,6 +488,16 @@ const overCourt = (label: string, out: number, up: number): void => debug.add({
 });
 overCourt('Fly: over an entrance court', 1.5, 0.9);
 overCourt('Fly: entrance courts from afar', 12, 5);
+/** Stand at a lift's doors, facing them (gen/lifts.ts): the court's portal above or its cage below; the lift nearest the floor's middle. */
+const atLift = (label: string, below: boolean): void => debug.add({
+  label, group: 'Go', run: () => {
+    const h = lab.habitat, mid = h ? (h.profile.floorStart + h.profile.floorEnd) / 2 : 0;
+    const f = inView((t) => t.courts.map((c, i) => ({ s: c.s, i })).sort((a, b) => Math.abs(a.s - mid) - Math.abs(b.s - mid)).find((c) => underLiftOf(t, c.i)));
+    f?.v.toLiftDoors(f.x.i, below);
+  },
+});
+atLift('To a lift: at its doors in an entrance court (click them to ride down)', false);
+atLift('Below: at a lift cage (click it to call the cabin, again to ride up)', true);
 /** Of the things built on the floor in a frame (crossings, halls) that `list` gives, the one nearest the walker. */
 function nearestOnFloor<T extends { frame: FloorFrame }>(list: (t: Terrain) => readonly T[]): { v: InteriorView; x: T } | null {
   const at = view()?.walker.at;
