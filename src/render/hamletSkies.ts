@@ -8,7 +8,7 @@
  * VAULT): the day (`day`, 0 night … 1 full day) dims the skies that keep their day in step with the land's; the
  * others keep their own night. Moving parts move with the habitat's clock (`clock`, s).
  */
-import { Fn, If, abs, clamp, cos, dot, exp, float, floor, hash, max, mix, mx_fractal_noise_float, mx_noise_float, normalize, pow, sin, smoothstep, vec2, vec3 } from 'three/tsl';
+import { Fn, If, abs, clamp, cos, dot, exp, float, floor, hash, max, mix, mx_fractal_noise_float, mx_noise_float, mx_worley_noise_vec2, normalize, sin, smoothstep, vec2, vec3 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 
 type F = Node<'float'>;
@@ -32,7 +32,8 @@ function overhead(d: V3, up: V3, along: V3, across: V3): { at: V2; rise: F } {
 
 /** A field of stars over the directions (in the eye's frame, so they keep still), `share` of cells lit. */
 function stars(d: V3, share: number): F {
-  const c = floor(d.mul(STAR_CELLS)), h = hash(c.x.add(c.y.mul(157)).add(c.z.mul(9133)).add(1e5));
+  // Kept positive (a negative cell number would turn every hash on that side of the sky into the same one).
+  const c = floor(d.mul(STAR_CELLS)), h = hash(c.x.add(c.y.mul(157)).add(c.z.mul(9133)).add(STAR_CELLS * (1 + 157 + 9133) + 1));
   const lit = smoothstep(1 - share, 1, h);
   return lit.mul(lit).mul(4);
 }
@@ -59,9 +60,9 @@ function aurora(d: V3, o: { at: V2; rise: F }, clock: F): V3 {
   return night(d, o.rise).add(hue.mul(glow).mul(0.6));
 }
 
-/** The sky from the Moon: black, dense with stars, Earth hanging low over the across side, lit from one side. */
+/** The sky from the Moon: black, dense with stars, Earth hanging high in it, lit from one side. */
 function moon(d: V3, up: V3, along: V3, across: V3, clock: F): V3 {
-  const toward = normalize(up.mul(0.92).add(across.mul(0.3)).add(along.mul(0.2)));
+  const toward = normalize(up.mul(0.99).add(across.mul(0.12)).add(along.mul(0.08)));
   const c = dot(d, toward), r = max(float(1).sub(c), 0).mul(2).sqrt().div(EARTH);
   const disc = float(1).sub(smoothstep(0.96, 1, r));
   // Earth's face: blue sea, white weather, its lit half toward `along`.
@@ -88,12 +89,16 @@ function mars(d: V3, o: { at: V2; rise: F }, up: V3, along: V3, day: F): V3 {
 function canopy(d: V3, o: { at: V2; rise: F }, day: F, clock: F): V3 {
   let out: V3 = mix(vec3(0.85, 0.92, 1), vec3(0.55, 0.72, 0.95), smoothstep(0, 0.7, o.rise));
   let gaps: F = float(1);
-  // From the highest layer down: the light through the leaves greener and dimmer the more layers it has passed.
+  // From the highest layer down: the light through the leaves greener and dimmer the more layers it has passed. Each
+  // layer's crowns are ragged with single leaves at their edges, and dappled where the leaves overlap.
   for (const [scale, shade, k] of [[0.7, 0.45, 1], [1.6, 0.65, 2], [3.4, 0.85, 3]] as const) {
     const sway = vec2(sin(clock.mul(0.4 + k * 0.13)).mul(0.03), cos(clock.mul(0.3 + k * 0.17)).mul(0.03));
-    const n = mx_fractal_noise_float(vec3(o.at.add(sway).mul(scale), k * 4.1), 3, 2, 0.5);
-    const leaf = smoothstep(0.08, 0.2, n);
-    out = mix(out, vec3(0.42, 0.68, 0.16).mul(shade), leaf);
+    const at = o.at.add(sway).mul(scale);
+    const crowns = mx_fractal_noise_float(vec3(at, k * 4.1), 3, 2, 0.5);
+    const leaves = mx_fractal_noise_float(vec3(at.mul(14), k * 7.3), 2, 2, 0.5);
+    const leaf = smoothstep(0.1, 0.16, crowns.add(leaves.mul(0.16)));
+    const dapple = mx_noise_float(vec3(at.mul(30), k * 2.9)).mul(0.25).add(1);
+    out = mix(out, vec3(0.36, 0.62, 0.14).mul(shade).mul(dapple), leaf);
     gaps = gaps.mul(float(1).sub(leaf));
   }
   // By night the leaves are black against the stars in their gaps.
@@ -102,11 +107,16 @@ function canopy(d: V3, o: { at: V2; rise: F }, day: F, clock: F): V3 {
 
 /** Up from under the sea: blue going green, the surface's waves and the light running in bright threads under it. */
 function deep(o: { at: V2; rise: F }, day: F, clock: F): V3 {
-  const water = mix(vec3(0.1, 0.42, 0.48), vec3(0.3, 0.68, 0.85), smoothstep(0.1, 0.9, o.rise));
-  const wave = mx_noise_float(vec3(o.at.mul(1.6), clock.mul(0.15)));
-  const threads = pow(clamp(float(1).sub(abs(wave)), 0, 1), 12).mul(smoothstep(0.2, 0.6, o.rise));
-  const window = smoothstep(0.82, 0.97, o.rise).mul(0.35);
-  const sea = water.add(vec3(0.7, 0.95, 1).mul(threads.mul(0.7).add(window)));
+  const water = mix(vec3(0.02, 0.15, 0.22), vec3(0.06, 0.34, 0.48), smoothstep(0.1, 0.9, o.rise));
+  // The light's threads: the bright net where the waves overhead focus it, two drifting nets over each other.
+  const at = o.at.mul(7);
+  const a = mx_worley_noise_vec2(vec3(at, clock.mul(0.2))), b = mx_worley_noise_vec2(vec3(at.mul(1.9).add(5.3), clock.mul(0.27)));
+  const net = float(1).sub(smoothstep(0, 0.1, a.y.sub(a.x))).add(float(1).sub(smoothstep(0, 0.07, b.y.sub(b.x))).mul(0.6));
+  const threads = net.mul(smoothstep(0.25, 0.7, o.rise));
+  // The surface overhead: the bright window the light comes in by, rippled by the waves.
+  const ripple = mx_fractal_noise_float(vec3(o.at.mul(3), clock.mul(0.2)), 2, 2, 0.5).mul(0.3).add(1);
+  const window = smoothstep(0.8, 0.97, o.rise).mul(0.3).mul(ripple);
+  const sea = water.add(vec3(0.55, 0.85, 0.95).mul(threads.mul(0.5).add(window)));
   // By night only the threads show, faintly, as under a moon.
   return mix(vec3(0.004, 0.012, 0.02).add(vec3(0.02, 0.05, 0.06).mul(threads)), sea, day);
 }
