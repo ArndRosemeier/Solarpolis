@@ -838,5 +838,9 @@
   {
     "key": "idiom: [.add .mul .sub] in solarpolis/render/crowdShaders.ts + solarpolis/render/hamletSkies.ts + solarpolis/render/hullShaders.ts",
     "reason": "TSL arithmetic (add, mul, sub on nodes) is how every shader writes a formula; the formulas are each shader's own (a hamlet sky's halo, a crowd's pose, the hull's panels)."
+  },
+  {
+    "key": "idiom: [.mul .sub] in solarpolis/render/hamletSkies.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
+    "reason": "TSL arithmetic (mul, sub on nodes) is how every shader writes a formula; each is its own (a hamlet sky's Earth disc, the VAULT's sky screen, the outside sky's discs)."
   }
 ]
