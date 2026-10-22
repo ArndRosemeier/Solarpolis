@@ -8,10 +8,14 @@
  * the spine, arms and head (upper). Movement drives both halves; an action or a flinch takes the
  * upper half over the movement, so a figure can swing while it walks. Movement clips cross-fade
  * and keep their stride in step with the ground speed.
+ *
+ * Clips from the CMU motion-capture library (`CMU`, the few the game ships: cmu.json) load when a figure first plays
+ * one, and are turned to face the way the figure faces (the mocap subject faced wherever they stood in the studio).
  */
-import { AnimationClip, LoopOnce, LoopRepeat, type AnimationAction, type AnimationMixer, type KeyframeTrack } from 'three/webgpu';
+import { AnimationClip, LoopOnce, LoopRepeat, Quaternion, Vector3, type AnimationAction, type AnimationMixer, type KeyframeTrack } from 'three/webgpu';
 import type { Clip } from '@actors/core';
 import type { Character } from '@actors/generator';
+import cmu from './cmu.json';
 
 /** What a figure does, as the game says it (the same words the old humans took). */
 export type MoveState =
@@ -82,6 +86,13 @@ function moveClip(move: MoveState, speed: number, combat: boolean, pose?: Pose):
   }
 }
 
+/** CMU clips by the game's name for them: the clip's name in the library and its length (s). */
+export const CMU: Readonly<Record<string, { clip: string; seconds: number }>> = Object.fromEntries(
+  Object.entries(cmu.clips).map(([name, c]) => [name, { clip: `cmu ${c.id}`, seconds: c.seconds }]),
+);
+const LIBRARY = 'cmu';
+const fromLibrary = (clip: string): boolean => clip.startsWith(`${LIBRARY} `);
+
 /** The pack clip for each of the game's action ids (anything else: a jab). */
 const ACTION_CLIPS: Record<string, string> = {
   swing_1h: 'sword slash A',
@@ -99,6 +110,7 @@ const ACTION_CLIPS: Record<string, string> = {
   pickup: 'pick up',
   harvest: 'harvest',
   roll: 'roll',
+  wave: CMU.wave.clip,
 };
 
 /** Actions that move the whole body (the legs too), not just the arms. */
@@ -109,11 +121,11 @@ const MOOD_FACE: Record<Mood, string> = {
   neutral: 'neutral', happy: 'smile', angry: 'angry', sad: 'sad', afraid: 'fear', surprised: 'surprise', disgusted: 'disgust', focused: 'neutral', pain: 'fear',
 };
 
-/** The clips every figure may need, loaded before it is first drawn. */
+/** The clips every figure may need, loaded before it is first drawn (the CMU ones load when first played). */
 export const FIGURE_CLIPS = [...new Set([
   'idle', 'sword idle', 'walk', 'jog', 'sprint', 'crouch', 'crouch walk', 'swim', 'tread water', 'jump', 'jump start', 'jump land', 'climb up', 'sit', 'death',
   'knocked back', 'zombie idle', 'hit to chest', ...Object.values(ACTION_CLIPS),
-])];
+].filter((c) => !fromLibrary(c)))];
 
 /** Bones of the lower half (the rest is the upper half). */
 const LOWER = /^(Root|pelvis|thigh_|calf_|foot_|ball_)/;
@@ -336,6 +348,7 @@ export class FigureAnimator {
     }
     const actor = this.character.actor;
     const three = actor.toThreeClip(clip);
+    if (fromLibrary(name)) this.faceForward(three);
     const half = (keep: (t: KeyframeTrack) => boolean, suffix: string) => new AnimationClip(`${name}/${suffix}`, three.duration, three.tracks.filter(keep));
     const isLower = (t: KeyframeTrack) => LOWER.test(t.name.split('.')[0]);
     const halves: Halves = {
@@ -353,7 +366,35 @@ export class FigureAnimator {
   private fetch(name: string): void {
     if (this.fetching.has(name)) return;
     this.fetching.add(name);
-    this.character.loadClip(name).then((c) => this.loaded.set(name, c), () => {});
+    // A library clip needs the library's index first (loaded once for all figures: they share the pack).
+    const ready = fromLibrary(name) ? this.character.human.runtime.loadClipLibrary(LIBRARY) : Promise.resolve();
+    ready.then(() => this.character.loadClip(name)).then((c) => this.loaded.set(name, c), () => {});
+  }
+
+  /**
+   * Turns a mocap clip about the up axis so that, on the whole, its body faces the way the figure's own clips face (the
+   * idle's first frame): the pelvis carries the turn, and everything above follows it.
+   */
+  private faceForward(three: AnimationClip): void {
+    const idle = this.loaded.get('idle');
+    const pelvis = three.tracks.find((t) => t.name === 'pelvis.quaternion'), at = three.tracks.find((t) => t.name === 'pelvis.position');
+    const ref = idle && this.character.actor.toThreeClip(idle).tracks.find((t) => t.name === 'pelvis.quaternion');
+    if (!pelvis || !ref) return;
+    const root = new Quaternion(), rootTrack = three.tracks.find((t) => t.name === 'Root.quaternion');
+    if (rootTrack) root.fromArray(rootTrack.values, 0);
+    const toIdle = root.clone().multiply(new Quaternion().fromArray(ref.values, 0)).invert();
+    const q = new Quaternion(), f = new Vector3(), sum = new Vector3();
+    const v = pelvis.values;
+    for (let i = 0; i < v.length; i += 4) {
+      q.fromArray(v, i).premultiply(root).multiply(toIdle);
+      sum.add(f.set(0, 0, 1).applyQuaternion(q).setY(0));
+    }
+    if (sum.lengthSq() < 1e-12) return;
+    const turn = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), -Math.atan2(sum.x, sum.z));
+    // In the root's frame: root⁻¹ · turn · root, put before the pelvis's own turn (and its place).
+    const fix = root.clone().invert().multiply(turn).multiply(root);
+    for (let i = 0; i < v.length; i += 4) q.fromArray(v, i).premultiply(fix).toArray(v, i);
+    if (at) for (let i = 0; i < at.values.length; i += 3) f.fromArray(at.values, i).applyQuaternion(fix).toArray(at.values, i);
   }
 
   /** Drops the baked clips; the next frame bakes what it plays for the new body. */

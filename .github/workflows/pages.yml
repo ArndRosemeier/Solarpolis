@@ -42,7 +42,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: .actors-pack
-          key: actors-pack-${{ hashFiles('package-lock.json') }}
+          key: actors-pack-${{ hashFiles('package-lock.json', 'src/render/actors/cmu.json') }}
           restore-keys: actors-pack-
       - run: node tools/actors/pack.mjs
       - run: npx vite build --mode publish

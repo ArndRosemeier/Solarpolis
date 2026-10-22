@@ -2,6 +2,12 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.114 — What each place offers
+
+- What people do now depends on where they are. On a play commons they dance and play catch; at a picnic a pair may get up for a game of catch between eating and lying back; in a grove or at the pavilion a pair may dance a salsa. At a makers' commons some kneel at their work and others stand and saw or split wood. On the trail through the reserve, hikers stop to look out, drink and stretch; at the summit people look out and stretch. On a water commons people sunbathe and chat.
+- Pairs who stand and talk often both talk with their hands. In a court, someone standing about now and then waves to someone coming up.
+- These moves are real motion capture (the CMU library), loaded only when someone near you does them.
+
 ## v0.113 — Each district shapes its own ground
 
 - The districts now build their land in their own style, so you can tell who made a place from its shapes: turf pyramids, stepped cones and sunken courts in the stone districts; mesas with sheer cut faces and sharp chevron folds in the makers' districts; terraced domes in the orchards; round downs and long scarps in the herd districts; deep vales in the groves; bowls and stepwells in the water districts; half-pipe valleys, amphitheatres and launch ramps in the play districts; drumlins and rock tors in the let-go districts.

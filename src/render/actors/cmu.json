@@ -1,0 +1,16 @@
+{
+  "about": "The CMU motion-capture clips the game plays (tools/actors/pack.mjs ships only these): by the name the game uses, the clip's number in the CMU library and its length in seconds. Pairs (A, B) were captured together and play in step.",
+  "clips": {
+    "talk with hands A": { "id": "18_08", "seconds": 17.4 },
+    "talk with hands B": { "id": "19_08", "seconds": 17.4 },
+    "salsa A": { "id": "60_01", "seconds": 18.7 },
+    "salsa B": { "id": "61_01", "seconds": 18.7 },
+    "throw and catch A": { "id": "33_01", "seconds": 22.53 },
+    "throw and catch B": { "id": "34_01", "seconds": 22.53 },
+    "stretch": { "id": "42_01", "seconds": 9.47 },
+    "stretching": { "id": "77_21", "seconds": 10.93 },
+    "stretch and yawn": { "id": "111_32", "seconds": 6.23 },
+    "saw": { "id": "62_03", "seconds": 11.5 },
+    "wave": { "id": "141_16", "seconds": 2.5 }
+  }
+}
