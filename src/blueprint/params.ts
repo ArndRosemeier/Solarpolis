@@ -216,6 +216,15 @@ export interface Understorey {
   lanes: number;
   /** Share of the layer under the worked floor (outside the hamlets, galleries and the lake) that is cisterns (0 … 1). */
   cisterns: number;
+  /**
+   * The steepest the layer's floor may climb (rise per run): it follows the land's shape (`relief`), and where the land
+   * is steeper, its ceiling is set deeper (more soil over it) so the floor below stays this gentle.
+   */
+  grade: number;
+  /** The lamps' light on the floor below, as a share of the daylight on the open land at midday (0 … 1). */
+  lamp: number;
+  /** The air below is moist and still: over this many metres it keeps only a quarter of the light through it (m). */
+  mist: number;
 }
 
 /**

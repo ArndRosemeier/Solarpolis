@@ -24,6 +24,7 @@ import { Rng, Noise, angleDiff, deriveSeed, smoothstep } from '@futuremagic/core
 import { cultureOf, type Culture, type DistrictStyle, type FaceKind, type Habitat } from '../blueprint';
 import { kept } from './kept';
 import { fileUnder, floorGrid } from './floorGrid';
+import { baysOf } from './bays';
 
 const TURN = 2 * Math.PI;
 
@@ -451,12 +452,14 @@ export function makePlan(h: Habitat): Plan {
     assigned.add(k.id);
   }
 
-  // Entrances: dart throwing inside each district, kept apart by about the spacing, off the river lines and the lake.
+  // Entrances: dart throwing inside each district, kept apart by about the spacing, off the river lines and the lake,
+  // and as far from the worked floor's ends (the Gate's foot rising at one, the reserve at the other) as from the lake.
   const erng = new Rng(deriveSeed(h.seed, 'plan', 'entrances'));
   const spacing = spec.entranceSpacing;
   const perDistrict = Math.max(1, Math.round((circumference * worked) / districts.length / (spacing * spacing)));
   const nearRiver = (theta: number, s: number): boolean => rivers.some((r) => Math.abs(wrap(theta - routeOf(r, s))) * R < riverWidth * (3 + r.meander));
-  const placed: Site[] = [];
+  const placed: Site[] = [], bays = baysOf(h);
+  const firstEntrance = reserveEnd + spacing * 0.15, lastEntrance = Math.max(firstEntrance, floorEnd - spacing * 0.15);
   // Entrances filed by a grid a spacing wide (around the axis, along it), so a new one checks only its neighbours.
   const bin = new Map<number, Site[]>(), grid = floorGrid(R, spacing);
   const tooClose = (theta: number, s: number): boolean => {
@@ -469,9 +472,10 @@ export function makePlan(h: Habitat): Plan {
   for (const k of districts) {
     const reach = Math.max(rowLength, colWidth * R);
     for (let n = 0, tries = 0; n < perDistrict && tries < perDistrict * 30; tries++) {
-      const s = k.s + erng.range(-0.75, 0.75) * reach, theta = wrap(k.theta + (erng.range(-0.75, 0.75) * reach) / R);
-      // The cheap checks first; each throw must pass them all.
-      if (fromLake(lake, s) < spacing * 0.15) continue;
+      // Each throw lands on the middle of a bay below (gen/bays.ts), where the vault reaches the deck and the court's
+      // light well can come down through it; the cheap checks first, and each must pass them all where it lands.
+      const at = bays.middleNear(k.theta + (erng.range(-0.75, 0.75) * reach) / R, k.s + erng.range(-0.75, 0.75) * reach), theta = wrap(at.theta), s = at.s;
+      if (fromLake(lake, s) < spacing * 0.15 || s < firstEntrance || s > lastEntrance) continue;
       if (tooClose(theta, s) || districtAt(theta, s) !== k || nearRiver(theta, s)) continue;
       const site: Site = { kind: 'entrance', theta, s, size: spacing * 0.025, facing: erng.range(0, TURN), district: k.id };
       k.entrances.push(site);
@@ -480,8 +484,9 @@ export function makePlan(h: Habitat): Plan {
       n++;
     }
     if (!k.entrances.length) {
-      // Too cramped to keep apart: one entrance at the seed itself.
-      const site: Site = { kind: 'entrance', theta: k.theta, s: k.s, size: spacing * 0.025, facing: 0, district: k.id };
+      // Too cramped to keep apart: one entrance at the seed itself (its bay's middle), kept off the floor's ends.
+      const at = bays.middleNear(k.theta, k.s, firstEntrance, lastEntrance);
+      const site: Site = { kind: 'entrance', theta: wrap(at.theta), s: at.s, size: spacing * 0.025, facing: 0, district: k.id };
       k.entrances.push(site);
       placed.push(site);
     }

@@ -9,7 +9,7 @@
  *   lane     the lanes left open between them, every `under.lanes` bay lines, crossing at the wellhead;
  *   gallery  the indoor streets between hamlets, under the land's Sunwalk and ways;
  *   cistern  pillared water halls: the water the habitat moves to keep its spin balanced, warmed on its way to the radiators;
- *   lake     under the ring lake: a low gallery whose ceiling is the lake's glass bed (or no room at all: `lakeHeight`);
+ *   lake     under the ring lake: a gallery whose ceiling is the lake's glass bed;
  *   works    under the reserve: the habitat mind's own (no hamlets there, as there are no entrances);
  *   dim      the rest: open pillar forest, lit low.
  *
@@ -20,12 +20,14 @@
  * Cisterns are square blocks of bays in rings round the axis, evenly along the worked floor, as many as `under.cisterns` asks.
  *
  * Pure and seeded; nothing is stored per bay: `useAt` works any bay out on its own, so a habitat of millions of bays
- * costs only its hamlets. Distances are over the unrolled floor (θ times the radius, and s). Later steps add what the
+ * costs only its hamlets. Distances are over the unrolled floor (θ times the radius, and s). How high the layer lies
+ * follows the land over it: that is the terrain's (`levelsOf`, gen/underLevels.ts). Later steps add more of what the
  * terrain decides (great rooms under hills, root bells).
  */
 import { angleDiff, deriveSeed, Rng } from '@futuremagic/core';
-import { wrapAngle, type Habitat } from '../blueprint';
+import type { Habitat } from '../blueprint';
 import { kept } from './kept';
+import { baysOf, type Bays } from './bays';
 import { fileUnder, floorGrid } from './floorGrid';
 import { entrancesOf, fromLake, planOf, type Site } from './plan';
 import { pathsOf } from './paths';
@@ -58,29 +60,9 @@ export interface Hamlet {
   swing: readonly { k: number; a: number; phase: number }[];
 }
 
-export interface Under {
+export interface Under extends Bays {
   readonly habitat: Habitat;
-  /** Bays round the axis (a whole number, so the grid closes) and along the floor. */
-  readonly around: number;
-  readonly along: number;
-  /** One bay's angle round the axis, its length along the floor (m), and where the first row begins along the profile. */
-  readonly dTheta: number;
-  readonly bay: number;
-  readonly s0: number;
-  /**
-   * The layer's levels as heights over the profile (negative: under the ground's mean): the ceiling (the deck's
-   * underside), where the vault ribs spring, and the floor.
-   */
-  readonly ceiling: number;
-  readonly springing: number;
-  readonly floor: number;
-  /** Clear height of the gallery under the ring lake's glass bed (m); 0 or less: the lake's basin fills the layer. */
-  readonly lakeHeight: number;
   readonly hamlets: readonly Hamlet[];
-  /** The bay a point of the floor lies over, or null beyond the floor (the endcaps). */
-  bayAt(theta: number, s: number): { i: number; j: number } | null;
-  /** A bay's middle. */
-  centreOf(i: number, j: number): { theta: number; s: number };
   /** What a bay is used for (any i: it wraps round the axis; j outside the floor is 'works'). */
   useAt(i: number, j: number): BayUse;
   /** The hamlet a bay belongs to (the nearest court's, if the bay lies within its edge), or null. */
@@ -108,18 +90,8 @@ export const underOf: (h: Habitat) => Under = kept(makeUnder);
 
 export function makeUnder(h: Habitat): Under {
   const u = h.params.under, plan = planOf(h), paths = pathsOf(h), R = h.radius, { floorStart, floorEnd } = h.profile;
-  const bay = u.bay, around = Math.max(3, Math.round((TURN * R) / bay)), dTheta = TURN / around;
-  const along = Math.max(1, Math.floor((floorEnd - floorStart) / bay));
-  const s0 = floorStart + (floorEnd - floorStart - along * bay) / 2;
-  const ly = h.params.layers, ceiling = -(ly.soilMax + ly.ceilingDeck), floor = ceiling - ly.living;
-  const lake = plan.lake, lakeHeight = lake ? lake.level - lake.depth - ly.ceilingDeck - floor : 0;
-
-  const bayAt = (theta: number, s: number): { i: number; j: number } | null => {
-    const j = Math.floor((s - s0) / bay);
-    if (j < 0 || j >= along) return null;
-    return { i: Math.min(around - 1, Math.floor(wrapAngle(theta) / dTheta)), j };
-  };
-  const centreOf = (i: number, j: number): { theta: number; s: number } => ({ theta: (((i % around) + around) % around + 0.5) * dTheta, s: s0 + (j + 0.5) * bay });
+  const bays = baysOf(h), { bay, around, along, bayAt, centreOf } = bays;
+  const lake = plan.lake;
 
   // The hamlets: each court's people in households, their homes and halls in rings round the wellhead.
   const courts = entrancesOf(plan);
@@ -229,8 +201,7 @@ export function makeUnder(h: Habitat): Under {
   };
 
   return {
-    habitat: h, around, along, dTheta, bay, s0,
-    ceiling, springing: floor + u.spring * ly.living, floor, lakeHeight,
-    hamlets, bayAt, centreOf, useAt, hamletOf,
+    ...bays, habitat: h,
+    hamlets, useAt, hamletOf,
   };
 }

@@ -2,6 +2,39 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.093 — A finer lift cabin, and a shaft you can't see out of
+
+- The lift shaft now rises above the cabin waiting at the top, so you no longer see out over the backs of the vaults before you ride down.
+- The cabin has a timber floor of boards, a timber handrail, and crossed bronze lattices above its panels. Its floor sits a step above the floor below rather than flush with it.
+
+## v0.092 — Renders publish in seconds again
+
+- Behind the scenes: the render PC pushes each result set on top of the last one, so it uploads only the new pictures instead of the whole branch (seconds, not minutes), and a hung network call can no longer stop the watcher for good.
+
+## v0.091 — Riding the lifts down and up
+
+- Click the bronze doors in an entrance court's portal (left button, or a tap) and you step into a lift cabin that rides down its shaft into the Understorey. The pointer turns into a hand over doors you can use.
+- Below, click a lift's open bronze cage: its cabin comes down out of the vault, and you ride it back up to the court.
+- The cabin waits at the top until the pillar forest below is ready, so you never arrive in an empty dark.
+- Debug menu: "To a lift: at its doors" and "Below: at a lift cage" put you in front of one.
+
+## v0.090 — Light wells and lift cages below the courts
+
+- Under every entrance court, its light well now comes down through the vault: look up from the wellhead and the court's glass glows with the day, and a pool of daylight falls on the floor below.
+- Next to it stands the court's lift: an open bronze cage from the floor up into the vault, in the bay its portal above faces. Riding it comes next.
+- The pillar forest reads as lamplight now, warm and dimmer, and the ribs on the vaults are rounded mouldings instead of flickering dark lines.
+- Courts now sit over the middle of a bay below, and a court whose rim a path or river crosses is dug deep enough there too.
+
+## v0.089 — Entrance courts keep off the ends of the land
+
+- No entrance court is dug into the foot of the Gate any more, or set right at the edge of the wild reserve: each keeps about an eighth of the entrance spacing from both. One court in the reference habitat used to sit 6 m from the Gate, its floor 68 m down.
+
+## v0.088 — The pillar forest below the land
+
+- Below the land there is now a place to stand: the Understorey, a forest of stone pillars whose fan vaults hold up the land above, lit by warm lamps under each capital and fading into lamp-lit mist.
+- It follows the land: under a hill its ceiling rises, under a lake it dips, and its floor never gets steeper than a gentle walk.
+- For now the debug menu takes you down ("Below: …") and back up; the lifts in the entrance courts come next.
+
 ## v0.087 — People turn detailed sooner, and come in every skin tone
 
 - Walking up to someone, their detailed figure is there in moments instead of about ten seconds. Shader builds may now use a third of the time, spread evenly, so quick builds no longer wait a fifth of a second each.

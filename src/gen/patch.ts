@@ -3,7 +3,8 @@
  * relative to its own origin (the point on the ground at its centre) so the physics engine's 32-bit floats stay
  * precise (docs/ARCHITECTURE.md, "Where does the camera sit?"). The same heights as the tiles (`terrain.heightAt`),
  * on a grid of (θ, s), so it wraps around the axis and climbs the endcaps like everything else, with the solid parts of
- * the landmarks, the Lift Stair, the entrance courts, the river crossings and the grown halls near it. Pure.
+ * the landmarks, the Lift Stair, the entrance courts, the river crossings and the grown halls near it; below the land,
+ * the Understorey's floors, pillars and end walls too (gen/underMesh.ts). Pure.
  */
 import { toWorld, type Vec3 } from '../blueprint';
 import type { Terrain } from './terrain';
@@ -14,6 +15,7 @@ import { buildStairSolid } from './liftStairMesh';
 import { courtSites } from './courts';
 import { crossingSites } from './crossings';
 import { hallSites } from './grownHall';
+import { underFloorAt, underSolid } from './underMesh';
 import { v3sub } from '@futuremagic/core';
 
 export interface GroundPatch {
@@ -23,15 +25,18 @@ export interface GroundPatch {
   origin: Vec3;
   /** Side length (m) along s and around. */
   size: number;
+  /** Whether it is the ground below the land (the Understorey's floor, its middle there), not the land's. */
+  below: boolean;
   positions: Float32Array;
   index: Uint32Array;
 }
 
-/** A patch `size` metres across centred on (θ, s), with cells of about `cell` metres. */
-export function buildPatch(terrain: Terrain, theta: number, s: number, size: number, cell: number): GroundPatch {
+/** A patch `size` metres across centred on (θ, s), with cells of about `cell` metres; `below`: with the Understorey's solids. */
+export function buildPatch(terrain: Terrain, theta: number, s: number, size: number, cell: number, below = false): GroundPatch {
   const { profile } = terrain.habitat;
   const n = Math.max(2, Math.round(size / cell)), row = n + 1;
-  const origin = toWorld(profile, { theta, s, h: terrain.heightAt(theta, s) });
+  // Below the land, the patch's middle is on the Understorey's floor, where the player is.
+  const origin = toWorld(profile, { theta, s, h: below ? underFloorAt(terrain, theta, s) : terrain.heightAt(theta, s) });
   const positions = new Float32Array(row * row * 3);
   for (let j = 0; j <= n; j++) {
     const sj = Math.min(profile.length, Math.max(0, s + (j / n - 0.5) * size));
@@ -51,8 +56,8 @@ export function buildPatch(terrain: Terrain, theta: number, s: number, size: num
     index[k++] = a; index[k++] = d; index[k++] = b; index[k++] = b; index[k++] = d; index[k++] = e;
   }
   // The landmarks' and the Lift Stair's solid parts follow the ground's triangles, in the same frame.
-  const parts = [{ positions, index }, landmarkSolids(terrain, origin, size), buildStairSolid(terrain.habitat, origin, size * 0.75), siteSolidsNear(terrain, origin, size)].filter((a): a is { positions: Float32Array; index: Uint32Array } => !!a && a.index.length > 0);
-  if (parts.length === 1) return { theta, s, origin, size, positions, index };
+  const parts = [{ positions, index }, landmarkSolids(terrain, origin, size), buildStairSolid(terrain.habitat, origin, size * 0.75), siteSolidsNear(terrain, origin, size), below ? underSolid(terrain, origin, size) : null].filter((a): a is { positions: Float32Array; index: Uint32Array } => !!a && a.index.length > 0);
+  if (parts.length === 1) return { theta, s, origin, size, below, positions, index };
   const all = new Float32Array(parts.reduce((n, a) => n + a.positions.length, 0)), idx = new Uint32Array(parts.reduce((n, a) => n + a.index.length, 0));
   let vertices = 0, at = 0;
   for (const a of parts) {
@@ -61,7 +66,7 @@ export function buildPatch(terrain: Terrain, theta: number, s: number, size: num
     vertices += a.positions.length / 3;
     at += a.index.length;
   }
-  return { theta, s, origin, size, positions: all, index: idx };
+  return { theta, s, origin, size, below, positions: all, index: idx };
 }
 
 /**

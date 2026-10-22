@@ -27,6 +27,7 @@ import { courtSites } from '../gen/courts';
 import { crossingSites } from '../gen/crossings';
 import { hallSites } from '../gen/grownHall';
 import type { SiteTile } from '../gen/siteTiles';
+import { buildUnderTile, type UnderTile } from '../gen/underMesh';
 import { specksAt, type Specks } from '../sim/specks';
 import type { Role } from '../sim/air';
 import { droneDesign, type DroneDesign } from '../gen/drone';
@@ -35,11 +36,12 @@ import { herdsNear, type Herd } from '../sim/herds';
 import { coatsOf, type CoatAsk, type Coats } from '../gen/coat';
 
 /** The built things that stream in tiles. */
-export type TiledPart = 'stair' | 'courts' | 'crossings' | 'halls';
+export type TiledPart = 'stair' | 'courts' | 'crossings' | 'halls' | 'under';
 
 export type GenRequest =
   | { kind: 'tile'; params: HabitatParams; key: TileKey }
-  | { kind: 'patch'; params: HabitatParams; theta: number; s: number; size: number; cell: number }
+  /** The ground for the physics around (θ, s); `below`: the Understorey's floor and pillars there as well. */
+  | { kind: 'patch'; params: HabitatParams; theta: number; s: number; size: number; cell: number; below?: boolean }
   | { kind: 'plants'; params: HabitatParams; key: CellKey }
   | { kind: 'tree'; params: HabitatParams; form: PlantForm; variant: number }
   | { kind: 'tuft'; params: HabitatParams; form: CoverForm; color: Rgb; variant: number }
@@ -49,7 +51,7 @@ export type GenRequest =
   | { kind: 'floor'; params: HabitatParams; layer: number }
   | { kind: 'hull'; params: HabitatParams; part: string; key: DetailKey }
   | { kind: 'landmark'; params: HabitatParams; index: number; level: LandmarkLevel }
-  /** A tile of a built thing that streams in tiles (render/tiled.ts): the Lift Stair, the entrance courts, the river crossings, the grown halls. */
+  /** A tile of a built thing that streams in tiles (render/tiled.ts): the Lift Stair, the entrance courts, the river crossings, the grown halls, the Understorey. */
   | { kind: 'tiled'; part: TiledPart; params: HabitatParams; key: DetailKey }
   /** Everyone up on the land at clock time t, for the far view (render/specks.ts). */
   | { kind: 'specks'; params: HabitatParams; t: number }
@@ -73,7 +75,7 @@ export type GenAnswer =
   | { kind: 'floor'; layer: number; albedo: Uint8Array; relief: Uint8Array; mean: [number, number, number] }
   | { kind: 'hull'; partTile: PartTile }
   | { kind: 'landmark'; index: number; level: LandmarkLevel; mesh: MappedArrays }
-  | { kind: 'tiled'; part: TiledPart; built: StairTile | SiteTile }
+  | { kind: 'tiled'; part: TiledPart; built: StairTile | SiteTile | UnderTile }
   | { kind: 'specks'; specks: Specks }
   | { kind: 'drone'; design: DroneDesign }
   /** The homes animals live from round a point: squirrels' trees, deer herds' ranges. */
@@ -160,7 +162,7 @@ self.onmessage = (e: MessageEvent<GenRequest>) => {
     }
     const { terrain, ecology, layout, plants } = terrainFor(req.params);
     if (req.kind === 'patch') {
-      post({ kind: 'patch', patch: buildPatch(terrain, req.theta, req.s, req.size, req.cell) });
+      post({ kind: 'patch', patch: buildPatch(terrain, req.theta, req.s, req.size, req.cell, req.below) });
       return;
     }
     if (req.kind === 'landmark') {
@@ -170,7 +172,8 @@ self.onmessage = (e: MessageEvent<GenRequest>) => {
       return;
     }
     if (req.kind === 'tiled') {
-      post({ kind: 'tiled', part: req.part, built: req.part === 'stair' ? buildStairTile(terrain.habitat, req.key) : { courts: courtSites, crossings: crossingSites, halls: hallSites }[req.part].buildTile(terrain, req.key) });
+      const p = req.part;
+      post({ kind: 'tiled', part: p, built: p === 'stair' ? buildStairTile(terrain.habitat, req.key) : p === 'under' ? buildUnderTile(terrain, req.key) : { courts: courtSites, crossings: crossingSites, halls: hallSites }[p].buildTile(terrain, req.key) });
       return;
     }
     if (req.kind === 'squirrels') {

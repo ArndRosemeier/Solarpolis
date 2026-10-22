@@ -6,21 +6,21 @@
  * Q or C sinks. On foot the physics carries the player (`physics/character.ts`): up is toward the axis, and gravity
  * is the spin's. The player is an Actors human (`render/actors`); V looks at them from behind, V again from their eyes.
  */
-import { Color, CylinderGeometry, Group, Mesh, PerspectiveCamera, Scene, SphereGeometry, type WebGPURenderer } from 'three/webgpu';
+import { Color, CylinderGeometry, Group, Mesh, PerspectiveCamera, Scene, SphereGeometry, Vector3, type WebGPURenderer } from 'three/webgpu';
 import { Stage, createRenderer } from '@futuremagic/stage';
-import { deriveSeed, smoothstep, v3dot, v3madd, v3norm } from '@futuremagic/core';
+import { deriveSeed, smoothstep, v3dot, v3madd, v3norm, v3scale } from '@futuremagic/core';
 import { fromWorld, toView, toWorld, type Habitat, type Vec3 } from '../blueprint';
 import { makeTerrain, type Terrain } from '../gen/terrain';
-import { Walker, type View } from '../world/walker';
+import { EYE_HEIGHT, Walker, type View } from '../world/walker';
 import { Flyer } from '../world/flyer';
 import { PhysicsWorld } from '../physics/world';
 import { HUMAN, type Character } from '../physics/character';
 import { Figure, castAsWorn, type MoveState } from './actors/figure';
 import { playerLook } from './actors/looks';
-import { addLights, key, shineOn, sky } from './lights';
-import { adapt, glareOf, insideExposure, insideRayLuminance, landAlbedo, meterRays, underCrowns, type InsideMeterable } from './exposure';
+import { addLights, dayOverhead, key, shineBelow, shineOn, sky } from './lights';
+import { BELOW_MAKES_UP, adapt, glareOf, insideExposure, insideRayLuminance, landAlbedo, meterRays, underCrowns, type InsideMeterable } from './exposure';
 import { sharedPool } from '../workers/pool';
-import { BALL, CLOUDS_FAR, CLOUDS_NEAR, SUNLINE, air, allKinds, setAir, setEmission, setSunline, standInAttribute, view } from './materials';
+import { BALL, CLOUDS_FAR, CLOUDS_NEAR, MIST_GLOW, SUNLINE, air, allKinds, below, setAir, setBelow, setEmission, setSunline, standInAttribute, view } from './materials';
 import { dayPhase, emissionMean, nearestLit, sunlineEmission, sunlineNorm, EMISSION_SAMPLES } from '../world/sunline';
 import { densityFalloff, seenMid } from '../world/air';
 import { TerrainView, describeLayout } from './terrain';
@@ -29,18 +29,21 @@ import type { Level } from '../gen/scatter';
 import { slopeAt } from '../gen/scatter';
 import { setFloorEye, setRockBeds, setSnow } from './groundShaders';
 import { UNDER_CROWNS, crownsClosed, makeEcology, type Ecology } from '../gen/ecology';
-import { FrameLoop, dragToLook, draw, fitCanvas, moveKeys } from './surface';
+import { FrameLoop, clickToUse, dragToLook, draw, fitCanvas, moveKeys } from './surface';
 import { freeMesh } from './geometry';
 import { cloudSpan, cloudsAt } from '../world/clouds';
 import { setCloudSpan, setCloudState } from './cloudShaders';
 import { LandmarkView } from './landmarks';
-import { TiledView, courtSource, crossingSource, hallSource, stairSource } from './tiled';
+import { TiledView, courtSource, crossingSource, hallSource, stairSource, underSource } from './tiled';
+import { underFloorAt } from '../gen/underMesh';
 import { landmarkTopAt, landmarksOf } from '../gen/landmarks';
 import { snowFieldOf } from '../gen/snow';
 import { PeopleView } from './people';
 import { SpeckView } from './specks';
 import { FlierView } from './fliers';
 import { AnimalView, DEER, SQUIRRELS } from './animals';
+import { CabinView } from './lift';
+import { calledFrom, doorsAbove, doorsBelow, doorsHit, eyeInCabin, liftDoorsNear, outside, type LiftDoors } from '../gen/lifts';
 
 /** Running is this many times the walking speed. */
 const RUN = 8;
@@ -70,6 +73,8 @@ const CHASE_GLIDE = 10;
 const GLARE_COLUMNS = 5, GLARE_ROWS = 4, GLARE_PER_FRAME = 4;
 /** The layer the player's body is drawn on: the shadow map always sees it, the camera only from behind. */
 const BODY_LAYER = 1;
+/** How far (in handrails) one steps out of a lift's doors on arriving (`outside`). */
+const STEP_OUT = 1.5;
 
 export class InteriorView {
   readonly canvas = document.createElement('canvas');
@@ -94,6 +99,16 @@ export class InteriorView {
   private courts: TiledView | null = null;
   private crossings: TiledView | null = null;
   private halls: TiledView | null = null;
+  /** The Understorey's pillar forest, drawn around the eye while it is below the land. */
+  private under: TiledView | null = null;
+  /**
+   * Whether the player is below the land, in the Understorey (gen/under.ts): then they stand on its floor, the land's
+   * things are not drawn (the vaults hide them), and the lamps light them.
+   */
+  private below = false;
+  /** The cabin of the lift last used (gen/lifts.ts), and whether one is being made (a click then waits). */
+  private cabin: CabinView | null = null;
+  private cabinMaking = false;
   /** The people up on the land around the player. */
   private people: PeopleView | null = null;
   /** Everyone up on the land beyond them, as specks. */
@@ -105,7 +120,7 @@ export class InteriorView {
   /** In the air, or null on foot. */
   private flyer: Flyer | null = null;
   private readonly loop = new FrameLoop((dt) => this.frame(dt), (e) => {
-    if (e.code === 'KeyF' && !e.repeat) this.toggleFlying();
+    if (e.code === 'KeyF' && !e.repeat && !this.cabin?.aboard) this.toggleFlying();
     if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) this.jump = true; }
   });
   /** Travel speed multiplier from the debug menu. */
@@ -139,6 +154,7 @@ export class InteriorView {
    * height above the profile). The walker, the flyer and the camera keep to it.
    */
   private readonly standOn = (theta: number, s: number): number => {
+    if (this.below) return underFloorAt(this.terrain, theta, s);
     const g = this.terrain.standAt(theta, s), top = landmarkTopAt(this.terrain, theta, s);
     return top !== null && top > g ? top : g;
   };
@@ -207,7 +223,7 @@ export class InteriorView {
 
   /** Bytes of geometry this view holds (memory watchdog). */
   bytes(): number {
-    return (this.tiles?.bytes() ?? 0) + (this.plants?.bytes() ?? 0) + (this.landmarks?.bytes() ?? 0) + (this.stair?.bytes() ?? 0) + (this.courts?.bytes() ?? 0) + (this.crossings?.bytes() ?? 0) + (this.halls?.bytes() ?? 0);
+    return (this.tiles?.bytes() ?? 0) + (this.plants?.bytes() ?? 0) + (this.landmarks?.bytes() ?? 0) + (this.stair?.bytes() ?? 0) + (this.courts?.bytes() ?? 0) + (this.crossings?.bytes() ?? 0) + (this.halls?.bytes() ?? 0) + (this.under?.bytes() ?? 0) + (this.cabin?.bytes() ?? 0);
   }
 
   /** Give memory back (memory watchdog): drop every cached tile and plant cell not on screen. */
@@ -219,6 +235,7 @@ export class InteriorView {
     this.courts?.shed();
     this.crossings?.shed();
     this.halls?.shed();
+    this.under?.shed();
     this.people?.shed();
   }
 
@@ -226,8 +243,9 @@ export class InteriorView {
   info(): string {
     const a = this.flyer ? fromWorld(this.habitat.profile, ...this.flyer.eye) : this.walker.at;
     const c = this.character, g = this.habitat.gravityAt(Math.hypot(...this.current().eye.slice(0, 2) as [number, number]));
-    const mode = this.flyer ? `flying ${this.flyer.clearance().toFixed(0)} m up`
-      : !c ? 'on foot (waiting for the physics)' : `on foot, ${c.swimming ? 'swimming' : c.grounded ? 'standing' : 'in the air'}, gravity ${(g / 9.81).toFixed(2)} g`;
+    const where = this.below ? 'below the land, ' : '', ride = this.cabin?.ride;
+    const mode = ride?.aboard ? `in a lift, ${ride.waits ? 'waiting for the floor below' : ride.to > ride.from ? 'going up' : 'going down'}` : where + (this.flyer ? `flying ${this.flyer.clearance().toFixed(0)} m up`
+      : !c ? 'on foot (waiting for the physics)' : `on foot, ${c.swimming ? 'swimming' : c.grounded ? 'standing' : 'in the air'}, gravity ${(g / 9.81).toFixed(2)} g`);
     return [
       this.stage.hudLine(),
       `${this.tiles?.info() ?? 'terrain: none'} · ${describeLayout(this.terrain)} · ${this.pool.workers} workers`,
@@ -238,6 +256,7 @@ export class InteriorView {
       this.courts?.info() ?? 'entrance courts: none',
       this.crossings?.info() ?? 'river crossings: none',
       this.halls?.info() ?? 'grown halls: none',
+      this.under?.info() ?? 'understorey: none',
       this.people?.info() ?? 'people: none',
       this.specks?.info() ?? 'specks: none',
       this.drones?.info() ?? 'drones: none',
@@ -329,7 +348,7 @@ export class InteriorView {
     if (!this.physics || this.patchAsked) return;
     this.patchAsked = true;
     const at = fromWorld(this.habitat.profile, ...eye);
-    const answer = await this.pool.job({ kind: 'patch', params: this.habitat.params, theta: at.theta, s: at.s, size: PATCH_SIZE, cell: PATCH_CELL });
+    const answer = await this.pool.job({ kind: 'patch', params: this.habitat.params, theta: at.theta, s: at.s, size: PATCH_SIZE, cell: PATCH_CELL, below: this.below });
     if ('patch' in answer && this.physics) this.physics.setGround(answer.patch);
     this.patchAsked = false;
     this.standUp();
@@ -338,9 +357,11 @@ export class InteriorView {
   /** Give the walker a body once the physics has ground under it (at the start, and after landing). */
   private standUp(): void {
     const p = this.physics;
-    if (!p || this.flyer || this.character) return;
+    if (!p || this.flyer || this.character || this.cabin?.aboard) return;
     const { theta, s } = this.walker.at;
     const feet = toWorld(this.habitat.profile, { theta, s, h: this.standOn(theta, s) + 0.05 });
+    // Not on a patch of the other level (the land's, when below): ask for one of this one, which stands the body up.
+    if (p.groundPatch && p.groundPatch.below !== this.below) { void this.groundFor(feet); return; }
     if (p.offPatch(feet, PATCH_EDGE)) return;
     this.character = p.addCharacter(feet, this.terrain.waterDepth);
   }
@@ -349,7 +370,7 @@ export class InteriorView {
   private simulate(dt: number, eye: Vec3): void {
     const p = this.physics;
     if (!p) return;
-    if (p.needsGround(eye)) void this.groundFor(eye);
+    if (p.needsGround(eye) || (p.groundPatch && p.groundPatch.below !== this.below)) void this.groundFor(eye);
     const c = this.character;
     const o = p.groundPatch?.origin;
     if (c && o && p.offPatch(c.feet(), PATCH_EDGE)) {
@@ -403,6 +424,8 @@ export class InteriorView {
     if (this.courts) { this.scene.remove(this.courts.group); this.courts.dispose(); }
     if (this.crossings) { this.scene.remove(this.crossings.group); this.crossings.dispose(); }
     if (this.halls) { this.scene.remove(this.halls.group); this.halls.dispose(); }
+    if (this.under) { this.scene.remove(this.under.group); this.under.dispose(); }
+    if (this.cabin) { this.scene.remove(this.cabin.group); this.cabin.dispose(); }
     this.people?.dispose();
     this.specks?.dispose();
     this.drones?.dispose();
@@ -417,6 +440,7 @@ export class InteriorView {
     setAir(densityFalloff(h), h.radius, seenMid(h), h.params.air.hazeDistance);
     setRockBeds(h.params.relief.terraceStep, h.radius);
     setSnow(snowFieldOf(h));
+    setBelow(h.params.under.lamp, h.params.under.mist);
     // The sunline: from the wild wall to the port wall along the axis.
     const tube = new CylinderGeometry(h.params.sunlineRadius, h.params.sunlineRadius, h.length, 24, 1, true);
     tube.deleteAttribute('uv'); // the kind's attributes are position and normal (docs/SHADERS.md)
@@ -444,6 +468,10 @@ export class InteriorView {
     this.scene.add(this.crossings.group);
     this.halls = new TiledView(hallSource(this.terrain), h, this.stage, this.pool);
     this.scene.add(this.halls.group);
+    this.under = new TiledView(underSource(this.terrain), h, this.stage, this.pool);
+    this.scene.add(this.under.group);
+    this.cabin = new CabinView(this.terrain, this.stage);
+    this.scene.add(this.cabin.group);
     this.people = new PeopleView(h, this.terrain, this.stage, this.camera, (theta, s) => landmarkTopAt(this.terrain, theta, s));
     this.scene.add(this.people.group);
     this.specks = new SpeckView(h, this.stage, this.pool);
@@ -510,10 +538,23 @@ export class InteriorView {
     this.courts?.follow(v.eye);
     this.crossings?.follow(v.eye);
     this.halls?.follow(v.eye);
+    // In a lift the floor below is wanted all the way (from the shaft the eye is above the vaults, and wants none).
+    const rideFrom = this.cabin?.aboard ? this.cabin.place(0) : null;
+    this.under?.follow(v.eye, rideFrom ? eyeInCabin(this.habitat, rideFrom, EYE_HEIGHT) : v.eye);
+    this.cabin?.poseAt(v.eye);
+    this.showLand(!this.below);
     this.people?.follow(v.eye, this.time, this.frameDt);
     this.specks?.follow(this.time, this.frameDt, this.people?.near ?? [], this.people?.residentsLoaded() ?? null);
     this.drones?.follow(v.eye, this.time, this.frameDt);
     for (const a of this.animals) a.follow(v.eye, this.time, this.frameDt);
+  }
+
+  /**
+   * Draw the land's things or not: below the land the Understorey's vaults hide all of them, so they are left out of
+   * the frame (and the shadow map), and the background is the mist's.
+   */
+  private showLand(on: boolean): void {
+    for (const g of [this.tiles?.group, this.plants?.group, this.landmarks?.group, this.stair?.group, this.courts?.group, this.crossings?.group, this.halls?.group, this.people?.group, this.specks?.group, this.drones?.group, this.sunline, this.clouds, ...this.animals.map((a) => a.group)]) if (g) g.visible = on;
   }
 
   /** Where the eye is now (world). */
@@ -523,7 +564,9 @@ export class InteriorView {
 
   private current(): View {
     if (this.flyer) return this.flyer.view();
-    const v = this.walker.view();
+    const v = this.walker.view(), cabin = this.cabin?.aboard ? this.cabin.place() : null;
+    // In a lift: standing in the cabin, looking round as on foot.
+    if (cabin) return { eye: eyeInCabin(this.habitat, cabin, EYE_HEIGHT), look: v.look, up: cabin.ez };
     if (this.chase < 0.01) return v;
     // From behind and a little above the head, looking the same way; never under the ground.
     const d = this.chase;
@@ -565,9 +608,13 @@ export class InteriorView {
       const raise = this.meterCanopy[3];
       closed = crownsClosed(raise) * (1 - smoothstep(raise * 0.8, raise * 1.2, at.h - ground));
     }
-    const target = insideExposure(underCrowns(closed, air.skyLight.value, UNDER_CROWNS)) * this.glare(eye);
+    // Below the land the lamps' light is all there is: the eyes open up to it, and the background is the lit mist.
+    const target = this.below ? insideExposure(this.habitat.params.under.lamp, BELOW_MAKES_UP) : insideExposure(underCrowns(closed, air.skyLight.value, UNDER_CROWNS)) * this.glare(eye);
     this.exposure = adapt(this.exposure, target, Math.min(this.frameDt, 0.25));
     view.exposure.value = this.exposure;
+    const back = this.scene.background as Color;
+    if (this.below) back.copy(below.tint.value as Color).multiplyScalar((below.lamp.value as number) * MIST_GLOW * this.exposure);
+    else back.copy(air.haze.value as Color);
     key.intensity *= this.exposure;
     sky.intensity *= this.exposure;
   }
@@ -600,7 +647,11 @@ export class InteriorView {
     const f = this.figure, c = this.character;
     // Light and shade around the player (or under the flyer).
     const centre = this.flyer || !c ? eye : v3madd(this.walker.feetAt(), c.up, HUMAN.height / 2);
-    shineOn(this.habitat, this.terrain, this.emission, emissionMean(this.emission), air.skyLight.value, this.norm, centre, eye);
+    if (this.below) {
+      shineBelow(centre, eye, this.habitat.params.under.lamp);
+      below.day.value = dayOverhead(this.habitat, this.terrain, this.emission, emissionMean(this.emission), air.skyLight.value, this.norm, centre);
+    }
+    else shineOn(this.habitat, this.terrain, this.emission, emissionMean(this.emission), air.skyLight.value, this.norm, centre, eye);
     this.adaptEyes(eye);
     if (!f) return;
     // On foot the body is always there and casts its shadow; the camera sees it once it is out of the head (BODY_LAYER).
@@ -620,6 +671,23 @@ export class InteriorView {
    * there once the physics has the ground under it, or it would carry the walker straight back.
    */
   goTo(theta: number, s: number, heading?: number): void {
+    this.below = false;
+    this.stand(theta, s, heading);
+  }
+
+  /** Jump on foot to (θ, s) below the land, onto the Understorey's floor there (debug menu, until the lifts are built). */
+  goBelow(theta: number, s: number, heading?: number): void {
+    this.below = true;
+    this.stand(theta, s, heading);
+  }
+
+  /** Whether the player is below the land. */
+  get isBelow(): boolean {
+    return this.below;
+  }
+
+  private stand(theta: number, s: number, heading?: number): void {
+    if (this.cabin) this.cabin.ride = null;
     this.flyer = null;
     this.physics?.removeCharacter();
     this.character = null;
@@ -652,7 +720,95 @@ export class InteriorView {
     }
   }
 
+  /**
+   * The lift doors (gen/lifts.ts) under a point of the canvas (pixels), near enough to the player to use: on foot, with
+   * no ride under way.
+   */
+  private doorsUnder(x: number, y: number): LiftDoors | null {
+    if (this.flyer || this.cabin?.ride || this.cabinMaking) return null;
+    const doors = liftDoorsNear(this.terrain, this.walker.view().eye, this.below);
+    if (!doors) return null;
+    // The camera sits at the origin: the point unprojected is the ray's direction.
+    this.camera.updateMatrixWorld();
+    const d = new Vector3((2 * x) / (this.canvas.clientWidth || 1) - 1, 1 - (2 * y) / (this.canvas.clientHeight || 1), 0.5).unproject(this.camera).normalize();
+    return doorsHit(doors, this.current().eye, [d.x, d.y, d.z]) ? doors : null;
+  }
+
+  /**
+   * Use a lift's doors: above, step into its cabin and ride down; below, call the cabin down if it is not there (and
+   * board it when it comes, if still at the doors), else step in and ride up.
+   */
+  private async useDoors(doors: LiftDoors): Promise<void> {
+    const cabin = this.cabin;
+    if (!cabin) return;
+    if (cabin.court !== doors.court) {
+      // Another lift's cabin: it waits at the top of its shaft (called from below, it comes down from over the vaults).
+      this.cabinMaking = true;
+      try {
+        await cabin.ofLift(doors.court, doors.below ? calledFrom(this.terrain, doors.court) : 1);
+      } finally {
+        this.cabinMaking = false;
+      }
+      if (this.cabin !== cabin || cabin.court !== doors.court) return;
+    }
+    if (!doors.below) {
+      // Out of sight in its shaft, the cabin is already up at the court for one stepping in.
+      cabin.k = 1;
+      this.board(0);
+    } else if (cabin.k > 1e-3) cabin.setOff(0, false);
+    else this.board(1);
+  }
+
+  /** Step into the lift's cabin, facing its doors, and ride to share `to` of its way (0 below, 1 up at the court). */
+  private board(to: number): void {
+    const cabin = this.cabin, p = cabin?.place();
+    if (!cabin || !p) return;
+    this.flyer = null;
+    this.physics?.removeCharacter();
+    this.character = null;
+    // The lift is below the land from its doors on: the vaults' tiles are wanted, the land's hidden.
+    this.below = true;
+    const at = fromWorld(this.habitat.profile, ...p.at);
+    this.walker.land(at.theta, at.s, p.ex);
+    cabin.setOff(to, true);
+  }
+
+  /** Move the lift's ride on, and at its end step out of the cabin (or, a called cabin come down, board it if still at its doors). */
+  private rideOn(dt: number): void {
+    const cabin = this.cabin, done = cabin?.step(dt, !!this.under?.complete);
+    if (!cabin || !done) return;
+    if (!done.aboard) {
+      if (liftDoorsNear(this.terrain, this.walker.view().eye, true)?.court === cabin.court) this.board(1);
+      return;
+    }
+    const doors = done.to > 0.5 ? doorsAbove(this.terrain, cabin.court) : doorsBelow(this.terrain, cabin.court);
+    if (doors) this.stepOut(doors, true);
+  }
+
+  /** Stand on foot a step out of a lift's doors (on their level), facing away from them or toward them. */
+  private stepOut(doors: LiftDoors, away: boolean): void {
+    if (this.cabin) this.cabin.ride = null;
+    this.flyer = null;
+    this.physics?.removeCharacter();
+    this.character = null;
+    const o = outside(this.habitat, doors, STEP_OUT);
+    this.below = doors.below;
+    this.walker.land(o.theta, o.s, away ? doors.out : v3scale(doors.out, -1));
+    this.standUp();
+  }
+
+  /** Stand in front of a court's lift doors, facing them (debug menu): above at its portal, below at its cage. */
+  toLiftDoors(court: number, below: boolean): void {
+    const doors = below ? doorsBelow(this.terrain, court) : doorsAbove(this.terrain, court);
+    if (doors) this.stepOut(doors, false);
+  }
+
   private listen(): void {
+    // The left button (a tap) uses what it is on: for now, lifts' doors.
+    clickToUse(this.canvas, (x, y) => {
+      const doors = this.doorsUnder(x, y);
+      if (doors) void this.useDoors(doors);
+    }, (x, y) => !!this.doorsUnder(x, y));
     // The pointer stays visible and free (Arnd, 2026-10-21): the right button held down looks around.
     dragToLook(this.canvas, (dx, dy) => {
       const k = 0.004;
@@ -679,7 +835,9 @@ export class InteriorView {
     this.glide(dt);
     const { forward, right, up, fast } = moveKeys(this.loop.keys);
     const run = this.boost * (fast ? RUN : 1);
-    if (this.flyer) {
+    if (this.cabin?.aboard) {
+      // In a lift the keys wait for its doors.
+    } else if (this.flyer) {
       this.flyer.boost = run;
       this.flyer.step({ forward, right, up }, dt);
     } else {
@@ -697,6 +855,7 @@ export class InteriorView {
     fitCanvas(this.canvas, this.renderer, this.camera);
     this.time += dt * this.timeScale;
     this.shine();
+    this.rideOn(dt);
     this.simulate(dt, this.current().eye);
     this.place();
     draw(this.stage);

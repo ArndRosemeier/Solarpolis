@@ -51,8 +51,6 @@ for (const { name } of MATRIX) {
     assert.ok(Math.abs(under.around * under.dTheta - TURN) < 1e-9);
     assert.ok(Math.abs(under.dTheta * h.radius - u.bay) < u.bay * 0.05, 'a bay is as wide as it is long');
     assert.ok(under.along * u.bay <= h.profile.floorEnd - h.profile.floorStart + 1e-6 && (under.along + 1) * u.bay > h.profile.floorEnd - h.profile.floorStart);
-    assert.ok(under.ceiling < 0 && under.floor < under.springing && under.springing < under.ceiling, 'ceiling over the springing over the floor, all under the ground');
-    assert.ok(Math.abs(under.ceiling - under.floor - h.params.layers.living) < 1e-9);
     const b = under.bayAt(1, h.profile.floorStart + u.bay)!, c = under.centreOf(b.i, b.j);
     assert.deepEqual(under.bayAt(c.theta, c.s), b);
     assert.equal(under.bayAt(0, h.profile.floorStart - 1), null, 'no bays under the endcaps yet');
@@ -108,7 +106,6 @@ for (const { name } of MATRIX) {
     const worked = 1 - shares.works - shares.lake;
     assert.ok(shares.cistern > u.cisterns * worked * 0.3 && shares.cistern < u.cisterns * worked * 1.3, `cisterns ${(shares.cistern * 100).toFixed(1)}% of the bays`);
     assert.ok(shares.home > 0.02 && shares.dim > 0.1 && shares.gallery > 0, 'homes, the Dim and galleries all there');
-    if (lake) assert.equal(under.lakeHeight > 0, h.params.relief.ringLake!.depth + h.params.layers.ceilingDeck < h.params.layers.soilMax + h.params.layers.ceilingDeck + h.params.layers.living - 1, 'a gallery under the lake where its bed leaves room');
   });
 }
 

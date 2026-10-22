@@ -7,8 +7,8 @@
  *   the dug edge from it up to the rim: a darker plinth, pilasters, a coping, its top a stone walk railed on the drop;
  * - two stairs curving down along the wall from a landing at the rim's lowest point, one each way (one alone where
  *   two would not fit);
- * - on the far side, where the wall is highest, the portal: a stone frame rising through the walk, bronze lift doors,
- *   lamps beside it;
+ * - facing one of the four ways along the bays below, where the wall is highest, the portal: a stone frame rising
+ *   through the walk, bronze lift doors, lamps beside it;
  * - stone benches along the wall's foot.
  *
  * The stone is the district's (`STYLE_STONE`: each style builds its courts its own way), and a district that let its
@@ -21,7 +21,7 @@ import type { DistrictStyle, Habitat, Vec3 } from '../blueprint';
 import { Rng, deriveSeed } from '@futuremagic/core';
 import type { PlacedCourt, Terrain } from './terrain';
 import { planOf } from './plan';
-import { kept } from './kept';
+import { kept, keptEach } from './kept';
 import { FLIGHT, REST, TREAD, riserAt } from './liftStair';
 import { FINISH, polar, railing, topRail } from './pavilion';
 import { Shape, floorPoint, shade, type FloorFrame, type RGB } from './shapes';
@@ -107,6 +107,15 @@ export interface CourtLayout {
   kerb: number;
 }
 
+/**
+ * A court's light well: its glass's radius and the glass's height over the profile, or null in a habitat built without
+ * landmarks. The Understorey's well shaft comes up to it from the vault below (gen/underMesh.ts).
+ */
+export function lightWellOf(h: Habitat, c: PlacedCourt): { radius: number; height: number } | null {
+  const hr = h.params.landmarks?.handrail;
+  return hr ? { radius: c.radius * PART.well, height: c.floor + (PART.pave - PART.sink) * hr } : null;
+}
+
 /** The rim's height over a court's dug floor at an angle (between its samples). */
 export function rimAt(l: CourtLayout, a: number): number {
   const u = ((((a / TAU) % 1) + 1) % 1) * RIM, i = Math.floor(u) % RIM, f = u - Math.floor(u);
@@ -121,16 +130,11 @@ function within(a: number, lo: number, hi: number): boolean {
   return lo + ((((a - lo) % TAU) + TAU) % TAU) <= hi;
 }
 
-/** Each terrain's courts, by index, laid out when first asked for; and each court's index. */
-const layoutsOf = kept((_t: Terrain) => new Map<number, CourtLayout | null>());
+/** Each court's index among the terrain's courts. */
 const indexOf = kept((t: Terrain) => new Map(t.courts.map((c, i) => [c, i])));
 
-/** A court's layout (its index in `terrain.courts`), or null for one too small to stair. */
-export function courtLayoutOf(t: Terrain, index: number): CourtLayout | null {
-  const cache = layoutsOf(t);
-  if (!cache.has(index)) cache.set(index, layCourt(t, index));
-  return cache.get(index)!;
-}
+/** A court's layout (its index in `terrain.courts`), or null for one too small to stair; laid out when first asked for. */
+export const courtLayoutOf: (t: Terrain, index: number) => CourtLayout | null = keptEach(layCourt);
 
 function layCourt(t: Terrain, index: number): CourtLayout | null {
   const h = t.habitat, c = t.courts[index], hr = h.params.landmarks?.handrail;
@@ -174,16 +178,18 @@ function layCourt(t: Terrain, index: number): CourtLayout | null {
   const end = (dir: number): number => stairs.find((st) => st.dir === dir)?.steps.at(-1)?.a1 ?? (dir > 0 ? landing.a1 : landing.a0);
   const used: [number, number] = [end(-1), end(1)];
   const l: CourtLayout = {
-    habitat: h, seed: deriveSeed(h.seed, 'court', index), court: c, handrail: hr, well: c.radius * PART.well, kerb: PART.kerb * hr, style: planOf(h).districtAt(c.theta, c.s)?.style ?? null, rim, inner, face, outer, pave, coping,
+    habitat: h, seed: deriveSeed(h.seed, 'court', index), court: c, handrail: hr, well: lightWellOf(h, c)!.radius, kerb: PART.kerb * hr, style: planOf(h).districtAt(c.theta, c.s)?.style ?? null, rim, inner, face, outer, pave, coping,
     landing, stairs, used, portal: { angle: 0, width: PART.door * hr, high: 0 }, benches: [],
   };
-  // The portal where the wall is highest, clear of the stairs.
+  // The portal faces one of the four ways along the bays below (its lift comes down in the next bay that way, gen/
+  // underMesh.ts): of those clear of the stairs, where the wall is highest; if none is, the one furthest from them.
   const margin = ((PART.door / 2 + PART.pilaster + 0.5) * hr) / face;
   const clear = (a: number): boolean => !within(a, used[0] - margin, used[1] + margin);
-  let best = aLow + Math.PI;
-  for (let i = 0; i < RIM; i++) {
-    const a = (i / RIM) * TAU;
-    if (clear(a) && (!clear(best) || rimAt(l, a) > rimAt(l, best))) best = a;
+  const fromStairs = (a: number): number => Math.min(...[used[0], used[1], (used[0] + used[1]) / 2].map((b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)))));
+  let best = 0;
+  for (let k = 1; k < 4; k++) {
+    const a = (k * TAU) / 4;
+    if (clear(a) ? !clear(best) || rimAt(l, a) > rimAt(l, best) : !clear(best) && fromStairs(a) > fromStairs(best)) best = a;
   }
   const high = Math.max(2 * hr, Math.min(PART.high * hr, walkAt(l, best) - pave - (PART.lintel + 0.3) * hr));
   l.portal = { angle: best, width: PART.door * hr, high };

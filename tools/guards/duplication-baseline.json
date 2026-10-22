@@ -44,7 +44,7 @@
     "reason": "TSL arithmetic (a.mul(b).sub(c)) is how every shader is written; the formulas differ."
   },
   {
-    "key": "idiom: [.mul .sub] in solarpolis/render/crowdShaders.ts + solarpolis/render/hullShaders.ts + solarpolis/render/skyShaders.ts",
+    "key": "idiom: [.mul .sub] in solarpolis/render/crowdShaders.ts + solarpolis/render/hullShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
     "reason": "TSL has no operators: every shader file does its arithmetic with .mul and .sub. The stand-ins' pose (render/crowdShaders.ts) is its own step; the shared ones (sunlit, throughAir) are used from materials.ts, not copied."
   },
   {
@@ -764,7 +764,7 @@
     "reason": "The floor's radius at a point (Math.max(1, profile.at(s).r)) to turn metres around into radians: one profile lookup, said where each simulation needs it."
   },
   {
-    "key": "idiom: [.group .name] in solarpolis/render/animals.ts + solarpolis/render/fliers.ts + solarpolis/render/landmarks.ts + solarpolis/render/specks.ts",
+    "key": "idiom: [.group .name] in solarpolis/render/animals.ts + solarpolis/render/fliers.ts + solarpolis/render/landmarks.ts + solarpolis/render/lift.ts + solarpolis/render/specks.ts",
     "reason": "Each view names its scene group for the debug menu and the shader monitor's labels: one assignment."
   },
   {
@@ -806,5 +806,33 @@
   {
     "key": "same name: solarpolis/render/plants.ts#info + solarpolis/render/view.ts#info",
     "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; each view does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/animal.ts#dispose + solarpolis/render/lift.ts#dispose",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; CabinView (render/lift.ts) is one more such view, holding the one lift cabin drawn."
+  },
+  {
+    "key": "same name: solarpolis/render/hullDetail.ts#bytes + solarpolis/render/lift.ts#bytes",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; CabinView (render/lift.ts) is one more such view, holding the one lift cabin drawn."
+  },
+  {
+    "key": "same name: solarpolis/render/landmarks.ts#ask + solarpolis/render/streamed.ts#ask",
+    "reason": "Both ask the workers for something to build under the same verb: LandmarkView for one landmark's level, StreamCache for one streamed entry; LandmarkView's meshes are few and built whole, so it does not stream through StreamCache."
+  },
+  {
+    "key": "same name: solarpolis/render/lift.ts#bytes + solarpolis/render/streamed.ts#bytes",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; CabinView (render/lift.ts) is one more such view, holding the one lift cabin drawn."
+  },
+  {
+    "key": "same name: solarpolis/render/lift.ts#bytes + solarpolis/render/terrain.ts#bytes",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; CabinView (render/lift.ts) is one more such view, holding the one lift cabin drawn."
+  },
+  {
+    "key": "same name: solarpolis/render/lift.ts#bytes + solarpolis/render/tiled.ts#bytes",
+    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; CabinView (render/lift.ts) is one more such view, holding the one lift cabin drawn."
+  },
+  {
+    "key": "same name: solarpolis/render/outside.ts#frame + solarpolis/render/view.ts#frame",
+    "reason": "Each view's own frame step under FrameLoop (render/surface.ts): moving by the keys, the clock, then placing and drawing. The two views move different things (a flyer and walker inside, a ship or camera outside) and share the loop itself already."
   }
 ]

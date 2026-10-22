@@ -43,8 +43,9 @@ export class UnderView extends MapsPanel {
     const p = h.pillars, share = sharesOf(under, Math.max(1, Math.round(Math.sqrt((under.around * under.along) / 2e5))));
     const percent = (u: BayUse): string => `${Math.round(share[u] * 100)}%`;
     const first = under.hamlets[0];
-    const lake = h.params.relief.ringLake ? (under.lakeHeight > 0 ? `under the lake a gallery ${under.lakeHeight.toFixed(0)} m high` : 'the lake basin fills the layer') : 'no lake';
-    const summary = `${(under.around * under.along).toLocaleString('en')} bays of ${under.bay} m · pillars ${(2 * p.radius).toFixed(1)} m thick (${p.governs} decides), ribs spring ${(under.springing - under.floor).toFixed(0)} m up · `
+    const lake = h.params.relief.ringLake ? 'under the lake a gallery under its glass bed' : 'no lake';
+    const ribs = h.params.under.spring * h.params.layers.living;
+    const summary = `${(under.around * under.along).toLocaleString('en')} bays of ${under.bay} m · pillars ${(2 * p.radius).toFixed(1)} m thick (${p.governs} decides), ribs spring ${ribs.toFixed(0)} m up · `
       + `${under.hamlets.length} hamlets of about ${Math.round(first?.people ?? 0)} people · homes and lanes ${percent('home')} + ${percent('lane')}, halls ${percent('hall')}, galleries ${percent('gallery')}, cisterns ${percent('cistern')}, the Dim ${percent('dim')}, works ${percent('works')} · ${lake}`;
     const figs = [figure(canvasOf(underFloorMap(under, FLOOR_WIDTH)), 'Under the floor, unrolled like the land plan: wild end left, port end right')];
     // The hamlet nearest the middle of the worked floor, close up.

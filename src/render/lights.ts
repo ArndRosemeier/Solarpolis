@@ -19,10 +19,11 @@
  */
 import { AmbientLight, DirectionalLight, type DepthTexture, type Node, type NodeBuilder, type Scene } from 'three/webgpu';
 import { Fn, float, min, screenCoordinate, select, shadow, texture, uniform, uniformArray, vec2 } from 'three/tsl';
-import { fromWorld, toView, type Habitat, type Vec3 } from '../blueprint';
+import { fromWorld, toView, toWorld, type Habitat, type Vec3 } from '../blueprint';
 import { horizonAt } from '../gen/horizon';
 import type { Terrain } from '../gen/terrain';
 import { lightShares, lightVector } from '../world/sunline';
+import { LAMPLIGHT } from '../gen/underMesh';
 
 /** Rays toward the line per shaded point, and steps along each. */
 export const SHADOW_RAYS = 4;
@@ -100,6 +101,37 @@ export function addLights(scene: Scene): void {
   scene.add(key, key.target, sky);
 }
 
+/** Below the land: the share of the lamps' light that comes from all round (the rest from above), and how far above the player the key light stands (m): under the ceiling, so nothing up on the land shades them. */
+const BELOW_ALL_ROUND = 0.4;
+const BELOW_BACK = 8;
+
+/**
+ * Light around the world point `p` (the player's middle) below the land, in the Understorey: its lamps overhead, `lamp`
+ * as a share of the open land's daylight, as the key light from straight above and the sky light all round.
+ */
+export function shineBelow(p: Vec3, eye: Vec3, lamp: number): void {
+  key.color.setRGB(...LAMPLIGHT);
+  sky.color.setRGB(...LAMPLIGHT);
+  key.intensity = Math.PI * lamp * (1 - BELOW_ALL_ROUND);
+  sky.intensity = Math.PI * lamp * BELOW_ALL_ROUND;
+  for (let k = 0; k < SHADOW_RAYS; k++) tilts.array[k] = 0;
+  const r = Math.hypot(p[0], p[1]) || 1, up: Vec3 = [-p[0] / r, -p[1] / r, 0], c = toView(eye, p);
+  key.target.position.set(c[0], c[1], c[2]);
+  key.position.set(c[0] + up[0] * BELOW_BACK, c[1] + up[1] * BELOW_BACK, c[2] + up[2] * BELOW_BACK);
+  key.target.updateMatrixWorld();
+  key.updateMatrixWorld();
+}
+
+/**
+ * The day's light on the land straight over the world point `p` (1: the mid floor at midday in the open): the
+ * sunline's past the land's horizons there, and the sky light. Below the land, it is what the light wells let down.
+ */
+export function dayOverhead(h: Habitat, terrain: Terrain, emission: Float32Array, mean: number, skyShare: number, norm: number, p: Vec3): number {
+  const at = fromWorld(h.profile, p[0], p[1], p[2]), ground = toWorld(h.profile, { theta: at.theta, s: at.s, h: terrain.heightAt(at.theta, at.s) });
+  const [port, wild] = horizonAt(terrain, at.theta, at.s), v = lightVector(h, emission, ground, port, wild, norm);
+  return Math.hypot(v[0], v[1], v[2]) * (1 - skyShare) + skyShare * mean * Math.min(1, Math.max(0, (port + wild) / Math.PI));
+}
+
 /**
  * Light and shade around the world point `p` (the player's middle), seen from the camera's world eye: the hour's
  * emission and mean, the share of sky light, the sunline's scale (`sunlineNorm`).
@@ -109,6 +141,8 @@ export function shineOn(h: Habitat, terrain: Terrain, emission: Float32Array, me
   const [port, wild] = horizonAt(terrain, at.theta, at.s);
   const v = lightVector(h, emission, p, port, wild, norm);
   const strength = Math.hypot(v[0], v[1], v[2]);
+  key.color.setRGB(1, 1, 1);
+  sky.color.setRGB(1, 1, 1);
   key.intensity = Math.PI * strength * (1 - skyShare);
   const open = Math.min(1, Math.max(0, (port + wild) / Math.PI));
   sky.intensity = Math.PI * skyShare * mean * open;

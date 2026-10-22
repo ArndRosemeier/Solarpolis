@@ -29,6 +29,8 @@ import type { Terrain } from './gen/terrain';
 import { floorAt, floorPoint, outOfPlace, placeAt, type FloorFrame } from './gen/shapes';
 import { crossingsOf, type Crossing, type CrossingKind } from './gen/crossings';
 import { landformOf, planOf } from './gen/plan';
+import { underOf, type Hamlet } from './gen/under';
+import { underLiftOf } from './gen/underMesh';
 import { pavilionPlan } from './gen/pavilion';
 import { hutPlan } from './gen/summitHut';
 import { courtLayoutOf, courtWorld, type CourtLayout } from './gen/courts';
@@ -486,6 +488,16 @@ const overCourt = (label: string, out: number, up: number): void => debug.add({
 });
 overCourt('Fly: over an entrance court', 1.5, 0.9);
 overCourt('Fly: entrance courts from afar', 12, 5);
+/** Stand at a lift's doors, facing them (gen/lifts.ts): the court's portal above or its cage below; the lift nearest the floor's middle. */
+const atLift = (label: string, below: boolean): void => debug.add({
+  label, group: 'Go', run: () => {
+    const h = lab.habitat, mid = h ? (h.profile.floorStart + h.profile.floorEnd) / 2 : 0;
+    const f = inView((t) => t.courts.map((c, i) => ({ s: c.s, i })).sort((a, b) => Math.abs(a.s - mid) - Math.abs(b.s - mid)).find((c) => underLiftOf(t, c.i)));
+    f?.v.toLiftDoors(f.x.i, below);
+  },
+});
+atLift('To a lift: at its doors in an entrance court (click them to ride down)', false);
+atLift('Below: at a lift cage (click it to call the cabin, again to ride up)', true);
 /** Of the things built on the floor in a frame (crossings, halls) that `list` gives, the one nearest the walker. */
 function nearestOnFloor<T extends { frame: FloorFrame }>(list: (t: Terrain) => readonly T[]): { v: InteriorView; x: T } | null {
   const at = view()?.walker.at;
@@ -618,6 +630,29 @@ byStair('Fly: the Lift Stair from over the floor', 0.3, 900, 120);
 byStair('Fly: beside the Lift Stair', 0.5, 60, 25, 30);
 byStair('Fly: the Lift Stair close up', 0.5, 8, 4, 3);
 byStair('Fly: the Lift Stair near the hub', 0.9, 120, 40);
+/**
+ * Below the land, in the Understorey (gen/under.ts), until the courts' lifts go down: on the floor in the middle of the
+ * bay `pick` gives (its i, j), facing along the axis.
+ */
+const goBelow = (label: string, pick: (h: Habitat, theta: number, s: number) => { i: number; j: number } | null): void => debug.add({
+  label, group: 'Go', run: () => {
+    const h = lab.habitat, v = view();
+    const bay = h && v && pick(h, v.walker.at.theta, v.walker.at.s);
+    if (!h || !v || !bay) return;
+    const c = underOf(h).centreOf(bay.i, bay.j);
+    v.goBelow(c.theta, c.s, 0);
+  },
+});
+goBelow('Below: the pillar forest under here', (h, theta, s) => {
+  const u = underOf(h);
+  return u.bayAt(theta, Math.min(u.s0 + (u.along - 0.5) * u.bay, Math.max(u.s0 + u.bay / 2, s)));
+});
+goBelow("Below: under the nearest entrance court (its hamlet's wellhead)", (h, theta, s) => {
+  const R = h.radius, away = (m: Hamlet): number => Math.hypot(Math.atan2(Math.sin(m.site.theta - theta), Math.cos(m.site.theta - theta)) * R, m.site.s - s);
+  const m = [...underOf(h).hamlets].sort((a, b) => away(a) - away(b))[0];
+  return m ? { i: m.i, j: m.j } : null;
+});
+debug.add({ label: 'Up onto the land (from below)', group: 'Go', run: () => { const v = view(); if (v) v.goTo(v.walker.at.theta, v.walker.at.s); } });
 debug.add({ label: 'Travel 10× faster (toggle)', group: 'Go', run: () => { const v = view(); if (v) v.boost = v.boost === 1 ? 10 : 1; } });
 debug.addInfo(() => view()?.clockLine() ?? '');
 /** The next of a cycle of clock speeds. */

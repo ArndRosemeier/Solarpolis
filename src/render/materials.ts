@@ -32,6 +32,7 @@ import { RISE_RANGE } from '../gen/tiles';
 import { filtered } from './textures';
 import { cloudMarch, cloudShade } from './cloudShaders';
 import { builtAlbedo, roofHorizons } from './builtShaders';
+import { LAMPLIGHT } from '../gen/underMesh';
 import { speckLook, standInHorizon, standInPose, unpack } from './crowdShaders';
 import { SPECK_ATTRIBUTES, SPECK_SHOWN, SPECK_STRIDE, STAND_IN_ATTRIBUTES, STAND_IN_STRIDE } from '../gen/standIn';
 import { FLIER_ATTRIBUTES, FLIER_STRIDE, flierPose } from './droneShaders';
@@ -661,7 +662,7 @@ export function standInAttribute(g: BufferGeometry, name: string): boolean {
   else if (name === 'paint') g.setAttribute('paint', new Uint8BufferAttribute(new Array(12).fill(0), 4, true));
   else if (name === 'spin') g.setAttribute('spin', new Float32BufferAttribute(new Array(12).fill(0), 4));
   else if (name === 'part') g.setAttribute('part', new Float32BufferAttribute(new Array(6).fill(0), 2));
-  else if (name === 'uv') g.setAttribute('uv', new Float32BufferAttribute(new Array(6).fill(0), 2));
+  else if (name === 'uv' || name === 'glow') g.setAttribute(name, new Float32BufferAttribute(new Array(6).fill(0), 2));
   else if (name === 'floorA' || name === 'floorB') g.setAttribute(name, new Uint8BufferAttribute(new Array(12).fill(name === 'floorA' ? 255 : 0), 4, true));
   else if (name === 'canopy') g.setAttribute('canopy', new Float32BufferAttribute([0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0], 4));
   else if (name === 'wind' || name === 'occ' || name === 'tint' || name === 'kind' || name === 'finish') g.setAttribute(name, new Float32BufferAttribute([0, 0, 0], 1));
@@ -706,6 +707,50 @@ export const BUILT = kind('built', ['position', 'normal', 'color', 'uv', 'finish
   return m;
 });
 const NO_ROOF = new Vector4(0, 0, 0, 0);
+
+/**
+ * The Understorey's light and air (gen/underMesh.ts; set per habitat by `setBelow`): the lamps' light on the floor
+ * mid-bay, as a share of the open land's daylight (`under.lamp`), their warm colour, and the mist below (extinction
+ * per metre: a quarter of the light left over `under.mist`).
+ */
+export const below = {
+  lamp: uniform(0.1),
+  /** The day's light on the land above (1: the mid floor at midday in the open), which comes down the light wells. */
+  day: uniform(0),
+  tint: uniform(color(...LAMPLIGHT)),
+  extinction: uniform(Math.log(4) / 150),
+};
+
+/** Load a habitat's Understorey into the shaders' uniforms. */
+export function setBelow(lamp: number, mist: number): void {
+  below.day.value = 0;
+  below.lamp.value = lamp;
+  below.extinction.value = Math.log(4) / mist;
+}
+
+/** A lamp's glowing face (finish `lamp`), and the lamp-lit mist at its thickest (the view's background below), in the lamps' floor light. */
+const LAMP_FACE = 6;
+/** A light well's glass seen from below (finish `sky`), in the day's light on the land: the bright sky past the court. */
+const SKY_FACE = 1.5;
+export const MIST_GLOW = 0.25;
+
+/**
+ * The Understorey's structure (gen/underMesh.ts): no sunline reaches it, so it is lit by its lamps alone, as baked per
+ * vertex (`glow`: x the lamps' light relative to the floor mid-bay, y the day's down a light well, a share of the day's
+ * on the land, `below.day`), over a built finish (`builtAlbedo`); a lamp's own face glows, and a well's glass with the day. Distance fades into the lamp-lit mist below, not the land's haze.
+ */
+export const VAULT = kind('vault', ['position', 'normal', 'color', 'uv', 'finish', 'glow'], { cast: false, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial();
+  const glow = attribute<'vec2'>('glow', 'vec2'), finish = attribute<'float'>('finish', 'float');
+  const light = below.tint.mul(below.lamp);
+  const albedo = builtAlbedo(vertexColor().rgb, uv(), finish);
+  const lit = albedo.mul(light.mul(glow.x).add(below.day.mul(glow.y)));
+  const face = mix(light.mul(LAMP_FACE), vec3(below.day.mul(SKY_FACE)), step(4.5, finish));
+  const surface = mix(lit, face, step(3.5, finish));
+  const kept = exp(below.extinction.negate().mul(positionWorld.sub(cameraPosition).length()));
+  m.colorNode = surface.mul(kept).add(light.mul(MIST_GLOW).mul(float(1).sub(kept))).mul(view.exposure);
+  return m;
+});
 
 /** Things the physics moves (for now the debug menu's test balls): one colour, lit by the sunline, through the air. */
 export const BALL = kind('ball', ['position', 'normal'], { cast: true, receive: false }, () => {
@@ -906,5 +951,5 @@ export function animalEyeMaterial(): Material {
 
 /** Every kind, for the Stage's warm-up. */
 export function allKinds(): readonly Kind[] {
-  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS, STONE, BUILT, CROWD, SPECK, DRONE, DRONE_VEIL, CLOUDS_FAR, CLOUDS_NEAR];
+  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS, STONE, BUILT, VAULT, CROWD, SPECK, DRONE, DRONE_VEIL, CLOUDS_FAR, CLOUDS_NEAR];
 }

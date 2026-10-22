@@ -35,7 +35,7 @@ git show origin/renders:<id>/report.json                 # what happened, per vi
 git show origin/renders:<id>/inside.png > /tmp/inside.png  # then look at the file
 ```
 
-The `renders` branch is one commit without history holding the latest 20 sets, so it never grows. Never merge it.
+The `renders` branch holds the latest 20 sets. Each set is a commit on top of the last (so publishing pushes only the new files); every 15 sets its history starts again from one commit, so it stays bounded. Never merge it.
 
 ## Asking for a render (no person needed)
 
