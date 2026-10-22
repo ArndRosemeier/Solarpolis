@@ -276,7 +276,9 @@ const toAnimal = (kind: string, label: string, back: number): void => debug.add(
     if (!v || !q) return;
     const side: Vec3 = [q.up[1] * q.front[2] - q.up[2] * q.front[1], q.up[2] * q.front[0] - q.up[0] * q.front[2], q.up[0] * q.front[1] - q.up[1] * q.front[0]];
     const lift = q.height * 0.5, at: Vec3 = [q.feet[0] + q.up[0] * lift, q.feet[1] + q.up[1] * lift, q.feet[2] + q.up[2] * lift];
-    const from: Vec3 = [at[0] + side[0] * back + q.up[0] * back * 0.3, at[1] + side[1] * back + q.up[1] * back * 0.3, at[2] + side[2] * back + q.up[2] * back * 0.3];
+    // A little above it, but under the crowns of the woods it may be in.
+    const rise = Math.min(back * 0.3, 3);
+    const from: Vec3 = [at[0] + side[0] * back + q.up[0] * rise, at[1] + side[1] * back + q.up[1] * rise, at[2] + side[2] * back + q.up[2] * rise];
     const d = Math.hypot(at[0] - from[0], at[1] - from[1], at[2] - from[2]);
     v.floatAt(from, [(at[0] - from[0]) / d, (at[1] - from[1]) / d, (at[2] - from[2]) / d]);
   },
