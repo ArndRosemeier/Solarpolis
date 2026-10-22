@@ -91,7 +91,7 @@ const FORM: Readonly<Record<Activity, Form>> = {
 
 /** How far apart neighbours stand in a ring (m): close to talk, an arm's reach round a bench, wide to dance or play catch. */
 const RING_GAP: Partial<Record<Activity, number>> = { play: 2.2, make: 1.0 };
-const TALK_GAP = 0.8;
+const TALK_GAP = 1.1;
 /** Neighbours in a row (m), lying side by side a little wider; walking two abreast, and each pair this far behind the one ahead. */
 const ROW_GAP = 0.7;
 const LIE_GAP = 0.9;
