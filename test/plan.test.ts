@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { MATRIX, derive, validate, withParams, REFERENCE } from '../src/blueprint';
 import { GRAVITY_BANDS, lakeOf, makePlan, type Plan } from '../src/gen/plan';
 import { makeTerrain } from '../src/gen/terrain';
+import { baysOf } from '../src/gen/bays';
 
 const TURN = 2 * Math.PI;
 const wrap = (a: number): number => a - TURN * Math.round(a / TURN);
@@ -111,12 +112,15 @@ for (const { name, plan } of plans) {
     assert.equal(plan.districtAt(0, (profile.floorStart + plan.reserveEnd) / 2), null, 'none in the reserve');
   });
 
-  test(`plan (${name}): entrances in their own districts, apart, off the lake and the worked floor's ends`, () => {
-    const entrances = plan.sites.filter((s) => s.kind === 'entrance'), margin = h.params.plan.entranceSpacing * 0.15;
+  test(`plan (${name}): entrances in their own districts, apart, off the lake and the worked floor's ends, each over a bay's middle`, () => {
+    const entrances = plan.sites.filter((s) => s.kind === 'entrance'), margin = h.params.plan.entranceSpacing * 0.15, bays = baysOf(h);
     assert.equal(entrances.length, plan.districts.reduce((a, d) => a + d.entrances.length, 0));
     for (const d of plan.districts) assert.ok(d.entrances.length >= 1, `district ${d.id} has a way down`);
     for (const e of entrances) {
       assert.equal(plan.districtAt(e.theta, e.s)?.id, e.district);
+      // Over the middle of a bay below, where the court's light well comes down through the vault.
+      const b = bays.bayAt(e.theta, e.s), c = b && bays.centreOf(b.i, b.j);
+      assert.ok(c && Math.abs(wrap(c.theta - e.theta)) * h.radius < 1e-6 && Math.abs(c.s - e.s) < 1e-6, 'an entrance off its bay\'s middle');
       if (plan.lake) assert.ok(Math.abs(e.s - plan.lake.s) >= plan.lake.halfWidth);
       // Never dug into the Gate's foot, nor right at the reserve's edge.
       assert.ok(e.s >= plan.reserveEnd + margin - 1e-6 && e.s <= profile.floorEnd - margin + 1e-6, `an entrance ${(profile.floorEnd - e.s).toFixed(0)} m from the floor's end`);

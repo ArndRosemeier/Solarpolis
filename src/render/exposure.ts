@@ -113,9 +113,15 @@ export function exposureFor(m: Meterable, rays: readonly Vec3[], darkest: number
  * metered here; the hour's own light stays as it is.
  */
 export const INSIDE_MAKES_UP = 0.8;
-export function insideExposure(light: number): number {
-  return Math.pow(1 / Math.max(light, 0.05), INSIDE_MAKES_UP);
+export function insideExposure(light: number, makesUp = INSIDE_MAKES_UP): number {
+  return Math.pow(1 / Math.max(light, 0.05), makesUp);
 }
+
+/**
+ * Below the land the eyes make up less of the missing light than in a wood's shade: the lamps' light must still read
+ * as lamplight, warm and dim, the vaults glowing over darker floors (the first render on real GPU read as daylight).
+ */
+export const BELOW_MAKES_UP = 0.6;
 
 /**
  * The share of the open's light around the eye under crowns `closed` (0 … 1, `crownsClosed`), when `skyShare` of the

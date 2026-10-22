@@ -17,8 +17,8 @@ import { PhysicsWorld } from '../physics/world';
 import { HUMAN, type Character } from '../physics/character';
 import { Figure, castAsWorn, type MoveState } from './actors/figure';
 import { playerLook } from './actors/looks';
-import { addLights, key, shineBelow, shineOn, sky } from './lights';
-import { adapt, glareOf, insideExposure, insideRayLuminance, landAlbedo, meterRays, underCrowns, type InsideMeterable } from './exposure';
+import { addLights, dayOverhead, key, shineBelow, shineOn, sky } from './lights';
+import { BELOW_MAKES_UP, adapt, glareOf, insideExposure, insideRayLuminance, landAlbedo, meterRays, underCrowns, type InsideMeterable } from './exposure';
 import { sharedPool } from '../workers/pool';
 import { BALL, CLOUDS_FAR, CLOUDS_NEAR, MIST_GLOW, SUNLINE, air, allKinds, below, setAir, setBelow, setEmission, setSunline, standInAttribute, view } from './materials';
 import { dayPhase, emissionMean, nearestLit, sunlineEmission, sunlineNorm, EMISSION_SAMPLES } from '../world/sunline';
@@ -594,7 +594,7 @@ export class InteriorView {
       closed = crownsClosed(raise) * (1 - smoothstep(raise * 0.8, raise * 1.2, at.h - ground));
     }
     // Below the land the lamps' light is all there is: the eyes open up to it, and the background is the lit mist.
-    const target = this.below ? insideExposure(this.habitat.params.under.lamp) : insideExposure(underCrowns(closed, air.skyLight.value, UNDER_CROWNS)) * this.glare(eye);
+    const target = this.below ? insideExposure(this.habitat.params.under.lamp, BELOW_MAKES_UP) : insideExposure(underCrowns(closed, air.skyLight.value, UNDER_CROWNS)) * this.glare(eye);
     this.exposure = adapt(this.exposure, target, Math.min(this.frameDt, 0.25));
     view.exposure.value = this.exposure;
     const back = this.scene.background as Color;
@@ -632,7 +632,10 @@ export class InteriorView {
     const f = this.figure, c = this.character;
     // Light and shade around the player (or under the flyer).
     const centre = this.flyer || !c ? eye : v3madd(this.walker.feetAt(), c.up, HUMAN.height / 2);
-    if (this.below) shineBelow(centre, eye, this.habitat.params.under.lamp);
+    if (this.below) {
+      shineBelow(centre, eye, this.habitat.params.under.lamp);
+      below.day.value = dayOverhead(this.habitat, this.terrain, this.emission, emissionMean(this.emission), air.skyLight.value, this.norm, centre);
+    }
     else shineOn(this.habitat, this.terrain, this.emission, emissionMean(this.emission), air.skyLight.value, this.norm, centre, eye);
     this.adaptEyes(eye);
     if (!f) return;

@@ -19,14 +19,15 @@
  * (`underTilesFor`), far, mid and near detail by a tile's size, every level the same size and light, so they hand over
  * without a step. `underSolid` gives the physics the floors, pillars and end walls near a point. Pure.
  */
-import { v3cross, v3dot, v3norm, v3sub, type Vec3 } from '@futuremagic/core';
+import { v3cross, v3dot, v3madd, v3norm, v3sub, type Vec3 } from '@futuremagic/core';
 import { fromWorld, toWorld, wrapAngle, type Habitat } from '../blueprint';
-import { kept } from './kept';
+import { kept, keptEach } from './kept';
 import { wantedCells, type Grid, type TileKey, type WantedTile } from './detailTree';
 import { FINISH } from './pavilion';
 import { Shape, bendInto, outOfPlace, placeAt, type FloorFrame, type MappedArrays, type Place, type RGB } from './shapes';
 import type { Terrain } from './terrain';
 import { levelsOf, type Levels, type UnderLevels } from './underLevels';
+import { courtLayoutOf, lightWellOf } from './courts';
 import { underOf, type Under } from './under';
 
 export type UnderDetail = 'far' | 'mid' | 'near';
@@ -36,7 +37,7 @@ export interface UnderTile {
   key: TileKey;
   origin: Place;
   mesh: MappedArrays;
-  /** Two numbers a vertex: the lamps' light (1 on the floor mid-bay under level land), and the daylight down a well (0 for now). */
+  /** Two numbers a vertex: the lamps' light (1 on the floor mid-bay under level land), and the day's light down a well (a share of the day's on the land). */
   glow: Float32Array;
 }
 
@@ -67,15 +68,37 @@ const PAVING: RGB = [0.4, 0.38, 0.35];
 const VAULT: RGB = [0.58, 0.55, 0.5];
 const BRONZE: RGB = [0.22, 0.15, 0.08];
 const LAMP: RGB = [1, 0.92, 0.78];
+/** A light well's glass seen from below: the day's own colour (the VAULT kind lights it by the day above). */
+const SKY: RGB = [1, 1, 1];
 
 /** The lamps' warm light (linear RGB): the VAULT kind's tint, and the light the player's body gets below (render/lights.ts). */
 export const LAMPLIGHT: RGB = [1, 0.86, 0.68];
 
+/**
+ * The openings through the vault (light wells, lifts) take at most this share of the flat ceiling's least radius at a
+ * bay's middle (where the fan vaults leave the deck bare), a well narrowing from the court's glass above if it must; of the day's light on the glass,
+ * this share comes down the shaft; the floor gives back this share of what falls on it, from a pool this much wider
+ * than the oculus per metre of the room's height. The bronze lip round the oculus: its width and depth.
+ */
+const OPENING_ROOM = 0.8;
+const WELL_PASS = 0.8;
+const FLOOR_BACK = 0.35;
+const POOL_SPREAD = 0.5;
+const LIP = { width: 0.5, deep: 0.2 };
+/**
+ * A court's lift below, in handrails: an open bronze cage from floor to vault, its side, its corner posts, the bands
+ * round it at every `every` up, the lattice's bars, the panels below the first band (`door` high, the doorway's
+ * height on the side toward the court), and the clearance round it in the vault's opening.
+ */
+const LIFT = { side: 3, post: 0.16, band: 0.09, every: 2.8, bar: 0.05, door: 2.6, clear: 0.35 };
+/** Facets across a rib's rounded section; how far its normals lean out of the surface even where it meets it. */
+const RIB_SECTION = 4;
+const RIB_LEAN = 0.6;
 /** Tiles of 2^ROOT bays a side are the coarsest. */
 const ROOT = 3;
 /** The lamps: how much of a ring's light goes all round (the rest up, toward the vault), and how much comes back off every surface. */
 const LAMP_ALL_ROUND = 0.3;
-const BOUNCE = 0.6;
+const BOUNCE = 0.3;
 /**
  * A ring's glowing face is large, so a surface right by it is lit as by a broad source, not a point: its light falls
  * as 1 / (d² + SOURCE²) (m), and none is lit brighter than BRIGHTEST times the floor mid-bay.
@@ -123,6 +146,77 @@ const sizesOf = kept((h: Habitat): Sizes => {
   const u = underOf(h), rp = h.pillars.radius, around = u.dTheta * h.radius;
   return { rp, top: Math.min(u.bay, around) / 2, spring: PILLAR.capital * rp, along: u.bay, around };
 });
+
+/**
+ * A shaft up from a bay's middle through the vault, the deck and the soil: its radius in the vault, its radius and
+ * height at the top, and what closes it there (a light well's glass, bright with the day; a lift's head, stone).
+ */
+interface Shaft {
+  radius: number;
+  topRadius: number;
+  top: number;
+  cap: 'sky' | 'stone';
+}
+
+/**
+ * A court's lift, down in the next bay the way its portal faces (bay i, j): the way back toward the court's bay (the
+ * bay's frame: x along the axis, y round it), its cage's side.
+ */
+export interface UnderLift {
+  i: number;
+  j: number;
+  toward: [number, number];
+  side: number;
+  /** The height its doors open at above (the court's paving). */
+  above: number;
+}
+
+/** What comes down through the vault over a bay: a court's light well, or its lift. */
+interface Opening {
+  shaft: Shaft;
+  lift: UnderLift | null;
+}
+
+/** The light wells by bay (`key`): one under every court's glass (none without courts), made once per terrain. */
+const wellsOf = kept((t: Terrain): Map<number, { court: number; shaft: Shaft }> => {
+  const h = t.habitat, u = underOf(h), s = sizesOf(h), out = new Map<number, { court: number; shaft: Shaft }>();
+  if (!h.params.landmarks || t.courts.length !== u.hamlets.length) return out;
+  for (const m of u.hamlets) {
+    const w = lightWellOf(h, t.courts[m.court])!;
+    out.set(u.key(m.i, m.j), { court: m.court, shaft: { radius: Math.min(w.radius, openingRoom(s)), topRadius: w.radius, top: w.height, cap: 'sky' } });
+  }
+  return out;
+});
+
+/** The flat ceiling at a bay's middle, where the fan vaults leave the deck bare: no opening may take more of it. */
+const openingRoom = (s: Sizes): number => (Math.hypot(s.along, s.around) / 2 - s.top) * OPENING_ROOM;
+
+/** A court's lift below (its index among the terrain's courts), or null where it has none; laid out when first asked for. */
+export const underLiftOf: (t: Terrain, court: number) => UnderLift | null = keptEach(layLift);
+
+function layLift(t: Terrain, court: number): UnderLift | null {
+  const h = t.habitat, u = underOf(h), hr = h.params.landmarks?.handrail, m = u.hamlets[court], l = hr && m && t.courts.length === u.hamlets.length ? courtLayoutOf(t, court) : null;
+  if (!hr || !l) return null;
+  // In the next bay the portal faces (x along the axis, y round it), if it lies on the floor and no well takes it.
+  const a = l.portal.angle, di = Math.round(Math.sin(a)), dj = Math.round(Math.cos(a)), i = m.i + di, j = m.j + dj;
+  if (j < 0 || j >= u.along || wellsOf(t).has(u.key(i, j))) return null;
+  const room = openingRoom(sizesOf(h)), side = Math.min(LIFT.side * hr, (room - LIFT.clear * hr) * Math.SQRT2);
+  return { i, j, toward: [0 - dj, 0 - di], side, above: t.courts[court].floor + l.pave };
+}
+
+/** What comes down through the vault over bay (i, j) (any i: it wraps): a court's light well, or a lift whose court is next to it. */
+function openingOver(t: Terrain, i: number, j: number): Opening | null {
+  const u = underOf(t.habitat), wells = wellsOf(t), well = wells.get(u.key(i, j));
+  if (well) return { shaft: well.shaft, lift: null };
+  for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    const next = wells.get(u.key(i + di, j + dj)), lift = next ? underLiftOf(t, next.court) : null;
+    if (lift && lift.j === j && u.key(lift.i, lift.j) === u.key(i, j)) {
+      const radius = (lift.side / 2) * Math.SQRT2 + LIFT.clear * t.habitat.params.landmarks!.handrail;
+      return { shaft: { radius, topRadius: radius, top: lift.above, cap: 'stone' }, lift };
+    }
+  }
+  return null;
+}
 
 /** The lamp ring's middle height over a pillar's floor. */
 const lampHeight = (lv: Levels, rp: number): number => lv.springing - (PILLAR.capitalHigh + PILLAR.lampBelow + PILLAR.lampHigh / 2) * rp;
@@ -216,7 +310,7 @@ function conoid(bay: Bay, s: Sizes, px: number, py: number): { spot: (t: number,
 
 /** One bay of the structure, built in its own frame. */
 function buildBay(sh: Shape, lv: UnderLevels, s: Sizes, i: number, j: number, d: (typeof DETAIL)[UnderDetail]): void {
-  const u = lv.under, bay = bayOf(lv, s, i, j), A = s.along, W = s.around, quarter = Math.PI / 2;
+  const u = lv.under, bay = bayOf(lv, s, i, j), A = s.along, W = s.around, quarter = Math.PI / 2, opening = openingOver(lv.terrain, i, j);
   // The floor, paved.
   sh.finish = FINISH.stone;
   sh.smoothGrid(d.floor, d.floor, (a, b) => {
@@ -257,11 +351,21 @@ function buildBay(sh: Shape, lv: UnderLevels, s: Sizes, i: number, j: number, d:
     .filter((p, k, all) => k === 0 || Math.hypot(p.x - all[k - 1].x, p.y - all[k - 1].y) > 1e-6);
   if (Math.hypot(ring[0].x - ring[ring.length - 1].x, ring[0].y - ring[ring.length - 1].y) < 1e-6) ring.pop();
   ring.push(ring[0]);
+  // Under a court, the spandrel opens round its light well's oculus (or its lift's shaft, a bay over): each ray from
+  // the bay's middle starts there.
+  const hole = opening?.shaft.radius ?? 0;
+  const onRay = (b: number, k: number): Vec3 => {
+    const dx = ring[b].x - mx, dy = ring[b].y - my, f = hole / Math.hypot(dx, dy) + (1 - hole / Math.hypot(dx, dy)) * k;
+    const x = mx + dx * f, y = my + dy * f;
+    return [x, y, bay.at(x, y).ceiling];
+  };
   sh.smoothGrid(d.rings, ring.length - 1, (a, b) => {
-    const k = a / d.rings, x = mx + (ring[b].x - mx) * k, y = my + (ring[b].y - my) * k, e = 0.01;
+    const p = onRay(b, a / d.rings), e = 0.01, x = p[0], y = p[1];
     const dzx = (bay.at(x + e, y).ceiling - bay.at(x - e, y).ceiling) / (2 * e), dzy = (bay.at(x, y + e).ceiling - bay.at(x, y - e).ceiling) / (2 * e);
-    return { p: [x, y, bay.at(x, y).ceiling], n: v3norm([dzx, dzy, -1]), uv: [x, y] };
+    return { p, n: v3norm([dzx, dzy, -1]), uv: [x, y] };
   }, VAULT);
+  if (opening) shaftUp(sh, opening.shaft, ring.length - 1, (b) => onRay(b, 0), [mx, my], d);
+  if (opening?.lift) liftCage(sh, bay, opening.lift, lv.terrain.habitat.params.landmarks!.handrail, [mx, my], d);
   // The pillar at the bay's first corner (and, on the last row, the one at its far end).
   const placePillar = (x: number, y: number, levels: Levels): void => {
     const p = new Shape(d.shaft, true, true);
@@ -279,6 +383,87 @@ function buildBay(sh: Shape, lv: UnderLevels, s: Sizes, i: number, j: number, d:
       const y = (b / d.floor) * W, lvl = bay.at(x, y);
       return { p: [x, y, a ? lvl.ceiling : lvl.floor], n: [inward, 0, 0], uv: [y, a ? lvl.ceiling - lvl.floor : 0] };
     }, STONE);
+  }
+}
+
+/**
+ * A shaft over a bay's middle (`mid`, in the bay's frame), from its rim in the vault (`rim(b)`, the spandrel's inner
+ * ring, so the two meet exactly) up through the deck and the soil: a stone lining (widening to a light well's glass),
+ * closed at the top by the glass, bright with the day, or by the lift's stone head; a bronze lip round it up close.
+ */
+function shaftUp(sh: Shape, shaft: Shaft, rays: number, rim: (b: number) => Vec3, mid: [number, number], d: (typeof DETAIL)[UnderDetail]): void {
+  const rows = d.rings;
+  sh.finish = FINISH.stone;
+  sh.smoothGrid(rows, rays, (a, b) => {
+    const p = rim(b), dx = p[0] - mid[0], dy = p[1] - mid[1], l = Math.hypot(dx, dy), k = a / rows;
+    const r = shaft.radius + (shaft.topRadius - shaft.radius) * k, rise = shaft.top - p[2];
+    return {
+      p: [mid[0] + (dx / l) * r, mid[1] + (dy / l) * r, p[2] + rise * k],
+      n: v3norm([(-dx / l) * rise, (-dy / l) * rise, shaft.topRadius - shaft.radius]),
+      uv: [Math.atan2(dy, dx) * r, p[2] + rise * k],
+    };
+  }, VAULT);
+  const cap = new Shape(d.shaft, true, true);
+  cap.finish = shaft.cap === 'sky' ? FINISH.sky : FINISH.stone;
+  cap.arc(shaft.top, 0, shaft.top, shaft.topRadius, -1, 0, 0, 2 * Math.PI, d.shaft, shaft.cap === 'sky' ? SKY : STONE);
+  sh.append(cap, [1, 0, 0], [0, 1, 0], [0, 0, 1], [mid[0], mid[1], 0]);
+  if (!d.moulded) return;
+  // The lip: round the rim, half on the ceiling, half over the opening's edge.
+  sh.finish = FINISH.bronze;
+  const onRim = (t: number): Vec3 => {
+    const b = Math.min(rays - 1e-9, t * rays), k = Math.floor(b), f = b - k, p = rim(k), q = rim(k + 1);
+    return [p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f, p[2] + (q[2] - p[2]) * f];
+  };
+  const radial = (t: number): Vec3 => { const p = onRim(t); return v3norm([p[0] - mid[0], p[1] - mid[1], 0]); };
+  strip(sh, onRim, () => [0, 0, -1], radial, rays * 2, LIP.width, LIP.deep, BRONZE);
+}
+
+/**
+ * A court's lift cage over a bay's middle (`mid`): four bronze posts from the floor up into the shaft, bands round it
+ * every few metres, bronze panels below the first band but for the doorway on the side toward the court, and up
+ * close a lattice of crossed bars in each panel above.
+ */
+function liftCage(sh: Shape, bay: Bay, lift: UnderLift, hr: number, mid: [number, number], d: (typeof DETAIL)[UnderDetail]): void {
+  const f: Vec3 = [lift.toward[0], lift.toward[1], 0], v: Vec3 = [-lift.toward[1], lift.toward[0], 0], z: Vec3 = [0, 0, 1], h = lift.side / 2, L = LIFT;
+  const cornerAt = (a: number, b: number): [number, number] => {
+    const p = v3madd(v3madd([mid[0], mid[1], 0], f, a * h), v, b * h);
+    return [p[0], p[1]];
+  };
+  const centre = bay.at(mid[0], mid[1]), floor = centre.floor, ceiling = centre.ceiling;
+  sh.finish = FINISH.bronze;
+  // The posts, each from the floor under it into the shaft.
+  for (const [a, b] of [[1, 1], [1, -1], [-1, -1], [-1, 1]]) {
+    const [x, y] = cornerAt(a, b), lvl = bay.at(x, y), top = lvl.ceiling + LIP.deep * 2;
+    sh.block([x, y, (lvl.floor + top) / 2], f, v, z, [(L.post * hr) / 2, (L.post * hr) / 2, (top - lvl.floor) / 2], BRONZE);
+  }
+  // The sides: from the corner (a0, b0) to (a1, b1), and the way out of the cage there.
+  const sides: { from: [number, number]; to: [number, number]; out: Vec3; door: boolean }[] = [
+    { from: [1, -1], to: [1, 1], out: f, door: true },
+    { from: [1, 1], to: [-1, 1], out: v, door: false },
+    { from: [-1, 1], to: [-1, -1], out: [-f[0], -f[1], 0], door: false },
+    { from: [-1, -1], to: [1, -1], out: [-v[0], -v[1], 0], door: false },
+  ];
+  const levels: number[] = [];
+  for (let zb = floor + L.door * hr; zb < ceiling - L.every * hr * 0.5; zb += L.every * hr) levels.push(zb);
+  for (const side of sides) {
+    const [x0, y0] = cornerAt(...side.from), [x1, y1] = cornerAt(...side.to), dir = v3norm([x1 - x0, y1 - y0, 0]);
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    for (const zb of levels) sh.block([cx, cy, zb], dir, v3cross(z, dir), z, [h, (L.band * hr) / 2, (L.band * hr) / 2], BRONZE);
+    // Below the first band: a panel, but for the doorway.
+    if (!side.door) {
+      const l0 = bay.at(x0, y0).floor, l1 = bay.at(x1, y1).floor, top = levels[0] ?? floor + L.door * hr;
+      sh.faceToward([x0, y0, l0], [x1, y1, l1], [x1, y1, top], [x0, y0, top], side.out, BRONZE);
+      sh.faceToward([x0, y0, l0], [x0, y0, top], [x1, y1, top], [x1, y1, l1], [-side.out[0], -side.out[1], 0], BRONZE);
+    }
+    if (!d.moulded) continue;
+    // The lattice: two crossed bars in each panel between bands.
+    for (let k = 0; k + 1 < levels.length; k++) {
+      const z0 = levels[k], z1 = levels[k + 1], len = Math.hypot(2 * h, z1 - z0);
+      for (const sgn of [1, -1]) {
+        const ax = v3norm([dir[0] * 2 * h * sgn, dir[1] * 2 * h * sgn, z1 - z0]), up = v3norm(v3cross(ax, side.out));
+        sh.block([cx, cy, (z0 + z1) / 2], ax, side.out, up, [len / 2, (L.bar * hr) / 2, (L.bar * hr) / 2], BRONZE);
+      }
+    }
   }
 }
 
@@ -301,19 +486,22 @@ function ribAcross(sh: Shape, at: (t: number) => Vec3, across: (t: number) => Ve
   strip(sh, at, down, across, steps, width, deep);
 }
 
-/** A band of rectangular section along a curve: its face `deep` off along `out`, its sides `width` apart along `side`. */
-function strip(sh: Shape, at: (t: number) => Vec3, out: (t: number) => Vec3, side: (t: number) => Vec3, steps: number, width: number, deep: number): void {
-  const stripAt = (t: number, w: number, o: number): Vec3 => {
-    const p = at(t), n = out(t), e = side(t);
-    return [p[0] + e[0] * w + n[0] * o, p[1] + e[1] * w + n[1] * o, p[2] + e[2] * w + n[2] * o];
-  };
-  const h = width / 2;
-  for (let k = 0; k < steps; k++) {
-    const t0 = k / steps, t1 = (k + 1) / steps, n = out((t0 + t1) / 2), e = side((t0 + t1) / 2);
-    sh.faceToward(stripAt(t0, -h, deep), stripAt(t0, h, deep), stripAt(t1, h, deep), stripAt(t1, -h, deep), n, VAULT);
-    sh.faceToward(stripAt(t0, h, 0), stripAt(t0, h, deep), stripAt(t1, h, deep), stripAt(t1, h, 0), e, VAULT);
-    sh.faceToward(stripAt(t0, -h, 0), stripAt(t0, -h, deep), stripAt(t1, -h, deep), stripAt(t1, -h, 0), [-e[0], -e[1], -e[2]], VAULT);
-  }
+/**
+ * A moulding of rounded section along a curve: it rises out of the surface on both sides (`width` apart along `side`)
+ * to its crown `deep` off along `out`, its normals turning smoothly from the sides to the crown, so it catches the
+ * lamps' light as stone does and never shows a hard dark edge.
+ */
+function strip(sh: Shape, at: (t: number) => Vec3, out: (t: number) => Vec3, side: (t: number) => Vec3, steps: number, width: number, deep: number, col: RGB = VAULT): void {
+  const h = width / 2, n = RIB_SECTION;
+  sh.smoothGrid(n, steps, (a, b) => {
+    const t = b / steps, phi = (a / n) * Math.PI, p = at(t), o = out(t), e = side(t);
+    const w = h * Math.cos(phi), d = deep * Math.sin(phi), lean = Math.max(Math.sin(phi), RIB_LEAN);
+    return {
+      p: [p[0] + e[0] * w + o[0] * d, p[1] + e[1] * w + o[1] * d, p[2] + e[2] * w + o[2] * d],
+      n: v3norm([e[0] * Math.cos(phi) + o[0] * lean, e[1] * Math.cos(phi) + o[1] * lean, e[2] * Math.cos(phi) + o[2] * lean]),
+      uv: [t * steps, a / n],
+    };
+  }, col);
 }
 
 /** The bays a tile covers. */
@@ -394,24 +582,75 @@ const floorLight = kept((h: Habitat): number => {
 /** The mist's extinction per metre: a quarter of the light left over `under.mist`. */
 const sigmaOf = (h: Habitat): number => Math.log(4) / h.params.under.mist;
 
+/** A light well as its light sees it: the oculus (world, its middle in the vault), the way down there, its radius and the exitance of its light (a share of the day's on the land); the pool of it on the floor, shining back up. */
+interface WellLight {
+  at: Vec3;
+  down: Vec3;
+  radius: number;
+  exitance: number;
+  pool: Vec3;
+  poolRadius: number;
+  poolExitance: number;
+}
+
+/** The wells that light bay (i, j): over it and its neighbours (further off, a well's light is spent). */
+function wellsNear(lv: UnderLevels, i0: number, j0: number): WellLight[] {
+  const t = lv.terrain, h = t.habitat, u = lv.under, out: WellLight[] = [];
+  for (let j = j0 - 1; j <= j0 + 1; j++) for (let i = i0 - 1; i <= i0 + 1; i++) {
+    const w = openingOver(t, i, j)?.shaft;
+    if (!w || w.cap !== 'sky') continue;
+    const c = u.centreOf(i, j), l = lv.levelAt(c.theta, c.s), room = l.ceiling - l.floor;
+    const exitance = WELL_PASS * (w.topRadius / w.radius) ** 2, poolRadius = w.radius + POOL_SPREAD * room;
+    // What reaches the floor comes back off it from the pool: the oculus's whole flux, spread over the pool.
+    const poolExitance = FLOOR_BACK * exitance * (w.radius / poolRadius) ** 2;
+    out.push({
+      at: toWorld(h.profile, { theta: c.theta, s: c.s, h: l.ceiling }), down: [Math.cos(c.theta), Math.sin(c.theta), 0], radius: w.radius, exitance,
+      pool: toWorld(h.profile, { theta: c.theta, s: c.s, h: l.floor }), poolRadius, poolExitance,
+    });
+  }
+  return out;
+}
+
+/** Light at a point (normal n) from a round Lambertian source of `radius` and `exitance` at `at`, facing `facing`. */
+function discLight(at: Vec3, facing: Vec3, radius: number, exitance: number, p: Vec3, n: Vec3, sigma: number): number {
+  const D = v3sub(at, p), d = Math.hypot(D[0], D[1], D[2]);
+  if (d < 1e-6) return 0;
+  const out = -v3dot(facing, D) / d, cosine = v3dot(n, D) / d;
+  return out > 0 && cosine > 0 ? exitance * ((radius * radius * out * cosine) / (d * d + radius * radius)) * Math.exp(-sigma * d) : 0;
+}
+
+/** The day's light down the wells at a point (normal n), as a share of the day's light on the land: from the oculus, and back off its pool. */
+function wellLight(wells: readonly WellLight[], p: Vec3, n: Vec3, sigma: number): number {
+  let e = 0;
+  for (const w of wells) {
+    e += discLight(w.at, w.down, w.radius, w.exitance, p, n, sigma);
+    e += discLight(w.pool, [-w.down[0], -w.down[1], -w.down[2]], w.poolRadius, w.poolExitance, p, n, sigma);
+  }
+  return e;
+}
+
 /**
  * The glow of bay (i, j)'s vertices in a shape (from `first` on, in the tile's frame `origin`), onto `glow`: each one's
- * lamp light relative to the floor mid-bay, with the light back off every surface, and its daylight (none yet).
+ * lamp light relative to the floor mid-bay, with the light back off every surface, and the day's light down the wells
+ * near it (a share of the day's on the land).
  */
 function bakeGlow(lv: UnderLevels, s: Sizes, i: number, j: number, origin: Place, m: Shape, first: number, glow: number[]): void {
-  const h = lv.terrain.habitat, lamps = lampsNear(lv, s, i, j), ref = floorLight(h), sigma = sigmaOf(h), reach = (LAMP_REACH + 0.5) * lv.under.bay;
+  const h = lv.terrain.habitat, lamps = lampsNear(lv, s, i, j), wells = wellsNear(lv, i, j), ref = floorLight(h), sigma = sigmaOf(h), reach = (LAMP_REACH + 0.5) * lv.under.bay;
   const ringRadius = PILLAR.lamp * s.rp, P = m.pos, N = m.nrm;
   for (let v = first; v < m.vertices; v++) {
     const p = outOfPlace(origin, [P[v * 3], P[v * 3 + 1], P[v * 3 + 2]]);
     const nx = N[v * 3], ny = N[v * 3 + 1], nz = N[v * 3 + 2];
     const nw: Vec3 = [0, 1, 2].map((a) => origin.ex[a] * nx + origin.ey[a] * ny + origin.ez[a] * nz) as Vec3;
-    glow.push(Math.min(BRIGHTEST, (lampLight(lamps, p, nw, ringRadius, sigma, reach) + BOUNCE * ref) / ((1 + BOUNCE) * ref)), 0);
+    glow.push(
+      Math.min(BRIGHTEST, (lampLight(lamps, p, nw, ringRadius, sigma, reach) + BOUNCE * ref) / ((1 + BOUNCE) * ref)),
+      wells.length ? Math.min(1, wellLight(wells, p, nw, sigma)) : 0,
+    );
   }
 }
 
 /**
- * The Understorey's solid parts near a world point, for the physics: the floors, the pillars (plinth and shaft) and the
- * end walls of the bays within `size` of it, relative to `origin`.
+ * The Understorey's solid parts near a world point, for the physics: the floors, the pillars (plinth and shaft), the
+ * lifts' cages and the end walls of the bays within `size` of it, relative to `origin`.
  */
 export function underSolid(t: Terrain, origin: Vec3, size: number): { positions: Float32Array; index: Uint32Array } {
   const h = t.habitat, lv = levelsOf(t), u = lv.under, s = sizesOf(h), at = fromWorld(h.profile, origin[0], origin[1], origin[2]);
@@ -431,6 +670,9 @@ export function underSolid(t: Terrain, origin: Vec3, size: number): { positions:
     };
     post(0, 0, bay.corners[0]);
     if (j === u.along - 1) post(A, 0, bay.corners[1]);
+    // A court's lift cage: its posts, bands and panels (the doorway open).
+    const lift = openingOver(t, i, j)?.lift;
+    if (lift) liftCage(b, bay, lift, h.params.landmarks!.handrail, [A / 2, W / 2], DETAIL.far);
     for (const [x, end] of [[0, j === 0], [A, j === u.along - 1]] as const) {
       if (!end) continue;
       const l0 = bay.at(x, 0), l1 = bay.at(x, W);

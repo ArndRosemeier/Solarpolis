@@ -298,6 +298,45 @@ export function makeTerrain(h: Habitat): Terrain {
   const rivers = makeRivers(form, landAt);
   const reach = valleyReach(h);
 
+  // The paths (gen/paths.ts): the ground levelled across each at the land of its middle line, except where that lies
+  // under the lake (the Sunwalk crosses it on the pavilion's bridges) or in a river; the courts the ways lead down into
+  // are dug after.
+  // The level along each piece is the land's, taken every `LEVEL_STEP` widths, the first time the piece is met (at
+  // most the paths' length over that step, in floats: a few hundred kB for the reference, all of it walked).
+  const net = pathsOf(h);
+  const levels: (Float32Array | undefined)[] = [];
+  const levelOf = (piece: number, t: number, width: number): number => {
+    let line = levels[piece];
+    if (!line) {
+      const n = Math.max(1, Math.ceil(net.lengthOf(piece) / (width * LEVEL_STEP)));
+      line = levels[piece] = new Float32Array(n + 1);
+      for (let i = 0; i <= n; i++) { const p = net.pointOf(piece, i / n); line[i] = carved(p.theta, p.s); }
+    }
+    const f = t * (line.length - 1), i = Math.min(line.length - 2, Math.floor(f));
+    return line.length < 2 ? line[0] : line[i] + (line[i + 1] - line[i]) * (f - i);
+  };
+  /** The land with the rivers' channels and valleys carved into it. */
+  const carved = (theta: number, s: number): number => {
+    const g = landAt(theta, s);
+    const hit = rivers.length ? riverAt(rivers, theta, s, reach) : null;
+    return hit ? carve(hit, hit.river.depth, g) : g;
+  };
+
+  /** The ground before the courts are dug: the land, the rivers carved into it, the paths levelled over it. */
+  const uncut = (theta: number, s: number): number => {
+    const g = landAt(theta, s);
+    const hit = rivers.length ? riverAt(rivers, theta, s, reach) : null;
+    let ground = hit ? carve(hit, hit.river.depth, g) : g;
+    // A path over the carved land (down a river's valley side and up the other), but not through its water: there
+    // the river's bed is the ground (a ford, for now).
+    const way = net.pieces ? net.pathAt(theta, s) : null;
+    if (way && !(hit && Math.abs(hit.across) < hit.halfWidth)) {
+      const level = levelOf(way.piece, way.along, way.width);
+      if (!(lake && level < lake.level && fromLake(lake, way.s) < 0)) ground = gradePath(ground, level, way);
+    }
+    return ground;
+  };
+
   // The entrances' courts, each with the level of its floor, filed in a grid over the unrolled floor by every cell its
   // clear ring touches, so a point looks in one cell.
   const clear = COURT.clear * (h.params.landmarks?.handrail ?? 0);
@@ -305,11 +344,12 @@ export function makeTerrain(h: Habitat): Terrain {
   for (const site of planOf(h).sites) {
     const c = site.kind === 'entrance' ? courtOf(h, site) : null;
     if (!c) continue;
-    // The floor lies its depth under the lowest ground on the rim, so it never opens to daylight downhill.
-    let low = landAt(c.theta, c.s);
+    // The floor lies its depth under the lowest ground on the rim (a river's bank or a way cut into it included), so
+    // it never opens to daylight downhill.
+    let low = uncut(c.theta, c.s);
     for (let i = 0; i < 16; i++) {
       const a = (i / 16) * 2 * Math.PI;
-      low = Math.min(low, landAt(c.theta + (c.radius * Math.cos(a)) / R, c.s + c.radius * Math.sin(a)));
+      low = Math.min(low, uncut(c.theta + (c.radius * Math.cos(a)) / R, c.s + c.radius * Math.sin(a)));
     }
     const floor = low - c.depth;
     courts.push({ court: { ...c, floor }, floor, reach: c.radius + clear });
@@ -346,42 +386,8 @@ export function makeTerrain(h: Habitat): Terrain {
     return up > 0 ? floor + up * Math.min(1, Math.max(t, ((d - inner) * Math.tan(COURT.wall)) / up)) : floor + up * t;
   };
 
-  // The paths (gen/paths.ts): the ground levelled across each at the land of its middle line, except where that lies
-  // under the lake (the Sunwalk crosses it on the pavilion's bridges) or in a river; the courts the ways lead down into
-  // are dug after.
-  // The level along each piece is the land's, taken every `LEVEL_STEP` widths, the first time the piece is met (at
-  // most the paths' length over that step, in floats: a few hundred kB for the reference, all of it walked).
-  const net = pathsOf(h);
-  const levels: (Float32Array | undefined)[] = [];
-  const levelOf = (piece: number, t: number, width: number): number => {
-    let line = levels[piece];
-    if (!line) {
-      const n = Math.max(1, Math.ceil(net.lengthOf(piece) / (width * LEVEL_STEP)));
-      line = levels[piece] = new Float32Array(n + 1);
-      for (let i = 0; i <= n; i++) { const p = net.pointOf(piece, i / n); line[i] = carved(p.theta, p.s); }
-    }
-    const f = t * (line.length - 1), i = Math.min(line.length - 2, Math.floor(f));
-    return line.length < 2 ? line[0] : line[i] + (line[i + 1] - line[i]) * (f - i);
-  };
-  /** The land with the rivers' channels and valleys carved into it. */
-  const carved = (theta: number, s: number): number => {
-    const g = landAt(theta, s);
-    const hit = rivers.length ? riverAt(rivers, theta, s, reach) : null;
-    return hit ? carve(hit, hit.river.depth, g) : g;
-  };
-
   const heightAt = (theta: number, s: number): number => {
-    const g = landAt(theta, s);
-    const hit = rivers.length ? riverAt(rivers, theta, s, reach) : null;
-    let ground = hit ? carve(hit, hit.river.depth, g) : g;
-    // A path over the carved land (down a river's valley side and up the other), but not through its water: there
-    // the river's bed is the ground (a ford, for now).
-    const way = net.pieces ? net.pathAt(theta, s) : null;
-    if (way && !(hit && Math.abs(hit.across) < hit.halfWidth)) {
-      const level = levelOf(way.piece, way.along, way.width);
-      if (!(lake && level < lake.level && fromLake(lake, way.s) < 0)) ground = gradePath(ground, level, way);
-    }
-    const near = courts.length ? nearCourt(theta, s) : null;
+    const ground = uncut(theta, s), near = courts.length ? nearCourt(theta, s) : null;
     return near && near.distance < near.at.court.radius ? dig(ground, near.at.floor, near.at.court.radius, near.distance) : ground;
   };
   const inRiver = (theta: number, s: number): RiverHit | null => {

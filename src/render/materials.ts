@@ -715,31 +715,38 @@ const NO_ROOF = new Vector4(0, 0, 0, 0);
  */
 export const below = {
   lamp: uniform(0.1),
+  /** The day's light on the land above (1: the mid floor at midday in the open), which comes down the light wells. */
+  day: uniform(0),
   tint: uniform(color(...LAMPLIGHT)),
   extinction: uniform(Math.log(4) / 150),
 };
 
 /** Load a habitat's Understorey into the shaders' uniforms. */
 export function setBelow(lamp: number, mist: number): void {
+  below.day.value = 0;
   below.lamp.value = lamp;
   below.extinction.value = Math.log(4) / mist;
 }
 
 /** A lamp's glowing face (finish `lamp`), and the lamp-lit mist at its thickest (the view's background below), in the lamps' floor light. */
 const LAMP_FACE = 6;
+/** A light well's glass seen from below (finish `sky`), in the day's light on the land: the bright sky past the court. */
+const SKY_FACE = 1.5;
 export const MIST_GLOW = 0.25;
 
 /**
  * The Understorey's structure (gen/underMesh.ts): no sunline reaches it, so it is lit by its lamps alone, as baked per
- * vertex (`glow`: x the lamps' light relative to the floor mid-bay, y daylight down a well, not yet used), over a built
- * finish (`builtAlbedo`); a lamp's own face glows. Distance fades into the lamp-lit mist below, not the land's haze.
+ * vertex (`glow`: x the lamps' light relative to the floor mid-bay, y the day's down a light well, a share of the day's
+ * on the land, `below.day`), over a built finish (`builtAlbedo`); a lamp's own face glows, and a well's glass with the day. Distance fades into the lamp-lit mist below, not the land's haze.
  */
 export const VAULT = kind('vault', ['position', 'normal', 'color', 'uv', 'finish', 'glow'], { cast: false, receive: false }, () => {
   const m = new MeshBasicNodeMaterial();
   const glow = attribute<'vec2'>('glow', 'vec2'), finish = attribute<'float'>('finish', 'float');
   const light = below.tint.mul(below.lamp);
   const albedo = builtAlbedo(vertexColor().rgb, uv(), finish);
-  const surface = mix(albedo.mul(light).mul(glow.x), light.mul(LAMP_FACE), step(3.5, finish));
+  const lit = albedo.mul(light.mul(glow.x).add(below.day.mul(glow.y)));
+  const face = mix(light.mul(LAMP_FACE), vec3(below.day.mul(SKY_FACE)), step(4.5, finish));
+  const surface = mix(lit, face, step(3.5, finish));
   const kept = exp(below.extinction.negate().mul(positionWorld.sub(cameraPosition).length()));
   m.colorNode = surface.mul(kept).add(light.mul(MIST_GLOW).mul(float(1).sub(kept))).mul(view.exposure);
   return m;
