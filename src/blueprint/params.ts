@@ -217,6 +217,36 @@ export interface Life {
   walk: number;
   /** How far from the court they came up at people usually go (m). */
   reach: number;
+  /** The drones that work the land (sim/air.ts). */
+  drones: Drones;
+}
+
+/**
+ * The drones that work the land (design "Who is out on the land": each a small mind with a job, built from Actors'
+ * drone kit). How many of each role, by what there is to do:
+ *
+ *   couriers   per entrance court: they carry food, wine and parcels from it to the places around it and back;
+ *   tenders    per orchard block, and as many per row of the Vine face's parcels: they prune and pick beside people;
+ *   surveyors  per hike point of the reserve, and at the Mountain's flight launch: they circle, map and measure;
+ *   lifters    at the Gate, bringing loads down its face from the hub, and one per makers' commons, moving stone;
+ *   gliders    per km of the floor's length: they ride the still, thin air near the axis;
+ *   guardians  per km of the ring lake's shores, and at the flight launch: they hover, ready to catch a flyer or a swimmer.
+ */
+export interface Drones {
+  couriers: number;
+  tenders: number;
+  surveyors: number;
+  lifters: number;
+  gliders: number;
+  guardians: number;
+  /** How fast they cruise (m/s). */
+  cruise: number;
+  /** How high the couriers' lanes run over the ground (m), clear of the trees. */
+  lane: number;
+  /** How long a courier's round lasts (s): up, out to a place near its court, a stop, back, and a rest on its pad. */
+  round: number;
+  /** How many designs each role is built in (each made once from the kit, a whole number, at least 1). */
+  designs: number;
 }
 
 export interface HabitatParams {

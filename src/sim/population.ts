@@ -254,10 +254,10 @@ export function lifeBytes(h: Habitat): number {
   return n;
 }
 
-/** Routes kept per habitat, a bounded number. */
+/** Routes kept per habitat, a bounded number (the one way to a route between two points of the walk net: people and couriers). */
 const KEEP_ROUTES = 4096;
 const routeCache = new WeakMap<Habitat, Map<number, Route>>();
-function routeOf(h: Habitat, from: number, to: number): Route {
+export function routeOf(h: Habitat, from: number, to: number): Route {
   let m = routeCache.get(h);
   if (!m) { m = new Map(); routeCache.set(h, m); }
   const net = walksOf(h), key = from * net.size + to;

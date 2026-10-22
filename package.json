@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@actors/core": "https://github.com/ArndRosemeier/Actors/releases/download/v0.6.0/actors-core-0.6.0.tgz",
+    "@actors/drone": "https://github.com/ArndRosemeier/Actors/releases/download/v0.6.0/actors-drone-0.6.0.tgz",
     "@actors/generator": "https://github.com/ArndRosemeier/Actors/releases/download/v0.6.0/actors-generator-0.6.0.tgz",
     "@actors/human": "https://github.com/ArndRosemeier/Actors/releases/download/v0.6.0/actors-human-0.6.0.tgz",
     "@actors/three": "https://github.com/ArndRosemeier/Actors/releases/download/v0.6.0/actors-three-0.6.0.tgz",
