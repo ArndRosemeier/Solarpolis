@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.089 — Entrance courts keep off the ends of the land
+
+- No entrance court is dug into the foot of the Gate any more, or set right at the edge of the wild reserve: each keeps about an eighth of the entrance spacing from both. One court in the reference habitat used to sit 6 m from the Gate, its floor 68 m down.
+
 ## v0.088 — The pillar forest below the land
 
 - Below the land there is now a place to stand: the Understorey, a forest of stone pillars whose fan vaults hold up the land above, lit by warm lamps under each capital and fading into lamp-lit mist.
