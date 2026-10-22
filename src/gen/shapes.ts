@@ -165,6 +165,42 @@ export class Shape {
   }
 
   /**
+   * A round tube along a polyline (a limb, a rope, a pipe that bends): a ring of `sides` corners at each point, its radius
+   * there, turned with the line (parallel transport, so it never twists), normals smooth round it. Open ends: it runs
+   * into something at both. Mapped along its length and round its girth.
+   */
+  curvedTube(points: readonly Vec3[], radii: readonly number[], sides: number, col: RGB): void {
+    const n = points.length;
+    if (n < 2) return;
+    const tan = (i: number): Vec3 => v3norm(v3sub(points[Math.min(n - 1, i + 1)], points[Math.max(0, i - 1)]));
+    let t = tan(0);
+    let nx = v3norm(v3cross(Math.abs(t[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0], t));
+    const base = this.vertices;
+    let run = 0;
+    for (let i = 0; i < n; i++) {
+      if (i > 0) {
+        run += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1], points[i][2] - points[i - 1][2]);
+        const t1 = tan(i);
+        // Carry the frame along: take out of nx what now lies along the line.
+        const d = v3dot(nx, t1);
+        nx = v3norm([nx[0] - t1[0] * d, nx[1] - t1[1] * d, nx[2] - t1[2] * d]);
+        t = t1;
+      }
+      const ny = v3cross(t, nx), r = radii[i];
+      for (let k = 0; k <= sides; k++) {
+        const a = (k / sides) * 2 * Math.PI, c = Math.cos(a), sn = Math.sin(a);
+        const nn: Vec3 = [nx[0] * c + ny[0] * sn, nx[1] * c + ny[1] * sn, nx[2] * c + ny[2] * sn];
+        this.put([points[i][0] + nn[0] * r, points[i][1] + nn[1] * r, points[i][2] + nn[2] * r], nn, col, [run, (k / sides) * 2 * Math.PI * r]);
+      }
+    }
+    const row = sides + 1;
+    for (let i = 0; i + 1 < n; i++) for (let k = 0; k < sides; k++) {
+      const a = base + i * row + k, b = a + 1, c = a + row, d = c + 1;
+      this.idx.push(a, b, d, a, d, c);
+    }
+  }
+
+  /**
    * Another shape put into this one: its x, y and z axes become `ex`, `ey`, `ez` (unit, right-handed, so front faces
    * stay front) and its origin `at`. With `colored`, its colours come along.
    */

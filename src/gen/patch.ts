@@ -3,7 +3,7 @@
  * relative to its own origin (the point on the ground at its centre) so the physics engine's 32-bit floats stay
  * precise (docs/ARCHITECTURE.md, "Where does the camera sit?"). The same heights as the tiles (`terrain.heightAt`),
  * on a grid of (θ, s), so it wraps around the axis and climbs the endcaps like everything else, with the solid parts of
- * the landmarks, the Lift Stair, the entrance courts and the river crossings near it. Pure.
+ * the landmarks, the Lift Stair, the entrance courts, the river crossings and the grown halls near it. Pure.
  */
 import { toWorld, type Vec3 } from '../blueprint';
 import type { Terrain } from './terrain';
@@ -11,8 +11,9 @@ import { buildLandmark, frameOf, landmarksOf, reachOf, type Landmark } from './l
 import { outOfPlace } from './shapes';
 import { kept } from './kept';
 import { buildStairSolid } from './liftStairMesh';
-import { courtSolids } from './courts';
-import { crossingSolids } from './crossings';
+import { courtSites } from './courts';
+import { crossingSites } from './crossings';
+import { hallSites } from './grownHall';
 import { v3sub } from '@futuremagic/core';
 
 export interface GroundPatch {
@@ -77,10 +78,10 @@ function landmarkSolids(terrain: Terrain, origin: Vec3, size: number): { positio
   return arraysOf(out);
 }
 
-/** The entrance courts' and the river crossings' solid parts near a patch (gen/courts.ts, gen/crossings.ts), relative to its origin. */
+/** The solid parts of the things at sites on the floor near a patch (the courts, crossings, grown halls), relative to its origin. */
 function siteSolidsNear(terrain: Terrain, origin: Vec3, size: number): { positions: Float32Array; index: Uint32Array } {
   const out: Solid = { pos: [], idx: [] };
-  for (const a of [...courtSolids(terrain, origin, size), ...crossingSolids(terrain, origin, size)]) keepNear(out, a, (p) => v3sub(p, origin), size * 0.75);
+  for (const a of [courtSites, crossingSites, hallSites].flatMap((kind) => kind.solids(terrain, origin, size))) keepNear(out, a, (p) => v3sub(p, origin), size * 0.75);
   return arraysOf(out);
 }
 

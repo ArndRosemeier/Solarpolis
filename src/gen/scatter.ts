@@ -148,10 +148,10 @@ export function plantsOf(ecology: Ecology): Species[] {
   };
   ecology.climate.biomes.forEach((b, biome) => { for (const spec of b.plants) plant(spec, biome, 'plant'); });
   // Each planted species as one of its own, sized by its tallest planted plant.
-  for (const g of plantingsOf(ecology.terrain).groves) {
-    if (out.some((sp) => sp.what === 'planted' && sp.spec.name === g.spec.name)) continue;
-    const tall = Math.max(...(plantingsOf(ecology.terrain).bySpecies.get(g.spec.name) ?? []).map((p) => p.height), g.spec.height[1]);
-    plant({ ...g.spec, height: [g.spec.height[0], tall] }, -1, 'planted');
+  const planted = plantingsOf(ecology.terrain);
+  for (const spec of planted.species) {
+    const tall = Math.max(...(planted.bySpecies.get(spec.name) ?? []).map((p) => p.height), spec.height[1]);
+    plant({ ...spec, height: [spec.height[0], tall] }, -1, 'planted');
   }
   const onFloor = (what: 'cover' | 'debris', spec: CoverSpec | DebrisSpec, band: [number, number, number, number][]) =>
     out.push({ id: out.length, biome: -1, on: FLOOR_LAYERS.indexOf(spec.on), what, spec, cell: cellsFor(band, what === 'debris' ? DEBRIS_ACROSS : 0), band, seen: band[band.length - 1][3], tall: spec.height[1] });

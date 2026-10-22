@@ -13,9 +13,9 @@
  *
  * The stone is the district's (`STYLE_STONE`: each style builds its courts its own way), and a district that let its
  * land go keeps its courts without railings, slabs missing from their paving. Sizes come from the court (its radius and depth, `courtOf` in
- * gen/plan.ts) and the handrail; steps follow gravity (`riserAt`). Courts stream in tiles over the floor (a
- * `detailTree` grid; `courtTilesFor`, `buildCourtTile`): far, mid and near detail by a tile's size; `courtSolids`
- * gives the physics the courts near a point, and `courtTopAt` what people stand on. Pure.
+ * gen/plan.ts) and the handrail; steps follow gravity (`riserAt`). Courts are things at sites (`courtSites`,
+ * gen/siteTiles.ts): they stream in tiles over the floor, far, mid and near detail by a tile's size; `solids` gives the
+ * physics the courts near a point, and `topAt` what people stand on. Pure.
  */
 import type { DistrictStyle, Habitat, Vec3 } from '../blueprint';
 import { Rng, deriveSeed } from '@futuremagic/core';
@@ -24,9 +24,8 @@ import { planOf } from './plan';
 import { kept } from './kept';
 import { FLIGHT, REST, TREAD, riserAt } from './liftStair';
 import { FINISH, polar, railing, topRail } from './pavilion';
-import { Shape, bendInto, floorPoint, placeAt, shade, solidOnFloor, topOnFloor, type FloorFrame, type MappedArrays, type Place, type RGB } from './shapes';
-import type { TileKey, WantedTile } from './detailTree';
-import { siteDetailOf, siteGrid, siteTileMiddle, siteTilesFor, sitesIn, sitesNear, type Site, type SiteDetail, type SiteGrid } from './siteTiles';
+import { Shape, floorPoint, shade, type FloorFrame, type RGB } from './shapes';
+import { siteParts, type Site, type SiteDetail } from './siteTiles';
 
 /** A court's parts, in handrails. */
 const PART = {
@@ -131,13 +130,6 @@ export function courtLayoutOf(t: Terrain, index: number): CourtLayout | null {
   const cache = layoutsOf(t);
   if (!cache.has(index)) cache.set(index, layCourt(t, index));
   return cache.get(index)!;
-}
-
-/** The court near (θ, s) and its frame, or null. */
-function courtNear(t: Terrain, theta: number, s: number): { thing: CourtLayout; frame: FloorFrame } | null {
-  const near = t.courtAt(theta, s), i = near ? indexOf(t).get(near.court) : undefined;
-  const l = i === undefined ? null : courtLayoutOf(t, i);
-  return l && { thing: l, frame: frameOf(l.court) };
 }
 
 function layCourt(t: Terrain, index: number): CourtLayout | null {
@@ -424,75 +416,18 @@ export function courtWorld(h: Habitat, c: PlacedCourt, p: Vec3): Vec3 {
   return floorPoint(h, frameOf(c), p);
 }
 
-/** The courts' tiles: a grid over the floor (around × along), each cell `CELL` handrails; roots 2^ROOT cells a side. */
-const CELL = 23;
-const ROOT = 7;
-const FINEST = 2;
-
 /** Each court as a site on the floor (its walk reaches a little past its radius). */
 const sitesOf = kept((t: Terrain): Site[] => t.courts.map((c) => ({ theta: c.theta, s: c.s, reach: c.radius * 1.2 })));
 
-/** A terrain's court grid (null without courts), made once. */
-export const courtGridOf: (t: Terrain) => SiteGrid | null = kept((t: Terrain) => {
-  const hr = t.habitat.params.landmarks?.handrail;
-  return hr ? siteGrid(t.habitat, sitesOf(t), CELL * hr, ROOT, FINEST) : null;
-});
-
-/** The detail a tile of a level is built at. */
-export function courtDetailOf(g: SiteGrid, level: number, handrail: number): Exclude<CourtDetail, 'solid'> {
-  return siteDetailOf(g, level, handrail);
-}
-
-/** The courts a tile owns: those whose middle lies in it. */
-export function courtsIn(t: Terrain, key: TileKey): number[] {
-  const g = courtGridOf(t);
-  return g ? sitesIn(g, sitesOf(t), key) : [];
-}
-
-/** The tiles wanted around an eye (world, m): the quadtree over the floor, coarsest first, nearest first. */
-export function courtTilesFor(t: Terrain, eye: Vec3): WantedTile[] {
-  const g = courtGridOf(t);
-  return g ? siteTilesFor(t.habitat, g, eye) : [];
-}
-
-export interface CourtTile {
-  key: TileKey;
-  origin: Place;
-  mesh: MappedArrays;
-  /** How many courts it holds. */
-  courts: number;
-}
-
-/** A tile of a terrain's courts: every court it owns at the tile's detail, in a frame at the tile's middle. */
-export function buildCourtTile(t: Terrain, key: TileKey): CourtTile {
-  const g = courtGridOf(t), h = t.habitat;
-  if (!g) throw new Error('buildCourtTile: this terrain has no courts');
-  const m = siteTileMiddle(g, key), origin = placeAt(h, m.theta, m.s, 0), out = new Shape(8, true, true);
-  const detail = courtDetailOf(g, key.level, h.params.landmarks!.handrail);
-  let courts = 0;
-  for (const i of courtsIn(t, key)) {
-    const l = courtLayoutOf(t, i);
-    if (!l) continue;
-    bendInto(out, h, frameOf(l.court), buildCourt(l, detail), origin);
-    courts++;
-  }
-  return { key, origin, mesh: out.mappedArrays(), courts };
-}
-
-/** A court's solid parts in the world (m), built once. */
-const solidOf = kept((l: CourtLayout) => {
-  return solidOnFloor(l.habitat, frameOf(l.court), buildCourt(l, 'solid'));
-});
-
-/** The solid parts (world, m) of every court within `reach` of a point: walks, walls, stairs, railings, portals. */
-export function courtSolids(t: Terrain, at: Vec3, reach: number): { positions: Float32Array; index: Uint32Array }[] {
-  return sitesNear(t.habitat, sitesOf(t), at, reach).map((i) => courtLayoutOf(t, i)).filter((l): l is CourtLayout => !!l).map(solidOf);
-}
-
 /**
- * The height over the profile of the walkable top of a court at (θ, s), or null outside every court (the ground
- * there is the terrain's). On the floor true up is the profile's normal, so this is a drop onto it.
+ * The courts as things at sites (gen/siteTiles.ts): their grid, tiles, solids for the physics and the top one stands
+ * on (`courtSites.topAt`: on the floor true up is the profile's normal, so this is a drop onto it). A court too small
+ * to stair has nothing built.
  */
-export function courtTopAt(t: Terrain, theta: number, s: number): number | null {
-  return topOnFloor(t.habitat, theta, s, courtNear(t, theta, s), courtTop);
-}
+export const courtSites = siteParts({
+  sites: sitesOf,
+  frame: (t, i) => { const l = courtLayoutOf(t, i); return l && frameOf(l.court); },
+  build: (t, i, detail) => buildCourt(courtLayoutOf(t, i)!, detail),
+  at: (t, theta, s) => { const near = t.courtAt(theta, s); return (near && indexOf(t).get(near.court)) ?? null; },
+  top: (t, i, x, y) => courtTop(courtLayoutOf(t, i)!, x, y),
+});

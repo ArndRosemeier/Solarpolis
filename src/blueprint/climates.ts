@@ -16,8 +16,9 @@ export const PLANT_FORMS = [
   'oak', 'holm-oak', 'linden', 'maple', 'birch', 'willow', 'chestnut', 'plane', 'ginkgo', 'olive',
   'pine', 'stone-pine', 'cypress', 'juniper',
   'shrub', 'evergreen-shrub', 'heather', 'reeds',
-  // Grown by people (gen/places.ts): fruit trees pruned open, vines trained along a wire.
-  'fruit', 'vine',
+  // Grown by people (gen/places.ts): fruit trees pruned open, vines trained along a wire; lindens trained since the
+  // founding into the columns of a grown hall (gen/planted.ts), their crowns held high over its vault.
+  'fruit', 'vine', 'hall-linden',
 ] as const;
 export type PlantForm = (typeof PLANT_FORMS)[number];
 
@@ -137,6 +138,11 @@ export interface Climate {
    * and tallest trees in it stand in a ring at the founders' grove (gen/planted.ts).
    */
   grove: string;
+  /**
+   * The grown halls' tree (gen/planted.ts): planted in two rows when the habitat was new and trained ever since, its
+   * limbs grafted across into the hall's vault. Not one of the biomes': it grows only where a hall was planted.
+   */
+  hall: PlantSpec;
   /** The biome (by name) each kind of planted place is grown as (gen/places.ts): the orchards' fruit, the vineyards. */
   places: Readonly<Record<'orchard' | 'vineyard', string>>;
 }
@@ -176,6 +182,7 @@ export const CLIMATES: Readonly<Record<string, Climate>> = {
     shore: [0.42, 0.38, 0.27],
     bed: [0.18, 0.2, 0.16],
     grove: 'oak',
+    hall: { name: 'hall linden', form: 'hall-linden', height: [21, 25], spacing: 8 },
     places: { orchard: 'orchard', vineyard: 'vineyard' },
   },
   mediterranean: {
@@ -208,6 +215,8 @@ export const CLIMATES: Readonly<Record<string, Climate>> = {
     shore: [0.5, 0.45, 0.33],
     bed: [0.2, 0.22, 0.17],
     grove: 'stone pine',
+    // Silver lindens stand the heat.
+    hall: { name: 'hall linden', form: 'hall-linden', height: [18, 22], spacing: 7 },
     // Olives are its orchards.
     places: { orchard: 'olive grove', vineyard: 'vineyard' },
   },
