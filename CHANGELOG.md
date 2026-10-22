@@ -2,6 +2,14 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.115 — Three signature works on the floor
+
+- The Spiral: a mound 2 km across and 250 m high, with a broad ramp winding four times round it up to a level top.
+- The Wave Field: kilometres of grass waves running round the cylinder, up to 30 m high, lit one after another as the sun's bright stretch moves along.
+- The Tilt: a 3 km slab of meadow tilted up 400 m to a sheer cliff that flyers launch from.
+- All three stand in full view of the Sunwalk. Debug menu: Go → "Fly: the next signature work", and "… from the far side".
+- Entrance courts no longer sit against a Ring's front or on the steep bank above the lake.
+
 ## v0.114 — What each place offers
 
 - What people do now depends on where they are. On a play commons they dance and play catch; at a picnic a pair may get up for a game of catch between eating and lying back; in a grove or at the pavilion a pair may dance a salsa. At a makers' commons some kneel at their work and others stand and saw or split wood. On the trail through the reserve, hikers stop to look out, drink and stretch; at the summit people look out and stretch. On a water commons people sunbathe and chat.
