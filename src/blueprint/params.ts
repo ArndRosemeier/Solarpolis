@@ -110,9 +110,11 @@ export interface Relief {
    * `works` radii high. The wild grows bolder natural relief: up the valleys' sides the hills stand `wild` times
    * higher again where the land is let be (the reserve, care 0). Absent: no works, no wilder relief. And `signature`
    * signature works, made by the habitat's people together (0 … 3: the Spiral, the Wave Field, the Tilt, in turn; sized
-   * as shares of the radius, `SIGNATURE_KINDS`). Absent: none.
+   * as shares of the radius, `SIGNATURE_KINDS`). Absent: none. The rooms between the Rings step down toward the lake,
+   * `fall` of a Ring's height at each on average (both ends of the floor stand equally high over the lake, so a side
+   * with fewer Rings has taller steps), so every river falls through each Ring's gorge. Absent: level rooms.
    */
-  landforms?: { ring: number; ringEvery: number; height: number; heights: number; works?: number; wild?: number; signature?: number } | null;
+  landforms?: { ring: number; ringEvery: number; height: number; heights: number; works?: number; wild?: number; signature?: number; fall?: number } | null;
 }
 
 export type AxisOrientation = 'side-on' | 'end-on';

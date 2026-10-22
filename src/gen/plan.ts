@@ -130,6 +130,14 @@ export interface GroundForm {
   height: number;
   radius: number;
   facing: number;
+  /**
+   * A Ring's step (m): the room beyond it, away from the lake, lies this much higher than the room on the lake's side,
+   * the Ring holding it like a dam; where a river breaks through, it falls the step (`relief.landforms.fall`). 0 for a
+   * Height, and without a lake.
+   */
+  step: number;
+  /** Which way along the axis is up the step (away from the lake): +1, −1, or 0 with no step. */
+  up: number;
 }
 
 /**
@@ -144,16 +152,23 @@ export interface OnGround {
   face: number;
   /** How steeply its designed surface rises there (m per m). */
   slope: number;
+  /**
+   * How much of a Ring's step lies under the point (m): its whole step on the side away from the lake, 0 on the lake's
+   * side. The Ring stands on the lower room: the land over the point is the higher of its surface and this.
+   */
+  room: number;
 }
 
 /**
  * The landforms' shapes, in shares of a form's height. A Ring's crest is `crest` heights wide; its steep face falls in
  * `face` heights, its long slope in `slope`; it keeps `saddle` of its height over a valley's middle (where the ways
  * and the Sunwalk cross it, both sides as gentle as the long slope), and opens to the land within `gorge` of a river's
- * route (at least `gorgeMin` of the river's width). Its line wanders `wander` radii along the axis. A Height's plateau
- * is `plateau` of its height across, its foot `foot` heights out.
+ * route (at least `gorgeMin` of the river's width). Its line wanders `wander` radii along the axis. Its step (the
+ * fall where a river breaks through) is cut over `lip` of the step either side of its line, and is at most `stepMax` of
+ * its height (well under its saddle). A Height's plateau is
+ * `plateau` of its height across, its foot `foot` heights out.
  */
-export const GROUND = { crest: 0.15, face: 1, slope: 4, saddle: 0.22, gorge: 0.25, gorgeMin: 4, wander: 0.08, plateau: 0.2, foot: 1.3 };
+export const GROUND = { crest: 0.15, face: 1, slope: 4, saddle: 0.22, gorge: 0.25, gorgeMin: 4, wander: 0.08, plateau: 0.2, foot: 1.3, lip: 0.15, stepMax: 0.16 };
 
 /** How close to a Height a way may pass, as a share of the Height's reach to its foot (its plateau and flanks kept clear). */
 export const WAY_CLEAR = 0.8;
@@ -211,6 +226,11 @@ export interface Landform {
   ringLine(ring: GroundForm, theta: number): number;
   /** The landform a point of the floor lies on and its designed surface there, or null off every footprint. */
   landformAt(theta: number, s: number): OnGround | null;
+  /**
+   * How far the floor's room at a point lies below the floor's ends (m, ≤ 0): the rooms between the Rings step down
+   * toward the lake, a Ring's `step` at each (cut sharply at its line, where a river falls through the gorge).
+   */
+  roomAt(theta: number, s: number): number;
 }
 
 export interface Plan extends Landform {
@@ -422,11 +442,13 @@ export function makeLandform(h: Habitat): Landform {
   /** Where a planned river's middle runs at s. */
   const routeOf = (r: PlannedRiver, s: number): number => valleyAt(r.valley, s) + r.offset * gap / 2;
 
-  const { grounds, ringLine, landformAt } = groundsOf(h, { lake, reserveEnd, valleys: N, rivers, valleyAt, ridgeAt, routeOf });
+  const { grounds, ringLine, landformAt, roomAt } = groundsOf(h, { lake, reserveEnd, valleys: N, rivers, valleyAt, ridgeAt, routeOf });
+  // The lake lies in the lowest room, every Ring's step below the floor's ends: its water as far down.
+  const stepped = lake ? { ...lake, level: lake.level + roomAt(0, lake.s) } : null;
 
   return {
-    habitat: h, lake, reserveEnd, valleys: N, faces, mountain, rivers, phase, stairHalfWidth: R * 0.02,
-    careAt, gravityAt, bandAt, valleyAt, acrossAt, ridgeAt, faceAt, routeOf, endcapAt, grounds, ringLine, landformAt,
+    habitat: h, lake: stepped, reserveEnd, valleys: N, faces, mountain, rivers, phase, stairHalfWidth: R * 0.02,
+    careAt, gravityAt, bandAt, valleyAt, acrossAt, ridgeAt, faceAt, routeOf, endcapAt, grounds, ringLine, landformAt, roomAt,
   };
 }
 
@@ -439,7 +461,7 @@ type GroundBase = Pick<Landform, 'lake' | 'reserveEnd' | 'valleys' | 'rivers' | 
  * end, each clear of the lake, the floor's ends and the Rings' crests (it may rise out of a Ring's slopes). Shapes in
  * shares of each form's height (`GROUND`); where two overlap, the higher surface is the land's.
  */
-function groundsOf(h: Habitat, base: GroundBase): Pick<Landform, 'grounds' | 'ringLine' | 'landformAt'> {
+function groundsOf(h: Habitat, base: GroundBase): Pick<Landform, 'grounds' | 'ringLine' | 'landformAt' | 'roomAt'> {
   const spec = h.params.relief.landforms, R = h.radius, { floorEnd } = h.profile;
   const { lake, reserveEnd, valleys, rivers, valleyAt, ridgeAt, routeOf } = base;
   const grounds: GroundForm[] = [];
@@ -467,10 +489,19 @@ function groundsOf(h: Habitat, base: GroundBase): Pick<Landform, 'grounds' | 'ri
       const id = grounds.length, t = new Float64Array(LINE);
       for (let i = 0; i < LINE; i++) { const a = (i / LINE) * TURN; t[i] = amp * wander.fbm2(Math.cos(a) * 3 + id * 11.7, Math.sin(a) * 3, 2); }
       lines.push(t);
-      grounds.push({ id, kind: 'ring', theta: 0, s: at, height, radius: back, facing: 1 });
+      // A step down toward the lake (none without one: no water to fall); its size below, once all are placed.
+      grounds.push({ id, kind: 'ring', theta: 0, s: at, height, radius: back, facing: 1, step: 0, up: lake ? (at < lake.s ? -1 : 1) : 0 });
     }
   }
   const rings = grounds.length;
+  // The steps: both ends of the floor stand as high over the lake, `fall` of a Ring's height for each Ring on average,
+  // shared out among the Rings on each side (a side with fewer Rings has taller falls, each kept under `stepMax` of a
+  // Ring's height so it stays a Ring). Rings on one side only: no steps (the lake would have a cliff under it).
+  const wildRings = grounds.filter((g) => g.up < 0).length, portRings = grounds.filter((g) => g.up > 0).length;
+  if (spec && wildRings && portRings) {
+    const drop = Math.min(((spec.fall ?? 0) * rings) / 2, GROUND.stepMax * Math.min(wildRings, portRings)) * spec.ring * R;
+    for (const g of grounds) g.step = drop / (g.up < 0 ? wildRings : portRings);
+  }
   if (spec && spec.height > 0 && spec.heights > 0 && valleys > 1) {
     const rng = new Rng(deriveSeed(h.seed, 'plan', 'heights')), worked = floorEnd - reserveEnd;
     // Round the axis from one another: each on the next ridge, unless there is no room on it.
@@ -487,7 +518,7 @@ function groundsOf(h: Habitat, base: GroundBase): Pick<Landform, 'grounds' | 'ri
         // It may rise out of a Ring's slopes (a peak on the range), never out of its crest or steep face.
         if (grounds.slice(0, rings).some((r) => Math.abs(s - r.s) < reach * 0.45 + r.height * (GROUND.crest / 2 + GROUND.face) + GROUND.wander * R)) continue;
         if (grounds.slice(rings).some((o) => Math.hypot(wrap(o.theta - theta) * R, o.s - s) < reach + o.radius)) continue;
-        grounds.push({ id: grounds.length, kind: 'height', theta, s, height, radius: reach, facing: 0 });
+        grounds.push({ id: grounds.length, kind: 'height', theta, s, height, radius: reach, facing: 0, step: 0, up: 0 });
         break;
       }
     }
@@ -509,7 +540,7 @@ function groundsOf(h: Habitat, base: GroundBase): Pick<Landform, 'grounds' | 'ri
   }));
   const landformAt = (theta: number, s: number): OnGround | null => {
     // The highest form over the point (made into an `OnGround` once, at the end).
-    let best = -1, bestTop = 0, bestShare = 0, bestFace = 0, bestSlope = 0;
+    let best = -1, bestTop = 0, bestShare = 0, bestFace = 0, bestSlope = 0, bestRoom = 0;
     for (let n = 0; n < grounds.length; n++) {
       const g = grounds[n];
       if (Math.abs(s - g.s) >= g.radius) continue;
@@ -557,11 +588,25 @@ function groundsOf(h: Habitat, base: GroundBase): Pick<Landform, 'grounds' | 'ri
         across = u > 0 ? (0.375 * Math.PI * Math.sin(Math.PI * v) * v) / u / run : 0;
       }
       const top = share * g.height;
-      if (top > bestTop) { best = n; bestTop = top; bestShare = share; bestFace = face; bestSlope = g.height * Math.hypot(across, edge); }
+      if (top > bestTop) { best = n; bestTop = top; bestShare = share; bestFace = face; bestSlope = g.height * Math.hypot(across, edge); bestRoom = g.step ? stepOver(g, theta, s) : 0; }
     }
-    return best < 0 ? null : { form: grounds[best], top: bestTop, share: bestShare, face: bestFace, slope: bestSlope };
+    return best < 0 ? null : { form: grounds[best], top: bestTop, share: bestShare, face: bestFace, slope: bestSlope, room: bestRoom };
   };
-  return { grounds, ringLine, landformAt };
+  /** How much of a Ring's step lies under a point: all of it up the step, none down it, cut over `lip` at its line. */
+  const stepOver = (g: GroundForm, theta: number, s: number): number => {
+    const c = g.step * GROUND.lip;
+    return g.step * smoothstep(-c, c, (s - ringLine(g, theta)) * g.up);
+  };
+  // Each side of the lake steps down by its own Rings (both reach the lake equally low).
+  const wildSteps = grounds.filter((g) => g.step > 0 && g.up < 0), portSteps = grounds.filter((g) => g.step > 0 && g.up > 0);
+  const roomAt = (theta: number, s: number): number => {
+    if (!lake) return 0;
+    const steps = s < lake.s ? wildSteps : portSteps;
+    let room = 0;
+    for (let i = 0; i < steps.length; i++) room += stepOver(steps[i], theta, s) - steps[i].step;
+    return room;
+  };
+  return { grounds, ringLine, landformAt, roomAt };
 }
 
 export function makePlan(h: Habitat): Plan {

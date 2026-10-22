@@ -117,7 +117,7 @@ for (const { name, params } of MATRIX) {
     const walk = plan.paths.find((p) => p.kind === 'sunwalk')!.points;
     for (const r of rings) {
       const ridge = wrap(plan.valleyAt(0, r.s) + Math.PI / plan.valleys), s0 = plan.ringLine(r, ridge);
-      assert.ok(t.builtAt(ridge, s0) >= r.height * 0.99, 'its crest as high as planned');
+      assert.ok(t.builtAt(ridge, s0) >= r.height * 0.99 - plan.landformAt(ridge, s0)!.room, 'its crest as high as planned (over the lower room)');
       // Down its front over a ridge: ledges and walls, not one even slope.
       const n = 160, run = r.height * (GROUND.face + GROUND.crest), angles: number[] = [];
       let prev = t.heightAt(ridge, s0);
@@ -151,6 +151,62 @@ for (const { name, params } of MATRIX) {
       if (params.landmarks) assert.ok(Math.abs(wrap(e.theta - line)) * R >= e.size + params.plan.pathWidth.sunwalk / 2, 'a court on the Sunwalk');
     }
   });
+
+  test(`landforms (${name}): the rooms between the Rings step down to the lake, level between, the ends equally high`, () => {
+    const { floorStart } = h.profile, lake = plan.lake, fall = spec.fall ?? 0;
+    const wild = rings.filter((r) => r.up < 0), port = rings.filter((r) => r.up > 0);
+    if (!lake || !fall || !wild.length || !port.length) {
+      for (const r of rings) assert.equal(r.step, 0, 'no step without a lake on both sides');
+      for (let i = 0; i < 16; i++) assert.equal(plan.roomAt(i, floorStart + ((floorEnd - floorStart) * i) / 16), 0, 'level rooms');
+      return;
+    }
+    for (const r of rings) {
+      assert.equal(r.up, r.s < lake.s ? -1 : 1, 'up the step is away from the lake');
+      assert.ok(r.step > 0 && r.step <= GROUND.stepMax * r.height + 1e-9, `a step of ${r.step.toFixed(1)} m, under the saddle`);
+    }
+    const total = (side: typeof rings): number => side.reduce((sum, r) => sum + r.step, 0);
+    assert.ok(Math.abs(total(wild) - total(port)) < 1e-6, 'both ends of the floor equally high over the lake');
+    assert.ok(Math.abs(total(wild) - Math.min((fall * rings.length) / 2, GROUND.stepMax * Math.min(wild.length, port.length)) * spec.ring * R) < 1e-6, 'as far as the blueprint says');
+    for (let q = 0; q < 8; q++) {
+      const theta = (q / 8) * TURN + 0.3;
+      assert.equal(plan.roomAt(theta, floorStart), 0, 'the wild end at the top');
+      assert.equal(plan.roomAt(theta, floorEnd), 0, 'the port end at the top');
+      assert.ok(Math.abs(plan.roomAt(theta, lake.s) + total(wild)) < 1e-6, 'the lake in the lowest room');
+      // Level between the Rings, away from their lines; one step lower past each, toward the lake.
+      const lines = rings.map((r) => ({ r, s: plan.ringLine(r, theta) }));
+      for (const [i, { r, s }] of lines.entries()) {
+        const c = r.step * GROUND.lip, before = plan.roomAt(theta, s - c - 1e-6), after = plan.roomAt(theta, s + c + 1e-6);
+        assert.ok(Math.abs(after - before - r.up * r.step) < 1e-6, 'a step at each Ring, down toward the lake');
+        const next = lines[i + 1]?.s ?? floorEnd;
+        for (let k = 1; k < 4; k++) assert.equal(plan.roomAt(theta, s + c + ((next - s - 2 * c) * k) / 4), after, 'level between');
+      }
+    }
+    assert.equal(lake.level, planOf(h).lake!.level, 'the same lake every time');
+  });
+
+  test(`landforms (${name}): each river falls its step where it breaks through a Ring`, () => {
+    const t = terrainOf(name);
+    let falls = 0, crossings = 0;
+    for (const river of t.rivers) {
+      for (const r of rings) {
+        if (!r.step) continue;
+        // Where the river's middle crosses the Ring's line (they wander, so sample by sample), then the water just above
+        // the step and where it lands: most of the step falls there, the rest in rapids as the room's land allows.
+        const side = (i: number): number => Math.sign((river.s0 + i * river.step - plan.ringLine(r, river.theta[i])) * r.up);
+        const reach = Math.ceil((r.step * GROUND.lip) / river.step) + 2;
+        for (let i = 1; i < river.count; i++) {
+          if (side(i) === side(i - 1) || i - reach < 0 || i + reach >= river.count) continue;
+          const up = r.up > 0 ? i + reach : i - 1 - reach, down = r.up > 0 ? i - 1 - reach : i + reach;
+          const fell = river.surface[up] - river.surface[down];
+          crossings++;
+          assert.ok(fell >= 0, 'water never runs up');
+          if (fell >= r.step * 0.5) falls++;
+        }
+      }
+    }
+    assert.ok(falls >= Math.floor(crossings * 0.75), `${falls} falls of at least half a step at ${crossings} crossings`);
+    if (rings.some((r) => r.step > 0) && t.rivers.length && params.relief.rivers) assert.ok(crossings > 0, 'the rivers break through the Rings');
+  });
 }
 
 test('landforms: none without them in the blueprint; invalid ones are refused', () => {
@@ -159,4 +215,8 @@ test('landforms: none without them in the blueprint; invalid ones are refused', 
   assert.equal(planOf(none).landformAt(0, (none.profile.floorStart + none.profile.floorEnd) / 2), null);
   const bad = derive(withParams({ relief: { ...p.relief, landforms: { ring: 0.3, ringEvery: 1, height: 0.2, heights: 1.5 } } }));
   assert.ok(validate(bad).some((x) => x.id === 'relief' && x.severity === 'invalid'));
+  const steep = derive(withParams({ relief: { ...p.relief, landforms: { ...p.relief.landforms!, fall: 0.3 } } }));
+  assert.ok(validate(steep).some((x) => x.id === 'relief' && x.severity === 'invalid'), 'a fall over 0.2');
+  const level = planOf(derive(withParams({ relief: { ...p.relief, landforms: { ...p.relief.landforms!, fall: 0 } } })));
+  assert.ok(level.grounds.every((g) => g.step === 0), 'level rooms without a fall');
 });

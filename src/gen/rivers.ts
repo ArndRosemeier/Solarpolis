@@ -6,8 +6,9 @@
  *
  * A river is a path along the profile, `θ` a function of `s` (it never turns back along the axis), sampled every
  * `step` metres. Its water surface only ever falls downstream: walking from the spring, the surface is the lower of
- * where it was and a little under the ground there, and never below the lake. So the river cuts its own channel and
- * valley through the hills in its way, and every terrace riser on the endcaps becomes a fall.
+ * where it was and a little under the ground there, and never below its room's level (the lake's, in the lake's room:
+ * `Landform.roomAt`). So the river cuts its own channel and valley through the hills in its way, every terrace riser on
+ * the endcaps becomes a fall, and so does every Ring it breaks through, one room down to the next.
  *
  * Sizes come from `HabitatParams.relief.rivers`; the meanders scale with the river's width. Pure.
  */
@@ -89,6 +90,10 @@ export function makeRivers(form: Landform, ground: (theta: number, s: number) =>
     }
     // Walk downstream from the spring in elevation (how far in from the hull, which is what water runs down): the surface
     // only falls, stays under the banks, and ends no lower than the lake.
+    // The water rests no lower than its room's own lake level (the rooms step down to the lake, each step a fall; a dip
+    // upstream, say at the endcap's foot, does not drag the river into a trench through a higher room). The endcaps
+    // stand in the top rooms. Without steps this is the lake's level everywhere.
+    const base = lake.level - form.roomAt(0, lake.s);
     let level = Infinity, run = 0, prev: { s: number; theta: number; level: number; i: number } | null = null;
     for (let n = 0; n < count; n++) {
       const i = from === 'wild' ? n : count - 1 - n, s = lo + i * r.step;
@@ -97,7 +102,7 @@ export function makeRivers(form: Landform, ground: (theta: number, s: number) =>
       const p = profile.at(s), rad = Math.max(p.r, half), dTheta = w / rad;
       const elevation = (height: number): number => h.radius - p.r - height * p.nr;
       const bank = Math.min(elevation(ground(r.theta[i], s)), elevation(ground(r.theta[i] - dTheta, s)), elevation(ground(r.theta[i] + dTheta, s)));
-      level = Math.max(lake.level, Math.min(level - LEAST_FALL * r.step, bank - spec.depth * FREEBOARD));
+      level = Math.max(lake.level, base + form.roomAt(r.theta[i], s), Math.min(level - LEAST_FALL * r.step, bank - spec.depth * FREEBOARD));
       const surface = (h.radius - p.r - level) / p.nr;
       // Where it runs: along the profile, around the axis, and down.
       if (prev) {
