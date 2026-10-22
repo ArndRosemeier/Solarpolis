@@ -1,5 +1,5 @@
 {
-  "why": "CI must stay fast forever (Arnd, 2026-10-21: the whole CI job is capped at 2 minutes, because test time otherwise grows quadratically with the project). These limits fail the fast suite when it grows past them. Raising one is a decision for Arnd, not a fix. See docs/CI.md.",
+  "why": "CI must stay fast forever (Arnd, 2026-10-21: the whole CI job is capped at 2 minutes, because test time otherwise grows quadratically with the project). totalMs fails the fast suite when it grows past it; perTestMs and perFileMs only warn, since one test's wall clock swings with the runner (Arnd, 2026-10-22). Raising one is a decision for Arnd, not a fix. See docs/CI.md.",
   "perTestMs": 500,
   "perFileMs": 2000,
   "totalMs": 30000,

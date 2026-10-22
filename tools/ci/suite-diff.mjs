@@ -1,8 +1,9 @@
 /**
  * What a PR's tests cost: compares this run's suite timings with main's last green run (both written by the
  * budget reporter with CI_TIMES_OUT) and prints the change in total time and the files that moved most.
- * `node tools/ci/suite-diff.mjs <main.json> <pr.json>`; CI appends the output to the job summary. Report only:
- * runner timing jitters by a few hundred ms, the budget (tools/ci/budget.json) is what fails a run.
+ * `node tools/ci/suite-diff.mjs <main.json> <pr.json>`; CI appends the output to the job summary, with the tests and files
+ * over their budget (warnings). Report only: runner timing jitters by a few hundred ms, the suite's total budget
+ * (tools/ci/budget.json) is what fails a run.
  */
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -20,12 +21,17 @@ export function suiteDiff(base, head, top = 6) {
     lines.push('', '| File | main | this PR | change |', '|---|---|---|---|');
     for (const x of moved) lines.push(`| ${x.f} | ${x.a === undefined ? 'new' : s(x.a)} | ${x.b === undefined ? 'gone' : s(x.b)} | ${signed(x.d)} |`);
   }
-  return lines;
+  return [...lines, ...slowLines(head)];
+}
+
+/** The tests and files over their budget (a warning, docs/CI.md), as Markdown lines. */
+export function slowLines(head) {
+  return head.slow?.length ? ['', '**Over budget (warning, make faster or move to test/slow/):**', ...head.slow.map((l) => `- ⚠️ ${l}`)] : [];
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const [basePath, headPath] = process.argv.slice(2);
   const head = JSON.parse(fs.readFileSync(headPath, 'utf8'));
-  if (!basePath || !fs.existsSync(basePath)) console.log(`**Fast suite: ${s(head.totalMs)}** (${head.tests} tests; no timings from main to compare).`);
+  if (!basePath || !fs.existsSync(basePath)) console.log([`**Fast suite: ${s(head.totalMs)}** (${head.tests} tests; no timings from main to compare).`, ...slowLines(head)].join('\n'));
   else console.log(suiteDiff(JSON.parse(fs.readFileSync(basePath, 'utf8')), head).join('\n'));
 }

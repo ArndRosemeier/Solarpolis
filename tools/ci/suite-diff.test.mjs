@@ -12,3 +12,11 @@ test('suite diff: total change and the files that moved most, new and gone files
   assert.match(out, /\| gone\.ts \| 0\.5 s \| gone \| −0\.5 s \|/);
   assert.doesNotMatch(out, /a\.ts/, 'a 50 ms move is noise');
 });
+
+test('suite diff: the tests and files over budget are listed as warnings', () => {
+  const base = { totalMs: 20000, tests: 100, files: {} };
+  const out = suiteDiff(base, { ...base, slow: ['test over 500 ms: 527 ms  rivers (large)  (test/rivers.test.ts)'] }).join('\n');
+  assert.match(out, /Over budget \(warning/);
+  assert.match(out, /- ⚠️ test over 500 ms: 527 ms {2}rivers \(large\)/);
+  assert.doesNotMatch(suiteDiff(base, base).join('\n'), /Over budget/);
+});
