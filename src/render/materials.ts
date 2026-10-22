@@ -10,7 +10,7 @@
  * world position is the `view.eye` uniform, for whatever needs the true place (the axis, ground patterns).
  */
 import { MeshBasicNodeMaterial, MeshPhysicalNodeMaterial, MeshStandardNodeMaterial, DoubleSide, BackSide, FrontSide, AdditiveBlending, type Material } from 'three/webgpu';
-import { abs, atan, attribute, screenCoordinate, cross, dFdx, dFdy, floor, fwidth, length, fract, inverseSqrt, log2, mx_noise_float, uv, cameraPosition, hash, normalLocal, step, time, varying, clamp, color, cos, log, select, sign, sqrt, dot, exp, float, max, mix, normalize, min, modelWorldMatrix, normalWorld, positionLocal, positionWorld, pow, sin, smoothstep, texture, uniform, vec2, vec3, vec4, vertexColor } from 'three/tsl';
+import { abs, atan, attribute, mod, screenCoordinate, cross, dFdx, dFdy, floor, fwidth, length, fract, inverseSqrt, log2, mx_noise_float, uv, cameraPosition, hash, normalLocal, step, time, varying, clamp, color, cos, log, select, sign, sqrt, dot, exp, float, max, mix, normalize, min, modelWorldMatrix, normalWorld, positionLocal, positionWorld, pow, sin, smoothstep, texture, uniform, vec2, vec3, vec4, vertexColor } from 'three/tsl';
 import { DataTexture, Uint8BufferAttribute, RGBAFormat, UnsignedByteType, Vector4, DataUtils, Float32BufferAttribute, HalfFloatType, InstancedBufferAttribute, InstancedInterleavedBuffer, InterleavedBufferAttribute, RedFormat, Vector2, Vector3, type BufferGeometry } from 'three/webgpu';
 import { PLANT_STRIDE } from '../gen/scatter';
 import { BARK_STRIPS } from '../gen/trees';
@@ -27,12 +27,12 @@ import { OPEN_SKY } from '../gen/horizon';
 import { EMISSION_SAMPLES, SUNLINE_STEPS } from '../world/sunline';
 import { HAZE_STEPS } from '../world/air';
 import { skyDome, starColor, starVertex } from './skyShaders';
-import { floorShare, floorSurface, rockFromAfar, snowOver, woodsFromAfar } from './groundShaders';
+import { cellHash, floorShare, floorSurface, rockFromAfar, snowOver, woodsFromAfar } from './groundShaders';
 import { RISE_RANGE } from '../gen/tiles';
 import { filtered } from './textures';
 import { cloudMarch, cloudShade } from './cloudShaders';
 import { builtAlbedo, roofHorizons } from './builtShaders';
-import { speckLook, standInHorizon, standInPose } from './crowdShaders';
+import { speckLook, standInHorizon, standInPose, unpack } from './crowdShaders';
 import { SPECK_ATTRIBUTES, SPECK_SHOWN, SPECK_STRIDE, STAND_IN_ATTRIBUTES, STAND_IN_STRIDE } from '../gen/standIn';
 import { FLIER_ATTRIBUTES, FLIER_STRIDE, flierPose } from './droneShaders';
 import { LIGHT_SCALE, VEIL_LIGHT } from '../gen/drone';
@@ -826,18 +826,45 @@ export function layInstances(g: BufferGeometry, data: Float32Array | InstancedIn
  * enters with `stage.prepare`; unlike them they are made here, since Actors' WebGPU kit draws fur in one flat colour.
  * One material each, shared by every animal figure: what differs per animal comes in the `coat` attribute.
  */
-let furMade: Material | null = null, eyeMade: Material | null = null;
+const furMade = new Map<boolean, Material>();
+let eyeMade: Material | null = null;
 
 /** How fine the hair's locks are (per m of the coat's pattern, the shader's `furStreak`), and their two octaves' shares. */
 const LOCKS = [230, 520] as const;
+/** How much of a deer's coat its spots cover, on average: what they blend into where they are finer than a pixel. */
+const SPOTS_MEAN = 0.2;
+/** How much shells lift a coat seen without them (gen/coat.ts `UNDER_FUR`), for the spots drawn here. */
+const SPOTS_UNDER_FUR = 0.9;
+
+/**
+ * Actors' `deerSpots`: white spots in rows, q along the spine and down from it in spot spacings; alternate rows offset
+ * by half a spot, each spot jittered, sized, ragged and sometimes missing. 1 inside a spot.
+ */
+function deerSpots(q: Node<'vec2'>): Node<'float'> {
+  const c = floor(q);
+  let best: Node<'float'> = float(9);
+  for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) {
+    const cell = c.add(vec2(x, y)), r = cellHash(vec3(cell, 17));
+    const middle = cell.add(vec2(r.x.mul(0.6).add(0.2).add(mod(cell.y, 2).mul(0.5)), r.y.mul(0.5).add(0.25)));
+    const radius = r.z.mul(r.z).mul(0.2).add(0.12);
+    const ragged = mx_noise_float(vec3(q.mul(7), r.x.mul(9))).mul(0.5 * 0.45);
+    const d = length(q.sub(middle).mul(vec2(0.68, 1))).div(radius).add(ragged);
+    best = min(best, select(r.z.lessThan(0.1), float(9), d));
+  }
+  return float(1).sub(smoothstep(0.55, 1.1, best));
+}
 
 /**
  * Fur: the coat's colour baked per vertex (gen/coat.ts, the attribute `coat`: linear RGB, and the hair's grain in w),
  * with locks of lighter and darker hair laid along the way the hair lies (`furFlow`, on the coat's own pattern
- * positions `coatPos`, so they stay put as the body moves); locks finer than a pixel blend into their mean.
+ * positions `coatPos`, so they stay put as the body moves); locks finer than a pixel blend into their mean. `dappled`:
+ * a spotted deer's coat, its spots drawn here per pixel (they are smaller than its vertices are apart) from the
+ * attribute `dapple` (the pattern's coordinates, how strongly they show, their colour packed), and blended into their
+ * mean where they are finer than a pixel.
  */
-export function furMaterial(): Material {
-  if (furMade) return furMade;
+export function furMaterial(dappled = false): Material {
+  const made = furMade.get(dappled);
+  if (made) return made;
   const m = new MeshStandardNodeMaterial({ roughness: 0.85, metalness: 0 });
   const coat = attribute<'vec4'>('coat', 'vec4'), flow = normalize(attribute<'vec3'>('furFlow', 'vec3').add(1e-5));
   const p = attribute<'vec3'>('coatPos', 'vec3').div(coat.w), q = varying(p.sub(flow.mul(dot(p, flow).mul(0.86))));
@@ -845,9 +872,19 @@ export function furMaterial(): Material {
   const locks = octave(0, LOCKS[0]).mul(0.6).add(octave(1, LOCKS[1]).mul(0.4));
   const px = length(fwidth(q.mul(LOCKS[0])));
   const grain = mix(locks, float(0.5), smoothstep(0.35, 1, px));
-  m.colorNode = vec4(coat.rgb.mul(grain.mul(0.28).add(0.86)), 1);
-  furMade = useNodeDqs(Object.assign(m, { name: 'animal fur' }));
-  return furMade;
+  let col: Node<'vec3'> = coat.rgb;
+  if (dappled) {
+    const dapple = attribute<'vec4'>('dapple', 'vec4'), at = dapple.xy;
+    const spot = mix(deerSpots(at), float(SPOTS_MEAN), smoothstep(0.3, 0.8, length(fwidth(at))));
+    // Actors' furMixP: a blend that looks linear to the eye.
+    const t = clamp(spot.mul(dapple.z), 0, 1), white = unpack(dapple.w).mul(SPOTS_UNDER_FUR);
+    const blend = mix(sqrt(max(col, vec3(0, 0, 0))), sqrt(white), t);
+    col = blend.mul(blend);
+  }
+  m.colorNode = vec4(col.mul(grain.mul(0.28).add(0.86)), 1);
+  const out = useNodeDqs(Object.assign(m, { name: dappled ? 'animal fur, spotted' : 'animal fur' }));
+  furMade.set(dappled, out);
+  return out;
 }
 
 /**

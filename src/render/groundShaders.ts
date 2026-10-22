@@ -141,7 +141,7 @@ export function floorSurface(color: Node<'vec3'>, normal: Node<'vec3'>): { color
  * Three numbers in 0 … 1 for a lattice cell (whole-number coordinates, up to some ten thousand): a few multiplies and
  * fractions (Dave Hoskins' hash without sine), cheap enough to run for eight cells per pixel of ground.
  */
-function cellHash(c: Node<'vec3'>): Node<'vec3'> {
+export function cellHash(c: Node<'vec3'>): Node<'vec3'> {
   const a = fract(c.mul(vec3(0.1031, 0.103, 0.0973)));
   const b = a.add(dot(a, a.yxz.add(33.33)));
   return fract(b.xxy.add(b.yxx).mul(b.zyx));

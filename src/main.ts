@@ -5,7 +5,7 @@
  */
 import { nearestFloor, nearestWood, type Ecology, type Found } from './gen/ecology';
 import { nearestOnPath } from './gen/paths';
-import { busiestNear, fleetOf, flierAt } from './sim';
+import { busiestNear, deerAt, fleetOf, flierAt, floorGap, herdsNear } from './sim';
 import { nearestPlace, vineFaceFoot } from './gen/places';
 import { besideRiver, nearestSample, type River } from './gen/rivers';
 import './app/style.css';
@@ -28,7 +28,7 @@ import { daisOf } from './gen/grownHall';
 import type { Terrain } from './gen/terrain';
 import { floorAt, floorPoint, outOfPlace, placeAt, type FloorFrame } from './gen/shapes';
 import { crossingsOf, type Crossing, type CrossingKind } from './gen/crossings';
-import { landformOf } from './gen/plan';
+import { landformOf, planOf } from './gen/plan';
 import { pavilionPlan } from './gen/pavilion';
 import { hutPlan } from './gen/summitHut';
 import { courtLayoutOf, courtWorld, type CourtLayout } from './gen/courts';
@@ -232,6 +232,17 @@ toPlace('Before the nearest crowd', 12, (eco, t, s) => {
   const d = b.theta - t, dx = (d - 2 * Math.PI * Math.round(d / (2 * Math.PI))) * h.radius, dy = b.s - s, l = Math.hypot(dx, dy) || 1;
   return { theta: b.theta, s: b.s, way: [dx / l, dy / l] };
 });
+/** Before the nearest herd of deer (within a few km, or else in the wild reserve), approached from where the player stands. */
+toPlace('Before the nearest herd', 60, (eco, t, s) => {
+  const h = eco.terrain.habitat, v = view(), r = h.radius;
+  if (!v) return null;
+  let herds = herdsNear(eco, t, s, 3000);
+  if (!herds.length) herds = herdsNear(eco, t, (h.profile.floorStart + planOf(h).reserveEnd) / 2, 3000);
+  const herd = herds.sort((a, b) => floorGap(r, t, s, a.theta, a.s) - floorGap(r, t, s, b.theta, b.s))[0];
+  if (!herd) return null;
+  const d = deerAt(eco.terrain, herd, 0, v.time), dt = d.theta - t, dx = (dt - 2 * Math.PI * Math.round(dt / (2 * Math.PI))) * r, dy = d.s - s, l = Math.hypot(dx, dy) || 1;
+  return { theta: d.theta, s: d.s, way: [dx / l, dy / l] };
+});
 /**
  * Floating `back` m from the nearest drone at work (hovering at a spot it is still at half a minute on), a little
  * above it, looking at it: a tender over its orchard, a lifter at the Gate, a courier at its stop.
@@ -258,20 +269,22 @@ const toDrone = (label: string, back: number): void => debug.add({
 });
 toDrone('Fly: beside the nearest drone at work', 4);
 toDrone('Fly: the nearest drone at work from 60 m', 60);
-/** Low beside the nearest squirrel down on the ground around the player, `back` m off its side, looking at it. */
-const toSquirrel = (label: string, back: number): void => debug.add({
+/** Low beside the nearest animal of a kind out on the land around the player, `back` m off its side, looking at it. */
+const toAnimal = (kind: string, label: string, back: number): void => debug.add({
   label, group: 'Go', run: () => {
-    const v = view(), eye = v?.eye(), q = v && eye && v.animals?.nearest(eye);
+    const v = view(), eye = v?.eye(), q = v && eye && v.animals.find((a) => a.kind.name === kind)?.nearest(eye);
     if (!v || !q) return;
     const side: Vec3 = [q.up[1] * q.front[2] - q.up[2] * q.front[1], q.up[2] * q.front[0] - q.up[0] * q.front[2], q.up[0] * q.front[1] - q.up[1] * q.front[0]];
-    const at: Vec3 = [q.feet[0] + q.up[0] * 0.12, q.feet[1] + q.up[1] * 0.12, q.feet[2] + q.up[2] * 0.12];
+    const lift = q.height * 0.5, at: Vec3 = [q.feet[0] + q.up[0] * lift, q.feet[1] + q.up[1] * lift, q.feet[2] + q.up[2] * lift];
     const from: Vec3 = [at[0] + side[0] * back + q.up[0] * back * 0.3, at[1] + side[1] * back + q.up[1] * back * 0.3, at[2] + side[2] * back + q.up[2] * back * 0.3];
     const d = Math.hypot(at[0] - from[0], at[1] - from[1], at[2] - from[2]);
     v.floatAt(from, [(at[0] - from[0]) / d, (at[1] - from[1]) / d, (at[2] - from[2]) / d]);
   },
 });
-toSquirrel('Fly: beside the nearest squirrel', 1.2);
-toSquirrel('Fly: the nearest squirrel from 15 m', 15);
+toAnimal('squirrels', 'Fly: beside the nearest squirrel', 1.2);
+toAnimal('squirrels', 'Fly: the nearest squirrel from 15 m', 15);
+toAnimal('deer', 'Fly: beside the nearest deer', 5);
+toAnimal('deer', 'Fly: the nearest deer from 60 m', 60);
 /** Ground one can stand on (a terrace's ledge, not its wall). */
 const ledge = (eco: Ecology) => (pt: number, ps: number): boolean => slopeAt(eco, pt, ps, eco.terrain.heightAt(pt, ps), 2) < 0.2;
 toPlace('Into the nearest orchard', -10, (eco, t, s) => nearestPlace(eco.terrain, 'orchard', t, s, ledge(eco)));

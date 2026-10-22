@@ -10,8 +10,12 @@ import { defineConfig, type Plugin } from 'vite';
 function actorsPack(): Plugin {
   const version = (): string => JSON.parse(fs.readFileSync(path.resolve('node_modules/@actors/generator/package.json'), 'utf8')).version;
   const dir = (): string => path.resolve('.actors-pack', version());
-  // No dogs yet (Arnd, 2026-10-22): their pack stays out.
-  const wanted = (rel: string): boolean => { const r = rel.split(path.sep).join('/'); return !r.startsWith('human/clips/cmu') && r !== 'dog' && !r.startsWith('dog/'); };
+  // The packs the game uses: people and the animals that live in it (no dogs or cats yet, Arnd, 2026-10-22).
+  const PACKS = ['human', 'squirrel', 'deer'];
+  const wanted = (rel: string): boolean => {
+    const r = rel.split(path.sep).join('/');
+    return r === '' || r === '.version' || (PACKS.includes(r.split('/')[0]) && !r.startsWith('human/clips/cmu'));
+  };
   let outDir = 'dist';
   return {
     name: 'actors-pack',

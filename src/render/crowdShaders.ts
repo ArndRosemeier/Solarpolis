@@ -37,7 +37,7 @@ function about(p: V3, py: number | F, pz: number | F, a: F): V3 {
 }
 
 /** An sRGB colour packed in a float (gen/standIn.ts `packColor`), linear. */
-function unpack(v: F): V3 {
+export function unpack(v: F): V3 {
   const r = mod(v, 256), g = mod(floor(v.div(256)), 256), b = floor(v.div(65536));
   return pow(vec3(r, g, b).div(255), vec3(2.2));
 }

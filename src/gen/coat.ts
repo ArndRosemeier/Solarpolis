@@ -14,10 +14,21 @@
  */
 import { clamp, lerp as mix, mixRgb, smoothstep, srgbToLinear } from '@futuremagic/core';
 import { ActorRuntime, type Fetcher } from '@actors/core';
-import { breedParams, type DogCoat } from '@actors/animal';
+import { SPECIES, type DeerCoat, type DogCoat } from '@actors/animal';
 import { packColor } from './standIn';
 
-export type { DogCoat as Coat } from '@actors/animal';
+/** An animal's coat: a dog-shaped one (squirrels) or a deer's, as Actors' presets give them. */
+export type Coat = DogCoat | DeerCoat;
+
+/** A coat value the coat may not have (0 when it hasn't). */
+const opt = (coat: Coat, key: string): number => (coat as unknown as Record<string, number | undefined>)[key] ?? 0;
+
+/** An animal's look from its preset (`SPECIES` by the pack's kind: squirrel, deer…): its shape and coat. */
+export function paramsOf(kind: string, preset: string): { shape: { size: number }; coat: Coat } {
+  const species = SPECIES[kind];
+  if (!species) throw new Error(`Unknown animal kind ${kind}`);
+  return species.params(preset) as { shape: { size: number }; coat: Coat };
+}
 
 type Rgb = [number, number, number];
 
@@ -28,7 +39,10 @@ export interface CoatSource {
   coatC: Float32Array;
   coatD: Float32Array;
   coatE: Float32Array;
-  /** Nose coordinates (packs with a nose leather); absent on older packs. */
+  /**
+   * Dogs and squirrels: nose coordinates (packs with a nose leather). Deer: the rump patch, the position along the body
+   * (m), the distance from the spine line (m) and where spots grow. Absent on older packs.
+   */
   coatF?: Float32Array;
   /** Where the vertex is on the base pack (m): the pattern stays on the body as it moves and changes shape. */
   coatPos: Float32Array;
@@ -89,21 +103,77 @@ function spots(px: number, py: number, pz: number): number {
 interface Marks {
   base: Rgb; second: Rgb; tan: Rgb; white: Rgb;
   nose: Rgb | null;
+  /** Plain nose leather (the coat's `nose`, or near black). */
+  leather: Rgb;
   grain: number;
+  /** A deer's coat (its markings ride coatF), and its spots' amount and spacing (m). */
+  deer: boolean;
+  dapple: number;
+  spacing: number;
 }
 
 /**
- * Linear RGB at every vertex of a fur mesh (3 floats each), and its hair's grain in a fourth (the fur material's
- * pattern scale: `coat.grain`): the coat's colour with its markings, seen without the shells' strands.
+ * A coat baked for a fur mesh: linear RGB at every vertex and the hair's grain (the fur material's pattern scale:
+ * `coat.grain`) in a fourth; the coat's colour with its markings, seen without the shells' strands. A spotted deer's
+ * spots are smaller than its vertices are apart, so they are drawn per pixel (`furMaterial(true)`) from `dapple`: per
+ * vertex the spot pattern's coordinates (in spot spacings), how strongly spots show there, and their colour (packed
+ * sRGB); null for a coat without spots.
  */
-export function bakeCoat(src: CoatSource, coat: DogCoat): Float32Array {
-  const m: Marks = { base: linear(coat.base), second: linear(coat.second), tan: linear(coat.tan), white: linear(coat.white), nose: coat.noseColor ? linear(coat.noseColor) : null, grain: coat.grain ?? 1 };
-  const n = src.coatPos.length / 3, out = new Float32Array(n * 4);
+export interface Baked {
+  coat: Float32Array;
+  dapple: Float32Array | null;
+}
+
+export function bakeCoat(src: CoatSource, coat: Coat): Baked {
+  const deer = 'dapple' in coat, nose = (coat as { nose?: Rgb }).nose;
+  const m: Marks = {
+    base: linear(coat.base), second: linear(coat.second), tan: linear(coat.tan), white: linear(coat.white),
+    nose: 'noseColor' in coat && coat.noseColor ? linear(coat.noseColor) : null,
+    leather: nose ? linear(nose) : [0.025, 0.02, 0.02],
+    grain: opt(coat, 'grain') || 1, deer, dapple: opt(coat, 'dapple'), spacing: 0.034 * Math.max(opt(coat, 'dappleSize') || 1, 0.3),
+  };
+  const n = src.coatPos.length / 3, out = new Float32Array(n * 4), spots = m.dapple > 0 && src.coatF ? new Float32Array(n * 4) : null;
+  const white = packColor(coat.white), at = { x: 0, y: 0, amount: 0 };
   for (let i = 0; i < n; i++) {
-    const c = coatAt(src, i, coat, m);
+    const c = coatAt(src, i, coat, m, at);
     out[i * 4] = c[0]; out[i * 4 + 1] = c[1]; out[i * 4 + 2] = c[2]; out[i * 4 + 3] = m.grain;
+    if (spots) { spots[i * 4] = at.x; spots[i * 4 + 1] = at.y; spots[i * 4 + 2] = at.amount; spots[i * 4 + 3] = white; }
   }
-  return out;
+  return { coat: out, dapple: spots };
+}
+
+/** Blend that looks linear to the eye (Actors' `furMixP`: light marks would swamp a dark coat in linear colour). */
+function mixP(a: Rgb, b: Rgb, t: number): Rgb {
+  const k = clamp(t, 0, 1), c = (x: number, y: number): number => { const v = mix(Math.sqrt(Math.max(x, 0)), Math.sqrt(Math.max(y, 0)), k); return v * v; };
+  return [c(a[0], b[0]), c(a[1], b[1]), c(a[2], b[2])];
+}
+
+/**
+ * A deer's markings over the coat (Actors' `deerCoat`): a greyer head and neck, the dark dorsal stripe, the pale flank
+ * line, eye ring, inner ears, gland tufts, the rump patch and its border. Its spots are left to the fur material; `at`
+ * gets where the vertex lies in their pattern and how strongly they show there.
+ */
+function deerCoat(src: CoatSource, k: number, coat: Coat, m: Marks, colIn: Rgb, nz: number, flow: Rgb, at: { x: number; y: number; amount: number }): Rgb {
+  const A = src.coatA, B = src.coatB, D = src.coatD, E = src.coatE, F = src.coatF!, P = src.coatPos, i3 = (k / 4) * 3;
+  const rump = F[k], along = F[k + 1], fromSpine = F[k + 2], spotty = F[k + 3];
+  let col = colIn;
+  const neckTone = Math.max(A[k + 1], smoothstep(0.42, 0.2, along) * (1 - D[k + 1]));
+  col = mixP(col, m.tan, neckTone * opt(coat, 'headTone') * (1 - E[k]));
+  const stripe = smoothstep(0.014, 0.006, fromSpine + nz * 0.006) * smoothstep(0.3, 0.38, along) * (1 - A[k + 1]);
+  col = mixRgb(col, mixRgb(col, m.second, 0.85), stripe * opt(coat, 'dorsal'));
+  const lower = smoothstep(0.27, 0.15, fromSpine);
+  at.x = along / m.spacing + nz * 0.35;
+  at.y = (fromSpine - 0.012) / m.spacing + nz * 0.35;
+  at.amount = smoothstep(0.008, 0.02, fromSpine) * spotty * mix(0.45, 1, lower) * m.dapple * 0.85;
+  const line = smoothstep(1, 0, Math.abs(fromSpine - 0.255) / 0.011 + noise(P[i3] * 45, P[i3 + 1] * 45, P[i3 + 2] * 45) * 1.4 - 0.4) * spotty * smoothstep(0.5, 0.58, along) * smoothstep(0.95, 0.85, along);
+  col = mixP(col, m.white, clamp(line * 0.5, 0, 1) * m.dapple * 0.85);
+  col = mixP(col, m.white, smoothstep(0.2, 0.7, B[k + 2]) * opt(coat, 'eyeRing'));
+  const pale = 0.24 + 0.22 * smoothstep(0.35, 0.8, streak(P[i3] * 1.6 + 1.7, P[i3 + 1] * 1.6 + 1.7, P[i3 + 2] * 1.6 + 1.7, flow));
+  col = mixP(col, mixP(m.second, m.white, pale), smoothstep(0.15, 0.6, E[k + 1] + nz * 0.2) * opt(coat, 'innerEar'));
+  col = mixP(col, m.white, smoothstep(0.2, 0.6, E[k + 2]) * opt(coat, 'glands'));
+  col = mixRgb(col, m.white, smoothstep(0.3, 0.6, rump + nz * 0.2) * opt(coat, 'rump'));
+  col = mixRgb(col, scaled(m.second, 0.6), clamp(smoothstep(0.25, 0.6, D[k + 3] + nz * 0.2) + smoothstep(0.3, 0.6, E[k + 3]), 0, 1) * opt(coat, 'rumpBorder'));
+  return col;
 }
 
 /** The bare nose pad (packs with nose coordinates, when the coat sets a nose colour), seen from in front of the nose. */
@@ -113,8 +183,11 @@ function nosePad(F: ArrayLike<number> | null, k: number, m: Marks): number {
   return (1 - smoothstep(0.85, 1, ell)) * smoothstep(-0.011, -0.006, F[k + 2]);
 }
 
-/** One vertex: the shader's `furCoat`, then its shells' tips on average (see the file comment). */
-function coatAt(src: CoatSource, i: number, coat: DogCoat, m: Marks): Rgb {
+/**
+ * One vertex: the shader's `furCoat`, then its shells' tips on average (see the file comment). A deer's spots are
+ * left out; `at` gets their pattern there, faded by whatever is laid over them after (white marks, bare skin).
+ */
+function coatAt(src: CoatSource, i: number, coat: Coat, m: Marks, at: { x: number; y: number; amount: number }): Rgb {
   const k = i * 4, A = src.coatA, B = src.coatB, C = src.coatC, D = src.coatD, E = src.coatE, F = src.coatF ?? null;
   const legT = A[k], headW = A[k + 1], muzzleT = A[k + 2], tailT = A[k + 3];
   const ear = B[k], brow = B[k + 2], bib = B[k + 3];
@@ -123,7 +196,8 @@ function coatAt(src: CoatSource, i: number, coat: DogCoat, m: Marks): Rgb {
   const bibA = coat.bib, socks = coat.socks, blazeA = coat.blaze, tailTip = coat.tailTip;
   const spotsA = coat.spots, spotSize = coat.spotSize, shade = coat.shade;
   const paleMask = coat.paleMask ?? 0, agouti = coat.agouti ?? 0, tanLegs = coat.tanLegs ?? 0;
-  const eyeRing = coat.eyeRing ?? 0, frost = coat.frost ?? 0, tailFrost = coat.tailFrost ?? 0;
+  // A deer's eye ring rides another channel (coatB.z, a dog's brow), in its own markings.
+  const eyeRing = m.deer ? 0 : opt(coat, 'eyeRing'), frost = opt(coat, 'frost'), tailFrost = opt(coat, 'tailFrost');
   const under = D[k + 1] * (1 - E[k + 2] * (tailFrost >= 0.01 ? 1 : 0));
   const px = src.coatPos[i * 3] / m.grain, py = src.coatPos[i * 3 + 1] / m.grain, pz = src.coatPos[i * 3 + 2] / m.grain;
   const flow: Rgb = [src.furFlow[i * 3], src.furFlow[i * 3 + 1], src.furFlow[i * 3 + 2]];
@@ -148,6 +222,9 @@ function coatAt(src: CoatSource, i: number, coat: DogCoat, m: Marks): Rgb {
   // Light (wolf) mask; tan lower legs.
   col = mixRgb(col, m.white, smoothstep(0.3, 0.7, E[k] + nz * 0.25) * paleMask);
   col = mixRgb(col, m.tan, smoothstep(1, 0.7, legT + nz * 0.15) * tanLegs);
+  at.amount = 0;
+  if (m.deer && F) col = deerCoat(src, k, coat, m, col, nz, flow, at);
+  // (Cats' tabby stripes and tortoiseshell patches are not baked: no cats live here yet.)
   // Spots.
   const sp = 0.034 * Math.max(spotSize, 0.2);
   if (spotsA > 0) col = mixRgb(col, m.second, spots(px / sp, py / sp, pz / sp) * spotsA * (1 - C[k]));
@@ -158,6 +235,7 @@ function coatAt(src: CoatSource, i: number, coat: DogCoat, m: Marks): Rgb {
   white = Math.max(white, smoothstep(0.25, 0.5, blaze * 1.4 * blazeA + muzzleT * blazeA * 0.6 * (blazeA >= 0.5 ? 1 : 0) + nz * 0.1) * (blazeA >= 0.01 ? 1 : 0));
   white = Math.max(white, smoothstep(1 - 0.3 * tailTip, 1 - 0.24 * tailTip, tailT) * (tailTip >= 0.01 ? 1 : 0));
   col = mixRgb(col, m.white, white);
+  at.amount *= 1 - clamp(white, 0, 1);
   // Frosted coats: flecks of light and dark hair tips.
   if (frost > 0) {
     const fleck = streak(px * 0.9 + 2.3, py * 0.9 + 2.3, pz * 0.9 + 2.3, flow), where = (1 - under) * (1 - E[k + 1]) * (1 - C[k]);
@@ -182,6 +260,7 @@ function coatAt(src: CoatSource, i: number, coat: DogCoat, m: Marks): Rgb {
   let bare: Rgb = [0.025, 0.02, 0.02];
   const pad = nosePad(F, k, m);
   const bareW = clamp(Math.max(C[k] + C[k + 1] + C[k + 2] + C[k + 3], pad), 0, 1);
+  bare = mixRgb(bare, m.leather, clamp(C[k] / Math.max(bareW, 1e-3), 0, 1));
   if (m.nose && F) {
     // The leather's mean colour (its pebbling and nostrils are below a vertex's spacing).
     const leather = scaled(m.nose, 0.85);
@@ -190,11 +269,12 @@ function coatAt(src: CoatSource, i: number, coat: DogCoat, m: Marks): Rgb {
     bare = mixRgb(bare, leather, clamp(noseW / Math.max(bareW, 1e-3), 0, 1));
   }
   col = mixRgb(col, bare, bareW);
+  at.amount *= 1 - bareW;
   return scaled(col, mix(UNDER_FUR, 1, bareW));
 }
 
 /** A coat's iris colour (linear RGB): the eyes' colour, which the eye material draws round the pupil. */
-export function irisOf(coat: DogCoat): Rgb {
+export function irisOf(coat: Coat): Rgb {
   return linear(coat.iris ?? [0.32, 0.18, 0.06]);
 }
 
@@ -209,6 +289,7 @@ export interface CoatAsk {
 export interface Look {
   preset: string;
   coat: Float32Array;
+  dapple: Float32Array | null;
   iris: Rgb;
   bands: [number, number, number];
   /** The preset's overall size (× the pack's body). */
@@ -236,8 +317,8 @@ export async function coatsOf(ask: CoatAsk, fetcher: Fetcher): Promise<Coats> {
   const p = rt.basePositions, lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
   for (let i = 0; i < p.length; i++) { const k = i % 3; lo[k] = Math.min(lo[k], p[i]); hi[k] = Math.max(hi[k], p[i]); }
   const looks = ask.presets.map((preset): Look => {
-    const params = breedParams(preset, ask.animal), coat = bakeCoat(src, params.coat);
-    return { preset, coat, iris: irisOf(params.coat), bands: coatBands(src.coatPos, coat), size: params.shape.size };
+    const params = paramsOf(ask.animal, preset), { coat, dapple } = bakeCoat(src, params.coat);
+    return { preset, coat, dapple, iris: irisOf(params.coat), bands: coatBands(src.coatPos, coat), size: params.shape.size };
   });
   return { fur: fur.def.name, looks, height: hi[1] - lo[1], length: hi[2] - lo[2], width: hi[0] - lo[0] };
 }

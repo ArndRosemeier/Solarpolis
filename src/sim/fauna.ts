@@ -85,7 +85,7 @@ const cellSide = (h: Habitat): number => 2 * h.params.life.animals.range;
 export function densNear(ecology: Ecology, plants: readonly Species[], theta: number, s: number, radius: number): Den[] {
   const t = ecology.terrain, h = t.habitat, { profile } = h, a = h.params.life.animals, G = cellSide(h);
   if (!(a.squirrels > 0)) return [];
-  const woods = ecology.climate.biomes.map((b) => canopyOf(b).cover), shares = new Float32Array(woods.length);
+  const crowns = crownsOf(ecology);
   const trees = plants.filter((sp) => (sp.what === 'plant' || sp.what === 'planted') && sp.spec.height[1] >= HOME_HEIGHT);
   const seed = hash3i(h.seed, 0x5a1, 7, 0), out: Den[] = [];
   const rows = Math.floor(profile.length / G);
@@ -96,9 +96,7 @@ export function densNear(ecology: Ecology, plants: readonly Species[], theta: nu
     for (let cc = c0; cc <= c1; cc++) {
       const c = ((cc % n) + n) % n, mid = (c + 0.5) * dTheta, ground = t.heightAt(mid, sMid);
       if (t.standAt(mid, sMid) > ground + 0.05) continue;
-      ecology.biomesAt(mid, sMid, ground, 0, shares);
-      let cover = woods.reduce((x, w, b) => x + w * shares[b], 0);
-      cover = Math.max(cover, plantedCanopy(t, mid, sMid)?.cover ?? 0);
+      const cover = crowns(mid, sMid, ground);
       const expect = (a.squirrels * G * G * cover) / 1e4, cell = hash3i(seed, k, c, 0);
       const count = Math.floor(expect) + (unit(cell, 0, 0, 0) < expect - Math.floor(expect) ? 1 : 0);
       for (let j = 0; j < count; j++) {
@@ -109,6 +107,19 @@ export function densNear(ecology: Ecology, plants: readonly Species[], theta: nu
     }
   }
   return out;
+}
+
+/**
+ * How closed the crowns are over a point of the ground (0 open … 1 closed): the woods of its biomes, or what was planted
+ * there. For the worker (it needs the ecology); `ground` is the ground's height there.
+ */
+export function crownsOf(ecology: Ecology): (theta: number, s: number, ground: number) => number {
+  const woods = ecology.climate.biomes.map((b) => canopyOf(b).cover), shares = new Float32Array(woods.length);
+  return (theta, s, ground) => {
+    ecology.biomesAt(theta, s, ground, 0, shares);
+    const cover = woods.reduce((x, w, b) => x + w * shares[b], 0);
+    return Math.max(cover, plantedCanopy(ecology.terrain, theta, s)?.cover ?? 0);
+  };
 }
 
 /** A squirrel's tree: the nearest home tree to a spot of its cell, a few spots tried; or none (no tree near). */
@@ -148,8 +159,8 @@ function forageSpot(t: Terrain, den: Den, day: number, n: number): [number, numb
   return open(t, theta, s) ? [theta, s] : foot();
 }
 
-/** Ground a squirrel may forage on: dry, not too steep, not down in a court or on a landmark. */
-function open(t: Terrain, theta: number, s: number): boolean {
+/** Ground an animal may forage on: dry, not too steep, not down in a court or on a landmark. */
+export function open(t: Terrain, theta: number, s: number): boolean {
   const ground = t.heightAt(theta, s), r = Math.max(1, t.habitat.profile.at(s).r), d = 0.5;
   if (t.standAt(theta, s) > ground + 0.05) return false;
   const rise = Math.hypot(t.heightAt(theta + d / r, s) - ground, t.heightAt(theta, s + d) - ground) / d;

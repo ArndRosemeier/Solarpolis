@@ -226,7 +226,7 @@ export interface Life {
 /**
  * The animals that live on the land (design "Who is out on the land"), each a pure function of the seed, the land and
  * the clock, like the people. Squirrels live in the woods: each has a home tree (a tree the scatter planted, gen/scatter.ts),
- * comes down from it in the bright hours and forages round it.
+ * comes down from it in the bright hours and forages round it. Deer live in herds on the wild land (sim/herds.ts).
  */
 export interface Animals {
   /** Squirrels per hectare where the crowns close over the ground (fewer where they open up; none outside the woods). */
@@ -235,6 +235,15 @@ export interface Animals {
   range: number;
   /** The share of a place's bright hours its squirrels are down on the ground, round the hour the light peaks there (0 … 1). */
   out: number;
+  /**
+   * Deer per km² of the land left to them: the wild reserve and the districts kept for herds or let go. They live in
+   * herds, out on the open ground at dawn and dusk and lying up in the woods round noon and at night.
+   */
+  deer: number;
+  /** How many deer a herd has, on average. */
+  herd: number;
+  /** How far a herd ranges from its home (m). */
+  roam: number;
 }
 
 /**
