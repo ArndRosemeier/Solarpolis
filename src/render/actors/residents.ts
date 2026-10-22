@@ -36,6 +36,17 @@ const LOWEST = 260, HIGHEST = 80;
 /** Target files fetched at once while measuring (the rest wait their turn). */
 const FETCHES = 16;
 
+/**
+ * A resident's ancestry, as Actors' three ethnic weights. A thousand years on, people's forebears come from everywhere,
+ * and their skin spans the whole range from dark to light evenly. Actors' own pick leans light (two of its three photo
+ * skins, which follow these weights, are light), so the weight of the dark one is drawn evenly here and the rest split
+ * between the other two. Drawn after the rest of the look, which stays as it was.
+ */
+function mixOf(random: () => number): { african: number; asian: number; caucasian: number } {
+  const dark = random(), split = random();
+  return { african: dark, asian: (1 - dark) * split, caucasian: (1 - dark) * (1 - split) };
+}
+
 /** What a stand-in needs of a person: standing height (m), width (× the mean), and colours by slot (packed). */
 export interface Dress {
   height: number;
@@ -84,7 +95,7 @@ export class Residents {
     const garmentColors: Record<string, string> = {};
     for (const g of outfit) garmentColors[g] = DYES[Math.floor(random() * DYES.length)];
     const hairColor = look.hairColor ?? this.catalog.hairColors[Math.floor(random() * this.catalog.hairColors.length)]?.id ?? '#3b2417';
-    return { ...look, body, outfit, garmentColors, hairColor, anatomy: false, detail: 'high', animation: null };
+    return { ...look, body: { ...body, ...mixOf(random) }, outfit, garmentColors, hairColor, anatomy: false, detail: 'high', animation: null };
   }
 
   /**
