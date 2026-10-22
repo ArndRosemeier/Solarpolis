@@ -2,6 +2,12 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.116 — The rooms step down to the lake, and the rivers fall
+
+- The land between the Rings now steps down toward the lake, one room lower past each Ring, and each Ring holds its step like a dam.
+- Every river breaks through a Ring's gorge in a waterfall, from the high rooms at both ends down to the lake in the lowest room.
+- New in the debug menu: Go "Below the nearest Ring fall" and "Above the nearest Ring fall".
+
 ## v0.115 — Three signature works on the floor
 
 - The Spiral: a mound 2 km across and 250 m high, with a broad ramp winding four times round it up to a level top.
