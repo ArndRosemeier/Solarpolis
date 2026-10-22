@@ -4,7 +4,7 @@ import { defineConfig, type Plugin } from 'vite';
 
 /**
  * The Actors asset pack (tools/actors/pack.mjs fetches it into .actors-pack/<version>/), served and built under
- * /actors/ (src/render/actors/pack.ts). The CMU mocap library stays out. ACTORS_PACK=skip builds without copying it
+ * /actors/ (src/render/actors/pack.ts). Of the CMU mocap library only the game's clips come along (pack.mjs). ACTORS_PACK=skip builds without copying it
  * (the CI check, which only needs the code to build). Ported from Dunfinity vite.config.ts.
  */
 function actorsPack(): Plugin {
@@ -14,7 +14,7 @@ function actorsPack(): Plugin {
   const PACKS = ['human', 'squirrel', 'deer'];
   const wanted = (rel: string): boolean => {
     const r = rel.split(path.sep).join('/');
-    return r === '' || r === '.version' || (PACKS.includes(r.split('/')[0]) && !r.startsWith('human/clips/cmu'));
+    return r === '' || r === '.version' || PACKS.includes(r.split('/')[0]);
   };
   let outDir = 'dist';
   return {

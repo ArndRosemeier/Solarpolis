@@ -8,14 +8,17 @@ import { habitatOf } from './worlds';
 
 test('beats: a stay is a chain of beats: down on arriving, up before leaving, strolls come back, the same for the same party', () => {
   const STEP = 5, seed = 77, arrive = 40, leave = 9000, pace = 1.2, reach = 30, acts = new Set<string>();
-  for (const activity of ['gather', 'picnic', 'sit', 'make', 'play', 'stargaze', 'wander'] as const) for (let lead = 0; lead < 16; lead++) {
-    let last = beatAt(seed, activity, lead, 3, arrive, arrive, leave, pace, reach), changes = 0;
+  for (const activity of ['gather', 'picnic', 'sit', 'make', 'play', 'stargaze', 'wander', 'hike', 'bathe'] as const) for (let lead = 0; lead < 16; lead++) {
+    // Alone now and then: nothing that needs company comes up then.
+    const size = 1 + (lead % 4);
+    let last = beatAt(seed, activity, lead, size, 3, arrive, arrive, leave, pace, reach), changes = 0;
     assert.equal(last.from, POSE.upright, 'they come upright');
     assert.ok(Math.abs(last.since) < 1e-9);
     for (let u = arrive; u <= leave; u += STEP) {
-      const b = beatAt(seed, activity, lead, 3, u, arrive, leave, pace, reach);
-      if (u % 500 === arrive) assert.deepEqual(b, beatAt(seed, activity, lead, 3, u, arrive, leave, pace, reach), 'the same every time');
+      const b = beatAt(seed, activity, lead, size, 3, u, arrive, leave, pace, reach);
+      if (u % 500 === arrive) assert.deepEqual(b, beatAt(seed, activity, lead, size, 3, u, arrive, leave, pace, reach), 'the same every time');
       acts.add(b.act);
+      if (size === 1) assert.ok(b.act !== 'catch' && b.act !== 'dance', `someone alone at ${b.act}`);
       assert.ok(b.away >= 0 && b.away <= reach + 1e-9, `a stroll ${b.away.toFixed(1)} m off, at most ${reach}`);
       if (b.moving || b.away > 0) assert.equal(b.posture, POSE.upright, 'strolling upright');
       if (b.posture !== last.posture) {
