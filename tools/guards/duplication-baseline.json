@@ -120,10 +120,6 @@
     "reason": "make is the name of a factory callback in unrelated places (the page's view slot, the stream cache); the bodies have nothing in common."
   },
   {
-    "key": "same name: solarpolis/physics/character.ts#step + solarpolis/space/flyer.ts#step",
-    "reason": "Each mover advances itself by one time step: the player's body, the flyer inside, the flyer outside. Different physics, the usual name."
-  },
-  {
     "key": "same name: solarpolis/physics/world.ts#dispose + solarpolis/render/actors/figure.ts#dispose",
     "reason": "The Actors figure and animator are ported from Dunfinity with their method names, which follow Actors' own Character API (load, update, stop, dispose); the plan moves the animator into Actors, and keeping the names keeps that swap a drop-in."
   },
