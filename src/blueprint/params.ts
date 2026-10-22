@@ -263,7 +263,7 @@ export interface Life {
   walk: number;
   /** How far from the court they came up at people usually go (m). */
   reach: number;
-  /** The drones that work the land (sim/air.ts). */
+  /** The drones that work the land (sim/air.ts), and the share of residents who wear a drone's body. */
   drones: Drones;
   /** The animals that live on the land (sim/fauna.ts). */
   animals: Animals;
@@ -302,9 +302,13 @@ export interface Animals {
  *   lifters    at the Gate, bringing loads down its face from the hub, and one per makers' commons, moving stone;
  *   gliders    per km of the floor's length: they ride the still, thin air near the axis;
  *   guardians  per km of the ring lake's shores, and at the flight launch: they hover, ready to catch a flyer or a swimmer.
+ *
+ * And persons: residents who wear a drone's body (`persons`), out on the land as anyone is, in their parties and at
+ * their places, at the height of the faces they talk to. Their bodies are their own designs (`bodies` of them), the
+ * `person` role's kit. (Small tool drones, a tender's pruner or a lifter's grab, are part of their drone, never persons.)
  */
 /** The drones' roles, in the order the fleet and the designs list them (sim/air.ts, gen/drone.ts). */
-export const DRONE_ROLES = ['courier', 'tender', 'surveyor', 'lifter', 'glider', 'guardian'] as const;
+export const DRONE_ROLES = ['courier', 'tender', 'surveyor', 'lifter', 'glider', 'guardian', 'person'] as const;
 export type DroneRole = (typeof DRONE_ROLES)[number];
 
 export interface Drones {
@@ -320,8 +324,12 @@ export interface Drones {
   lane: number;
   /** How long a courier's round lasts (s): up, out to a place near its court, a stop, back, and a rest on its pad. */
   round: number;
-  /** How many designs each role is built in (each made once from the kit, a whole number, at least 1). */
+  /** How many designs each working role is built in (each made once from the kit, a whole number, at least 1). */
   designs: number;
+  /** Share of residents whose body is a drone (0 … 1, with `shells` at most all of them). */
+  persons: number;
+  /** How many drone bodies residents wear, each its own design of the `person` kit (a whole number, at least 1). */
+  bodies: number;
 }
 
 export interface HabitatParams {

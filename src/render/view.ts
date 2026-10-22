@@ -37,9 +37,10 @@ import { LandmarkView } from './landmarks';
 import { TiledView, courtSource, crossingSource, hallSource, stairSource, underSource } from './tiled';
 import { underFloorAt } from '../gen/underMesh';
 import { landmarkTopAt, landmarksOf } from '../gen/landmarks';
+import { speckBands } from '../gen/standIn';
 import { snowFieldOf } from '../gen/snow';
 import { PeopleView } from './people';
-import { SpeckView } from './specks';
+import { SpeckView, type Measured } from './specks';
 import { FlierView } from './fliers';
 import { AnimalView, DEER, SQUIRRELS } from './animals';
 import { CabinView } from './lift';
@@ -117,6 +118,12 @@ export class InteriorView {
   private specks: SpeckView | null = null;
   /** The drones that work the land. */
   private drones: FlierView | null = null;
+  /** A resident's measured size and colours for the far specks (their look's, or their drone body's), once known. */
+  private readonly measured: Measured = (id, design) => {
+    if (design >= 0) return this.drones?.measured(design) ?? null;
+    const dress = this.people?.residentsLoaded()?.measured(id);
+    return dress ? { height: dress.height, width: dress.width, bands: speckBands(dress.colors) } : null;
+  };
   /** The animals that live on it, a view for each kind: squirrels, deer. */
   animals: AnimalView[] = [];
   /** In the air, or null on foot. */
@@ -552,8 +559,8 @@ export class InteriorView {
     this.cabin?.poseAt(v.eye);
     this.showLand(!this.below);
     this.people?.follow(v.eye, this.time, this.frameDt);
-    this.specks?.follow(this.time, this.frameDt, this.people?.near ?? [], this.people?.residentsLoaded() ?? null);
-    this.drones?.follow(v.eye, this.time, this.frameDt);
+    this.drones?.follow(v.eye, this.time, this.frameDt, this.people?.aloft);
+    this.specks?.follow(this.time, this.frameDt, [...(this.people?.near ?? []), ...(this.drones?.near ?? [])], this.measured);
     for (const a of this.animals) a.follow(v.eye, this.time, this.frameDt);
   }
 

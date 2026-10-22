@@ -5,7 +5,7 @@
  */
 import { nearestFloor, nearestWood, type Ecology, type Found } from './gen/ecology';
 import { nearestOnPath } from './gen/paths';
-import { busiestNear, deerAt, fleetOf, flierAt, floorGap, herdsNear, peopleAt, personKey, venuesOf, type Person } from './sim';
+import { busiestNear, deerAt, fleetOf, flierAt, floorGap, herdsNear, peopleAt, personKey, residentOf, venuesOf, type Person } from './sim';
 import { nearestPlace, vineFaceFoot } from './gen/places';
 import { besideRiver, nearestSample, type River } from './gen/rivers';
 import './app/style.css';
@@ -262,6 +262,17 @@ toPlace('Beside the nearest talking ring', 5, (eco, t, s) => {
     const g = floorGap(r, t, s, m.theta, m.s);
     if (g < gap) { gap = g; best = m; }
   }
+  if (!best) return null;
+  const d = best.theta - t, dx = (d - 2 * Math.PI * Math.round(d / (2 * Math.PI))) * r, dy = best.s - s, l = Math.hypot(dx, dy) || 1;
+  return { theta: best.theta, s: best.s, way: [dx / l, dy / l] };
+});
+/** 4 m from the nearest person in a drone body staying with others (or else anyone in one), facing them. */
+toPlace('Beside the nearest person in a drone body', 4, (eco, t, s) => {
+  const h = eco.terrain.habitat, r = h.radius, v = view();
+  if (!v) return null;
+  const aloft = peopleAt(h, v.time, { theta: t, s, radius: 1500 }, eco.terrain).filter((p) => residentOf(h, p.resident).body === 'drone');
+  const by = (p: Person): number => floorGap(r, t, s, p.theta, p.s) + (p.moving || p.size < 2 ? 1e6 : 0);
+  const best = aloft.sort((a, b) => by(a) - by(b))[0];
   if (!best) return null;
   const d = best.theta - t, dx = (d - 2 * Math.PI * Math.round(d / (2 * Math.PI))) * r, dy = best.s - s, l = Math.hypot(dx, dy) || 1;
   return { theta: best.theta, s: best.s, way: [dx / l, dy / l] };
