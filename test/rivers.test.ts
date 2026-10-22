@@ -49,8 +49,8 @@ for (const { name, params } of MATRIX) {
       }
       assert.ok(deep >= 38 && banks >= 36 && n >= 38, `deep ${deep}, banks ${banks}, on the water ${n} of 40`);
     }
-    // Same habitat, same rivers.
-    assert.deepEqual(makeTerrain(derive(params)).rivers[0].theta, t.rivers[0].theta);
+    // Same habitat, same rivers (its plan is kept, and the plan's own repeatability is plan.test.ts's).
+    assert.deepEqual(makeTerrain(h).rivers[0].theta, t.rivers[0].theta);
   });
 
   test(`river water (${name}): ribbons over the channel at the water's level, facing the air, flowing downstream`, () => {

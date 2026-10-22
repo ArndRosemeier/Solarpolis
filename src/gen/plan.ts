@@ -126,11 +126,18 @@ export interface GroundForm {
   facing: number;
 }
 
-/** Where a point lies on a landform: which, its designed surface over the land there (m), and 0 at its foot … 1 at its crest. */
+/**
+ * Where a point lies on a landform: which, its designed surface over the land there (m), 0 at its foot … 1 at its
+ * crest, and how much of it is a built face (1 on a Ring's steep front over a ridge, where the terrain cuts terraces;
+ * 0 on its saddles, its long slope and the Heights, which are shaped as rock).
+ */
 export interface OnGround {
   form: GroundForm;
   top: number;
   share: number;
+  face: number;
+  /** How steeply its designed surface rises there (m per m). */
+  slope: number;
 }
 
 /**
@@ -140,7 +147,10 @@ export interface OnGround {
  * route (at least `gorgeMin` of the river's width). Its line wanders `wander` radii along the axis. A Height's plateau
  * is `plateau` of its height across, its foot `foot` heights out.
  */
-export const GROUND = { crest: 0.15, face: 1, slope: 4, saddle: 0.3, gorge: 0.25, gorgeMin: 4, wander: 0.08, plateau: 0.2, foot: 1.3 };
+export const GROUND = { crest: 0.15, face: 1, slope: 4, saddle: 0.22, gorge: 0.25, gorgeMin: 4, wander: 0.08, plateau: 0.2, foot: 1.3 };
+
+/** How close to a Height a way may pass, as a share of the Height's reach to its foot (its plateau and flanks kept clear). */
+export const WAY_CLEAR = 0.8;
 
 export type PathKind = 'sunwalk' | 'way' | 'trail';
 
@@ -460,34 +470,56 @@ function groundsOf(h: Habitat, base: GroundBase): Pick<Landform, 'grounds' | 'ri
       }
     }
   }
+  /** A smoothstep's rise per unit of x. */
+  const smoothRise = (e0: number, e1: number, x: number): number => {
+    const k = (x - e0) / (e1 - e0);
+    return k <= 0 || k >= 1 ? 0 : (6 * k * (1 - k)) / (e1 - e0);
+  };
+  const riverWidth = h.params.relief.rivers?.width ?? 0;
   const landformAt = (theta: number, s: number): OnGround | null => {
     let best: OnGround | null = null;
     for (const g of grounds) {
-      let share = 0;
+      // Its share at the point, and how fast that changes across the form and along its edges (per metre).
+      let share = 0, face = 0, across = 0, edge = 0;
       if (g.kind === 'ring') {
         if (Math.abs(s - g.s) > g.radius) continue;
         const d = (s - ringLine(g, theta)) * g.facing, H = g.height, c = (H * GROUND.crest) / 2;
+        if (Math.abs(d) - c >= H * GROUND.slope) continue;
         // Saddles over the valleys, high and steep over the ridges between them; the long slope the same everywhere.
-        const high = GROUND.saddle + (1 - GROUND.saddle) * smoothstep(0.15, 0.7, ridgeAt(theta, s));
+        const high = GROUND.saddle + (1 - GROUND.saddle) * smoothstep(0.3, 0.75, ridgeAt(theta, s));
         const front = H * GROUND.face + (H * GROUND.slope - H * GROUND.face) * (1 - smoothstep(0.3, 0.8, high));
-        const u = d >= 0 ? Math.max(0, d - c) / front : Math.max(0, -d - c) / (H * GROUND.slope);
+        const run = d >= 0 ? front : H * GROUND.slope, u = Math.max(0, Math.abs(d) - c) / run;
         if (u >= 1) continue;
         share = high * (d >= 0 ? 1 - smoothstep(0, 1, u) : Math.pow(1 - u, 1.6));
+        across = u > 0 ? (high * (d >= 0 ? 6 * u * (1 - u) : 1.6 * Math.pow(1 - u, 0.6))) / run : 0;
+        // A saddle's front falls as gently as the long slope, but ends at the lake's shore.
+        if (lake) {
+          const shore = fromLake(lake, s), k = smoothstep(0, H * GROUND.face, shore);
+          across = Math.abs(across * k - share * smoothRise(0, H * GROUND.face, shore));
+          share *= k;
+        }
+        face = smoothstep(-c, c, d) * smoothstep(0.5, 0.8, high);
         // Open to the land where a river runs through.
         for (const r of rivers) {
           // As wide as the river may wander from its route (`meander` widths and its banks), or a share of the Ring.
-          const w = Math.max(H * GROUND.gorge, (h.params.relief.rivers?.width ?? 0) * (GROUND.gorgeMin + r.meander));
+          const w = Math.max(H * GROUND.gorge, riverWidth * (GROUND.gorgeMin + r.meander));
           const off = Math.abs(wrap(theta - routeOf(r, s))) * R;
-          if (off < w * 2) share *= smoothstep(w, w * 2, off);
+          if (off < w * 2) {
+            const k = smoothstep(w, w * 2, off);
+            edge = Math.max(edge * k, share * smoothRise(w, w * 2, off));
+            across *= k;
+            share *= k;
+          }
         }
       } else {
         const r = Math.hypot(wrap(theta - g.theta) * R, s - g.s);
         if (r >= g.radius) continue;
-        const plateau = (g.height * GROUND.plateau) / 2, u = Math.max(0, r - plateau) / (g.radius - plateau);
+        const plateau = (g.height * GROUND.plateau) / 2, run = g.radius - plateau, u = Math.max(0, r - plateau) / run;
         share = 0.5 + 0.5 * Math.cos(Math.PI * Math.pow(u, 0.8));
+        across = u > 0 ? (0.4 * Math.PI * Math.sin(Math.PI * Math.pow(u, 0.8)) * Math.pow(u, -0.2)) / run : 0;
       }
       const top = share * g.height;
-      if (top > 0 && (!best || top > best.top)) best = { form: g, top, share };
+      if (top > 0 && (!best || top > best.top)) best = { form: g, top, share, face, slope: g.height * Math.hypot(across, edge) };
     }
     return best;
   };
@@ -689,8 +721,10 @@ export function makePlan(h: Habitat): Plan {
   paths.push({ kind: 'trail', width: widths.trail, points: Float64Array.from(trail) });
 
   // The ways: the shortest net joining every entrance to the Sunwalk (a spanning tree, Prim's), never across the
-  // lake: water is crossed only by the Sunwalk, through the pavilion. Each way swings gently from side to side, as a
-  // path walked for two hundred years does (a tenth of its length at most), and never into the lake.
+  // lake: water is crossed only by the Sunwalk, through the pavilion. Nor over a Ring or a Height: a way keeps to its
+  // room between two Rings and meets the Sunwalk there, which crosses each Ring at its saddle. Each way swings gently
+  // from side to side, as a path walked for two hundred years does (a tenth of its length at most), and never into the
+  // lake.
   const wrng = new Rng(deriveSeed(h.seed, 'plan', 'ways'));
   const wayStep = Math.max(spacing / 12, widths.way * 4);
   const wayPoints = (a: { theta: number; s: number }, b: { theta: number; s: number }): Float64Array => {
@@ -703,7 +737,9 @@ export function makePlan(h: Habitat): Plan {
       const t = i / n, ends = Math.sin(Math.PI * t);
       const off = length * ends * (a1 * Math.sin(Math.PI * t + p1) + a2 * Math.sin(3 * Math.PI * t + p2));
       let ps = a.s + dv * t + nv * off;
-      if (lake) {
+      // Kept off the water, all but its ends: an entrance or a point of the Sunwalk by the shore stays where it is, so
+      // the way joins it.
+      if (lake && i > 0 && i < n) {
         const shore = lake.halfWidth + spacing * 0.1, d = ps - lake.s;
         if (Math.abs(d) < shore) ps = lake.s + Math.sign(a.s - lake.s) * shore;
       }
@@ -713,7 +749,8 @@ export function makePlan(h: Habitat): Plan {
     return out;
   };
   const anchors: { theta: number; s: number }[] = [];
-  for (let i = 0; i < walk.length; i += 2) if (walk[i + 1] >= reserveEnd) anchors.push({ theta: walk[i], s: walk[i + 1] });
+  // The Sunwalk's points a way may join: on the worked floor, and on land (over the lake it is the pavilion's bridges).
+  for (let i = 0; i < walk.length; i += 2) if (walk[i + 1] >= reserveEnd && (!lake || fromLake(lake, walk[i + 1]) >= spacing * 0.1)) anchors.push({ theta: walk[i], s: walk[i + 1] });
   const nodes = [...anchors, ...placed];
   const crossesLake = (a: { s: number }, b: { s: number }): boolean => !!lake && Math.min(a.s, b.s) < lake.s && Math.max(a.s, b.s) > lake.s;
   const n = nodes.length, inTree = new Uint8Array(n), cost = new Float64Array(n).fill(Infinity), from = new Int32Array(n).fill(-1);
@@ -721,11 +758,26 @@ export function makePlan(h: Habitat): Plan {
   // Squared distances: the shortest net is the same for any measure that keeps their order, and a lake crossing costs
   // a million times over either way.
   const nt = Float64Array.from(nodes, (k) => k.theta), ns = Float64Array.from(nodes, (k) => k.s);
+  // Which side of each Ring every node lies on, and the Heights' places.
+  const rings = form.grounds.filter((g) => g.kind === 'ring'), mounts = form.grounds.filter((g) => g.kind === 'height');
+  const sides = rings.map((r) => Int8Array.from(nodes, (k) => (k.s > form.ringLine(r, k.theta) ? 1 : -1)));
+  const overLand = (i: number, j: number, u: number, v: number): boolean => {
+    for (const side of sides) if (side[i] !== side[j]) return true;
+    for (const g of mounts) {
+      const a = g.theta - nt[i], gu = (a - TURN * Math.round(a / TURN)) * R, gv = g.s - ns[i];
+      const t = Math.min(1, Math.max(0, (gu * u + gv * v) / Math.max(u * u + v * v, 1e-9)));
+      if (Math.hypot(gu - u * t, gv - v * t) < g.radius * WAY_CLEAR) return true;
+    }
+    return false;
+  };
   const relax = (i: number): void => {
     for (let j = anchors.length; j < n; j++) {
       if (inTree[j]) continue;
       const a = nt[j] - nt[i], u = (a - TURN * Math.round(a / TURN)) * R, v = ns[j] - ns[i];
-      const c = (u * u + v * v) * (crossesLake(nodes[i], nodes[j]) ? 1e12 : 1);
+      // (A crossing only raises the cost, so it is only looked for where the plain cost would win.)
+      let c = u * u + v * v;
+      if (c >= cost[j]) continue;
+      c *= crossesLake(nodes[i], nodes[j]) ? 1e12 : overLand(i, j, u, v) ? 1e6 : 1;
       if (c < cost[j]) { cost[j] = c; from[j] = i; }
     }
   };

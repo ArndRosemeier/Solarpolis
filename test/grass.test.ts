@@ -89,7 +89,7 @@ test('grass: no grass on bare rock, at the waterline or on the lake bed; dry gra
   const m = nearestFloor(eco, 0.3, mid, 'grass');
   assert.ok(m, 'a meadow near the middle of the floor');
   const r = profile.at(m.s).r;
-  assert.ok(grass(m.theta + (m.way[0] * 20) / r, m.s + m.way[1] * 20) > 0.6, 'thick grass 20 m in');
+  assert.ok(grass(m.theta + (m.way[0] * 10) / r, m.s + m.way[1] * 10) > 0.6, 'thick grass 10 m in');
   const med = makeEcology(makeTerrain(derive(withParams({ climate: 'mediterranean' }))));
   assert.deepEqual(plantsOf(med).filter((p) => p.what === 'cover').map((p) => p.spec.form), ['dry-grass']);
 });

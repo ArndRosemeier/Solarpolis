@@ -150,19 +150,24 @@ test('scatter: on a hilltop the plants around the eye are still near (their dist
     const s = P.floorStart + ((P.floorEnd - P.floorStart) * j) / 60, theta = (i / 48) * 2 * Math.PI, g = t.heightAt(theta, s);
     if (g > best.g) best = { theta, s, g };
   }
-  const sp = plants.find((p) => p.what === 'plant' && p.band.length > 0)!;
-  assert.ok(best.g > sp.band[0][3], `a hill ${best.g.toFixed(0)} m high, above the full level's reach`);
-  const eye = toWorld(P, { theta: best.theta, s: best.s, h: best.g + 1.7 }), cells = cellsNear(eco, sp, 0, eye);
-  assert.ok(cells.length > 0 && cells[0].near === 0, `${cells.length} cells at the full level`);
-  // Each cell's bounds hold its plants, whose feet lie far above its origin on the profile.
+  // The plants of the biome that holds most of the top (a Height's is above the meadows: heath or pines).
+  const shares = eco.biomesAt(best.theta, best.s, best.g, 0, new Float32Array(eco.climate.biomes.length));
+  const most = shares.indexOf(Math.max(...shares));
   let held = 0;
-  for (const c of cells.slice(0, 8)) {
-    const cell = plantCell(eco, plants, c.key), { middle, radius } = cellSphere(cell, sp.spec.height[1]);
-    for (const list of cell.instances) for (let i = 0; i < list.length; i += PLANT_STRIDE) {
-      const top = Math.hypot(list[i] - middle[0], list[i + 1] - middle[1], list[i + 2] - middle[2]) + list[i + 3];
-      assert.ok(top <= radius + 1e-6, 'a plant outside its cell\'s bounds');
-      held++;
+  for (const sp of plants.filter((p) => p.what === 'plant' && p.band.length > 0 && p.biome === most)) {
+    assert.ok(best.g > sp.band[0][3], `a hill ${best.g.toFixed(0)} m high, above the full level's reach`);
+    const eye = toWorld(P, { theta: best.theta, s: best.s, h: best.g + 1.7 }), cells = cellsNear(eco, sp, 0, eye);
+    assert.ok(cells.length > 0 && cells[0].near === 0, `${cells.length} cells at the full level`);
+    // Each cell's bounds hold its plants, whose feet lie far above its origin on the profile.
+    for (const c of cells.slice(0, 8)) {
+      const cell = plantCell(eco, plants, c.key), { middle, radius } = cellSphere(cell, sp.spec.height[1]);
+      for (const list of cell.instances) for (let i = 0; i < list.length; i += PLANT_STRIDE) {
+        const top = Math.hypot(list[i] - middle[0], list[i + 1] - middle[1], list[i + 2] - middle[2]) + list[i + 3];
+        assert.ok(top <= radius + 1e-6, 'a plant outside its cell\'s bounds');
+        held++;
+      }
     }
+    if (held > 0) break;
   }
   assert.ok(held > 0, 'plants near the hilltop');
 });

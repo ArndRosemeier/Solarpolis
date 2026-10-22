@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { MATRIX, derive, fromWorld, toWorld, withParams, type DebrisSpec } from '../src/blueprint';
 import { makeTerrain } from '../src/gen/terrain';
 import { makeEcology } from '../src/gen/ecology';
+import { planOf } from '../src/gen/plan';
 import { buildStone, type StoneMesh } from '../src/gen/stones';
 import { buildFallenWood, BARK_STRIPS } from '../src/gen/trees';
 import { LEVELS, cellsNear, plantCell, plantsOf, PLANT_STRIDE, type Level } from '../src/gen/scatter';
@@ -75,14 +76,18 @@ for (const { name, params } of MATRIX) {
     // a metre away (but where the rock is rough or a cliff, which it is clamped to).
     let checked = 0;
     const errors: number[] = [];
-    for (const at of [profile.floorStart * 0.5, (profile.floorStart + profile.floorEnd) / 2]) {
-      const eye = toWorld(profile, { theta: 0.4, s: at, h: 1.7 });
+    // On the Mountain and mid-floor; round the axis until some lie there (a place can be bare: a meadow, a rock face).
+    for (const at of [profile.floorStart * 0.5, (profile.floorStart + profile.floorEnd) / 2]) for (let k = 0, start = checked; k < 3 && checked === start; k++) {
+      const theta = 0.4 + k * 2.1;
+      const eye = toWorld(profile, { theta, s: at, h: 1.7 });
       for (const sp of debris) for (const { key } of cellsNear(eco, sp, 0 as Level, eye).slice(0, 2)) {
         const c = plantCell(eco, plants, key);
         for (const list of c.instances) for (let i = 0; i < list.length && checked < 400; i += PLANT_STRIDE * 3) {
           const w = [c.origin[0] + list[i], c.origin[1] + list[i + 1], c.origin[2] + list[i + 2]] as const;
           const p = fromWorld(profile, w[0], w[1], w[2]);
           assert.ok(Math.abs(p.h - eco.terrain.heightAt(p.theta, p.s)) < 0.05, 'on the ground');
+          // A Ring's front is cut in terraces: a metre's slope can't follow their edges (no more than the Gate's).
+          if ((planOf(h).landformAt(p.theta, p.s)?.face ?? 0) > 0) continue;
           const r = Math.hypot(w[0], w[1]), up = [-w[0] / r, -w[1] / r, 0], side = [up[1], -up[0], 0];
           // One metre around the axis and one along it, raised by the slope: about the ground there.
           for (const [dir, rise] of [[side, list[i + 5]], [[0, 0, 1], list[i + 6]]] as const) {
