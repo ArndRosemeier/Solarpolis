@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.084 — A better look at the deer
+
+- Debug menu: "Fly: the nearest deer from 60 m" (and the squirrel one from 15 m) now stays low, under the trees, instead of ending up in a crown.
+
 ## v0.083 — Deer on the wild land
 
 - Herds of deer live on the wild reserve and in the districts kept for herds or let go wild: fallow, red, roe, sika, white-tailed and chital deer, each herd one kind, from Actors 0.6.3.
