@@ -84,7 +84,7 @@ export class PhysicsWorld {
     }
     this.origin = [...patch.origin];
     this.patch = patch;
-    this.ground = this.world.createCollider(this.R.ColliderDesc.trimesh(patch.positions, patch.index).setFriction(0.8).setRestitution(0.3));
+    this.ground = this.world.createCollider(this.R.ColliderDesc.trimesh(patch.positions, patch.index, this.R.TriMeshFlags.FIX_INTERNAL_EDGES).setFriction(0.8).setRestitution(0.3));
     this.standTrunks(patch.trunks);
     this.dropStrays();
   }
