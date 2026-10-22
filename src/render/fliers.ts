@@ -130,7 +130,7 @@ export class FlierView {
     this.specks = specks;
     for (const d of drawn) for (const l of d.levels) this.group.add(l.body, l.veil);
     this.group.add(specks.mesh);
-    fleet.forEach((_, id) => this.ones.push(this.blank(hash3i(h.seed, id, 41, 0))));
+    fleet.forEach((_, id) => this.ones.push(this.unplaced(hash3i(h.seed, id, 41, 0))));
     this.drawn = drawn;
   }
 
@@ -194,7 +194,7 @@ export class FlierView {
     for (const a of aloft) {
       const d = bodyOf(a), p = a.person, foot = footingOf(this.terrain, p, a.deck, d.height);
       let one = this.persons.get(a.key);
-      if (!one) this.persons.set(a.key, (one = this.blank(hash3i(this.habitat.seed, p.resident, 43, 0))));
+      if (!one) this.persons.set(a.key, (one = this.unplaced(hash3i(this.habitat.seed, p.resident, 43, 0))));
       this.putDrone(one, {
         id: -1, role: 'person', design: a.resident.design, theta: p.theta, s: p.s, h: foot.h, heading: p.heading,
         speed: p.moving ? p.speed : 0, climb: 0, doing: p.moving ? 'fly' : 'work',
@@ -215,7 +215,7 @@ export class FlierView {
   }
 
   /** A drone not yet placed. */
-  private blank(seed: number): One {
+  private unplaced(seed: number): One {
     return { flier: null, at: [0, 0, 0], low: [0, 0, 0], turn: 0, roll: 0, horizon: [OPEN_SKY, OPEN_SKY], litAt: [Infinity, 0, 0], level: 2, phase: 1000 * hashToFloat(seed) };
   }
 

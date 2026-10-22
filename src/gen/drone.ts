@@ -44,8 +44,8 @@ export function designsOf(h: Habitat, role: Role): number {
 /** The spec of a role's design `index` (Actors' `designDrone`, unbuilt): a pure function of the habitat's seed. */
 function specOf(h: Habitat, role: Role, index: number): DroneSpec {
   const kit = KIT[role], seed = deriveSeed(h.seed, 'drone', role, index), chance = (k: number): number => hashToFloat(hash3i(seed, k, 0, 0));
-  const pick = <T>(list: readonly T[], k: number): T => list[Math.floor(chance(k) * list.length)];
-  return designDrone({ seed, archetype: pick(kit.archetypes, 3), propulsion: pick(kit.propulsion, 2), palette: pick(kit.palettes, 1), armed: false });
+  const byChance = <T>(list: readonly T[], k: number): T => list[Math.floor(chance(k) * list.length)];
+  return designDrone({ seed, archetype: byChance(kit.archetypes, 3), propulsion: byChance(kit.propulsion, 2), palette: byChance(kit.palettes, 1), armed: false });
 }
 
 /**
