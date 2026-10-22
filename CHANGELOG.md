@@ -2,6 +2,13 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.090 — Light wells and lift cages below the courts
+
+- Under every entrance court, its light well now comes down through the vault: look up from the wellhead and the court's glass glows with the day, and a pool of daylight falls on the floor below.
+- Next to it stands the court's lift: an open bronze cage from the floor up into the vault, in the bay its portal above faces. Riding it comes next.
+- The pillar forest reads as lamplight now, warm and dimmer, and the ribs on the vaults are rounded mouldings instead of flickering dark lines.
+- Courts now sit over the middle of a bay below, and a court whose rim a path or river crosses is dug deep enough there too.
+
 ## v0.089 — Entrance courts keep off the ends of the land
 
 - No entrance court is dug into the foot of the Gate any more, or set right at the edge of the wild reserve: each keeps about an eighth of the entrance spacing from both. One court in the reference habitat used to sit 6 m from the Gate, its floor 68 m down.
