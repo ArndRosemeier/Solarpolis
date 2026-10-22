@@ -31,7 +31,7 @@ import type { Terrain } from './gen/terrain';
 import { floorAt, floorPoint, outOfPlace, placeAt, type FloorFrame } from './gen/shapes';
 import { crossingsOf, type Crossing, type CrossingKind } from './gen/crossings';
 import { landformOf, planOf, type GroundForm } from './gen/plan';
-import { WORK_KINDS, isDug, type Work, type WorkKind } from './gen/works';
+import { WORK_KINDS, isDug, isSignature, type DistrictWorkKind, type Work } from './gen/works';
 import { angleDiff } from '@futuremagic/core';
 import { baysOfHamlet, underOf, type Hamlet } from './gen/under';
 import { HALL_KINDS, hallAt } from './gen/halls';
@@ -681,7 +681,7 @@ debug.add({
   label: 'Fly: the next district work', group: 'Go', run: () => {
     const v = view(), t = v?.ecology?.terrain, h = lab.habitat;
     if (!v || !t || !h) return;
-    const plan = planOf(h), kinds = Object.keys(WORK_KINDS) as WorkKind[], R = h.radius, at = v.walker.at;
+    const plan = planOf(h), kinds = Object.keys(WORK_KINDS) as DistrictWorkKind[], R = h.radius, at = v.walker.at;
     for (let k = 1; k <= kinds.length; k++) {
       const kind = kinds[(workTurn + k) % kinds.length];
       const w = plan.works.filter((x) => x.kind === kind).reduce<Work | undefined>((a, x) => {
@@ -703,6 +703,44 @@ debug.add({
   },
 });
 debug.addInfo(() => (workSeen ? `work: ${workSeen}` : ''));
+/**
+ * The signature works (gen/works.ts `SIGNATURE_KINDS`): each press floats by the next (the Spiral, the Wave Field, the
+ * Tilt, as the habitat has them), 1.6 of its radii off and 0.45 up, the Tilt seen from before its cliff; the far-side
+ * entry looks at the last one from the floor across the axis, as people there see it over their heads.
+ */
+let signatureTurn = -1;
+const signatureNamed = (w: Work): string => ({ spiral: 'the Spiral', 'wave-field': 'the Wave Field', tilt: 'the Tilt' } as Record<string, string>)[w.kind] ?? w.kind;
+const signatureOf = (): Work | undefined => {
+  const h = lab.habitat;
+  return h ? planOf(h).works.filter(isSignature)[signatureTurn] : undefined;
+};
+const lookFrom = (eye: Vec3, w: Work, t: Terrain, h: Habitat): void => {
+  const { theta, s } = w, mid = toWorld(h.profile, { theta, s, h: t.heightAt(theta, s) });
+  const d = Math.hypot(mid[0] - eye[0], mid[1] - eye[1], mid[2] - eye[2]);
+  view()?.floatAt(eye, [(mid[0] - eye[0]) / d, (mid[1] - eye[1]) / d, (mid[2] - eye[2]) / d]);
+};
+debug.add({
+  label: 'Fly: the next signature work', group: 'Go', run: () => {
+    const v = view(), t = v?.ecology?.terrain, h = lab.habitat;
+    if (!v || !t || !h) return;
+    const all = planOf(h).works.filter(isSignature);
+    if (!all.length) { workSeen = 'no signature works in this habitat'; return; }
+    signatureTurn = (signatureTurn + 1) % all.length;
+    const w = all[signatureTurn], R = h.radius, dir = w.kind === 'tilt' ? 1 : -1;
+    const maker = w.district >= 0 ? `standing in the ${planOf(h).districts[w.district].style} district ${w.district}` : 'on the floor';
+    workSeen = `${signatureNamed(w)}, ${w.height.toFixed(0)} m high, ${(w.radius * 2).toFixed(0)} m across, ${maker}`;
+    const et = w.theta + (Math.sin(w.facing) * dir * w.radius * 1.6) / R, es = w.s + Math.cos(w.facing) * dir * w.radius * 1.6;
+    lookFrom(toWorld(h.profile, { theta: et, s: es, h: t.heightAt(et, es) + w.radius * 0.45 }), w, t, h);
+  },
+});
+debug.add({
+  label: 'Fly: the signature work from the far side', group: 'Go', run: () => {
+    const v = view(), t = v?.ecology?.terrain, h = lab.habitat, w = signatureOf();
+    if (!v || !t || !h || !w) return;
+    const et = w.theta + Math.PI, es = w.s;
+    lookFrom(toWorld(h.profile, { theta: et, s: es, h: t.heightAt(et, es) + 60 }), w, t, h);
+  },
+});
 /** The founders' grove (gen/planted.ts). */
 const grove = (): { v: InteriorView; g: Grove } | null => {
   const f = inView((t) => plantingsOf(t).groves[0]);

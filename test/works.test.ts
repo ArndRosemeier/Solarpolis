@@ -3,29 +3,37 @@ import assert from 'node:assert/strict';
 import { smoothstep } from '@futuremagic/core';
 import { DISTRICT_STYLES, MATRIX, derive, validate, withParams } from '../src/blueprint';
 import { entrancesOf, fromLake, makePlan, planOf } from '../src/gen/plan';
-import { STYLE_WORKS, WORKS, WORK_KINDS, isDug, workAt, type Work, type WorkKind } from '../src/gen/works';
+import { SIGNATURE, SIGNATURE_KINDS, STYLE_WORKS, WORKS, WORK_KINDS, isDug, isSignature, workAt, type DistrictWorkKind, type SignatureKind, type Work, type WorkKind } from '../src/gen/works';
 import { habitatOf, terrainOf } from './worlds';
 
 const TURN = 2 * Math.PI, DEG = Math.PI / 180;
 const wrap = (a: number): number => a - TURN * Math.round(a / TURN);
 
-/** A work of a kind on its own, for its shape. */
+/** A work of a kind on its own, for its shape (a signature work as in a habitat of radius 4 km). */
 const lone = (kind: WorkKind, crisp: number, vary = 0.37): Work => {
-  const spec = WORK_KINDS[kind], height = 100 * spec.height[1];
+  if (kind in SIGNATURE_KINDS) {
+    const spec = SIGNATURE_KINDS[kind as SignatureKind];
+    return { id: 0, kind, district: 0, theta: 0, s: 0, height: 4000 * spec.height, radius: 4000 * spec.radius, facing: spec.axial ? 0 : 0.7, crisp, vary };
+  }
+  const spec = WORK_KINDS[kind as DistrictWorkKind], height = 100 * spec.height[1];
   return { id: 0, kind, district: 0, theta: 0, s: 0, height, radius: height * spec.spread, facing: 0.7, crisp, vary };
 };
+const ALL_KINDS = [...Object.keys(WORK_KINDS), ...SIGNATURE.order] as WorkKind[];
 
 test('works: every style makes works of its own kinds, and a habitat without sensible works is invalid', () => {
   for (const style of DISTRICT_STYLES) assert.ok(STYLE_WORKS[style].length > 0, `${style} makes something`);
   const ids = (works: number, wild: number) => validate(derive(withParams({ relief: { ...MATRIX[0].params.relief, landforms: { ...MATRIX[0].params.relief.landforms!, works, wild } } }))).filter((f) => f.id === 'relief');
   assert.equal(ids(0.06, 1.5).length, 0);
   assert.ok(ids(-0.1, 1.5).length > 0 && ids(0.5, 1.5).length > 0 && ids(0.06, -1).length > 0);
+  const signature = (n: number) => validate(derive(withParams({ relief: { ...MATRIX[0].params.relief, landforms: { ...MATRIX[0].params.relief.landforms!, signature: n } } }))).filter((f) => f.id === 'relief');
+  assert.equal(signature(0).length + signature(3).length, 0);
+  assert.ok(signature(4).length > 0 && signature(1.5).length > 0 && signature(-1).length > 0);
 });
 
 test('works: each shape stays in its footprint, rises (or is dug) to its height, and is never steeper than a cliff', () => {
-  for (const kind of Object.keys(WORK_KINDS) as WorkKind[]) {
+  for (const kind of ALL_KINDS) {
     for (const crisp of [0, 1]) {
-      const w = lone(kind, crisp), r = w.radius, n = 50, e = r / n;
+      const w = lone(kind, crisp), r = w.radius, n = kind in SIGNATURE_KINDS ? 120 : 50, e = r / n;
       let top = -Infinity, bottom = Infinity, steepest = 0;
       for (let i = -n; i <= n; i++) for (let j = -n; j <= n; j++) {
         const du = i * e, dv = j * e;
@@ -64,6 +72,45 @@ test('works: the terraced kinds are cut in level ledges, crisp where cared for a
   }
 });
 
+test('works: the Spiral winds a level ramp up its flank, the Wave Field\'s waves run across its facing, the Tilt climbs gently to its cliff', () => {
+  const spiral = lone('spiral', 1), r = spiral.radius, H = spiral.height;
+  // Out from its middle: level treads, one riser per turn.
+  let ledges = 0, sloping = 0;
+  for (let i = 0, n = 2000; i < n * 0.9; i++) {
+    const a = workAt(spiral, (i * r) / n, 0), b = workAt(spiral, ((i + 1) * r) / n, 0);
+    if (a > H * 0.02 && a < H * 0.98) { sloping++; if (Math.abs(b - a) / (r / n) < 0.05) ledges++; }
+  }
+  assert.ok(ledges > 0.5 * sloping, `${ledges} of ${sloping} level`);
+  // Round it, halfway out: up the ramp nearly all the way, then one drop to the turn below.
+  let up = 0, down = 0, was = workAt(spiral, r * 0.5, 0);
+  for (let q = 1; q <= 720; q++) {
+    const a = (q / 720) * TURN, z = workAt(spiral, r * 0.5 * Math.sin(a), r * 0.5 * Math.cos(a));
+    if (z > was + 1e-9) up++; else if (z < was - 1e-9) down++;
+    was = z;
+  }
+  assert.ok(up > 0.7 * 720 && down < 0.25 * 720, `round the Spiral ${up} steps up, ${down} down`);
+  // The ramp's grade, a turn's rise over the way round it.
+  assert.ok(H / SIGNATURE.turns / (TURN * r * 0.5) < 0.05, 'a walkable ramp');
+
+  const waves = lone('wave-field', 1);
+  let crests = 0;
+  for (let i = 1, n = 4000; i < n; i++) {
+    const x = (i / n - 0.5) * 2 * waves.radius, z = (k: number) => workAt(waves, 0, x + (k * 2 * waves.radius) / n);
+    if (z(0) > z(-1) && z(0) >= z(1) && z(0) > waves.height * 0.2) crests++;
+  }
+  assert.ok(crests >= 8, `${crests} waves`);
+  // Along a crest it stays a wave: round the cylinder (across its facing) the height changes slowly.
+  const mid = workAt(waves, 0, (SIGNATURE.wave * waves.height) / 2), side = workAt(waves, waves.radius * 0.3, (SIGNATURE.wave * waves.height) / 2);
+  assert.ok(mid > waves.height * 0.8 && side > mid * 0.75, `a crest ${mid.toFixed(1)} m in the middle, ${side.toFixed(1)} m out to the side`);
+
+  const tilt = lone('tilt', 1), tr = tilt.radius;
+  const back = workAt(tilt, 0, -tr * 0.8), middle = workAt(tilt, 0, 0), front = workAt(tilt, 0, tr * 0.8);
+  assert.ok(back < middle && middle < front && front > tilt.height * 0.9, `${back.toFixed(0)} → ${middle.toFixed(0)} → ${front.toFixed(0)} m`);
+  const grade = Math.atan((front - back) / (tr * 1.6)) / DEG;
+  assert.ok(grade > 5 && grade < 12, `tilted ${grade.toFixed(1)}°`);
+  assert.equal(workAt(tilt, 0, tr * 0.95), 0, 'a cliff at its front');
+});
+
 for (const { name, params } of MATRIX) {
   const h = habitatOf(name), plan = planOf(h), R = h.radius, spacing = params.plan.entranceSpacing;
   const dist = (a: { theta: number; s: number }, b: { theta: number; s: number }): number => Math.hypot(wrap(a.theta - b.theta) * R, a.s - b.s);
@@ -74,22 +121,40 @@ for (const { name, params } of MATRIX) {
     works.forEach((w, i) => assert.equal(w.id, i));
     let shaped = 0;
     for (const d of plan.districts) {
-      const own = works.filter((w) => w.district === d.id);
+      const own = works.filter((w) => w.district === d.id && !isSignature(w));
       if (own.length) shaped++;
       for (const w of own) {
-        assert.ok(STYLE_WORKS[d.style].includes(w.kind), `a ${w.kind} in a ${d.style} district`);
+        assert.ok(STYLE_WORKS[d.style].includes(w.kind as DistrictWorkKind), `a ${w.kind} in a ${d.style} district`);
         assert.ok(plan.inside(d, w.theta, w.s, w.radius * 0.7 - 1e-6), 'inside its district');
         assert.ok(Math.abs(w.crisp - smoothstep(WORKS.care[0], WORKS.care[1], d.care)) < 1e-9, 'kept as its district is cared for');
       }
     }
     assert.ok(shaped >= plan.districts.length * 0.8, `${shaped} of ${plan.districts.length} districts shaped their ground`);
     for (const w of works) {
-      const spec = WORK_KINDS[w.kind];
+      if (isSignature(w)) continue;
+      const spec = WORK_KINDS[w.kind as DistrictWorkKind];
       assert.ok(w.height <= spec.height[1] * scale + 1e-6 && w.radius <= spacing * WORKS.reach + 1e-6, `${w.kind} ${w.height.toFixed(0)} m, ${w.radius.toFixed(0)} m wide`);
       if (spec.axial) assert.ok(Math.abs(Math.sin(w.facing)) < 1e-9, `${w.kind} faces along the axis`);
-      if (w.district < 0) assert.ok(w.s < plan.reserveEnd && STYLE_WORKS['let-go'].includes(w.kind) && w.crisp === 0, 'the reserve: nature\'s own');
+      if (w.district < 0) assert.ok(w.s < plan.reserveEnd && STYLE_WORKS['let-go'].includes(w.kind as DistrictWorkKind) && w.crisp === 0, 'the reserve: nature\'s own');
     }
     assert.ok(works.some((w) => w.district < 0), 'some in the wild reserve');
+  });
+
+  test(`works (${name}): the signature works stand in full view of the Sunwalk, each its own kind, in their turn`, () => {
+    const sig = plan.works.filter(isSignature), want = params.relief.landforms!.signature ?? 0;
+    if (name === 'reference') assert.equal(sig.length, want, 'the reference habitat has them all');
+    assert.ok(sig.length >= Math.min(1, want), `${sig.length} of ${want}`);
+    sig.forEach((w, i) => assert.equal(w.kind, SIGNATURE.order[i], 'in turn'));
+    const walk = plan.paths.find((p) => p.kind === 'sunwalk')!.points;
+    for (const w of sig) {
+      const spec = SIGNATURE_KINDS[w.kind as SignatureKind];
+      assert.ok(w.radius <= spec.radius * R + 1e-6 && Math.abs(w.height / w.radius - spec.height / spec.radius) < 1e-9, `${w.kind} sized as a share of the radius`);
+      assert.ok(w.crisp >= SIGNATURE.crisp && w.s > plan.reserveEnd, `${w.kind} kept, on the worked floor`);
+      let near = Infinity;
+      for (let k = 0; k < walk.length; k += 2) near = Math.min(near, dist({ theta: walk[k], s: walk[k + 1] }, w) - w.radius);
+      assert.ok(near < (TURN * R) / plan.valleys / 2, `${w.kind} ${near.toFixed(0)} m from the Sunwalk`);
+      assert.equal(plan.workOf(w.theta, w.s), w);
+    }
   });
 
   test(`works (${name}): clear of the courts, the Sunwalk, the rivers, the lake, the Heights and each other; the ways go round`, () => {

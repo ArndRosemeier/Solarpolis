@@ -69,6 +69,8 @@ export function validate(h: Habitat): Finding[] {
     out.push({ id: 'relief', severity: 'invalid', message: 'landforms need Rings 0 to 0.2 radii high a spacing > 0 apart, and a whole count ≥ 0 of Heights at most 0.45 radii high' });
   if (forms && !((forms.works ?? 0) >= 0 && (forms.works ?? 0) <= 0.15 && (forms.wild ?? 0) >= 0 && (forms.wild ?? 0) <= 4))
     out.push({ id: 'relief', severity: 'invalid', message: 'district works need a height from 0 to 0.15 radii, and the wild relief a boost from 0 to 4' });
+  if (forms && !(Number.isInteger(forms.signature ?? 0) && (forms.signature ?? 0) >= 0 && (forms.signature ?? 0) <= 3))
+    out.push({ id: 'relief', severity: 'invalid', message: 'signature works need a whole count from 0 to 3' });
   const c = p.clouds;
   if (c && !(c.base > 0 && c.thickness > 0 && c.base + c.thickness < h.radius - p.hubRadius && c.cover >= 0 && c.cover <= 1 && c.size > 0 && Number.isFinite(c.wind.along) && Number.isFinite(c.wind.around)))
     out.push({ id: 'clouds', severity: 'invalid', message: 'clouds need a base and thickness > 0 that stay clear of the axis, a cover from 0 to 1 and a size > 0' });

@@ -20,7 +20,7 @@ import { Noise, deriveSeed, smoothstep } from '@futuremagic/core';
 import { fromWorld, toWorld, type FaceKind, type Habitat, type Vec3 } from '../blueprint';
 import { LEVEL_STEP, gradePath, pathsOf } from './paths';
 import { carve, makeRivers, riverAt, valleyReach, type River, type RiverHit } from './rivers';
-import { COURT, courtOf, fromLake, landformOf, planOf, type Court, type Lake, type Landform, type OnGround } from './plan';
+import { COURT, courtOf, fromLake, landformOf, planOf, shoreOf, type Court, type Lake, type Landform, type OnGround } from './plan';
 
 export type { Lake } from './plan';
 
@@ -184,7 +184,7 @@ export function makeTerrain(h: Habitat): Terrain {
   const flanks = Math.max(1, Math.round(((Math.PI / form.valleys) * R * 0.5) / Math.max(massif * 3, 1e-6)));
   const cirqueLip = R * (1 - CIRQUE.gravity), cirqueHalf = Math.max(massif * CIRQUE.halfWidth, 1e-6), cirqueDepth = Math.max(massif * CIRQUE.depth, 1e-6);
   // The shore: a band as wide as the lake is deep times ten, where hills flatten to meet the water.
-  const shore = lake ? Math.max(lake.depth * 10, lake.halfWidth * 0.3) : 0;
+  const shore = shoreOf(lake);
 
   /** World position of the profile point under (θ, s), for the noise (so it wraps around the axis). */
   const at = (theta: number, s: number): Vec3 => toWorld(profile, { theta, s, h: 0 });
