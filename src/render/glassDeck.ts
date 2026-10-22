@@ -13,7 +13,7 @@
  */
 import { HalfFloatType, LinearFilter, PerspectiveCamera, RGBAFormat, RenderTarget, Vector2, Box2, type Scene, type WebGPURenderer } from 'three/webgpu';
 import { Fn, abs, clamp, dot, float, select, texture, uniform, vec2, vec3 } from 'three/tsl';
-import type { Node } from 'three/webgpu';
+import type { Node, Texture, TextureNode } from 'three/webgpu';
 import { toView, type Vec3 } from '../blueprint';
 
 type V3 = Node<'vec3'>;
@@ -42,9 +42,19 @@ const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0
 /** A face's right: its views' x. */
 const rightOf = (k: number): Vec3 => cross(FACES[k].f, FACES[k].u);
 
-/** The atlas the VAULT kind samples: one texel until a glass deck is near. */
-const atlas = new RenderTarget(1, 1, { type: HalfFloatType, format: RGBAFormat, depthBuffer: false, generateMipmaps: false, minFilter: LinearFilter, magFilter: LinearFilter });
-atlas.texture.name = 'glass deck';
+/** The atlas's texels: half floats, filtered, no depth. */
+const atlasOptions = { type: HalfFloatType, format: RGBAFormat, depthBuffer: false, generateMipmaps: false, minFilter: LinearFilter, magFilter: LinearFilter } as const;
+/**
+ * What the VAULT kind samples until a glass deck is near: one texel. The atlas, made when one is, takes its place in
+ * the shader's texture nodes (`looks`), so no shader is built again.
+ */
+const blank = new RenderTarget(1, 1, atlasOptions);
+const looks = new Set<TextureNode>();
+let looking: Texture = blank.texture;
+const lookAt = (t: Texture): void => {
+  looking = t;
+  for (const n of looks) n.value = t;
+};
 /** 1 once a whole round of views is in the atlas, 0 until then (the deck is dark for those few frames). */
 const ready = uniform(0);
 
@@ -69,7 +79,9 @@ export const glassSky = (d: V3): V3 => Fn(() => {
   // Texels as drawn: a view's first row is its top, and a render target's texture is looked up by its rows from the first.
   const col = k.mod(COLUMNS), row = k.div(COLUMNS).floor();
   const at = vec2(col.add(across).div(COLUMNS), row.add(float(1).sub(up)).div(ROWS));
-  return texture(atlas.texture, at).rgb.mul(ready);
+  const look = texture(looking, at);
+  looks.add(look);
+  return look.rgb.mul(ready);
 })() as unknown as V3;
 
 /** Where and for which hamlet the glass deck wants its views taken: straight over the eye, on the land. */
@@ -86,6 +98,7 @@ export interface GlassStage {
 
 export class GlassDeck {
   private view: RenderTarget | null = null;
+  private atlas: RenderTarget | null = null;
   private readonly camera = new PerspectiveCamera(90, 1, 0.3, 1e6);
   /** The hamlet the atlas is of (−1: none), where the round under way looks from, its next face, seconds to the next round. */
   private court = -1;
@@ -115,7 +128,12 @@ export class GlassDeck {
   step(dt: number, eye: Vec3, want: GlassWant | null, stage: GlassStage): void {
     if (!want) { this.release(); return; }
     if (want.court !== this.court) {
-      if (this.court < 0) { atlas.setSize(COLUMNS * GLASS_FACE, ROWS * GLASS_FACE); this.renderer.initTexture(atlas.texture); }
+      if (!this.atlas) {
+        this.atlas = new RenderTarget(COLUMNS * GLASS_FACE, ROWS * GLASS_FACE, atlasOptions);
+        this.atlas.texture.name = 'glass deck';
+        this.renderer.initTexture(this.atlas.texture);
+        lookAt(this.atlas.texture);
+      }
       this.court = want.court;
       ready.value = 0;
       this.from = null;
@@ -157,7 +175,7 @@ export class GlassDeck {
     r.render(this.scene, c);
     r.setRenderTarget(before);
     stage.onLand(null);
-    r.copyTextureToTexture(this.view.texture, atlas.texture, this.region, this.to.set((k % COLUMNS) * GLASS_FACE, Math.floor(k / COLUMNS) * GLASS_FACE));
+    if (this.atlas) r.copyTextureToTexture(this.view.texture, this.atlas.texture, this.region, this.to.set((k % COLUMNS) * GLASS_FACE, Math.floor(k / COLUMNS) * GLASS_FACE));
   }
 
   /** Give the atlas and any view target back. */
@@ -168,7 +186,9 @@ export class GlassDeck {
     ready.value = 0;
     this.view?.dispose();
     this.view = null;
-    atlas.setSize(1, 1);
+    lookAt(blank.texture);
+    this.atlas?.dispose();
+    this.atlas = null;
   }
 
   dispose(): void {

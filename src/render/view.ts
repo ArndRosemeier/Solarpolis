@@ -901,6 +901,8 @@ export class InteriorView {
     onLand: (at) => {
       this.showLand(!!at || !this.below);
       if (at) {
+        // The land and its specks, not the figures: their shadow shaders are built only as they come near on the land.
+        for (const g of [this.people?.group, this.drones?.group, ...this.animals.map((a) => a.group)]) if (g) g.visible = false;
         shineOn(this.habitat, this.terrain, this.emission, emissionMean(this.emission), air.skyLight.value, this.norm, at, this.posedAt);
         this.landExposure = view.exposure.value as number;
         view.exposure.value = 1;
