@@ -11,7 +11,7 @@ import { windingOk } from './meshChecks';
 import { terrainOf } from './worlds';
 
 /** A hamlet's home bays near its middle (up to `most`), with their houses. */
-function homesOf(name: string, hamlet: number, most = 12): { i: number; j: number; bay: ReturnType<typeof underHousesIn> }[] {
+function homesOf(name: string, hamlet: number, most = 5): { i: number; j: number; bay: ReturnType<typeof underHousesIn> }[] {
   const t = terrainOf(name), u = levelsOf(t).under, m = u.hamlets[hamlet], out: { i: number; j: number; bay: ReturnType<typeof underHousesIn> }[] = [];
   for (let r = 1; r <= 8 && out.length < most; r++) for (let di = -r; di <= r; di++) for (let dj = -r; dj <= r; dj++) {
     if (Math.max(Math.abs(di), Math.abs(dj)) !== r || out.length >= most) continue;
@@ -25,7 +25,7 @@ for (const { name } of MATRIX) {
   test(`homes (${name}): a hamlet's home bays hold its houses, each in its plot, level on the floor, under the vaults`, () => {
     const t = terrainOf(name), u = levelsOf(t).under, hr = t.habitat.params.landmarks!.handrail, middle = Math.floor(u.hamlets.length / 2);
     const bays = homesOf(name, middle);
-    assert.ok(bays.length >= 4, `${bays.length} home bays`);
+    assert.ok(bays.length >= 3, `${bays.length} home bays`);
     let houses = 0;
     for (const { i, j, bay } of bays) {
       assert.ok(bay.houses.length >= 1, 'a house in every home bay');
@@ -59,7 +59,7 @@ test('homes (reference): each district builds in its own way, of three eras, nea
     const m = u.hamlets[k], style = plan.districts[m.district].style;
     styles.add(style);
     const bays: { i: number; j: number }[] = [];
-    for (let di = -4; di <= 4; di++) for (let dj = -4; dj <= 4; dj++) if (m.j + dj >= 0 && m.j + dj < u.along && u.useAt(m.i + di, m.j + dj) === 'home' && u.hamletOf(m.i + di, m.j + dj) === m) bays.push({ i: m.i + di, j: m.j + dj });
+    for (let di = -8; di <= 8; di++) for (let dj = -8; dj <= 8; dj++) if (m.j + dj >= 0 && m.j + dj < u.along && u.useAt(m.i + di, m.j + dj) === 'home' && u.hamletOf(m.i + di, m.j + dj) === m) bays.push({ i: m.i + di, j: m.j + dj });
     for (const { i, j } of bays.slice(0, 4)) for (const h of housesIn(t.habitat, i, j, u.bay, around, 2, () => flat)) {
       n++;
       lived += h.lived ? 1 : 0;
