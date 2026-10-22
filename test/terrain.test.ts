@@ -5,7 +5,7 @@ import { CIRQUE, FLOOR_VALLEYS, GATE_TERRACES, HORN } from '../src/gen/terrain';
 import { COURT, courtOf, planOf } from '../src/gen/plan';
 import { slopeAt } from '../src/gen/scatter';
 import { ecologyOf, terrainOf } from './worlds';
-import { makeLayout, roots, bounds, buildTile, select, children, parent, keyId, cellSize, spheres, LodBudget, splitsAround, splitAround, packRelief, unpackRelief, CELL_PIXELS, RISE_RANGE, TILE_CELLS, type TileKey, type TileFit, type TileLayout, type TileMesh } from '../src/gen/tiles';
+import { makeLayout, roots, bounds, buildTile, select, children, parent, keyId, cellSize, sphere, spheres, LodBudget, splitsAround, splitAround, packRelief, unpackRelief, CELL_PIXELS, RISE_RANGE, TILE_CELLS, type TileKey, type TileFit, type TileLayout, type TileMesh } from '../src/gen/tiles';
 
 const wrap = (a: number): number => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
 const PX_PER_RAD = 1440 / (70 * Math.PI / 180);
@@ -250,7 +250,7 @@ for (const { name, params } of MATRIX) {
 test('tiles: the view where the sunline meets an endcap needs no more tiles than one on the floor', () => {
   const t = terrainOf(MATRIX[0].name), h = t.habitat, layout = makeLayout(t), { profile } = h;
   // Every tile built, each as rough as its cells: enough to count what a view splits to.
-  const errorOf = (k: TileKey): TileFit => ({ error: cellSize(layout, k) * 0.3, relief: 10 });
+  const errorOf = (k: TileKey): TileFit => ({ error: cellSize(layout, k) * 0.3, low: -10, high: 10 });
   const count = (s: number): ReturnType<typeof select> => select(t, layout, toWorld(profile, { theta: 1, s, h: 2 }), PX_PER_RAD, 2, errorOf);
   const floor = count((profile.floorStart + profile.floorEnd) / 2).draw.length;
   for (const s of [20, profile.length - 20]) {
@@ -278,7 +278,7 @@ test('tiles: children built while a sibling is not are kept, not drawn', () => {
   const root: TileKey = { band: 3, column: 0, level: 0, i: 0, j: 0 }, kids = children(layout, root);
   const built = new Set([...roots(layout), ...kids.slice(1)].map(keyId));
   const eye = toWorld(h.profile, { theta: 0.1, s: (layout.bands[3].s0 + layout.bands[3].s1) / 2, h: 2 });
-  const sel = select(t, layout, eye, PX_PER_RAD, 2, (k) => (built.has(keyId(k)) ? { error: cellSize(layout, k) * 0.3, relief: 10 } : undefined));
+  const sel = select(t, layout, eye, PX_PER_RAD, 2, (k) => (built.has(keyId(k)) ? { error: cellSize(layout, k) * 0.3, low: -10, high: 10 } : undefined));
   assert.ok(sel.draw.some((k) => keyId(k) === keyId(root)));
   const want = new Set(sel.want.map(keyId)), keep = new Set(sel.keep.map(keyId)), draw = new Set(sel.draw.map(keyId));
   assert.ok(want.has(keyId(kids[0])));
@@ -300,10 +300,10 @@ test('tiles: from high up a flat floor still splits until its cells are a few pi
     const s = (h.profile.floorStart + h.profile.floorEnd) / 2;
     const eye = toWorld(h.profile, { theta: 0, s, h: h.radius * 0.5 });
     // Every tile built and perfectly flat: only the cells' size on screen can split them.
-    const sel = select(t, layout, eye, PX_PER_RAD, 2, () => ({ error: 0, relief: 0 }), sphereOf);
+    const sel = select(t, layout, eye, PX_PER_RAD, 2, () => ({ error: 0, low: 0, high: 0 }), sphereOf);
     assert.ok(sel.draw.length > roots(layout).length, `${name}: ${sel.draw.length} tiles, only the roots`);
     for (const k of sel.draw) {
-      const sp = sphereOf(k), d = Math.max(1, Math.hypot(eye[0] - sp.center[0], eye[1] - sp.center[1], eye[2] - sp.center[2]) - sp.radius);
+      const sp = sphereOf(k, { low: 0, high: 0 }), d = Math.max(1, Math.hypot(eye[0] - sp.center[0], eye[1] - sp.center[1], eye[2] - sp.center[2]) - sp.radius);
       assert.ok(k.level === layout.maxLevel || (cellSize(layout, k) / d) * PX_PER_RAD <= CELL_PIXELS + 1e-9, `${name}: tile ${k.level} has cells over ${CELL_PIXELS} px`);
     }
   }
@@ -322,10 +322,10 @@ test('tiles: rock walls (an error that never shrinks) do not split every tile th
   // Over the floor near the foot of the Gate, 163 m up (Arnd, 2026-10-21: 4,214 tiles drawn there), every tile a cliff 60 m high.
   const theta = 323.8 * Math.PI / 180, s = profile.length - 5000;
   const eye = toWorld(profile, { theta, s, h: t.heightAt(theta, s) + 163 });
-  const cliffs = select(t, layout, eye, PX_PER_RAD, 2, () => ({ error: 60, relief: 10 }));
+  const cliffs = select(t, layout, eye, PX_PER_RAD, 2, () => ({ error: 60, low: -10, high: 10 }));
   // No more than ground whose error is half its cells everywhere (`FINEST_CELL_PIXELS`); split by their error alone,
   // cliffs would take every tile within kilometres to the finest level (tens of thousands).
-  const steep = select(t, layout, eye, PX_PER_RAD, 2, (k) => ({ error: cellSize(layout, k) / 2, relief: 10 }));
+  const steep = select(t, layout, eye, PX_PER_RAD, 2, (k) => ({ error: cellSize(layout, k) / 2, low: -10, high: 10 }));
   assert.ok(cliffs.draw.length <= steep.draw.length, `${cliffs.draw.length} tiles with cliffs everywhere, ${steep.draw.length} on steep ground`);
   assert.ok(cliffs.draw.length < 2500, `${cliffs.draw.length} tiles drawn`);
 });
@@ -333,7 +333,7 @@ test('tiles: rock walls (an error that never shrinks) do not split every tile th
 test('tiles: a view over its bytes is drawn coarser until it fits, and eases back once it can', () => {
   const t = terrainOf(MATRIX[0].name), h = t.habitat, layout = makeLayout(t), { profile } = h;
   const TILE = 0.5 * 1048576, budget = new LodBudget(100 * 1048576);
-  const fit = (k: TileKey): TileFit => ({ error: cellSize(layout, k) * 0.3, relief: 10 });
+  const fit = (k: TileKey): TileFit => ({ error: cellSize(layout, k) * 0.3, low: -10, high: 10 });
   const eye = toWorld(profile, { theta: 1, s: (profile.floorStart + profile.floorEnd) / 2, h: 2 });
   const used = (): number => { const sel = select(t, layout, eye, PX_PER_RAD, 2 * budget.scale, fit); return (sel.draw.length + sel.keep.length) * TILE; };
   assert.ok(used() > budget.bytes, 'the view needs more than the budget at full detail');
@@ -343,3 +343,35 @@ test('tiles: a view over its bytes is drawn coarser until it fits, and eases bac
   for (let f = 0; f < 400; f++) budget.update(0);
   assert.equal(budget.scale, 1);
 });
+
+test('tiles: a tile\'s sphere sits at its own height and holds its ground, so a Height\'s top is near and the floor below is far', () => {
+  for (const { name, params } of MATRIX) {
+    const t = terrainOf(name, params), h = t.habitat, layout = makeLayout(t), eco = ecologyOf(name, params);
+    const top = planOf(h).grounds.find((g) => g.kind === 'height');
+    if (!top) continue;
+    // The tile on the Height's top, a few levels down.
+    const level = Math.min(layout.maxLevel, 5);
+    let k = roots(layout).find((r) => inside(layout, r, top.theta, top.s))!;
+    while (k.level < level) k = children(layout, k).find((c) => inside(layout, c, top.theta, top.s))!;
+    const tile = buildTile(eco, layout, k), sp = sphere(t, layout, k, tile.low, tile.high), row = TILE_CELLS + 1;
+    for (let v = 0; v < row * row; v++) {
+      const p = [0, 1, 2].map((a) => tile.origin[a] + tile.positions[v * 3 + a]);
+      assert.ok(Math.hypot(p[0] - sp.center[0], p[1] - sp.center[1], p[2] - sp.center[2]) <= sp.radius + 1e-3, `${name}: a point of the tile outside its sphere`);
+    }
+    const ground = t.heightAt(top.theta, top.s);
+    assert.ok(tile.low <= ground && ground <= tile.high, `${name}: the top at ${ground.toFixed(0)} m outside ${tile.low.toFixed(0)} … ${tile.high.toFixed(0)}`);
+    // An eye standing on the top: the tile underfoot is near, a flat tile of the floor far below is as far as it is down.
+    const eye = toWorld(h.profile, { theta: top.theta, s: top.s, h: ground + 2 });
+    const d = (c: { center: number[]; radius: number }) => Math.hypot(eye[0] - c.center[0], eye[1] - c.center[1], eye[2] - c.center[2]) - c.radius;
+    assert.ok(d(sp) <= 0, `${name}: the eye is outside the sphere of the ground it stands on`);
+    const flat = sphere(t, layout, k, -1, 1);
+    assert.ok(d(flat) > ground / 2, `${name}: the floor below at ${d(flat).toFixed(0)} m, the top is ${ground.toFixed(0)} m up`);
+  }
+});
+
+function inside(layout: TileLayout, k: TileKey, theta: number, s: number): boolean {
+  const b = bounds(layout, k);
+  let x = theta - b.theta0;
+  x -= Math.floor(x / (2 * Math.PI)) * 2 * Math.PI;
+  return x < b.theta1 - b.theta0 && s >= b.s0 && s < b.s1;
+}
