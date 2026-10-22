@@ -39,7 +39,7 @@ for (const { name } of MATRIX) {
 
   test(`footing (${name}): on a deck over water, on the ground, or treading water with the head out`, () => {
     const terrain = terrainOf(name), h = terrain.habitat;
-    const p0: Person = { resident: 0, theta: 0, s: 0, heading: 0, moving: false, speed: 0, activity: 'meet', court: 0, outing: 0, member: 0, size: 1 };
+    const p0: Person = { resident: 0, theta: 0, s: 0, heading: 0, moving: false, speed: 0, activity: 'meet', court: 0, outing: 0, member: 0, size: 1, act: 'quiet', posture: POSE.upright, from: POSE.upright, since: 0 };
     // A dry place and a deep one, along a ring of the floor.
     let dry: [number, number] | null = null, wet: [number, number] | null = null;
     const R = h.radius, { floorStart, floorEnd } = h.profile;
@@ -51,7 +51,7 @@ for (const { name } of MATRIX) {
     }
     assert.ok(dry, `${name}: no dry land found (radius ${R})`);
     const at = (pl: [number, number], over: Partial<Person> = {}): Person => ({ ...p0, theta: pl[0], s: pl[1], ...over });
-    const still = at(dry, { moving: false, activity: 'picnic' });
+    const still = at(dry, { moving: false, activity: 'picnic', posture: postureOf('picnic') });
     const ground = footingOf(terrain, still, null, 1.8);
     assert.equal(ground.h, terrain.standAt(dry[0], dry[1]));
     assert.equal(ground.pose, postureOf('picnic'));
@@ -70,11 +70,11 @@ for (const { name } of MATRIX) {
     const terrain = terrainOf(name), h = terrain.habitat;
     let i = 0;
     while (residentOf(h, i).body !== 'drone') i++;
-    const body = 0.5, base: Person = { resident: i, theta: 0, s: h.profile.floorStart + 0.3 * (h.profile.floorEnd - h.profile.floorStart), heading: 0, moving: false, speed: 0, activity: 'meet', court: 0, outing: 0, member: 0, size: 1 };
+    const body = 0.5, base: Person = { resident: i, theta: 0, s: h.profile.floorStart + 0.3 * (h.profile.floorEnd - h.profile.floorStart), heading: 0, moving: false, speed: 0, activity: 'meet', court: 0, outing: 0, member: 0, size: 1, act: 'quiet', posture: POSE.upright, from: POSE.upright, since: 0 };
     const middle = (p: Person, deck: number | null = null): number => footingOf(terrain, p, deck, body).h + body / 2;
     const ground = terrain.standAt(base.theta, base.s), standing = middle(base) - ground;
     assert.ok(Math.abs(standing - 0.93 * MEAN_HEIGHT) < 1e-9, `at a standing person's eyes: ${standing.toFixed(2)} m`);
-    assert.ok(middle({ ...base, activity: 'bench' }) - ground < standing && middle({ ...base, activity: 'picnic' }) - ground < middle({ ...base, activity: 'bench' }) - ground, 'lower beside those sitting, lower still beside those lying');
+    assert.ok(middle({ ...base, posture: POSE.kneel }) - ground < standing && middle({ ...base, posture: POSE.lie }) - ground < middle({ ...base, posture: POSE.kneel }) - ground, 'lower beside those sitting, lower still beside those lying');
     assert.equal(middle({ ...base, moving: true, speed: 1 }) - ground, standing, 'flying along at the height of the faces');
     assert.equal(footingOf(terrain, base, null, body).swim, false);
     assert.ok(Math.abs(middle(base, ground + 3) - (ground + 3 + standing)) < 1e-9, 'over a deck, from the deck');
