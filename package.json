@@ -17,12 +17,12 @@
     "shots": "node scripts/shots/shots.mjs"
   },
   "dependencies": {
-    "@actors/animal": "https://github.com/ArndRosemeier/Actors/releases/download/v0.6.5/actors-animal-0.6.5.tgz",
-    "@actors/core": "https://github.com/ArndRosemeier/Actors/releases/download/v0.6.5/actors-core-0.6.5.tgz",
-    "@actors/drone": "https://github.com/ArndRosemeier/Actors/releases/download/v0.6.5/actors-drone-0.6.5.tgz",
-    "@actors/generator": "https://github.com/ArndRosemeier/Actors/releases/download/v0.6.5/actors-generator-0.6.5.tgz",
-    "@actors/human": "https://github.com/ArndRosemeier/Actors/releases/download/v0.6.5/actors-human-0.6.5.tgz",
-    "@actors/three": "https://github.com/ArndRosemeier/Actors/releases/download/v0.6.5/actors-three-0.6.5.tgz",
+    "@actors/animal": "https://github.com/ArndRosemeier/Actors/releases/download/v0.6.6/actors-animal-0.6.6.tgz",
+    "@actors/core": "https://github.com/ArndRosemeier/Actors/releases/download/v0.6.6/actors-core-0.6.6.tgz",
+    "@actors/drone": "https://github.com/ArndRosemeier/Actors/releases/download/v0.6.6/actors-drone-0.6.6.tgz",
+    "@actors/generator": "https://github.com/ArndRosemeier/Actors/releases/download/v0.6.6/actors-generator-0.6.6.tgz",
+    "@actors/human": "https://github.com/ArndRosemeier/Actors/releases/download/v0.6.6/actors-human-0.6.6.tgz",
+    "@actors/three": "https://github.com/ArndRosemeier/Actors/releases/download/v0.6.6/actors-three-0.6.6.tgz",
     "@dimforge/rapier3d-compat": "0.19.3",
     "@futuremagic/core": "file:vendor/assetgenerator/packages/core",
     "@futuremagic/stage": "file:vendor/assetgenerator/packages/stage",

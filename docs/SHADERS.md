@@ -7,6 +7,7 @@ Shader compiles are the worst kind of stutter: the frame waits for a driver. Sca
 1. **Each shader compile blocks for under 100 ms.** Aim for about 10 ms.
 2. **After the loading screen, shader builds take at most a third of the time, spread evenly: after a build of t ms the next waits 2t ms, and at most one per frame** (Arnd, 2026-10-22; it was 5 per second, 200 ms apart, which made a person's dozen 1–2 ms shadow builds take seconds).
 3. **Nothing compiles on the render path.** An object enters the scene only after its shaders are ready.
+4. **One build per kind, not per copy.** The same shader built again for every person, tile or plant is how stalls keep coming back. The monitor hashes the code of every build and names the same code built more than once after warm-up (`shaders.repeats()`, in `shaders.report()`, the debug menu's shader line and every render report on Arnd's PC). Share the material or node so the next copy hits the cache.
 
 ## How the code keeps them
 
