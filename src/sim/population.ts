@@ -396,7 +396,8 @@ function memberSpot(h: Habitat, place: Venue, form: Form, activity: Activity, le
   const ring = Math.max(1, h.profile.at(cs).r);
   let ds = 0, dy = 0, heading: number;
   if (form === 'ring' && size > 1) {
-    const gap = RING_GAP[activity] ?? TALK_GAP, rr = Math.max(gap * 0.6, (size * gap) / TURN), a = TURN * unit(seed, lead, day, 4) + (TURN * m) / size;
+    // Two stand as two who talk (or dance a pair dance), whatever the place's ring is for.
+    const gap = size === 2 ? TALK_GAP : RING_GAP[activity] ?? TALK_GAP, rr = Math.max(gap * 0.6, (size * gap) / TURN), a = TURN * unit(seed, lead, day, 4) + (TURN * m) / size;
     ds = rr * Math.cos(a); dy = rr * Math.sin(a); heading = a + Math.PI;
   } else if (form === 'row') {
     heading = TURN * unit(face, lead, day, 0);
