@@ -1,12 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { hash3f } from '@futuremagic/core';
-import { CLIMATES, derive, fromWorld, toWorld, withParams } from '../src/blueprint';
-import { makeTerrain } from '../src/gen/terrain';
-import { makeEcology, TREE_HEIGHT } from '../src/gen/ecology';
+import { CLIMATES, fromWorld, toWorld } from '../src/blueprint';
+import { TREE_HEIGHT } from '../src/gen/ecology';
 import { cellId, cellsNear, LEVELS, nearestOf, plantCell, plantsOf, PLANT_STRIDE, type Level } from '../src/gen/scatter';
 import { draws, handover, handOverPick, holes, sweepTo, type Band, type Piece } from '../src/gen/handover';
 import { EYE_HEIGHT } from '../src/world/walker';
+import { climateOf } from './worlds';
 
 /** Three levels as plants have them (sight unit 6 m), each fading in where the one before fades out. */
 const BANDS: Band[] = LEVELS.map((l) => l.fade.map((f) => f * 6) as Band);
@@ -82,7 +82,7 @@ test('handover: the boundaries sweep in at once and out over a moment, and while
 test('handover: every plant near the eye is drawn by exactly one level while the finer levels are half built', () => {
   // The real plants of a shrub and a tree, their real cells, the shaders' rule (`plantFrame`): level k draws a plant
   // at distance d with threshold p where out_k(d) ≤ p ≤ into_k(d).
-  const h = derive(withParams({ climate: 'temperate-mild' })), eco = makeEcology(makeTerrain(h)), plants = plantsOf(eco);
+  const eco = climateOf('temperate-mild'), h = eco.terrain.habitat, plants = plantsOf(eco);
   const s = (h.profile.floorStart + h.profile.floorEnd) / 2, middle = toWorld(h.profile, { theta: 0.7, s, h: EYE_HEIGHT });
   const smooth = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
   for (const name of ['hawthorn', 'oak']) {

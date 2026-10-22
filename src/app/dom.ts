@@ -8,6 +8,16 @@ export function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, t
   return e;
 }
 
+/** A new SVG element with attributes. */
+export function svg<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string | number>): SVGElementTagNameMap[K] {
+  const e = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, String(v));
+  return e;
+}
+
+/** A length for people to read: metres below a kilometre, then km (one decimal below 10 km). */
+export const km = (m: number): string => (m >= 1000 ? `${(m / 1000).toFixed(m >= 10000 ? 0 : 1)} km` : `${m.toFixed(0)} m`);
+
 /** Call `close` when Escape is pressed; returns the function that stops listening. */
 export function onEscape(close: () => void): () => void {
   const key = (e: KeyboardEvent): void => { if (e.key === 'Escape') close(); };

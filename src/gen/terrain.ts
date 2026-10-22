@@ -20,7 +20,7 @@ import { Noise, deriveSeed, smoothstep } from '@futuremagic/core';
 import { fromWorld, toWorld, type FaceKind, type Habitat, type Vec3 } from '../blueprint';
 import { LEVEL_STEP, gradePath, pathsOf } from './paths';
 import { carve, makeRivers, riverAt, valleyReach, type River, type RiverHit } from './rivers';
-import { COURT, courtOf, fromLake, landformOf, planOf, type Court, type Lake, type Landform } from './plan';
+import { COURT, courtOf, fromLake, landformOf, planOf, type Court, type Lake, type Landform, type OnGround } from './plan';
 
 export type { Lake } from './plan';
 
@@ -48,6 +48,11 @@ export interface Terrain {
   readonly courts: readonly PlacedCourt[];
   /** Which of a Gate face's terraces a point of the port endcap lies on, or null off the faces (the buttresses, the floor). */
   terraceAt(theta: number, s: number): GateTerrace | null;
+  /**
+   * How high a landform the plan built (a Ring, a Height: `Landform.landformAt`) raises the land at a point, its
+   * terraces and rock included (m; 0 off them). It is hollow: the Understorey's deck keeps to the land under it.
+   */
+  builtAt(theta: number, s: number): number;
 }
 
 /**
@@ -90,6 +95,20 @@ export const GATE_TERRACES: Readonly<Record<FaceKind, { step: number; wander: nu
  * valley is a long room with a broad meadow floor, its river down the middle, and rolling woods up its sides.
  */
 export const FLOOR_VALLEYS = { ridge: 1.2, floor: 0.45 };
+
+/**
+ * The Rings' fronts (gen/plan.ts), cut in terraces like the Gate's Vine face at the floor's scale: the step as a share
+ * of the terrace step, how far the levels wander (in steps), the ledges' and walls' angles from level.
+ */
+export const RING_TERRACES = { step: 0.25, wander: 0.3, tread: 3 * DEG, riser: 80 * DEG };
+/** The Heights' flanks: crags a `crag` share of the Height wide and a `depth` share deep, over the Mountain's benches. */
+export const HEIGHT_ROCK = { crag: 0.4, depth: 0.05 };
+
+/** A ridged noise (0 … 1) from a noise value: sharp crests, rounded over a few hundredths so one can stand on them. */
+const ridged = (f: number): number => {
+  const n = Math.max(0, 1 - Math.sqrt(f * f + 0.0225) * 1.8);
+  return n * n;
+};
 
 export const HORN = { gravity: 0.25, radius: 3, height: 2 };
 export const CIRQUE = { gravity: 0.6, halfWidth: 2.5, depth: 2.5 };
@@ -169,12 +188,7 @@ export function makeTerrain(h: Habitat): Terrain {
   const inLake = (s: number): number | null => (lake ? 1 - Math.abs(s - lake.s) / lake.halfWidth : null);
 
   /** The ridged crags of the endcaps: sharp crests between rounded hollows (0 … 1), stretched down the slope. */
-  const crags = (x: number, y: number, s: number, w: number, octaves: number): number => {
-    // The crest is rounded over a few hundredths of the crag's width (a soft |n|), so the rock is sharp from afar
-    // and still a surface one can stand on up close.
-    const f = cragNoise.fbm3(x / w, y / w, s / (w * 3), octaves), n = Math.max(0, 1 - Math.sqrt(f * f + 0.0225) * 1.8);
-    return n * n;
-  };
+  const crags = (x: number, y: number, s: number, w: number, octaves: number): number => ridged(cragNoise.fbm3(x / w, y / w, s / (w * 3), octaves));
 
   /** The Mountain's shape at a point of the wild endcap, as a height over the slope (`g`: gravity there). */
   const mountainAt = (theta: number, s: number, x: number, y: number, e: number, alpha: number, g: number, nr: number): number => {
@@ -262,21 +276,56 @@ export function makeTerrain(h: Habitat): Terrain {
     return body * shape + buttress;
   };
 
+  /**
+   * A landform's surface over the land at a world point (`base` m up before it): its designed shape (`plan.landformAt`), a
+   * Ring's front cut in terraces along the contours, a Height's flanks broken by crags and rock benches.
+   */
+  const formAt = (on: OnGround, x: number, y: number, z: number, base: number): number => {
+    const g = on.form, H = g.height;
+    let top = on.top;
+    const alpha = Math.atan(on.slope), e = base + top;
+    if (g.kind === 'ring') {
+      if (on.face <= 0) return top;
+      const tier = step * RING_TERRACES.step, lobe = tier * 12;
+      const wander = tier * RING_TERRACES.wander * noise.fbm3(x / lobe, y / lobe, z / lobe, 2);
+      return top + on.face * terraces(e + wander, tier, alpha, RING_TERRACES.tread, RING_TERRACES.riser);
+    }
+    // A Height: its plateau and its foot smooth, its flanks rock.
+    const flank = smoothstep(0.02, 0.2, on.share) * (1 - smoothstep(0.8, 0.97, on.share));
+    if (flank <= 0) return top;
+    const w = H * HEIGHT_ROCK.crag;
+    let rock = H * HEIGHT_ROCK.depth * (ridged(cragNoise.fbm3(x / w + 41.7, y / w, z / w, 2)) - 0.35);
+    const bench = step * BENCH.step;
+    const wander = bench * BENCH.wander * noise.fbm3(x / (bench * 10), y / (bench * 10), z / (bench * 10), 2);
+    const kept = smoothstep(0.1, 0.35, detail.fbm3(x / (massif * 4) + 17.3, y / (massif * 4), z / (massif * 4), 2));
+    rock += kept * terraces(e + rock + wander, bench, alpha, BENCH.tread, BENCH.riser, BENCH.worn);
+    return top + flank * rock;
+  };
+
+  /** How high `landAt` last found a landform raising the land. */
+  let raised = 0;
+
   /** The land before the rivers carve it. */
   const landAt = (theta: number, s: number): number => {
     const [x, y, z] = at(theta, s);
     let height = 0;
     const f = onFloor(s);
+    // The landforms the plan built on the floor (gen/plan.ts: the Rings and the Heights).
+    const on = f > 0 ? form.landformAt(theta, s) : null;
     if (f > 0 && hills > 0) {
       const n = noise.fbm3(x / hillWave, y / hillWave, z / hillWave, 5);
       // Up a valley's sides to the ridge: the land rises, and the hills roll more than on the valley's floor.
       const side = form.valleys > 1 ? smoothstep(0.15, 0.95, form.ridgeAt(theta, s)) : 0;
       let hill = hills * Math.pow(smoothstep(-0.25, 0.85, n), 1.6) * (FLOOR_VALLEYS.floor + (1 - FLOOR_VALLEYS.floor) * side);
+      // A Height's top is a garden, kept level: the hills die away on it.
+      if (on && on.form.kind === 'height') hill *= 1 - smoothstep(0.85, 1, on.share);
       hill += hills * FLOOR_VALLEYS.ridge * side;
       const k = inLake(s);
       if (k !== null && lake) hill *= smoothstep(0, shore, -k * lake.halfWidth); // 0 at the water, full a shore away
       height += f * hill;
     }
+    raised = on ? f * formAt(on, x, y, z, height) : 0;
+    height += raised;
     const k = inLake(s);
     if (k !== null && k > 0 && lake) height -= lake.depth * Math.sqrt(smoothstep(0, 0.6, k));
     if (f < 1) {
@@ -418,5 +467,10 @@ export function makeTerrain(h: Habitat): Terrain {
     return { face, tier: Math.floor(level / tier), body, level, step: tier };
   };
 
-  return { habitat: h, form, lake, rivers, riverAt: inRiver, heightAt, standAt, waterDepth, courtAt, courts: courts.map((c) => c.court), terraceAt };
+  const builtAt = (theta: number, s: number): number => {
+    landAt(theta, s);
+    return raised;
+  };
+
+  return { habitat: h, form, lake, rivers, riverAt: inRiver, heightAt, standAt, waterDepth, courtAt, courts: courts.map((c) => c.court), terraceAt, builtAt };
 }

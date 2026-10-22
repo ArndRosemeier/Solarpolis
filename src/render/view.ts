@@ -14,6 +14,7 @@ import { makeTerrain, type Terrain } from '../gen/terrain';
 import { EYE_HEIGHT, Walker, type View } from '../world/walker';
 import { Flyer } from '../world/flyer';
 import { PhysicsWorld } from '../physics/world';
+import { gravityReading, type GravityReading } from '../world/motion';
 import { HUMAN, type Character } from '../physics/character';
 import { Figure, castAsWorn, type MoveState } from './actors/figure';
 import { playerLook } from './actors/looks';
@@ -31,8 +32,8 @@ import { setFloorEye, setRockBeds, setSnow } from './groundShaders';
 import { UNDER_CROWNS, crownsClosed, makeEcology, type Ecology } from '../gen/ecology';
 import { FrameLoop, clickToUse, dragToLook, draw, fitCanvas, moveKeys } from './surface';
 import { freeMesh } from './geometry';
-import { cloudSpan, cloudsAt } from '../world/clouds';
-import { setCloudSpan, setCloudState } from './cloudShaders';
+import { cloudClearings, cloudSpan, cloudsAt } from '../world/clouds';
+import { setCloudClearings, setCloudSpan, setCloudState } from './cloudShaders';
 import { LandmarkView } from './landmarks';
 import { TiledView, courtSource, crossingSource, hallSource, stairSource, underSource } from './tiled';
 import { underFloorAt } from '../gen/underMesh';
@@ -51,6 +52,8 @@ import { calledFrom, doorsAbove, doorsBelow, doorsHit, eyeInCabin, liftDoorsNear
 
 /** Running is this many times the walking speed. */
 const RUN = 8;
+/** How long (s) the gravity meter takes to follow a change in the felt gravity, so a stride's jitter does not show. */
+const GRAVITY_SMOOTHING = 0.25;
 /** The physics' ground patch: side (m) and cell (m). */
 const PATCH_SIZE = 192;
 const PATCH_CELL = 1;
@@ -139,6 +142,12 @@ export class InteriorView {
   });
   /** Travel speed multiplier from the debug menu. */
   boost = 1;
+  /** Called each frame with the gravity the player feels (the page's gravity meter), smoothed over a fraction of a second. */
+  onGravity: ((r: GravityReading) => void) | null = null;
+  /** Walking and running speed on foot (m/s), for the gravity meter's explanation. */
+  get paces(): { walk: number; run: number } { return { walk: this.walker.speed, run: this.walker.speed * RUN }; }
+  private gravity: GravityReading | null = null;
+  private lastAt: Vec3 | null = null;
   /**
    * The habitat's clock (s since its first dawn) and how many clock seconds pass per real second. The clock is the
    * game's, advanced by frame time here; nothing reads the wall clock (CLAUDE.md, rule 5).
@@ -521,6 +530,7 @@ export class InteriorView {
   private cloudLayer(): Group | null {
     const h = this.habitat, span = cloudSpan(h);
     setCloudSpan(span, h.params.clouds?.size ?? 1);
+    setCloudClearings(cloudClearings(h));
     setCloudState(cloudsAt(h, this.time));
     if (!span) return null;
     // Fine enough around that its faces lie within a metre of the true cylinder (the march itself is exact).
@@ -884,8 +894,27 @@ export class InteriorView {
     this.rideOn(dt);
     this.simulate(dt, this.current().eye);
     this.place();
+    this.weigh(dt);
     draw(this.stage);
     this.glass?.takeViews(dt, this.posedAt, this.glassWanted(), this.glassStage);
+  }
+
+  /** The gravity the player feels now (`feltGravity`), smoothed so a stride's jitter does not show, for `onGravity`. */
+  private weigh(dt: number): void {
+    if (!this.onGravity || dt <= 0) return;
+    const c = this.character, view = this.current(), aboard = !!this.cabin?.aboard;
+    const onFoot = !!c && !this.flyer && !aboard;
+    const at = onFoot ? c.feet() : view.eye;
+    // On foot the body's own velocity; flying or in a lift, how far the eye went this frame (a jump elsewhere is no speed).
+    const last = this.lastAt;
+    let v: Vec3 = onFoot ? c.velocity : last ? v3scale([at[0] - last[0], at[1] - last[1], at[2] - last[2]], 1 / dt) : [0, 0, 0];
+    if (Math.hypot(...v) > 2000) v = [0, 0, 0];
+    this.lastAt = [...at];
+    const moving = aboard ? 'lift' : this.flyer ? 'fly' : !c ? 'foot' : c.swimming ? 'swim' : c.grounded ? 'foot' : 'air';
+    const now = gravityReading(this.habitat, at, v, view.look, view.up, moving), was = this.gravity;
+    const k = was ? 1 - Math.exp(-dt / GRAVITY_SMOOTHING) : 1;
+    this.gravity = !was ? now : { ...now, felt: was.felt + (now.felt - was.felt) * k, spinward: was.spinward + (now.spinward - was.spinward) * k };
+    this.onGravity(this.gravity);
   }
 
   /** Where the scene is posed about this frame (world): the eye `place` put it round. */

@@ -1,12 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { FLOOR_LAYERS, MATRIX, STYLE_LAND, derive } from '../src/blueprint';
-import { makeTerrain } from '../src/gen/terrain';
-import { makeEcology } from '../src/gen/ecology';
 import { planOf, type PlanPath } from '../src/gen/plan';
 import { CROWN, pathCover, pathsOf } from '../src/gen/paths';
 import { cellsNear, plantCell, plantsOf, PLANT_STRIDE } from '../src/gen/scatter';
 import { fromWorld, toWorld } from '../src/blueprint';
+import { terrainOf, ecologyOf } from './worlds';
 
 /** Every `every`-th point of a path, with the direction across it there (unit, in θ·R and s). */
 function along(path: PlanPath, R: number, every: number): { theta: number; s: number; nu: number; ns: number }[] {
@@ -39,7 +38,7 @@ for (const { name, params } of MATRIX) {
   });
 
   test(`paths (${name}): the ground is level across each path, crowned a little, and stays close to the land`, () => {
-    const h = derive(params), t = makeTerrain(h), plan = planOf(h), net = pathsOf(h), R = h.radius;
+    const t = terrainOf(name), h = t.habitat, plan = planOf(h), net = pathsOf(h), R = h.radius;
     let checked = 0;
     for (const path of plan.paths) {
       const half = path.width / 2;
@@ -50,8 +49,9 @@ for (const { name, params } of MATRIX) {
         if (t.riverAt(at.theta, at.s) || t.courtAt(at.theta, at.s) || (t.lake && Math.abs(at.s - t.lake.s) < t.lake.halfWidth * 1.2)) continue;
         const side = (k: number) => t.heightAt(at.theta + (at.nu * k) / R, at.s + at.ns * k);
         const left = side(-half * 0.8), mid = side(0), right = side(half * 0.8);
-        if (net.pathAt(at.theta + (at.nu * -half * 0.8) / R, at.s + at.ns * -half * 0.8)?.kind !== path.kind) continue;
-        if (net.pathAt(at.theta + (at.nu * half * 0.8) / R, at.s + at.ns * half * 0.8)?.kind !== path.kind) continue;
+        // Where two ways meet, each is levelled along its own line.
+        if (net.pathAt(at.theta + (at.nu * -half * 0.8) / R, at.s + at.ns * -half * 0.8)?.piece !== hit.piece) continue;
+        if (net.pathAt(at.theta + (at.nu * half * 0.8) / R, at.s + at.ns * half * 0.8)?.piece !== hit.piece) continue;
         // At a ford's edge one side is the river's bed (crossings.ts builds over it).
         if ([-1, 1].some((k) => t.riverAt(at.theta + (at.nu * k * half * 0.8) / R, at.s + at.ns * k * half * 0.8))) continue;
         assert.ok(Math.abs(left - right) < CROWN * half + 0.05, `${path.kind} tilts ${(left - right).toFixed(2)} m across`);
@@ -63,7 +63,7 @@ for (const { name, params } of MATRIX) {
   });
 
   test(`paths (${name}): each path is laid in its surface, a far one is a faint line, and no plant stands on one`, () => {
-    const h = derive(params), eco = makeEcology(makeTerrain(h)), t = eco.terrain, plan = planOf(h), net = pathsOf(h), R = h.radius;
+    const eco = ecologyOf(name), h = eco.terrain.habitat, t = eco.terrain, plan = planOf(h), net = pathsOf(h), R = h.radius;
     const out = new Float32Array(3), floor = new Uint8Array(FLOOR_LAYERS.length);
     const sunwalk = plan.paths.find((p) => p.kind === 'sunwalk')!;
     let laid = 0;

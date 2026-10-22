@@ -2,6 +2,28 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.107 — Faster test run
+
+- The remaining tests that built their own land now share one per habitat too (also the flat test land and the reference in other climates), so the whole test run takes about 20 s of its 30 s limit instead of about 25 s. Nothing in the game changes.
+
+## v0.106 — A gravity meter: why you weigh less running one way
+
+- Inside, a small meter at the bottom right shows the gravity you feel right now, in g, with a bar against what standing still here would give.
+- It says what changes it: running with the spin makes you heavier, against it lighter (at a full run about +45% and −36% in the reference cylinder), and higher up, nearer the axis, you are lighter too. One line says why.
+- Its arrow points spinward, the way the floor itself moves. The "?" opens a short explanation of spin gravity with this habitat's own numbers.
+
+## v0.105 — Rings and Heights rise out of the floor
+
+- The floor is no longer flat. Ridges called Rings run all the way round the cylinder, 400 m high in the reference habitat, and part the floor into landscape rooms. Each has a steep front toward the port end, cut in terraces, and a long slope toward the wild end.
+- Over each valley a Ring dips to a gentle saddle where the Sunwalk crosses, and it opens into a gorge wherever a river runs through.
+- Lone mounts called Heights stand on the ridges between the valleys. The tallest is 1,300 m high and rises through the cloud base. Their flanks are rock with crags and ledges, and their tops are level.
+- Ways now keep to their own room between two Rings and go round the Heights. The Sunwalk links the rooms.
+- The living layer below keeps to the land under a Ring or a Height, which leaves room for great halls inside them later.
+- New Go entries in the debug menu: before a Ring's terraced front, a Ring from far off, the tallest Height from far off, and the top of the tallest Height.
+- Clouds part round any Height that rises into them, so its top stands clear in the sky.
+- Ways bend round the entrance courts they pass instead of crossing them, and courts keep off the Sunwalk.
+- The tests reuse one built land per habitat, which brings the test run back under its time limit (about 23 s of 30 s).
+
 ## v0.104 — Ready for a taller floor
 
 - Ridges and the crests of the new Rings and Heights show no slits of sky between near and far ground.

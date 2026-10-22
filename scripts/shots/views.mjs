@@ -71,6 +71,9 @@ async function logPeople(page) {
 }
 /** Walk ahead (W) for `steps` stretches of `ms`, a picture after each (`-w1`, `-w2`, ...), then log the plant LOD line. */
 const walk = (steps, ms) => [...Array.from({ length: steps }, (_, i) => [{ key: 'KeyW', hold: ms }, { shot: `w${i + 1}` }]).flat(), { run: logPlantLod }];
+/** Press keys and keep them down across the next steps (running while a picture is taken), and let them go. */
+const hold = (...keys) => async (page) => { for (const k of keys) await page.keyboard.down(k); };
+const release = (...keys) => async (page) => { for (const k of keys) await page.keyboard.up(k); };
 /** A heap snapshot step (heap.mjs, loaded fresh: the render PC's watcher runs for hours and would keep an old copy). */
 const heap = (label) => ({ run: async (page) => { await (await import(`./heap.mjs?t=${Date.now()}`)).heapStep(page, label); } });
 /** Turn on the debug menu's memory details, so the report's debug info lists every owner. */
@@ -105,6 +108,7 @@ export const views = {
   'bushes-above': { query: 'view=inside', about: 'flown up over the nearest meadow, looking out and down at the bushes', settle: 6000, steps: [{ debug: 'Into the nearest meadow' }, { wait: 6000 }, { key: 'KeyF' }, { key: 'KeyE', hold: 3000 }, { look: [0, 90] }, { wait: 3000 }] },
   'ground-endcap': { query: 'view=inside', about: 'at the foot of the wild endcap, looking a little down', steps: [{ debug: 'The foot of the wild endcap' }, { wait: 6000 }, { look: [0, 120] }, { wait: 1000 }] },
   'clouds-up': { query: 'view=inside', about: 'in the nearest meadow, looking straight up at the clouds overhead', settle: 6000, steps: [{ debug: 'Into the nearest meadow' }, { wait: 6000 }, { look: [0, -390] }, { wait: 1500 }] },
+  'gravity-run': { query: 'view=inside', about: 'the gravity meter (app/gravityMeter.ts): standing (-still), running against the spin (-against), with it (-with), then its explanation panel', settle: 6000, steps: [{ debug: 'Into the nearest meadow' }, { wait: 6000 }, { look: [-393, 0] }, { wait: 1000 }, { shot: 'still' }, { run: hold('ShiftLeft', 'KeyW') }, { wait: 1500 }, { shot: 'against' }, { run: release('ShiftLeft', 'KeyW') }, { look: [786, 0] }, { run: hold('ShiftLeft', 'KeyW') }, { wait: 1500 }, { shot: 'with' }, { run: release('ShiftLeft', 'KeyW') }, { wait: 500 }, { run: async (page) => { await page.locator('.gm-help').click(); await page.waitForTimeout(500); } }] },
   'clouds-side': { query: 'view=inside', about: 'in the nearest meadow, turned spinward and looking up at the clouds across the cylinder', settle: 6000, steps: [{ debug: 'Into the nearest meadow' }, { wait: 6000 }, { look: [390, -150] }, { wait: 1500 }] },
   'clouds-overcast': { query: 'view=inside', about: 'in the nearest meadow, the clouds set to overcast (85%), looking up across the cylinder', settle: 6000, steps: [{ debug: 'Into the nearest meadow' }, { wait: 6000 }, { debug: 'Clouds: schedule' }, { debug: 'Clouds: schedule' }, { debug: 'Clouds: schedule' }, { look: [0, -200] }, { wait: 1500 }] },
   'clouds-under': { query: 'view=inside', about: 'flown up under the clouds: ahead (-ahead), then looking up', settle: 6000, steps: [{ debug: 'Fly up under the clouds' }, { wait: 3000 }, { shot: 'ahead' }, { look: [0, -250] }, { wait: 1500 }] },
@@ -170,6 +174,11 @@ export const views = {
   'hall-dais': { query: 'view=inside', about: 'on a grown hall\'s dais, looking down the nave', settle: 6000, steps: [{ debug: 'To a grown hall: on its dais' }, { wait: 12000 }] },
   'hall-beside': { query: 'view=inside', about: 'floating beside a grown hall: the two rows of trained lindens, the lattice screen, the roof of crowns', settle: 6000, steps: [{ debug: 'Fly: beside a grown hall' }, { wait: 12000 }] },
   'hall-far': { query: 'view=inside', about: 'a grown hall from a few hundred metres off', settle: 6000, steps: [{ debug: 'Fly: a grown hall from afar' }, { wait: 12000 }] },
+  // The landforms (gen/plan.ts `grounds`, gen/terrain.ts): a Ring's terraced front, the Rings and the tallest Height from afar, its top.
+  'ring-front': { query: 'view=inside', about: 'floating before the nearest Ring\'s terraced front over a ridge, looking up at it', settle: 6000, steps: [{ debug: 'Fly: before the nearest Ring' }, { wait: 14000 }] },
+  'ring-far': { query: 'view=inside', about: 'the nearest Ring from far off toward the port: a ridge across the floor and up round the curve', settle: 6000, steps: [{ debug: 'Fly: the nearest Ring from far off' }, { wait: 14000 }] },
+  'height-far': { query: 'view=inside', about: 'the tallest Height from a few kilometres off: sheer rock flanks, its plateau', settle: 6000, steps: [{ debug: 'Fly: the tallest Height from far off' }, { wait: 14000 }] },
+  'height-top': { query: 'view=inside', about: 'standing on the tallest Height\'s top, looking out along the cylinder, then down its flank', settle: 6000, steps: [{ debug: 'To the top of the tallest Height' }, { wait: 12000 }, { shot: 'out' }, { look: [900, 260] }, { wait: 1500 }] },
   'far-meadow-up': { query: 'view=inside', about: 'standing in a meadow, looking up at the far side', settle: 6000, steps: [{ debug: 'Into the nearest meadow' }, { wait: 5000 }, { look: [0, -260] }, { wait: 3000 }] },
   outside: { query: 'view=outside', about: 'the home habitat from outside', default: true },
   'outside-earth': { query: 'view=outside', about: 'looking at Earth (key 2)', steps: [{ key: 'Digit2' }, { wait: 3000 }] },

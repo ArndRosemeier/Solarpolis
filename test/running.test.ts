@@ -5,13 +5,13 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MATRIX, derive, toWorld, withParams, type Vec3 } from '../src/blueprint';
+import { MATRIX, toWorld, type Vec3 } from '../src/blueprint';
 import { buildPatch } from '../src/gen/patch';
-import { coast, upAt } from '../src/world/motion';
+import { coast, feltGravity, spinwardAt, upAt } from '../src/world/motion';
 import { PhysicsWorld, PHYSICS_STEP } from '../src/physics/world';
 import { JUMP_SPEED, afterMove } from '../src/physics/character';
-import { makeTerrain } from '../src/gen/terrain';
 import { RUN, around, rise } from './runs';
+import { flatOf } from './worlds';
 
 test('afterMove: the controller stops a body but never throws it', () => {
   const up: Vec3 = [0, 1, 0];
@@ -28,10 +28,9 @@ test('afterMove: the controller stops a body but never throws it', () => {
   assert.ok(Math.hypot(...slid) <= 1 + 1e-12, `slid at ${Math.hypot(...slid)}`);
 });
 
-for (const { name, params } of MATRIX) {
+for (const { name } of MATRIX) {
   // Flat land: any lift is the controller's alone.
-  const h = derive(withParams({ relief: { hills: 0, ringLake: null, terraceStep: params.relief.terraceStep, massif: 0, rivers: null }, landmarks: null }, params));
-  const t = makeTerrain(h);
+  const t = flatOf(name), h = t.habitat;
   const s = (h.profile.floorStart + h.profile.floorEnd) / 2 + Math.min(1234, (h.profile.floorEnd - h.profile.floorStart) / 4);
 
   test(`running (${name}): a fast run over flat ground stays on it, both ways around`, async () => {
@@ -72,8 +71,9 @@ for (const { name, params } of MATRIX) {
       assert.ok(Math.abs(air - expect.t) < 0.05, `${sign > 0 ? 'spinward' : 'antispinward'}: in the air ${air} s vs ${expect.t} s`);
       times.push(air);
     }
-    // Moving against the spin takes away from the speed that makes gravity: (ωr − v)² / r instead of ω²r.
-    const g = (v: number): number => (h.spin * h.radius + v) ** 2 / h.radius;
+    // Moving against the spin takes away from the speed that makes gravity: what the gravity meter shows.
+    const floor = toWorld(h.profile, { theta: 4, s, h: 0 }), spin = spinwardAt(floor)!;
+    const g = (v: number): number => feltGravity(h, floor, [spin[0] * v, spin[1] * v, 0]);
     assert.ok(times[0] > times[1], `antispinward ${times[0]} s vs spinward ${times[1]} s`);
     assert.ok(Math.abs(times[0] / times[1] - g(speed) / g(-speed)) < 0.1 * (g(speed) / g(-speed)), `ratio ${times[0] / times[1]} vs ${g(speed) / g(-speed)}`);
     world.dispose();

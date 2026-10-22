@@ -1,21 +1,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MATRIX, REFERENCE, derive, fromWorld, toWorld, withParams, type Vec3 } from '../src/blueprint';
-import { makeTerrain } from '../src/gen/terrain';
+import { MATRIX, fromWorld, toWorld, type Vec3 } from '../src/blueprint';
 import { buildPatch } from '../src/gen/patch';
 import { coast, upAt } from '../src/world/motion';
 import { PhysicsWorld, PHYSICS_STEP } from '../src/physics/world';
 import { HUMAN, JUMP_SPEED } from '../src/physics/character';
+import { flatOf, terrainOf } from './worlds';
 
 /** Step for `seconds`, or until `each` says stop. */
 const run = (world: PhysicsWorld, seconds: number, each?: () => boolean | void): void => {
   for (let i = 0; i < Math.round(seconds / PHYSICS_STEP); i++) { if (each?.() === true) return; world.advance(PHYSICS_STEP); }
 };
 
-for (const { name, params } of MATRIX) {
+for (const { name } of MATRIX) {
   // Flat ground: only the turning frame moves the body sideways (no landmarks either: their courts dig into it).
-  const h = derive(withParams({ relief: { hills: 0, ringLake: null, terraceStep: params.relief.terraceStep, massif: 0, rivers: null }, landmarks: null }, params));
-  const t = makeTerrain(h);
+  const t = flatOf(name), h = t.habitat;
   const s = (h.profile.floorStart + h.profile.floorEnd) / 2;
 
   test(`character (${name}): stands, walks along the ground, and a jump lands where the turning frame says`, async () => {
@@ -59,8 +58,7 @@ for (const { name, params } of MATRIX) {
 }
 
 test('character (reference): floats in the lake with the head out', async () => {
-  const h = derive(REFERENCE);
-  const t = makeTerrain(h);
+  const t = terrainOf('reference'), h = t.habitat;
   const lake = t.lake!;
   const world = await PhysicsWorld.create(h);
   world.setGround(buildPatch(t, 0, lake.s, 32, 2));
