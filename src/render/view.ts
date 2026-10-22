@@ -17,10 +17,10 @@ import { PhysicsWorld } from '../physics/world';
 import { HUMAN, type Character } from '../physics/character';
 import { Figure, castAsWorn, type MoveState } from './actors/figure';
 import { playerLook } from './actors/looks';
-import { addLights, key, shineOn, sky } from './lights';
+import { addLights, key, shineBelow, shineOn, sky } from './lights';
 import { adapt, glareOf, insideExposure, insideRayLuminance, landAlbedo, meterRays, underCrowns, type InsideMeterable } from './exposure';
 import { sharedPool } from '../workers/pool';
-import { BALL, CLOUDS_FAR, CLOUDS_NEAR, SUNLINE, air, allKinds, setAir, setEmission, setSunline, standInAttribute, view } from './materials';
+import { BALL, CLOUDS_FAR, CLOUDS_NEAR, MIST_GLOW, SUNLINE, air, allKinds, below, setAir, setBelow, setEmission, setSunline, standInAttribute, view } from './materials';
 import { dayPhase, emissionMean, nearestLit, sunlineEmission, sunlineNorm, EMISSION_SAMPLES } from '../world/sunline';
 import { densityFalloff, seenMid } from '../world/air';
 import { TerrainView, describeLayout } from './terrain';
@@ -34,7 +34,8 @@ import { freeMesh } from './geometry';
 import { cloudSpan, cloudsAt } from '../world/clouds';
 import { setCloudSpan, setCloudState } from './cloudShaders';
 import { LandmarkView } from './landmarks';
-import { TiledView, courtSource, crossingSource, hallSource, stairSource } from './tiled';
+import { TiledView, courtSource, crossingSource, hallSource, stairSource, underSource } from './tiled';
+import { underFloorAt } from '../gen/underMesh';
 import { landmarkTopAt, landmarksOf } from '../gen/landmarks';
 import { snowFieldOf } from '../gen/snow';
 import { PeopleView } from './people';
@@ -94,6 +95,13 @@ export class InteriorView {
   private courts: TiledView | null = null;
   private crossings: TiledView | null = null;
   private halls: TiledView | null = null;
+  /** The Understorey's pillar forest, drawn around the eye while it is below the land. */
+  private under: TiledView | null = null;
+  /**
+   * Whether the player is below the land, in the Understorey (gen/under.ts): then they stand on its floor, the land's
+   * things are not drawn (the vaults hide them), and the lamps light them.
+   */
+  private below = false;
   /** The people up on the land around the player. */
   private people: PeopleView | null = null;
   /** Everyone up on the land beyond them, as specks. */
@@ -139,6 +147,7 @@ export class InteriorView {
    * height above the profile). The walker, the flyer and the camera keep to it.
    */
   private readonly standOn = (theta: number, s: number): number => {
+    if (this.below) return underFloorAt(this.terrain, theta, s);
     const g = this.terrain.standAt(theta, s), top = landmarkTopAt(this.terrain, theta, s);
     return top !== null && top > g ? top : g;
   };
@@ -207,7 +216,7 @@ export class InteriorView {
 
   /** Bytes of geometry this view holds (memory watchdog). */
   bytes(): number {
-    return (this.tiles?.bytes() ?? 0) + (this.plants?.bytes() ?? 0) + (this.landmarks?.bytes() ?? 0) + (this.stair?.bytes() ?? 0) + (this.courts?.bytes() ?? 0) + (this.crossings?.bytes() ?? 0) + (this.halls?.bytes() ?? 0);
+    return (this.tiles?.bytes() ?? 0) + (this.plants?.bytes() ?? 0) + (this.landmarks?.bytes() ?? 0) + (this.stair?.bytes() ?? 0) + (this.courts?.bytes() ?? 0) + (this.crossings?.bytes() ?? 0) + (this.halls?.bytes() ?? 0) + (this.under?.bytes() ?? 0);
   }
 
   /** Give memory back (memory watchdog): drop every cached tile and plant cell not on screen. */
@@ -219,6 +228,7 @@ export class InteriorView {
     this.courts?.shed();
     this.crossings?.shed();
     this.halls?.shed();
+    this.under?.shed();
     this.people?.shed();
   }
 
@@ -226,8 +236,9 @@ export class InteriorView {
   info(): string {
     const a = this.flyer ? fromWorld(this.habitat.profile, ...this.flyer.eye) : this.walker.at;
     const c = this.character, g = this.habitat.gravityAt(Math.hypot(...this.current().eye.slice(0, 2) as [number, number]));
-    const mode = this.flyer ? `flying ${this.flyer.clearance().toFixed(0)} m up`
-      : !c ? 'on foot (waiting for the physics)' : `on foot, ${c.swimming ? 'swimming' : c.grounded ? 'standing' : 'in the air'}, gravity ${(g / 9.81).toFixed(2)} g`;
+    const where = this.below ? 'below the land, ' : '';
+    const mode = where + (this.flyer ? `flying ${this.flyer.clearance().toFixed(0)} m up`
+      : !c ? 'on foot (waiting for the physics)' : `on foot, ${c.swimming ? 'swimming' : c.grounded ? 'standing' : 'in the air'}, gravity ${(g / 9.81).toFixed(2)} g`);
     return [
       this.stage.hudLine(),
       `${this.tiles?.info() ?? 'terrain: none'} · ${describeLayout(this.terrain)} · ${this.pool.workers} workers`,
@@ -238,6 +249,7 @@ export class InteriorView {
       this.courts?.info() ?? 'entrance courts: none',
       this.crossings?.info() ?? 'river crossings: none',
       this.halls?.info() ?? 'grown halls: none',
+      this.under?.info() ?? 'understorey: none',
       this.people?.info() ?? 'people: none',
       this.specks?.info() ?? 'specks: none',
       this.drones?.info() ?? 'drones: none',
@@ -329,7 +341,7 @@ export class InteriorView {
     if (!this.physics || this.patchAsked) return;
     this.patchAsked = true;
     const at = fromWorld(this.habitat.profile, ...eye);
-    const answer = await this.pool.job({ kind: 'patch', params: this.habitat.params, theta: at.theta, s: at.s, size: PATCH_SIZE, cell: PATCH_CELL });
+    const answer = await this.pool.job({ kind: 'patch', params: this.habitat.params, theta: at.theta, s: at.s, size: PATCH_SIZE, cell: PATCH_CELL, below: this.below });
     if ('patch' in answer && this.physics) this.physics.setGround(answer.patch);
     this.patchAsked = false;
     this.standUp();
@@ -341,6 +353,8 @@ export class InteriorView {
     if (!p || this.flyer || this.character) return;
     const { theta, s } = this.walker.at;
     const feet = toWorld(this.habitat.profile, { theta, s, h: this.standOn(theta, s) + 0.05 });
+    // Not on a patch of the other level (the land's, when below): ask for one of this one, which stands the body up.
+    if (p.groundPatch && p.groundPatch.below !== this.below) { void this.groundFor(feet); return; }
     if (p.offPatch(feet, PATCH_EDGE)) return;
     this.character = p.addCharacter(feet, this.terrain.waterDepth);
   }
@@ -349,7 +363,7 @@ export class InteriorView {
   private simulate(dt: number, eye: Vec3): void {
     const p = this.physics;
     if (!p) return;
-    if (p.needsGround(eye)) void this.groundFor(eye);
+    if (p.needsGround(eye) || (p.groundPatch && p.groundPatch.below !== this.below)) void this.groundFor(eye);
     const c = this.character;
     const o = p.groundPatch?.origin;
     if (c && o && p.offPatch(c.feet(), PATCH_EDGE)) {
@@ -403,6 +417,7 @@ export class InteriorView {
     if (this.courts) { this.scene.remove(this.courts.group); this.courts.dispose(); }
     if (this.crossings) { this.scene.remove(this.crossings.group); this.crossings.dispose(); }
     if (this.halls) { this.scene.remove(this.halls.group); this.halls.dispose(); }
+    if (this.under) { this.scene.remove(this.under.group); this.under.dispose(); }
     this.people?.dispose();
     this.specks?.dispose();
     this.drones?.dispose();
@@ -417,6 +432,7 @@ export class InteriorView {
     setAir(densityFalloff(h), h.radius, seenMid(h), h.params.air.hazeDistance);
     setRockBeds(h.params.relief.terraceStep, h.radius);
     setSnow(snowFieldOf(h));
+    setBelow(h.params.under.lamp, h.params.under.mist);
     // The sunline: from the wild wall to the port wall along the axis.
     const tube = new CylinderGeometry(h.params.sunlineRadius, h.params.sunlineRadius, h.length, 24, 1, true);
     tube.deleteAttribute('uv'); // the kind's attributes are position and normal (docs/SHADERS.md)
@@ -444,6 +460,8 @@ export class InteriorView {
     this.scene.add(this.crossings.group);
     this.halls = new TiledView(hallSource(this.terrain), h, this.stage, this.pool);
     this.scene.add(this.halls.group);
+    this.under = new TiledView(underSource(this.terrain), h, this.stage, this.pool);
+    this.scene.add(this.under.group);
     this.people = new PeopleView(h, this.terrain, this.stage, this.camera, (theta, s) => landmarkTopAt(this.terrain, theta, s));
     this.scene.add(this.people.group);
     this.specks = new SpeckView(h, this.stage, this.pool);
@@ -510,10 +528,20 @@ export class InteriorView {
     this.courts?.follow(v.eye);
     this.crossings?.follow(v.eye);
     this.halls?.follow(v.eye);
+    this.under?.follow(v.eye);
+    this.showLand(!this.below);
     this.people?.follow(v.eye, this.time, this.frameDt);
     this.specks?.follow(this.time, this.frameDt, this.people?.near ?? [], this.people?.residentsLoaded() ?? null);
     this.drones?.follow(v.eye, this.time, this.frameDt);
     for (const a of this.animals) a.follow(v.eye, this.time, this.frameDt);
+  }
+
+  /**
+   * Draw the land's things or not: below the land the Understorey's vaults hide all of them, so they are left out of
+   * the frame (and the shadow map), and the background is the mist's.
+   */
+  private showLand(on: boolean): void {
+    for (const g of [this.tiles?.group, this.plants?.group, this.landmarks?.group, this.stair?.group, this.courts?.group, this.crossings?.group, this.halls?.group, this.people?.group, this.specks?.group, this.drones?.group, this.sunline, this.clouds, ...this.animals.map((a) => a.group)]) if (g) g.visible = on;
   }
 
   /** Where the eye is now (world). */
@@ -565,9 +593,13 @@ export class InteriorView {
       const raise = this.meterCanopy[3];
       closed = crownsClosed(raise) * (1 - smoothstep(raise * 0.8, raise * 1.2, at.h - ground));
     }
-    const target = insideExposure(underCrowns(closed, air.skyLight.value, UNDER_CROWNS)) * this.glare(eye);
+    // Below the land the lamps' light is all there is: the eyes open up to it, and the background is the lit mist.
+    const target = this.below ? insideExposure(this.habitat.params.under.lamp) : insideExposure(underCrowns(closed, air.skyLight.value, UNDER_CROWNS)) * this.glare(eye);
     this.exposure = adapt(this.exposure, target, Math.min(this.frameDt, 0.25));
     view.exposure.value = this.exposure;
+    const back = this.scene.background as Color;
+    if (this.below) back.copy(below.tint.value as Color).multiplyScalar((below.lamp.value as number) * MIST_GLOW * this.exposure);
+    else back.copy(air.haze.value as Color);
     key.intensity *= this.exposure;
     sky.intensity *= this.exposure;
   }
@@ -600,7 +632,8 @@ export class InteriorView {
     const f = this.figure, c = this.character;
     // Light and shade around the player (or under the flyer).
     const centre = this.flyer || !c ? eye : v3madd(this.walker.feetAt(), c.up, HUMAN.height / 2);
-    shineOn(this.habitat, this.terrain, this.emission, emissionMean(this.emission), air.skyLight.value, this.norm, centre, eye);
+    if (this.below) shineBelow(centre, eye, this.habitat.params.under.lamp);
+    else shineOn(this.habitat, this.terrain, this.emission, emissionMean(this.emission), air.skyLight.value, this.norm, centre, eye);
     this.adaptEyes(eye);
     if (!f) return;
     // On foot the body is always there and casts its shadow; the camera sees it once it is out of the head (BODY_LAYER).
@@ -620,6 +653,22 @@ export class InteriorView {
    * there once the physics has the ground under it, or it would carry the walker straight back.
    */
   goTo(theta: number, s: number, heading?: number): void {
+    this.below = false;
+    this.stand(theta, s, heading);
+  }
+
+  /** Jump on foot to (θ, s) below the land, onto the Understorey's floor there (debug menu, until the lifts are built). */
+  goBelow(theta: number, s: number, heading?: number): void {
+    this.below = true;
+    this.stand(theta, s, heading);
+  }
+
+  /** Whether the player is below the land. */
+  get isBelow(): boolean {
+    return this.below;
+  }
+
+  private stand(theta: number, s: number, heading?: number): void {
     this.flyer = null;
     this.physics?.removeCharacter();
     this.character = null;
