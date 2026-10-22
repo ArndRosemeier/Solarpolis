@@ -7,7 +7,7 @@
  * And the shelter a round roof gives what stands under it (`roofHorizons`): the sunline is a line along the axis, so
  * under the roof its light comes in only past the eaves (toward either end) and down through the oculus.
  */
-import { Fn, If, abs, atan, float, floor, hash, max, mix, mx_noise_float, select, smoothstep, sqrt, vec2, vec3 } from 'three/tsl';
+import { Fn, If, abs, atan, float, floor, fwidth, hash, max, mix, mx_noise_float, select, smoothstep, sqrt, vec2, vec3 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { OPEN_SKY } from '../gen/horizon';
 import { keepMean, lineAt, shows } from './shaderMath';
@@ -117,6 +117,21 @@ const panel = coursed([PANEL.wide, PANEL.high, (row) => row.mul(0), [0.006, 0.00
   const ghost = smoothstep(0.05, 0.07, u).mul(smoothstep(0.95, 0.93, u)).mul(smoothstep(0.05, 0.07, v)).mul(smoothstep(0.95, 0.93, v));
   return ghost.mul(0.05).mul(shows(st.div(PANEL.wide)));
 });
+
+/** A window's frame round the pane, its mullion and transom (shares of the pane), and the frame's paint (linear albedo). */
+const SASH = { edge: 0.06, mullion: 0.025, transom: 0.02, at: 0.72 };
+const FRAME = vec3(0.1, 0.085, 0.07);
+
+/**
+ * A window seen from outside (`st` across and up its pane, 0 … 1): its room's light through the glass (`room`, already
+ * as bright as it shines), brighter toward the room's ceiling, behind the frame, the mullion and the transom, which the
+ * light outside lights (`outside`). Each bar's edge kept one texel soft, so far off a pane reads as its mean.
+ */
+export const windowPane = Fn(([st, room, outside]: [V2, V3, V3]) => {
+  const bar = (x: F, at: number, half: number): F => float(1).sub(smoothstep(half, fwidth(x).add(half), abs(x.sub(at))));
+  const frame = max(max(max(bar(st.x, 0, SASH.edge), bar(st.x, 1, SASH.edge)), max(bar(st.y, 0, SASH.edge), bar(st.y, 1, SASH.edge))), max(bar(st.x, 0.5, SASH.mullion), bar(st.y, SASH.at, SASH.transom)));
+  return mix(room.mul(st.y.mul(0.45).add(0.65)), FRAME.mul(outside), frame.clamp(0, 1));
+}).setLayout({ name: 'windowPane', type: 'vec3', inputs: [{ name: 'st', type: 'vec2' }, { name: 'room', type: 'vec3' }, { name: 'outside', type: 'vec3' }] }) as unknown as (st: V2, room: V3, outside: V3) => V3;
 
 /**
  * A built surface's albedo: its finish over the vertex colour (`FINISH` in gen/pavilion.ts: 0 stone, 1 timber, 2

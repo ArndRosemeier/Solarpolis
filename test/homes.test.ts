@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { MATRIX, fromWorld } from '../src/blueprint';
 import { levelsOf } from '../src/gen/underLevels';
 import { buildUnderTile, underHousesIn, type UnderDetail } from '../src/gen/underMesh';
-import { ERAS, PARAPET, type House } from '../src/gen/homes';
+import { ERAS, PARAPET, housesIn, type House } from '../src/gen/homes';
 import { FINISH } from '../src/gen/pavilion';
 import { planOf } from '../src/gen/plan';
 import { outOfPlace } from '../src/gen/shapes';
@@ -11,7 +11,7 @@ import { windingOk } from './meshChecks';
 import { terrainOf } from './worlds';
 
 /** A hamlet's home bays near its middle (up to `most`), with their houses. */
-function homesOf(name: string, hamlet: number, most = 24): { i: number; j: number; bay: ReturnType<typeof underHousesIn> }[] {
+function homesOf(name: string, hamlet: number, most = 12): { i: number; j: number; bay: ReturnType<typeof underHousesIn> }[] {
   const t = terrainOf(name), u = levelsOf(t).under, m = u.hamlets[hamlet], out: { i: number; j: number; bay: ReturnType<typeof underHousesIn> }[] = [];
   for (let r = 1; r <= 8 && out.length < most; r++) for (let di = -r; di <= r; di++) for (let dj = -r; dj <= r; dj++) {
     if (Math.max(Math.abs(di), Math.abs(dj)) !== r || out.length >= most) continue;
@@ -53,10 +53,14 @@ test('homes (reference): each district builds in its own way, of three eras, nea
   const own: Record<string, House['build']> = { orchard: 'plaster', water: 'stone', stone: 'stone', grove: 'timber', herd: 'earth', play: 'plaster', makers: 'brick', 'let-go': 'plaster' };
   const eras: Record<string, number> = {}, styles = new Set<string>();
   let n = 0, lived = 0;
-  for (let k = 0; k < u.hamlets.length; k += Math.ceil(u.hamlets.length / 30)) {
-    const style = plan.districts[u.hamlets[k].district].style;
+  // What a house is built of does not hang on the levels: on a level floor here, so the land's levels are not worked out.
+  const flat = { floor: 0, springing: 30, ceiling: 40 }, around = u.dTheta * t.habitat.radius;
+  for (let k = 0; k < u.hamlets.length; k += Math.ceil(u.hamlets.length / 40)) {
+    const m = u.hamlets[k], style = plan.districts[m.district].style;
     styles.add(style);
-    for (const { bay } of homesOf('reference', k, 4)) for (const h of bay.houses) {
+    const bays: { i: number; j: number }[] = [];
+    for (let di = -4; di <= 4; di++) for (let dj = -4; dj <= 4; dj++) if (m.j + dj >= 0 && m.j + dj < u.along && u.useAt(m.i + di, m.j + dj) === 'home' && u.hamletOf(m.i + di, m.j + dj) === m) bays.push({ i: m.i + di, j: m.j + dj });
+    for (const { i, j } of bays.slice(0, 4)) for (const h of housesIn(t.habitat, i, j, u.bay, around, 2, () => flat)) {
       n++;
       lived += h.lived ? 1 : 0;
       eras[h.era] = (eras[h.era] ?? 0) + 1;

@@ -56,9 +56,9 @@ export interface House {
 const STOREY = 4;
 /** Head room left under the vaults' springing over the roof's parapet, in handrails. */
 const HEADROOM = 2;
-/** The parapet round a roof terrace and the yard wall, in handrails. */
+/** The parapet round a roof terrace and the yard wall (chest high: the house shows over it), in handrails. */
 export const PARAPET = 1;
-export const YARD_WALL = 2;
+export const YARD_WALL = 1.2;
 /** The walk left round each plot (beside the pillars' plinths), in handrails. */
 const WALK = 2;
 /** A plot's least width and depth, in handrails. */

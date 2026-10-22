@@ -38,7 +38,7 @@ const TINT = 0.06;
 /** The plinth, the doors (oiled wood) and a lit room's light through its window, and an unlit or empty one's dark glass. */
 const PLINTH: RGB = [0.46, 0.44, 0.4];
 const DOOR: RGB = [0.28, 0.18, 0.11];
-const ROOM: RGB = [1, 0.8, 0.56];
+const ROOM: RGB = [1, 0.74, 0.46];
 const DARK: RGB = [0.05, 0.05, 0.055];
 /** Of a lived-in house's windows, the share lit. */
 const LIT = 0.7;
@@ -60,7 +60,7 @@ const H = {
   /** A stair's riser and tread. */
   riser: 0.16, tread: 0.28,
   /** The yard wall's thickness, its stepped runs' longest piece (far, else), the gate, the gate piers, the coping (near). */
-  wall: 0.3, run: 12, step: 4, gate: 1.6, pier: 0.25, pierHigh: 0.3, coping: 0.06, copingHigh: 0.07,
+  wall: 0.3, run: 12, step: 6, gate: 1.6, pier: 0.25, pierHigh: 0.3, coping: 0.06, copingHigh: 0.07,
 } as const;
 
 /** A window or a door in a wall: along it from its start (m), from … to in height (absolute), its colour and finish. */
@@ -135,6 +135,17 @@ function patch(sh: Shape, s: Side, u0: number, u1: number, z0: number, z1: numbe
   sh.faceToward(onSide(s, u0, out, z0), onSide(s, u1, out, z0), onSide(s, u1, out, z1), onSide(s, u0, out, z1), [s.n[0], s.n[1], 0], col);
 }
 
+/**
+ * A window's pane or a door (`o`), `out` out from its side: a window mapped across and up itself (0 … 1, for its frame
+ * and bars in the VAULT kind), a door by its plane, as the timber it is.
+ */
+function pane(sh: Shape, s: Side, o: Opening, out: number): void {
+  sh.finish = o.finish;
+  if (o.door) { patch(sh, s, o.u0, o.u1, o.z0, o.z1, out, o.col); return; }
+  const n: Vec3 = [s.n[0], s.n[1], 0];
+  sh.smoothGrid(1, 1, (a, b) => ({ p: onSide(s, b ? o.u1 : o.u0, out, a ? o.z1 : o.z0), n, uv: [b, a] }), o.col);
+}
+
 /** A wall from z0 to z1 with holes where its openings are: strips between the openings' edges, filled round them. */
 function wallAround(sh: Shape, s: Side, z0: number, z1: number, openings: readonly Opening[], col: RGB): void {
   const e = 1e-6, cuts = [...new Set([0, s.length, ...openings.flatMap((o) => [o.u0, o.u1])])].sort((a, b) => a - b);
@@ -159,8 +170,7 @@ function setBack(sh: Shape, s: Side, o: Opening, wallCol: RGB, wallFinish: numbe
   sh.faceToward(q(o.u1, 0, o.z0), q(o.u1, -d, o.z0), q(o.u1, -d, o.z1), q(o.u1, 0, o.z1), [-t[0], -t[1], 0], wallCol);
   sh.faceToward(q(o.u0, 0, o.z1), q(o.u1, 0, o.z1), q(o.u1, -d, o.z1), q(o.u0, -d, o.z1), [0, 0, -1], wallCol);
   if (!o.door) sh.faceToward(q(o.u0, 0, o.z0), q(o.u1, 0, o.z0), q(o.u1, -d, o.z0), q(o.u0, -d, o.z0), [0, 0, 1], wallCol);
-  sh.finish = o.finish;
-  patch(sh, s, o.u0, o.u1, o.z0, o.z1, -d, o.col);
+  pane(sh, s, o, -d);
   if (o.door) return;
   // The sill, reaching out under it.
   sh.finish = FINISH.stone;
@@ -227,12 +237,12 @@ export function houseShape(sh: Shape, house: House, levelsAt: (x: number, y: num
     sh.finish = look.finish;
     if (detail === 'far') {
       patch(sh, s, 0, s.length, house.base, crown, 0, look.col);
-      for (const o of open) { sh.finish = o.finish; patch(sh, s, o.u0, o.u1, o.z0, o.z1, H.proud * hr, o.col); }
+      for (const o of open) pane(sh, s, o, H.proud * hr);
     } else {
       wallAround(sh, s, house.base, crown, open, look.col);
       for (const o of open) {
         if (detail === 'near') setBack(sh, s, o, look.col, look.finish, hr);
-        else { sh.finish = o.finish; patch(sh, s, o.u0, o.u1, o.z0, o.z1, 0, o.col); }
+        else pane(sh, s, o, 0);
       }
     }
     // The door's steps down to the floor in front of it.

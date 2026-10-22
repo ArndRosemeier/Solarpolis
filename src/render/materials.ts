@@ -31,7 +31,7 @@ import { cellHash, floorShare, floorSurface, rockFromAfar, snowOver, woodsFromAf
 import { RISE_RANGE } from '../gen/tiles';
 import { filtered } from './textures';
 import { cloudMarch, cloudShade } from './cloudShaders';
-import { builtAlbedo, roofHorizons } from './builtShaders';
+import { builtAlbedo, roofHorizons, windowPane } from './builtShaders';
 import { hamletSky } from './hamletSkies';
 import { FINISH } from '../gen/pavilion';
 import { LAMPLIGHT } from '../gen/underMesh';
@@ -742,8 +742,8 @@ const SKY_FACE = 1.5;
  * land's: full once the day overhead is `SCREEN_DAY` of midday's.
  */
 const SCREEN_GLOW = 2.2;
-/** A lit window's glow in the lamps' floor light (its vertex colour the rooms' light): softer than a lamp's face. */
-const WINDOW_GLOW = 1.6;
+/** A window's glow in the lamps' floor light (its vertex colour the rooms' light; an unlit one's dark glass). */
+const WINDOW_GLOW = 2.4;
 const SCREEN_DAY = 0.5;
 export const MIST_GLOW = 0.25;
 
@@ -765,7 +765,9 @@ export const VAULT = kind('vault', ['position', 'normal', 'color', 'uv', 'finish
   const toward = positionWorld.sub(cameraPosition), up = normalize(vec3(view.eye.x.negate(), view.eye.y.negate(), 0));
   const surface = Fn(() => {
     const out = mix(lit, face, glows).toVar();
-    If(window, () => out.assign(vertexColor().rgb.mul(light).mul(WINDOW_GLOW)));
+    // A window's arguments set before its branch too.
+    const pane = uv().toVar(), room = vertexColor().rgb.mul(light).mul(WINDOW_GLOW).toVar(), outside = light.mul(glow.x).toVar();
+    If(window, () => out.assign(windowPane(pane, room, outside)));
     // A hamlet's sky (only there: the skies are the heaviest part of the kind); its arguments set before the branch
     // (hamletSkies.ts `skyFunction` says why).
     const look = normalize(toward).toVar(), index = finish.sub(FINISH.screen).toVar();
