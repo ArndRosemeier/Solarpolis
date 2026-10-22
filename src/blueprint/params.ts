@@ -219,6 +219,22 @@ export interface Life {
   reach: number;
   /** The drones that work the land (sim/air.ts). */
   drones: Drones;
+  /** The animals that live on the land (sim/fauna.ts). */
+  animals: Animals;
+}
+
+/**
+ * The animals that live on the land (design "Who is out on the land"), each a pure function of the seed, the land and
+ * the clock, like the people. Squirrels live in the woods: each has a home tree (a tree the scatter planted, gen/scatter.ts),
+ * comes down from it in the bright hours and forages round it.
+ */
+export interface Animals {
+  /** Squirrels per hectare where the crowns close over the ground (fewer where they open up; none outside the woods). */
+  squirrels: number;
+  /** How far a squirrel goes from its home tree (m). */
+  range: number;
+  /** The share of a place's bright hours its squirrels are down on the ground, round the hour the light peaks there (0 … 1). */
+  out: number;
 }
 
 /**

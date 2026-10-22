@@ -10,7 +10,8 @@ import { defineConfig, type Plugin } from 'vite';
 function actorsPack(): Plugin {
   const version = (): string => JSON.parse(fs.readFileSync(path.resolve('node_modules/@actors/generator/package.json'), 'utf8')).version;
   const dir = (): string => path.resolve('.actors-pack', version());
-  const wanted = (rel: string): boolean => !rel.split(path.sep).join('/').startsWith('human/clips/cmu');
+  // No dogs yet (Arnd, 2026-10-22): their pack stays out.
+  const wanted = (rel: string): boolean => { const r = rel.split(path.sep).join('/'); return !r.startsWith('human/clips/cmu') && r !== 'dog' && !r.startsWith('dog/'); };
   let outDir = 'dist';
   return {
     name: 'actors-pack',

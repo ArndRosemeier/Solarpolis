@@ -9,7 +9,7 @@
  * and colours) is not drawn here: `follow` is given their keys each frame and turns their specks off (CLAUDE.md, rule
  * 16: the near level shows them before this one lets go).
  */
-import { Group, InstancedBufferAttribute, type Mesh } from 'three/webgpu';
+import { Group, InstancedBufferAttribute, MathUtils, type Camera, type InstancedBufferGeometry, type InstancedInterleavedBuffer, type Mesh, type PerspectiveCamera, type Vector2 } from 'three/webgpu';
 import type { Stage } from '@futuremagic/stage';
 import type { Habitat } from '../blueprint';
 import { SPECK_SHOWN, SPECK_STRIDE, speckBands } from '../gen/standIn';
@@ -17,7 +17,7 @@ import type { Specks } from '../sim/specks';
 import type { WorkerPool } from '../workers/pool';
 import { SPECK, SPECK_LAYOUT, layInstances } from './materials';
 import { speckClock } from './crowdShaders';
-import { drawnAnywhere, dropUploaded, freeMesh, quadInstances } from './geometry';
+import { drawnAnywhere, dropUploaded, freeMesh, quadInstances, sendInstances } from './geometry';
 import type { Residents } from './actors/residents';
 
 /** A new list is asked for this often (s, real time), or once the clock is this far from the drawn one's (s). */
@@ -25,6 +25,47 @@ const SPECKS_EVERY = 3;
 const SPECKS_AHEAD = 5;
 /** Walkers are carried on from their list's time at most this long (s): after a jump in the clock they wait for the next list. */
 const CARRY = 10;
+
+/**
+ * How many pixels a metre covers on screen one metre from the camera (divide by the distance): what decides which level
+ * draws something by its size on screen (people, drones, animals). `screen` takes the drawing buffer's size.
+ */
+export function pxPerMetre(stage: Stage, camera: Camera, screen: Vector2): number {
+  const fov = (camera as PerspectiveCamera).isPerspectiveCamera ? (camera as PerspectiveCamera).getEffectiveFOV() : 50;
+  return stage.renderer.getDrawingBufferSize(screen).y / 2 / Math.tan(MathUtils.degToRad(fov / 2));
+}
+
+/** A level's own specks (people's, drones', animals'): their mesh, their instances, every one shown as written (`writeSpeck`). */
+export interface OwnSpecks {
+  mesh: Mesh;
+  data: Float32Array;
+  buffer: InstancedInterleavedBuffer;
+}
+
+/** A level's own specks (the SPECK kind) with room for `count`, none drawn yet; `stage.prepare` it before it is drawn. */
+export function ownSpecks(name: string, count: number): OwnSpecks {
+  const mesh = drawnAnywhere(quadInstances(), SPECK.material, name);
+  const own = { mesh, data: new Float32Array(0), buffer: null as unknown as InstancedInterleavedBuffer };
+  roomForSpecks(own, count);
+  (mesh.geometry as InstancedBufferGeometry).instanceCount = 0;
+  return own;
+}
+
+/** Room for at least `need` specks (doubling): new instances on the same mesh, so nothing is compiled again. */
+export function roomForSpecks(own: OwnSpecks, need: number): void {
+  if (own.data.length >= need * SPECK_STRIDE && own.data.length > 0) return;
+  const count = Math.max(1, need, (own.data.length / SPECK_STRIDE) * 2), g = own.mesh.geometry;
+  own.data = new Float32Array(count * SPECK_STRIDE);
+  // The instance attributes are set again on the new buffer (the old one is let go with them).
+  own.buffer = layInstances(g, own.data, SPECK_LAYOUT);
+  g.setAttribute(SPECK_SHOWN, new InstancedBufferAttribute(new Float32Array(count).fill(1), 1));
+}
+
+/** Draw the first n of a level's own specks, uploading only those. */
+export function drawSpecks(own: OwnSpecks, n: number): void {
+  (own.mesh.geometry as InstancedBufferGeometry).instanceCount = n;
+  sendInstances(own.buffer, n, SPECK_STRIDE);
+}
 
 /** A list on the GPU: its mesh, who is in it (by key, ascending) and which of them are drawn. */
 interface Drawn {

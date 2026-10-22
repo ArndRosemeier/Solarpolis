@@ -18,6 +18,9 @@ export type Vec3 = [number, number, number];
 
 const TAU = Math.PI * 2;
 
+/** How far apart two world points are (m). */
+export const apart = (a: Vec3, b: Vec3): number => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+
 /** θ in [0, 2π). */
 export function wrapAngle(theta: number): number {
   const t = theta % TAU;

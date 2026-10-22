@@ -262,21 +262,46 @@ export function plantCell(ecology: Ecology, plants: readonly Species[], k: CellK
   const sp = plants[k.species], spec = sp.spec;
   const b = cellBounds(ecology, sp, k);
   const origin = toWorld(profile, { theta: (b.theta0 + b.theta1) / 2, s: (b.s0 + b.s1) / 2, h: 0 });
-  const seed = deriveSeed(h.seed, 'scatter', spec.name, sp.biome);
   const shapes = LEVELS[k.level].variants;
   const lists: number[][] = Array.from({ length: shapes }, () => []);
+  const trained = ('rowGap' in spec && !!spec.rowGap);
+  standsIn(ecology, sp, b, k.level, (pt, ps, ground, f, along0) => {
+    const p = toWorld(profile, { theta: pt, s: ps, h: ground });
+    const shape = Math.min(shapes - 1, Math.floor(f(5) * shapes));
+    if (sp.what === 'planted') {
+      lists[shape].push(p[0] - origin[0], p[1] - origin[1], p[2] - origin[2], f(3), f(4), 0, 0);
+      return;
+    }
+    const [tx, tz] = sp.what === 'debris' ? tiltAt(ecology, pt, ps, p) : [0, 0];
+    // A plant trained in a row is turned along it (its x around the axis: `plantFrame`), either way round, give or take
+    // a little; anything else any way.
+    const turn = trained ? along0 + (f(4) < 0.5 ? 0 : Math.PI) + (f(7) - 0.5) * TRAINED_TWIST : f(4) * 2 * Math.PI;
+    lists[shape].push(p[0] - origin[0], p[1] - origin[1], p[2] - origin[2], spec.height[0] + (spec.height[1] - spec.height[0]) * f(3), turn, tx, tz);
+  });
+  return finished(t, k, b, origin, lists);
+}
+
+/**
+ * Where a species' plants stand within bounds (θ, s), each with its ground height, its own numbers (`f(q)`: 0 … 1 by
+ * its lattice square; a planted one answers its height for 3, its turn for 4) and, for a plant trained in a row, the
+ * row's way (a plant turn); `level` is the level whose floor-layer lattice cover and debris are read on. The one
+ * place the lattice is walked: cells (`plantCell`) and anything that wants to know where plants stand (the squirrels'
+ * trees, sim/fauna.ts) see the same plants.
+ */
+export function standsIn(ecology: Ecology, sp: Species, b: { theta0: number; theta1: number; s0: number; s1: number }, level: Level, visit: (theta: number, s: number, ground: number, f: (q: number) => number, along: number) => void): void {
+  const t = ecology.terrain, h = t.habitat, { profile } = h, spec = sp.spec;
+  const seed = deriveSeed(h.seed, 'scatter', spec.name, sp.biome);
   if (sp.what === 'planted') {
     // Each where it was planted, its shape from its own hash.
     for (const p of plantedIn(t, spec.name, b)) {
-      const ground = t.heightAt(p.theta, p.s), w = toWorld(profile, { theta: p.theta, s: p.s, h: ground });
-      const shape = Math.min(shapes - 1, Math.floor(hash3f(seed, Math.round(p.s * 16), Math.round(p.theta * 1e5), 5) * shapes));
-      lists[shape].push(w[0] - origin[0], w[1] - origin[1], w[2] - origin[2], p.height, p.turn, 0, 0);
+      const ground = t.heightAt(p.theta, p.s), own = hash3f(seed, Math.round(p.s * 16), Math.round(p.theta * 1e5), 5);
+      visit(p.theta, p.s, ground, (q) => (q === 3 ? p.height : q === 4 ? p.turn : own), 0);
     }
-    return finished(t, k, b, origin, lists);
+    return;
   }
   const paths = pathsOf(t.habitat);
   const shares = new Float32Array(ecology.climate.biomes.length);
-  const cover = sp.on >= 0 ? coverChance(ecology, sp.on, gridOf(sp, k.level)) : null;
+  const cover = sp.on >= 0 ? coverChance(ecology, sp.on, gridOf(sp, level)) : null;
   // The lattice: rows `along` apart along s, columns `gap` apart around the axis in each. Rows planted by people are
   // that far apart on level ground: along the profile's level run (`levelRunOf`), so on an endcap's terraces they stand
   // as close as on the floor. Plants trained in rows (vines) take the spots of a square lattice their spacing apart that
@@ -288,7 +313,7 @@ export function plantCell(ecology: Ecology, plants: readonly Species[], k: CellK
     const s0 = run ? run.s(row * along) : row * along, r = profile.at(Math.min(profile.length, run ? s0 : s0 + along / 2)).r;
     if (r < gap) continue; // at the axis itself, nothing grows
     const n = Math.max(1, Math.round((2 * Math.PI * r) / gap)), dTheta = (2 * Math.PI) / n;
-    // The lattice squares that reach into the cell (a cell can wrap past θ = 0 only as a whole column).
+    // The lattice squares that reach into the bounds (a cell can wrap past θ = 0 only as a whole column).
     for (let col = Math.floor(b.theta0 / dTheta); col * dTheta < b.theta1; col++) {
       const it = ((col % n) + n) % n;
       const f = (q: number) => hash3f(seed, row, it, q);
@@ -315,16 +340,9 @@ export function plantCell(ecology: Ecology, plants: readonly Species[], k: CellK
         ecology.biomesAt(pt, ps, ground, slope, shares);
         if (f(2) >= shares[sp.biome]) continue;
       }
-      const p = toWorld(profile, { theta: pt, s: ps, h: ground });
-      const shape = Math.min(shapes - 1, Math.floor(f(5) * shapes));
-      const [tx, tz] = sp.what === 'debris' ? tiltAt(ecology, pt, ps, p) : [0, 0];
-      // A plant trained in a row is turned along it (its x around the axis: `plantFrame`), either way round, give or take
-      // a little; anything else any way.
-      const turn = trained ? along0 + (f(4) < 0.5 ? 0 : Math.PI) + (f(7) - 0.5) * TRAINED_TWIST : f(4) * 2 * Math.PI;
-      lists[shape].push(p[0] - origin[0], p[1] - origin[1], p[2] - origin[2], spec.height[0] + (spec.height[1] - spec.height[0]) * f(3), turn, tx, tz);
+      visit(pt, ps, ground, f, along0);
     }
   }
-  return finished(t, k, b, origin, lists);
 }
 
 /**

@@ -30,6 +30,8 @@ import type { SiteTile } from '../gen/siteTiles';
 import { specksAt, type Specks } from '../sim/specks';
 import type { Role } from '../sim/air';
 import { droneDesign, type DroneDesign } from '../gen/drone';
+import { densNear, type Den } from '../sim/fauna';
+import { coatsOf, type CoatAsk, type Coats } from '../gen/coat';
 
 /** The built things that stream in tiles. */
 export type TiledPart = 'stair' | 'courts' | 'crossings' | 'halls';
@@ -51,7 +53,11 @@ export type GenRequest =
   /** Everyone up on the land at clock time t, for the far view (render/specks.ts). */
   | { kind: 'specks'; params: HabitatParams; t: number }
   /** One of a role's drone designs (gen/drone.ts), both levels. */
-  | { kind: 'drone'; params: HabitatParams; role: Role; index: number };
+  | { kind: 'drone'; params: HabitatParams; role: Role; index: number }
+  /** The squirrels whose trees stand within `radius` m of (θ, s) (sim/fauna.ts). */
+  | { kind: 'squirrels'; params: HabitatParams; theta: number; s: number; radius: number }
+  /** An Actors animal pack's coats, one per look, baked per vertex (gen/coat.ts). */
+  | { kind: 'coats'; ask: CoatAsk };
 export type GenAnswer =
   | { kind: 'tile'; tile: TileMesh }
   | { kind: 'patch'; patch: GroundPatch }
@@ -67,6 +73,8 @@ export type GenAnswer =
   | { kind: 'tiled'; part: TiledPart; built: StairTile | SiteTile }
   | { kind: 'specks'; specks: Specks }
   | { kind: 'drone'; design: DroneDesign }
+  | { kind: 'squirrels'; dens: Den[] }
+  | { kind: 'coats'; coats: Coats }
   | { error: string };
 
 /** Every typed array's buffer in an answer, to transfer rather than copy. */
@@ -133,6 +141,12 @@ self.onmessage = (e: MessageEvent<GenRequest>) => {
       post({ kind: 'drone', design: droneDesign(derive(req.params), req.role, req.index) });
       return;
     }
+    if (req.kind === 'coats') {
+      // The pack's files come over the network (from the browser's cache once the figures have loaded them).
+      void coatsOf(req.ask, async (url) => { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.arrayBuffer(); })
+        .then((coats) => post({ kind: 'coats', coats }), (err: unknown) => (self as unknown as DedicatedWorkerGlobalScope).postMessage({ error: err instanceof Error ? err.message : String(err) } satisfies GenAnswer));
+      return;
+    }
     if (req.kind === 'hull') {
       const { habitat, skin, parts } = hullFor(req.params), part = parts.get(req.part);
       if (!part) throw new Error(`no hull part ${req.part}`);
@@ -152,6 +166,10 @@ self.onmessage = (e: MessageEvent<GenRequest>) => {
     }
     if (req.kind === 'tiled') {
       post({ kind: 'tiled', part: req.part, built: req.part === 'stair' ? buildStairTile(terrain.habitat, req.key) : { courts: courtSites, crossings: crossingSites, halls: hallSites }[req.part].buildTile(terrain, req.key) });
+      return;
+    }
+    if (req.kind === 'squirrels') {
+      post({ kind: 'squirrels', dens: densNear(ecology, plants, req.theta, req.s, req.radius) });
       return;
     }
     if (req.kind === 'specks') {

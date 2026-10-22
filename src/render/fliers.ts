@@ -13,20 +13,21 @@
  * are written again every frame for the drones in it. Nobody is simulated: each drone is asked where it is
  * (`flierAt`), near ones every frame, far ones a share each frame.
  */
-import { Group, InstancedBufferAttribute, InstancedInterleavedBuffer, MathUtils, Vector2, type Camera, type InstancedBufferGeometry, type Mesh, type PerspectiveCamera } from 'three/webgpu';
+import { Group, InstancedInterleavedBuffer, Vector2, type Camera, type InstancedBufferGeometry, type Mesh } from 'three/webgpu';
 import type { Stage } from '@futuremagic/stage';
-import { hash3i, hashToFloat, v3len, v3sub } from '@futuremagic/core';
-import { toView, toWorld, type Habitat, type Vec3 } from '../blueprint';
+import { hash3i, hashToFloat } from '@futuremagic/core';
+import { toView, toWorld, type Habitat, type Vec3, apart as away } from '../blueprint';
 import type { Terrain } from '../gen/terrain';
 import { horizonAt, OPEN_SKY } from '../gen/horizon';
-import { BODY_WIDTH, POSE, SPECK_SHOWN, SPECK_STRIDE, packColor, writeSpeck } from '../gen/standIn';
+import { BODY_WIDTH, POSE, SPECK_STRIDE, packColor, writeSpeck } from '../gen/standIn';
 import { designBytes, type DesignMesh, type DroneDesign } from '../gen/drone';
 import { ROLES, airBytes, fleetOf, flierAt, type Flier } from '../sim';
 import type { WorkerPool } from '../workers/pool';
-import { DRONE, DRONE_VEIL, FLIER_LAYOUT, SPECK, SPECK_LAYOUT, layInstances } from './materials';
+import { DRONE, DRONE_VEIL, FLIER_LAYOUT, layInstances } from './materials';
+import { drawSpecks, ownSpecks, pxPerMetre, type OwnSpecks } from './specks';
 import { turnFor } from './people';
 import { FLIER_STRIDE, writeFlier } from './droneShaders';
-import { drawnAnywhere, dropUploaded, freeMesh, instancedOf, meshGeometry, quadInstances, sendInstances } from './geometry';
+import { drawnAnywhere, dropUploaded, freeMesh, instancedOf, meshGeometry, sendInstances } from './geometry';
 
 /** A drone is drawn whole from this many pixels across, coarse down to `SPECK_PX`, a speck below. Back up at `BACK` × each. */
 const NEAR_PX = 48;
@@ -76,7 +77,7 @@ interface One {
 export class FlierView {
   readonly group = new Group();
   private drawn: Drawn[] | null = null;
-  private specks: { mesh: Mesh; data: Float32Array; buffer: InstancedInterleavedBuffer } | null = null;
+  private specks: OwnSpecks | null = null;
   private readonly ones: One[] = [];
   private readonly screen = new Vector2();
   private frameNo = 0;
@@ -100,15 +101,12 @@ export class FlierView {
     if (this.disposed || designs.some((d) => !d)) return;
     const fleet = fleetOf(this.terrain);
     const drawn = await Promise.all(designs.map((d) => this.onGpu(d!, Math.max(1, fleet.filter((j) => j.role === d!.role && j.design === d!.index).length))));
-    const specks = drawnAnywhere(quadInstances(), SPECK.material, 'drone specks');
-    const data = new Float32Array(Math.max(1, fleet.length) * SPECK_STRIDE), buffer = layInstances(specks.geometry, data, SPECK_LAYOUT);
-    specks.geometry.setAttribute(SPECK_SHOWN, new InstancedBufferAttribute(new Float32Array(Math.max(1, fleet.length)).fill(1), 1));
-    (specks.geometry as InstancedBufferGeometry).instanceCount = 0;
-    await this.stage.prepare(specks);
-    if (this.disposed) { for (const d of drawn) this.letGo(d); freeMesh(specks); return; }
-    this.specks = { mesh: specks, data, buffer };
+    const specks = ownSpecks('drone specks', fleet.length);
+    await this.stage.prepare(specks.mesh);
+    if (this.disposed) { for (const d of drawn) this.letGo(d); freeMesh(specks.mesh); return; }
+    this.specks = specks;
     for (const d of drawn) for (const l of d.levels) this.group.add(l.body, l.veil);
-    this.group.add(specks);
+    this.group.add(specks.mesh);
     fleet.forEach((_, id) => this.ones.push({ flier: null, at: [0, 0, 0], low: [0, 0, 0], turn: 0, roll: 0, horizon: [OPEN_SKY, OPEN_SKY], litAt: [Infinity, 0, 0], level: 2, phase: 1000 * hashToFloat(hash3i(h.seed, id, 41, 0)) }));
     this.drawn = drawn;
   }
@@ -147,8 +145,7 @@ export class FlierView {
     this.frameNo++;
     const cruise = this.habitat.params.life.drones.cruise;
     const byDesign = new Map<string, Drawn>(drawn.map((d) => [`${d.design.role}/${d.design.index}`, d]));
-    const fov = (this.camera as PerspectiveCamera).isPerspectiveCamera ? (this.camera as PerspectiveCamera).getEffectiveFOV() : 50;
-    const pxPerMetre = this.stage.renderer.getDrawingBufferSize(this.screen).y / 2 / Math.tan(MathUtils.degToRad(fov / 2));
+    const perMetre = pxPerMetre(this.stage, this.camera, this.screen);
     for (const d of drawn) for (const l of d.levels) l.count = 0;
     let speckCount = 0, written = 0;
     this.counts = [0, 0, 0];
@@ -157,7 +154,7 @@ export class FlierView {
       if (due) this.putDrone(one, flierAt(this.terrain, id, t), one.flier ? dt : 0);
       const f = one.flier!, d = byDesign.get(`${f.role}/${f.design}`)!;
       // Its level by its size on screen, with a margin each way so it does not flicker at the line.
-      const px = (d.size * pxPerMetre) / Math.max(1e-3, away(one.at, eye));
+      const px = (d.size * perMetre) / Math.max(1e-3, away(one.at, eye));
       const level: Level = one.level === 0 ? (px >= NEAR_PX / BACK ? 0 : px >= SPECK_PX ? 1 : 2)
         : one.level === 1 ? (px >= NEAR_PX ? 0 : px >= SPECK_PX / BACK ? 1 : 2)
         : px >= NEAR_PX ? 0 : px >= SPECK_PX ? 1 : 2;
@@ -181,8 +178,7 @@ export class FlierView {
       for (const m of [l.body, l.veil]) (m.geometry as InstancedBufferGeometry).instanceCount = l.count;
       sendInstances(l.buffer, l.count, FLIER_STRIDE);
     }
-    (specks.mesh.geometry as InstancedBufferGeometry).instanceCount = speckCount;
-    sendInstances(specks.buffer, speckCount, SPECK_STRIDE);
+    drawSpecks(specks, speckCount);
   }
 
   /** Put a drone where the fleet says it is now: its ground point, its turn eased toward its way, its bank, its light. */
@@ -237,5 +233,4 @@ export class FlierView {
   }
 }
 
-const away = (a: Vec3, b: Vec3): number => v3len(v3sub(a, b));
 const wrap = (a: number): number => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
