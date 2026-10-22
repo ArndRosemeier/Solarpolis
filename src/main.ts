@@ -483,7 +483,8 @@ const byHall = (label: string, x: number, y: number, z: number): void => debug.a
     f.v.floatAt(eye, [(at[0] - eye[0]) / d, (at[1] - eye[1]) / d, (at[2] - eye[2]) / d]);
   },
 });
-byHall('Fly: beside a grown hall', -1.25, 2.4, 0.35);
+// Beside: in the clearing the woods keep round it, at eye height, outside the lattice.
+byHall('Fly: beside a grown hall', -1.1, 1.15, 0.1);
 byHall('Fly: a grown hall from afar', -5, 12, 2.5);
 /** The founders' grove (gen/planted.ts). */
 const grove = (): { v: InteriorView; g: Grove } | null => {
