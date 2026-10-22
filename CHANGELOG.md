@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.098 — People come up out of the lifts
+
+- People no longer appear in the middle of a court. They step out of the lift's bronze doors, walk round the court and climb its stair to the land, and come back the same way. Those meeting in the court walk round its edge to their spot instead of across the light well.
+
 ## v0.097 — People come up together and stand together
 
 - Most people now go up on the land with others: friends in pairs, small groups of up to six. They walk two abreast and stay together.
