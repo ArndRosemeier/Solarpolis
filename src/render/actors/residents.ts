@@ -48,11 +48,11 @@ function mixOf(random: () => number): { african: number; asian: number; caucasia
 }
 
 /**
- * Whether figures wear Actors' photo skins. Off for now: with Actors 0.6.5's shared node materials the skin's photo
- * textures, given each figure as an input of its own, are not bound when it is drawn, so everybody's skin came out
- * nearly white. The procedural skin in the photos' mean colour stands in until Actors binds them.
+ * Whether figures wear Actors' photo skins (else its procedural skin in the photos' mean colour). Their textures are
+ * per-figure inputs of a shared material; the Stage rebinds them when they switch (@futuremagic/stage patches.ts
+ * `rebindSwitchedTextures`), without which every skin came out nearly white.
  */
-const PHOTO_SKIN = false;
+const PHOTO_SKIN = true;
 
 /** What a stand-in needs of a person: standing height (m), width (× the mean), and colours by slot (packed). */
 export interface Dress {
