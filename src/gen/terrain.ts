@@ -476,9 +476,15 @@ export function makeTerrain(h: Habitat): Terrain {
     return up > 0 ? floor + up * Math.min(1, Math.max(t, ((d - inner) * Math.tan(COURT.wall)) / up)) : floor + up * t;
   };
 
+  // The last point asked for, and its height: about one ask in five is the point just asked for again (`standAt` then
+  // the ground under it, a walker's step and its footing), and the land is the costliest thing here.
+  let asked = false, lastTheta = 0, lastS = 0, lastHeight = 0;
   const heightAt = (theta: number, s: number): number => {
+    if (asked && Object.is(theta, lastTheta) && Object.is(s, lastS)) return lastHeight;
     const ground = uncut(theta, s), near = courts.length ? nearCourt(theta, s) : null;
-    return near && near.distance < near.at.court.radius ? dig(ground, near.at.floor, near.at.court.radius, near.distance) : ground;
+    const height = near && near.distance < near.at.court.radius ? dig(ground, near.at.floor, near.at.court.radius, near.distance) : ground;
+    asked = true; lastTheta = theta; lastS = s; lastHeight = height;
+    return height;
   };
   const inRiver = (theta: number, s: number): RiverHit | null => {
     const hit = rivers.length ? riverAt(rivers, theta, s) : null;
