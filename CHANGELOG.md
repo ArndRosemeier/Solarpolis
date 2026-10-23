@@ -2,6 +2,14 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.145 — Sail boats on the water
+
+- The boats now show on the lakes and the ring lake: a wing-sailed skiff, a foiling trimaran and a glass-roofed catamaran, each in its own hull colour.
+- Under sail a boat heels to the wind, its wing swings to the wind over it, a trimaran rises onto its foils once it is fast enough, and white water trails behind and off its bows. At its mooring it lies head to the wind with its masthead light on.
+- Hulls and glass catch the haze and the sunline's glint; the wing's film shows its battens up close.
+- Every boat is drawn at any distance: whole up close, simplified further off, a speck beyond, and never missing in between.
+- Debug menu: Go → "Ride beside a boat" keeps pace with a skiff, a trimaran or a catamaran.
+
 ## v0.144 — Wind over the floor, and boats that sail
 
 - The habitat now has a wind near the floor: its own steady breeze, which swings and veers a little over a few days, plus gusts that sweep across the water. By day the land under the sunline's bright stretch draws the air along the axis toward it, so the breeze shifts as the light travels from the wild end to the port end.
