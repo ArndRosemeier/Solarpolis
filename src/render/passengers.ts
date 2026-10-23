@@ -1,6 +1,6 @@
 /**
  * The newcomer's fellow passengers in the arrival's cabin shot (plan "The Threshold", step 5: "You are on board"): a
- * few people of Actors (the same looks the player's body is made from, `playerLook`, each from the world's seed) seated
+ * few people of Actors (dressed as the residents are, `Residents.lookFrom`, each from the world's seed) seated
  * on the lounge's couches in view (space/lounge.ts `placesInView`), belted in for the approach, looking out at the
  * habitat. Loaded while the title plays (Arnd, 2026-10-23: the cast is loaded first); a seat whose passenger is not
  * ready yet stays empty, so nobody appears in the middle of the shot. Given back once the arrival is over.
@@ -13,7 +13,7 @@ import type { Stage } from '@futuremagic/stage';
 import { deriveSeed, v3add, v3len, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
 import { LOUNGE, fromShip, fromShipDirection, seatedFeet, type Lounge, type Place } from '../space';
 import { Figure } from './actors/figure';
-import { playerLook } from './actors/looks';
+import { Residents } from './actors/residents';
 import { humanCatalog } from './actors/pack';
 import { screenTextures } from './actors/screens';
 import { logged } from './loadLog';
@@ -40,9 +40,9 @@ export class Passengers {
 
   /** One after another, so the first seats fill first and the frames between loads stay light. */
   private async loadCast(seed: number, count: number): Promise<void> {
-    const { human } = await humanCatalog();
+    const { catalog, base, human } = await humanCatalog(), looks = new Residents(catalog, base, human);
     for (let k = 0; k < count && !this.disposed; k++) {
-      const figure = await Figure.load(await playerLook(deriveSeed(seed, 'passenger', k)), human);
+      const figure = await Figure.load(looks.lookFrom(deriveSeed(seed, 'passenger', k)), human);
       if (this.disposed) { figure.dispose(); return; }
       figure.object.visible = false;
       await this.stage.add(figure.object);

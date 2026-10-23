@@ -25,7 +25,7 @@ export const LOUNGE = {
   /** Couches stand at every window but each `every`th (an aisle to the glass between them). */
   every: 3,
   /** The newcomer's eyes: this far from the axis (share of the room's radius; at least `clear` m off the core and behind the couches' backs), this high over the floor (m), standing. */
-  eye: { out: 0.38, high: 1.62, clear: 0.25 },
+  eye: { out: 0.38, high: 1.62, clear: 0.6 },
   /** How far the shot tilts down toward the floor from straight out (rad): the couches and their sitters in the bottom of the frame, the window above them. */
   tilt: 0.3,
   /**
