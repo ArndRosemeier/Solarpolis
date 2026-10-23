@@ -59,7 +59,6 @@ import { AnimalView, DEER, SQUIRRELS } from './animals';
 import { BirdView } from './birds';
 import { CabinView } from './lift';
 import { CapsuleLink, CapsuleView, type Passenger } from './capsules';
-import { SEATED_BACK } from '../world/mount';
 import { GLASS, SKIES, skyOverBay } from '../gen/skies';
 import { GlassDeck, type GlassStage, type GlassWant } from './glassDeck';
 import { nearestExitCourt, type ExitCourt } from '../gen/exitCourt';
@@ -944,9 +943,9 @@ export class InteriorView {
       front = v3norm(speed > 0.5 && chase >= HEAD_CLEAR ? flat : ahead);
       move = ch.swimming ? 'swim' : !ch.grounded ? (v3dot(v, up) > 0.5 ? 'jump' : 'fall') : speed < 0.3 ? 'idle' : speed < 2.5 ? 'walk' : speed < 5.5 ? 'run' : 'sprint';
     }
-    // Seated, the hips are where the eyes look down from already: the body stays on its seat.
-    const seated = rider ? rider.pose.back / SEATED_BACK : 0;
-    const back = FIRST_PERSON_BACK * (f.height / HUMAN.height) * Math.max(0, 1 - chase / HEAD_CLEAR) * (1 - seated);
+    // From the eyes the body sits as far back as it stands, seated too: its head leans forward of the hips, and the
+    // first renders on real WebGPU showed it from behind, inside the hair.
+    const back = FIRST_PERSON_BACK * (f.height / HUMAN.height) * Math.max(0, 1 - chase / HEAD_CLEAR);
     f.update({ feet: toView(eye, v3madd(feet, front, -back)), up, front, speed, anim: anim ?? { move } }, this.frameDt, this.time);
   }
 
