@@ -343,7 +343,7 @@ function dayAt(h: Habitat, kind: BirdKind, s: number, t: number): { awake: boole
 // --- the day: spots and moves ----------------------------------------------------------------------------------------
 
 /** Where a bird's feet are and what it does there. */
-interface Place {
+export interface Place {
   at: Perch;
   doing: 'roost' | 'perch' | 'sing' | 'feed';
 }
@@ -428,25 +428,25 @@ function placed(h: Habitat, nest: Nest, place: Place, from: Perch | undefined, n
     way = v3norm(v3madd(v3scale(along, Math.cos(a)), side, Math.sin(a)));
   }
   const tilt = doing === 'roost' ? spec.stance * 0.7 : at.ground ? spec.stance * 0.4 : spec.stance;
-  const origin = originOn(spec, nest, feet, up, way, tilt);
+  const origin = originOn(nest.kind, nest.size, feet, up, way, tilt);
   return { at, doing, heading: way, tilt, origin, on: fromWorld(h.profile, ...origin) };
 }
 
 /** Up at a point: toward the axis (birds are never on it). */
-const upOf = (p: Vec3): Vec3 => upAt(p) ?? [0, 1, 0];
+export const upOf = (p: Vec3): Vec3 => upAt(p) ?? [0, 1, 0];
 
 /** Spinward at a point with up `up` (+θ). */
-const spinward = (up: Vec3): Vec3 => [up[1], -up[0], 0];
+export const spinward = (up: Vec3): Vec3 => [up[1], -up[0], 0];
 
 /** A bird's frame tilted nose up by `tilt` from a heading along the floor: its forward and up. */
-function bodyFrame(heading: Vec3, up: Vec3, tilt: number): { fwd: Vec3; up: Vec3 } {
+export function bodyFrame(heading: Vec3, up: Vec3, tilt: number): { fwd: Vec3; up: Vec3 } {
   const c = Math.cos(tilt), s = Math.sin(tilt), level = v3norm(v3madd(heading, up, -v3dot(heading, up)));
   return { fwd: v3norm(v3madd(v3scale(level, c), up, s)), up: v3norm(v3madd(v3scale(up, c), level, -s)) };
 }
 
-/** Its origin standing with its feet at `feet`: the body above them, tilted about them. */
-function originOn(spec: BirdSpec, nest: Nest, feet: Vec3, up: Vec3, heading: Vec3, tilt: number): Vec3 {
-  const L = spec.length * nest.size, f = feetOf(nest.kind), frame = bodyFrame(heading, up, tilt);
+/** The origin of a bird of `kind` and `size` standing with its feet at `feet`: the body above them, tilted about them. */
+export function originOn(kind: BirdKind, size: number, feet: Vec3, up: Vec3, heading: Vec3, tilt: number): Vec3 {
+  const L = BIRDS[kind].length * size, f = feetOf(kind), frame = bodyFrame(heading, up, tilt);
   // The soles are at (0, −stand, hip) in the bird's frame.
   return v3madd(v3madd(feet, frame.up, f.stand * L), frame.fwd, -f.hip * L);
 }
@@ -472,27 +472,36 @@ function songbirdAt(t: Terrain, nest: Nest, time: number): BirdNow {
     const k = smootherstep(0, 1, tau / slot.time), mixed = v3madd(v3scale(from.heading, 1 - k), to.heading, k);
     const heading = Math.hypot(...mixed) > 0.1 ? v3norm(mixed) : k < 0.5 ? from.heading : to.heading;
     const feet = toWorld(h.profile, to.at), up = upOf(feet);
-    return sitting(nest, to, originOn(spec, nest, feet, up, heading, to.tilt), heading, time, null);
+    return sitting(nest, to, originOn(nest.kind, nest.size, feet, up, heading, to.tilt), heading, time, null);
   }
   return sitting(nest, to, to.origin, to.heading, time, songOn(nest, slot, tau));
 }
 
 /** A bird at its spot: sitting or standing, looking about, feeding, singing (`song`: s into a song, or null); roosting still. */
 function sitting(nest: Nest, spot: Spot, origin: Vec3, heading: Vec3, time: number, song: number | null): BirdNow {
-  const spec = BIRDS[nest.kind], frame = bodyFrame(heading, upOf(origin), spot.tilt);
-  const look = Math.floor(time / 2.5), glance = (k: number): number => (unit(nest.seed, look + k, 21, 0) - 0.5) * 1.6;
-  let yaw = spot.doing === 'roost' ? 0 : glance(-1) + (glance(0) - glance(-1)) * smootherstep(0, 0.3, time - look * 2.5), nod = 0, gape = 0;
-  if (spot.doing === 'feed' && spot.at.ground) {
+  return settled(nest.kind, nest.size, nest.seed, origin, heading, spot.tilt, spot.doing, !!spot.at.ground, time, song);
+}
+
+/**
+ * A bird of `kind` (its size `size`, its own number `seed`) settled with its origin at `origin`, facing `heading`, its
+ * body tilted `tilt`: looking about, pecking when it feeds on the ground, singing (`song`: s into a song, or null),
+ * still at roost. The flocks' birds settle this way too (sim/flocks.ts).
+ */
+export function settled(kind: BirdKind, size: number, seed: number, origin: Vec3, heading: Vec3, tilt: number, doing: Place['doing'], ground: boolean, time: number, song: number | null): BirdNow {
+  const spec = BIRDS[kind], frame = bodyFrame(heading, upOf(origin), tilt);
+  const look = Math.floor(time / 2.5), glance = (k: number): number => (unit(seed, look + k, 21, 0) - 0.5) * 1.6;
+  let yaw = doing === 'roost' ? 0 : glance(-1) + (glance(0) - glance(-1)) * smootherstep(0, 0.3, time - look * 2.5), nod = 0, gape = 0;
+  if (doing === 'feed' && ground) {
     // Pecking: the head down for a moment, now and then.
     const peck = Math.floor(time / 0.9), into = time - peck * 0.9;
-    const down = unit(nest.seed, peck, 23, 0) < 0.5 ? smoothstep(0, 0.1, into) * (1 - smoothstep(0.25, 0.4, into)) : 0;
+    const down = unit(seed, peck, 23, 0) < 0.5 ? smoothstep(0, 0.1, into) * (1 - smoothstep(0.25, 0.4, into)) : 0;
     nod = 0.9 * down;
     yaw *= 1 - down;
   }
   if (song !== null) { gape = 0.35 + 0.35 * Math.sin(song * TURN * 6) ** 2; nod = -0.25; yaw *= 0.3; }
   return {
-    kind: nest.kind, at: origin, fwd: frame.fwd, up: frame.up, length: spec.length * nest.size, fold: 1, beat: 0, amp: 0, bias: 0, spread: 0,
-    gape, yaw, nod, doing: song !== null ? 'sing' : spot.doing === 'sing' ? 'perch' : spot.doing, speed: 0,
+    kind, at: origin, fwd: frame.fwd, up: frame.up, length: spec.length * size, fold: 1, beat: 0, amp: 0, bias: 0, spread: 0,
+    gape, yaw, nod, doing: song !== null ? 'sing' : doing === 'sing' ? 'perch' : doing, speed: 0,
   };
 }
 
@@ -540,15 +549,39 @@ function flying(h: Habitat, nest: Nest, path: (q: number) => Vec3, time: number,
   // Wings closed it is posed as it sits; open, by what its wings carry.
   const rest = bodyFrame(sit.heading, upOf(p), sit.tilt);
   const fwd = v3norm(v3madd(v3scale(w.fwd, open), rest.fwd, fold)), up = v3norm(v3madd(v3scale(w.up, open), rest.up, fold));
-  let amp = w.amp, bias = 0, wingFold = fold;
-  if (doing === 'drop') { wingFold = Math.max(fold, 0.9); amp = 0; }
-  else if (spec.flight === 'glide' && w.effort < 0.5) { amp = 0.05; bias = 0.12; }
-  else if (spec.flight === 'glide' && w.effort < 1.1 && Math.sin((TURN * tau) / 2.3 + nest.seed) > 0.4 + 0.5 * w.effort) { amp = 0.06; bias = 0.1; }
+  let { amp, bias } = gliding(spec, w, tau, nest.seed), wingFold = fold;
+  if (doing === 'drop') { wingFold = Math.max(fold, 0.9); amp = 0; bias = 0; }
   else if (spec.flight === 'bound' && (tau / BOUND) % 1 > BOUND_BEATS && tau > OPEN_TIME && time - tau > CLOSE_TIME) { wingFold = Math.max(fold, 0.85); amp = 0; }
   const slow = 1 - clamp(w.speed / (0.6 * spec.cruise), 0, 1);
   return {
     kind: nest.kind, at: p, fwd, up, length: spec.length * nest.size, fold: wingFold, beat: w.beat, amp: amp * open, bias: bias * open,
     spread: Math.max(slow, w.flare), gape: 0, yaw: 0, nod: 0, doing, speed: w.speed,
+  };
+}
+
+/**
+ * How a bird of `spec` holds its wings flying with `w` at clock τ (its own number `seed`): beating as its effort asks;
+ * a gliding species glides on held-up wings when it carries little, and now and then between bouts of beats.
+ */
+function gliding(spec: BirdSpec, w: Wings, tau: number, seed: number): { amp: number; bias: number } {
+  if (spec.flight === 'glide' && w.effort < 0.5) return { amp: 0.05, bias: 0.12 };
+  if (spec.flight === 'glide' && w.effort < 1.1 && Math.sin((TURN * tau) / 2.3 + seed) > 0.4 + 0.5 * w.effort) return { amp: 0.06, bias: 0.1 };
+  return { amp: w.amp, bias: 0 };
+}
+
+/**
+ * A bird of `kind` (its size `size`, its own number `seed`) on a path through the air given by the clock (`path(t)`,
+ * world), at clock time t: its velocity and acceleration from the path, what its wings must give for them
+ * (`wingsFor`), and so its pose and wingbeats, gliding as its species does. `heading`: its way when it hangs still;
+ * `open`: how far its wings are open (they fold as it lands). The flocks' birds fly this way (sim/flocks.ts).
+ */
+export function onPath(h: Habitat, kind: BirdKind, size: number, seed: number, path: (t: number) => Vec3, time: number, heading: Vec3, doing: BirdDoing = 'fly', open = 1): BirdNow {
+  const spec = BIRDS[kind], p = path(time), p0 = path(time - DT), p1 = path(time + DT);
+  const v = v3scale(v3sub(p1, p0), 1 / (2 * DT)), a = v3scale(v3add(v3sub(p1, p), v3sub(p0, p)), 1 / (DT * DT));
+  const w = wingsFor(h, spec, p, v, a, heading), { amp, bias } = gliding(spec, w, time, seed);
+  return {
+    kind, at: p, fwd: w.fwd, up: w.up, length: spec.length * size, fold: 1 - open, beat: w.beat, amp: amp * open, bias: bias * open,
+    spread: Math.max(1 - clamp(w.speed / (0.6 * spec.cruise), 0, 1), w.flare), gape: 0, yaw: 0, nod: 0, doing, speed: w.speed,
   };
 }
 
@@ -561,7 +594,7 @@ function hopping(h: Habitat, nest: Nest, slot: Slot, tau: number): BirdNow {
   const feet = toWorld(h.profile, { theta: a.theta + dTheta * share, s: a.s + (b.s - a.s) * share, h: a.h + (b.h - a.h) * share + HOP_RISE * Math.sin(Math.PI * f) });
   const up = upOf(feet), heading = slot.to.heading, frame = bodyFrame(heading, up, slot.to.tilt);
   return {
-    kind: nest.kind, at: originOn(spec, nest, feet, up, heading, slot.to.tilt), fwd: frame.fwd, up: frame.up, length: spec.length * nest.size,
+    kind: nest.kind, at: originOn(nest.kind, nest.size, feet, up, heading, slot.to.tilt), fwd: frame.fwd, up: frame.up, length: spec.length * nest.size,
     fold: 1, beat: 0, amp: 0, bias: 0, spread: 0, gape: 0, yaw: 0, nod: 0, doing: 'hop', speed: f < 1 ? HOP / HOP_TIME : 0,
   };
 }

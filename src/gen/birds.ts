@@ -20,7 +20,7 @@ import { hexColor, packColor } from './standIn';
 import { bytesOf, icosphere } from './shapes';
 
 /** The species of the land, in the order of their calls (sim/sounds.ts `CALLS`, files `call/<name>`). */
-export const BIRD_KINDS = ['blackbird', 'robin', 'wren', 'thrush', 'woodpecker', 'pigeon', 'lark', 'owl'] as const;
+export const BIRD_KINDS = ['blackbird', 'robin', 'wren', 'thrush', 'woodpecker', 'pigeon', 'lark', 'owl', 'swallow', 'swift', 'starling'] as const;
 export type BirdKind = (typeof BIRD_KINDS)[number];
 
 /** Where on the bird a vertex is: what colour of its look it takes (render/birdShaders.ts reads the same numbers). */
@@ -29,8 +29,11 @@ type Zone = (typeof ZONE)[keyof typeof ZONE];
 /** Added to a wing vertex's zone: it beats and folds with the wing (a wing takes other zones' colours in its patches). */
 export const WING = 16;
 
-/** A pattern over the plumage, drawn per pixel up close: none, spotted breast, fine bars, streaks, owl's mottle, faint scaling, white-barred flight feathers. */
-export const PATTERN = { none: 0, spots: 1, bars: 2, streaks: 3, mottle: 4, scaled: 5, barredWings: 6 } as const;
+/**
+ * A pattern over the plumage, drawn per pixel up close: none, spotted breast, fine bars, streaks, owl's mottle, faint
+ * scaling, white-barred flight feathers, a starling's pale stars all over.
+ */
+export const PATTERN = { none: 0, spots: 1, bars: 2, streaks: 3, mottle: 4, scaled: 5, barredWings: 6, starry: 7 } as const;
 
 /** A look (sRGB hex per zone): a sex or a colour morph. */
 export interface BirdLook {
@@ -38,6 +41,8 @@ export interface BirdLook {
   face: string; breast: string; belly: string; mark: string;
   beak: string; legs: string;
   pattern: number;
+  /** How glossy its dark feathers are (0 matt … 1): a sheen along its outline, steel blue, or a starling's purple and green. */
+  gloss: number;
 }
 
 /**
@@ -78,9 +83,17 @@ export interface BirdSpec {
   marks: { shoulder?: Zone; wingbar?: Zone; vent?: Zone; neck?: Zone };
   /** Its looks and how common each is. */
   looks: readonly [BirdLook, number][];
+  /**
+   * The tail's fork: how much longer its outer feathers are than its middle ones (a share of the tail), and whether only
+   * the outermost pair is drawn out into streamers (a swallow's). The arm's share of the half wing (a swift's is short,
+   * its hand long). Absent: a square tail, the arm 0.45 of the wing.
+   */
+  fork?: number;
+  streamers?: boolean;
+  arm?: number;
 }
 
-const look = (c: Omit<BirdLook, 'pattern'>, pattern = 0): BirdLook => ({ ...c, pattern });
+const look = (c: Omit<BirdLook, 'pattern' | 'gloss'>, pattern = 0, gloss = 0): BirdLook => ({ ...c, pattern, gloss });
 
 /** The species (sizes and beats from field guides; looks from life). */
 export const BIRDS: Readonly<Record<BirdKind, BirdSpec>> = {
@@ -88,7 +101,7 @@ export const BIRDS: Readonly<Record<BirdKind, BirdSpec>> = {
     length: 0.25, span: 0.36, beat: 11, cruise: 9, flight: 'glide', girth: 1, head: 0.085, beak: [0.085, 0.035], tail: [0.4, 0.13], legs: 0.15,
     chord: 0.27, tip: 0.3, fingers: 0.1, crest: 0, cock: 0.08, stance: 0.45, forage: 'ground', perch: 'top', night: false, song: [6.5, 13], marks: {},
     looks: [
-      [look({ crown: '#17171a', back: '#1b1b1e', coverts: '#1d1d20', flight: '#121214', face: '#1a1a1c', breast: '#1c1c1e', belly: '#202022', mark: '#1c1c1e', beak: '#e09a1c', legs: '#4a3a2a' }), 0.5],
+      [look({ crown: '#17171a', back: '#1b1b1e', coverts: '#1d1d20', flight: '#121214', face: '#1a1a1c', breast: '#1c1c1e', belly: '#202022', mark: '#1c1c1e', beak: '#e09a1c', legs: '#4a3a2a' }, PATTERN.none, 0.6), 0.5],
       [look({ crown: '#4b3b2b', back: '#4e3d2c', coverts: '#4a3a2a', flight: '#3a2e24', face: '#5a4634', breast: '#6b5440', belly: '#5d4a38', mark: '#5a4634', beak: '#8a6a2a', legs: '#4a3a2a' }, PATTERN.scaled), 0.5],
     ],
   },
@@ -130,6 +143,26 @@ export const BIRDS: Readonly<Record<BirdKind, BirdSpec>> = {
     looks: [
       [look({ crown: '#6e4a2c', back: '#73502f', coverts: '#7a5634', flight: '#5e4228', face: '#b08a60', breast: '#a07c56', belly: '#b89670', mark: '#3a2a1c', beak: '#c8b070', legs: '#b09a78' }, PATTERN.mottle), 0.7],
       [look({ crown: '#6a645c', back: '#706a60', coverts: '#78716a', flight: '#5a544c', face: '#a89e90', breast: '#9a9286', belly: '#b0a89a', mark: '#3a3630', beak: '#c8b070', legs: '#b0a89a' }, PATTERN.mottle), 0.3],
+    ],
+  },
+  swallow: {
+    length: 0.15, span: 0.33, beat: 7, cruise: 9, flight: 'glide', girth: 0.85, head: 0.1, beak: [0.04, 0.035], tail: [0.32, 0.11], legs: 0.07,
+    chord: 0.22, tip: 0.85, fingers: 0, crest: 0, cock: 0, stance: 0.2, forage: 'ground', perch: 'top', night: false, song: [2.6, 9], marks: {},
+    fork: 0.9, streamers: true, arm: 0.35,
+    looks: [[look({ crown: '#1e2c4e', back: '#1d2a4a', coverts: '#1f2b48', flight: '#171c28', face: '#8c2c1c', breast: '#ead8b8', belly: '#f2e6cc', mark: '#1d2a4a', beak: '#16161a', legs: '#2a2420' }, PATTERN.none, 0.9), 1]],
+  },
+  swift: {
+    length: 0.17, span: 0.42, beat: 7, cruise: 11, flight: 'glide', girth: 0.9, head: 0.1, beak: [0.03, 0.03], tail: [0.33, 0.1], legs: 0.03,
+    chord: 0.15, tip: 1, fingers: 0, crest: 0, cock: 0, stance: 0.1, forage: 'ground', perch: 'top', night: false, song: [1.6, 6], marks: {},
+    fork: 0.35, arm: 0.2,
+    looks: [[look({ crown: '#2c2824', back: '#2a2622', coverts: '#2e2a26', flight: '#24211e', face: '#8e877e', breast: '#2e2a26', belly: '#2c2824', mark: '#2c2824', beak: '#141414', legs: '#2a2a2a' }, PATTERN.none, 0.25), 1]],
+  },
+  starling: {
+    length: 0.21, span: 0.39, beat: 10, cruise: 13, flight: 'glide', girth: 1, head: 0.08, beak: [0.11, 0.03], tail: [0.27, 0.12], legs: 0.14,
+    chord: 0.25, tip: 0.6, fingers: 0, crest: 0, cock: 0, stance: 0.35, forage: 'ground', perch: 'top', night: false, song: [4, 12], marks: {},
+    looks: [
+      [look({ crown: '#1c1d22', back: '#1e2026', coverts: '#22242a', flight: '#191a1f', face: '#202227', breast: '#1e2025', belly: '#222428', mark: '#e6d8b8', beak: '#2e2a26', legs: '#8a5a48' }, PATTERN.starry, 0.85), 0.6],
+      [look({ crown: '#191a1e', back: '#1b1d22', coverts: '#202228', flight: '#17181d', face: '#1d1f24', breast: '#1b1d22', belly: '#1f2125', mark: '#d8c8a4', beak: '#d8b03a', legs: '#9a6650' }, PATTERN.starry, 1), 0.4],
     ],
   },
 };
@@ -221,7 +254,7 @@ interface Plan {
 function planOf(spec: BirdSpec): Plan {
   const zBeak = 0.5 - spec.beak[0], zHead = zBeak - spec.head * 0.93, zNeck = zHead - spec.head * 1.05;
   const zRump = -0.5 + spec.tail[0], hs = spec.span / (2 * spec.length);
-  const xs = 0.095 * spec.girth, zs = zNeck - 0.08, xe = xs + 0.45 * (hs - xs);
+  const xs = 0.095 * spec.girth, zs = zNeck - 0.08, xe = xs + (spec.arm ?? 0.45) * (hs - xs);
   return {
     spec, g: spec.girth, zRump, zNeck, zHead, yHead: 0.06 + spec.head * 0.3, zBeak, xs, ys: 0.05 + 0.02 * spec.girth, zs, xe, hs,
     foldLen: (zs - zRump) * (0.85 + 0.35 * spec.tip),
@@ -413,17 +446,23 @@ function tail(b: Built, q: Plan, count: number): void {
   const cc = Math.cos(s.cock), sc = Math.sin(s.cock);
   const turn = (x: number, along: number): Vec3 => [x, base[1] + along * sc, base[2] - along * cc];
   const normal: Vec3 = [0, cc, sc];
+  const fork = s.fork ?? 0;
   if (count === 1) {
-    // Scale's tail fan: one quad.
-    const w = s.tail[1] / 2, a = b.vert(turn(-w * 0.35, 0), normal, [ZONE.tail, 0, base[1], base[2]]), c = b.vert(turn(w * 0.35, 0), normal, [ZONE.tail, 0, base[1], base[2]]);
-    const d = b.vert(turn(w, len), normal, [ZONE.tail, 1, base[1], base[2]]), e = b.vert(turn(-w, len), normal, [ZONE.tail, -1, base[1], base[2]]);
-    b.quad(a, c, d, e);
+    // Scale's tail fan: one quad; a forked tail notched in the middle, its outer corners drawn out.
+    const w = s.tail[1] / 2, tipW = s.streamers ? w * 0.75 : w, part = (share: number): number[] => [ZONE.tail, share, base[1], base[2]];
+    const a = b.vert(turn(-w * 0.35, 0), normal, part(0)), c = b.vert(turn(w * 0.35, 0), normal, part(0));
+    const d = b.vert(turn(tipW, len * (1 + fork)), normal, part(1)), e = b.vert(turn(-tipW, len * (1 + fork)), normal, part(-1));
+    if (fork <= 0) { b.quad(a, c, d, e); return; }
+    const m = b.vert(turn(0, len * (1 - 0.35 * Math.min(1, fork))), normal, part(0));
+    b.tri(a, c, m); b.tri(c, d, m); b.tri(a, m, e);
     return;
   }
   const half = Math.atan((s.tail[1] * 0.5) / len) * 0.75;
   for (let k = 0; k < count; k++) {
-    const share = (2 * k) / (count - 1) - 1, psi = share * half, l = len * (1 - 0.1 * Math.abs(share) * (s.cock > 0.3 ? 2 : 1));
-    const w = (s.tail[1] / count) * 1.8, dx = Math.sin(psi), dz = Math.cos(psi), y = 0.003 * (1 - Math.abs(share));
+    // A forked tail's outer feathers are longer (a swallow's outermost pair drawn out into streamers).
+    const share = (2 * k) / (count - 1) - 1, out = Math.abs(share), longer = fork * (s.streamers ? out ** 8 : out ** 1.5);
+    const psi = share * half, l = len * (1 - 0.1 * out * (s.cock > 0.3 ? 2 : 1)) * (1 + longer);
+    const w = (s.tail[1] / count) * 1.8 * (s.streamers && out > 0.99 ? 0.6 : 1), dx = Math.sin(psi), dz = Math.cos(psi), y = 0.003 * (1 - out);
     const rows: number[][] = [];
     for (const [i, along] of [0, 0.6, 1].entries()) {
       const width = w * [0.6, 1, 0.75][i] / 2, row: number[] = [];
@@ -498,6 +537,9 @@ function legs(b: Built, q: Plan): number {
   return foot;
 }
 
+/** A look's gloss rides in its pattern number's fraction, at most this (so the number rounds down to the pattern). */
+export const GLOSS_PACK = 0.45;
+
 /** A bird's look, packed for its instance (sRGB bytes in one float each, `packColor`): ten zones' colours and the pattern. */
 export interface PackedLook {
   /** crown, back, coverts, flight; face, breast, belly, mark; beak, legs, pattern. */
@@ -516,7 +558,8 @@ export function packedLooks(kind: BirdKind): PackedLook[] {
     return {
       coat: [c(l.crown), c(l.back), c(l.coverts), c(l.flight)],
       front: [c(l.face), c(l.breast), c(l.belly), c(l.mark)],
-      bits: [c(l.beak), c(l.legs), l.pattern],
+      // The pattern's number, its gloss in the fraction (render/birdShaders.ts reads both).
+      bits: [c(l.beak), c(l.legs), l.pattern + GLOSS_PACK * clamp(l.gloss, 0, 1)],
       bands: [mean(l.crown, l.back), mean(l.coverts, l.flight, l.back), mean(l.breast, l.belly, l.face)],
     };
   });

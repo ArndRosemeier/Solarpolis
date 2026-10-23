@@ -335,6 +335,7 @@ export class InteriorView {
     if (!this.below) {
       for (const a of this.animals) a.heard(view.eye, this.time, sources);
       this.drones?.heard(view.eye, sources);
+      this.birds?.heard(view.eye, this.time, sources);
     }
     return {
       ecology: e,
@@ -348,6 +349,7 @@ export class InteriorView {
       sources,
       lift: ride?.aboard ? { court: this.cabin!.court, share: ride.elapsed / Math.max(ride.seconds, 1e-3), moving: !ride.waits } : null,
       birds: this.below ? [] : this.birds?.nests ?? [],
+      flocks: this.below ? [] : this.birds?.flockList ?? [],
     };
   }
 
@@ -430,13 +432,13 @@ export class InteriorView {
 
   /**
    * Move the clock on to when the light over the eye next reaches `level` of the day's (sim/birds.ts `lightAt`), rising
-   * (the dawn chorus) or falling; within a day, by the minute (debug menu).
+   * (the dawn chorus) or falling, then on by `shift` s (back, when negative); within a day, by the minute (debug menu).
    */
-  skipToLight(level: number, rising: boolean): void {
+  skipToLight(level: number, rising: boolean, shift = 0): void {
     const h = this.habitat, s = fromWorld(h.profile, ...this.current().eye).s;
-    for (let t = this.time + 60; t < this.time + h.params.day.length; t += 60) {
+    for (let t = this.time + 60 - shift; t < this.time + h.params.day.length - shift; t += 60) {
       const now = lightAt(h, s, t), before = lightAt(h, s, t - 60);
-      if (rising ? before < level && now >= level : before > level && now <= level) { this.time = t; return; }
+      if (rising ? before < level && now >= level : before > level && now <= level) { this.time = t + shift; return; }
     }
   }
 
