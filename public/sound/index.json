@@ -626,7 +626,7 @@
   },
   "music/title": {
    "kind": "music",
-   "take": "music/title-b",
+   "take": "music/title-fl-a",
    "files": [
     "music/title.mp3"
    ],
