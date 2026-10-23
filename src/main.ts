@@ -1130,7 +1130,7 @@ debug.add({ label: 'Two hours later', group: 'Time', run: () => view()?.skip(720
 debug.add({ label: 'Five minutes later', group: 'Time', run: () => view()?.skip(300) });
 debug.add({ label: 'To the dawn chorus (the light coming up here)', group: 'Time', run: () => view()?.skipToLight(0.3, true) });
 debug.add({ label: 'To nightfall here (owls out)', group: 'Time', run: () => view()?.skipToLight(0.03, false) });
-debug.add({ label: "To the starlings' murmuration here (dusk)", group: 'Time', run: () => view()?.skipToLight(0.06, false, -900) });
+debug.add({ label: "To the starlings' murmuration here (dusk)", group: 'Time', run: () => view()?.skipToLight(0.06, false, -600) });
 debug.add({ label: "To the swifts' dusk race at the Stair", group: 'Time', run: () => view()?.skipToLight(0.3, false) });
 debug.add({ label: 'Clouds: schedule → few → half → overcast → none', group: 'Time', run: () => { const v = view(); if (v) v.cloudCover = nextOf<number | null>([null, 0.15, 0.5, 0.85, 0], v.cloudCover); } });
 const toClouds = (label: string, share: number): void => debug.add({
