@@ -2068,10 +2068,6 @@
     "reason": "Views' dispose methods give back what they drew through the one way (freeMesh, stage.remove) and clear their own maps; the bodies differ in what each holds."
   },
   {
-    "key": "same name: solarpolis/render/actors/pack.ts#mesh + solarpolis/render/necklace.ts#mesh",
-    "reason": "pack.ts's `mesh` is Actors' ActorMaterialKit method (named by its interface); necklace.ts's builds a mesh of the necklace. Different jobs."
-  },
-  {
     "key": "idiom: [.new Set] in solarpolis/render/actors/animator.ts + solarpolis/render/actors/residents.ts + solarpolis/space/voyage.ts",
     "reason": "Plain sets of ids (clips loaded, garment kinds, places visited), each a line; nothing shared to fold."
   },
