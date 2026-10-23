@@ -1,9 +1,9 @@
 /** The lounge under a ship's nose and the cabin shot's view of it (src/space/lounge.ts), over the matrix. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { v3dot, v3sub } from '@futuremagic/core';
+import { v3add, v3cross, v3dot, v3norm, v3scale, v3sub } from '@futuremagic/core';
 import { MATRIX } from '../src/blueprint';
-import { ARRIVAL_SHOTS, LOUNGE, arrival, cabinCamera, chooseStart, deriveShip, loungeOf, placesInView, shipShape, throughWindow, windowFacing, windowLight, type Lounge } from '../src/space';
+import { ARRIVAL_SHOTS, CABIN_FOV, LOUNGE, arrival, cabinCamera, chooseStart, deriveShip, loungeOf, placesInView, shipShape, throughWindow, windowFacing, windowLight, type Lounge } from '../src/space';
 import { loungeGeometry } from '../src/render/lounge';
 import { windingOk } from './meshChecks';
 import { spaceOf } from './worlds';
@@ -38,9 +38,16 @@ for (const { name } of MATRIX) {
       for (let w = 0; w < l.windows.count; w += 5) {
         const look = l.windows.turn + (w * 2 * Math.PI) / l.windows.count, cam = cabinCamera(l, look), r = Math.hypot(cam.eye[1], cam.eye[2]);
         assert.ok(r > l.core && r < l.couches[0].out - LOUNGE.couch.deep / 2, `${name}: the eye ${r.toFixed(2)} m out`);
-        assert.ok(off(around(v3sub(cam.target, cam.eye)), look) < 1e-9 && cam.target[0] > cam.eye[0], 'out of the window, a little toward the nose');
+        assert.ok(off(around(v3sub(cam.target, cam.eye)), look) < 1e-9 && cam.target[0] < cam.eye[0], 'out of the window, a little down');
         const places = placesInView(l, look);
         assert.ok(places.length >= (l.core ? 2 : 1), `${name}: ${places.length} places in view`);
+        // Some of the sitters are in a 16:9 frame (their shoulders, 0.6 m over the seat).
+        const ahead = v3norm(v3sub(cam.target, cam.eye)), up = v3norm(v3sub([1, 0, 0], v3scale(ahead, ahead[0]))), right = v3cross(ahead, up);
+        const half = Math.tan((CABIN_FOV / 2) * (Math.PI / 180)), framed = places.filter((p) => {
+          const seat = v3sub(v3add(p.at, [0.6, 0, 0]), cam.eye), along = v3dot(seat, ahead);
+          return along > 0 && Math.abs(v3dot(seat, up) / along) < half && Math.abs(v3dot(seat, right) / along) < (half * 16) / 9;
+        });
+        assert.ok(framed.length >= 1, `${name}: no sitter in the frame`);
         const couchOff = (i: number): number => off(l.couches[i].angle, look);
         assert.ok(places.every((p) => couchOff(places[0].couch) <= couchOff(p.couch) + 1e-9), 'the couch nearest the window first');
       }

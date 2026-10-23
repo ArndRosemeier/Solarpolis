@@ -170,7 +170,7 @@ export const ARRIVAL = ARRIVAL_SHOTS[0] + ARRIVAL_SHOTS[1] + ARRIVAL_SHOTS[2] + 
 const BERTH_SHOT = ARRIVAL_SHOTS[0] + ARRIVAL_SHOTS[1];
 const CROSSING_SHOT = BERTH_SHOT + ARRIVAL_SHOTS[2];
 /** The cabin shot's field of view (degrees): a person's, standing in a room. */
-const CABIN_FOV = 62;
+export const CABIN_FOV = 62;
 /** Shot 4 starts with the ship this far up its corridor (outer radii; at most half its coast, where it slows). */
 const SHOT4_UP = 1.5;
 /** Shot 5 starts this long before the ship berths (s); the rest of it is the jolt, the clamps and the green light. */

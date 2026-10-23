@@ -26,8 +26,8 @@ export const LOUNGE = {
   every: 3,
   /** The newcomer's eyes: this far from the axis (share of the room's radius; at least `clear` m off the core and behind the couches' backs), this high over the floor (m), standing. */
   eye: { out: 0.38, high: 1.62, clear: 0.25 },
-  /** How far the shot tilts toward the nose from straight out (rad): the spindle ahead is in the top of the window. */
-  tilt: 0.12,
+  /** How far the shot tilts down toward the floor from straight out (rad): the couches and their sitters in the bottom of the frame, the window above them. */
+  tilt: 0.3,
   /**
    * The light of the room's own lamps on the floor (relative to full sunlight: about 400 lux, a quiet evening room), and
    * the mean albedo of its walls, floor and couches as the eyes' meter takes it.
@@ -99,12 +99,12 @@ export function windowFacing(l: Lounge, toward: Vec3): number {
 
 /**
  * The cabin shot's camera in the ship frame: standing behind the couches, looking out of the window at `look` (rad),
- * tilted a little toward the nose. Its up is the nose (the floor is aft).
+ * tilted a little down over them. Its up is the nose (the floor is aft).
  */
 export function cabinCamera(l: Lounge, look: number): { eye: Vec3; target: Vec3 } {
   const e = LOUNGE.eye, behind = l.couches[0].out - LOUNGE.couch.deep / 2 - e.clear;
   const eye = round(l.floor + e.high, Math.min(behind, Math.max(l.core + e.clear, l.radius * e.out)), look);
-  const out = round(0, 1, look), ahead = v3norm(v3add(out, [Math.tan(LOUNGE.tilt), 0, 0]));
+  const out = round(0, 1, look), ahead = v3norm(v3add(out, [-Math.tan(LOUNGE.tilt), 0, 0]));
   return { eye, target: v3add(eye, v3scale(ahead, 10)) };
 }
 
@@ -170,8 +170,8 @@ export function windowLight(l: Lounge, luminance: (d: Vec3) => number): { all: n
   let all = 0, toward: Vec3 = [0, 0, 0];
   for (let k = 0; k < w.count; k++) {
     const a = w.turn + (k * 2 * Math.PI) / w.count, out = round(0, 1, a);
-    // Out of the window as someone in the room's middle at its height sees it: the view a little toward the nose too.
-    const e = luminance(v3norm(v3add(out, [Math.tan(LOUNGE.tilt), 0, 0]))) * solid;
+    // Straight out of the window, as someone in the room sees it.
+    const e = luminance(out) * solid;
     all += e;
     toward = v3add(toward, v3scale(out, e));
   }

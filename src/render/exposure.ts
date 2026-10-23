@@ -110,15 +110,20 @@ export const PERIPHERY = 1.5;
  * the light in view allows (`ANCHOR_LEVEL`).
  */
 export function exposureFor(m: Meterable, rays: readonly Vec3[], darkest: number): number {
-  let sum = 0, high = darkest, light = 0;
+  let sum = 0, high = darkest, light = 0, counted = 0, roomSum = 0, roomRays = 0;
   for (const d of rays) {
     const r = rayMeter(m, d), l = Math.max(darkest, r.luminance);
     sum += Math.log(l);
+    counted++;
     high = Math.max(high, l);
     light = Math.max(light, r.light);
+    if (r === m.room) { roomSum += Math.log(l); roomRays++; }
   }
+  // In a room with windows the eyes settle on the room they stand in: black space beyond the glass does not open them
+  // further (what the windows show still stops them down, by its highlights and its light).
+  const average = roomRays && m.room?.open ? roomSum / roomRays : sum / counted;
   const anchored = light > 0 ? ANCHOR_LEVEL / light : Infinity;
-  return Math.min(KEY / Math.exp(sum / rays.length), HIGHLIGHT_LEVEL / high, anchored);
+  return Math.min(KEY / Math.exp(average), HIGHLIGHT_LEVEL / high, anchored);
 }
 
 /**

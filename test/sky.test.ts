@@ -113,6 +113,9 @@ test('exposure: full Earth in view sets it near 0.6, a sunlit hull against black
   const room = { luminance: 0.004, light: 0.01, open: (d: Vec3) => v3dot(d, back) > 0.99 };
   assert.ok(rayLuminance({ sky: { ...sky, sunlight: 1 }, hulls: [hull], earthshine: 0, room }, back) > 0.07, 'out of the window: the hull');
   assert.equal(rayLuminance({ sky: { ...sky, sunlight: 1 }, hulls: [hull], earthshine: 0, room }, pole), 0.004, 'the wall');
+  // Out of the window only black space: the eyes settle on the room, not on the dark beyond the glass.
+  const blackOut = { ...room, open: (d: Vec3) => v3dot(d, pole) < 0.99 };
+  near(exposureFor({ sky: { ...sky, sunlight: 0 }, hulls: [], earthshine: 0, room: blackOut }, [pole, away, away, away], DARKEST.plain), KEY / 0.004, 1e-6 * KEY / 0.004, 'the room sets it');
   const dark = exposureFor({ sky: { ...sky, sunlight: 0 }, hulls: [], earthshine: 0 }, [away], DARKEST.plain);
   near(dark, KEY / DARKEST.plain, 1e-6 * KEY / DARKEST.plain, 'eyes open to their limit');
   // Adapting: a second in the light gets most of the way; the dark takes longer.
