@@ -13,6 +13,17 @@ export const BELTS = {
   kuiper: { count: 70000, minDiameter: 100000, exponent: 4 },
 } as const;
 export const KIRKWOOD = [2.502, 2.824, 2.958, 3.279];
+/** Each belt's semi-major axes (AU) and the cap on its eccentricities: what `asteroid` draws from. */
+export const BELT_ORBITS: Readonly<Record<Belt, { a: readonly [number, number]; e: number }>> = {
+  main: { a: [2.1, 3.3], e: .32 },
+  trojan: { a: [5.2026, 5.2026], e: .2 },
+  kuiper: { a: [42, 48], e: .15 },
+};
+/** The shell about the Sun (m) that every rock of a belt stays within. */
+export function beltReach(belt: Belt): [number, number] {
+  const o = BELT_ORBITS[belt];
+  return [o.a[0] * (1 - o.e) * AU, o.a[1] * (1 + o.e) * AU];
+}
 export interface Asteroid { body: SolarBody; belt: Belt; a: number; e: number; i: number; node: number; peri: number; mean: number; libration: number; phase: number }
 
 export function asteroid(seed: number, belt: Belt, index: number): Asteroid {
@@ -21,12 +32,12 @@ export function asteroid(seed: number, belt: Belt, index: number): Asteroid {
   const rayleigh = (sigma: number, cap: number): number => Math.min(cap, sigma * Math.sqrt(-2 * Math.log(Math.max(1e-9, rng.range(0, 1)))));
   let a: number, e: number, i: number;
   if (belt === 'main') {
-    do { a = rng.range(2.1, 3.3); } while (KIRKWOOD.some(gap => Math.abs(a - gap) < .018) && rng.range(0, 1) > .035);
-    e = rayleigh(.09, .32); i = rayleigh(6 * Math.PI / 180, .5);
+    do { a = rng.range(...BELT_ORBITS.main.a); } while (KIRKWOOD.some(gap => Math.abs(a - gap) < .018) && rng.range(0, 1) > .035);
+    e = rayleigh(.09, BELT_ORBITS.main.e); i = rayleigh(6 * Math.PI / 180, .5);
   } else if (belt === 'trojan') {
-    a = 5.2026; e = rayleigh(.055, .2); i = rayleigh(10 * Math.PI / 180, .65);
+    a = BELT_ORBITS.trojan.a[0]; e = rayleigh(.055, BELT_ORBITS.trojan.e); i = rayleigh(10 * Math.PI / 180, .65);
   } else {
-    a = rng.range(42, 48); e = rayleigh(.045, .15); i = rayleigh((rng.range(0, 1) < .6 ? 2 : 14) * Math.PI / 180, .65);
+    a = rng.range(...BELT_ORBITS.kuiper.a); e = rayleigh(.045, BELT_ORBITS.kuiper.e); i = rayleigh((rng.range(0, 1) < .6 ? 2 : 14) * Math.PI / 180, .65);
   }
   const pop = BELTS[belt], diameter = Math.min(belt === 'kuiper' ? 1500000 : 350000, pop.minDiameter * (pop.count / (index + 8)) ** (1 / pop.exponent));
   const carbon = belt !== 'main' || rng.range(0, 1) < (a - 2) / 1.5;
