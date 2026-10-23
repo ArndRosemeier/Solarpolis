@@ -8,6 +8,7 @@
  */
 import { hash3i, hashToFloat } from '@futuremagic/core';
 import { ARRIVAL, SPIN_UP, type ArrivalMoments } from './cinema';
+import { CLAMP_CLUNKS, SEALED } from './dock';
 
 /** The loops under the arrival: the cabin, a steady thruster burn, the bearing, the air turning the passenger. */
 export const SHIP_BEDS = ['ship/cabin', 'ship/burn', 'ship/bearing', 'body/rush'] as const;
@@ -48,8 +49,8 @@ export const MIND_LINES = [
 
 /** How long a line of the Mind stays up at least (s), and when the first comes. */
 const LINE = 6, FIRST_LINE = 1.5;
-/** The latch after contact: each clamp (s after the berth), then the seal; the lock as shot 6 begins. */
-const CLAMPS = [0.7, 1.2, 1.8, 2.4], SEAL = 2.85, LOCK = 0.2;
+/** The lock, this long after shot 6 begins (s). The clamps' clunks and the seal are the berth's own (space/dock.ts). */
+const LOCK = 0.2;
 /** Loudness of each loop at its fullest. */
 const CABIN = 0.5, BURN = 0.55, BEARING = 0.8, RUSH = 0.4;
 /** How fast a loop comes in or goes (s). */
@@ -62,8 +63,8 @@ export function arrivalScore(m: ArrivalMoments, seed: number): ArrivalScore {
   const vary = (n: number, k: number): number => hashToFloat(hash3i(seed, n, k, 0x5c0e));
   const cues: ScoreCue[] = m.pulses.map((t, n) => ({ sound: 'ship/thruster', take: 0, t, gain: 0.5 + 0.2 * vary(n, 1), pitch: 0.9 + 0.2 * vary(n, 2) }));
   cues.push({ sound: 'ship/contact', take: 0, t: m.berth, gain: 0.9, pitch: 1 });
-  CLAMPS.forEach((d, k) => cues.push({ sound: 'ship/clamp', take: k, t: m.berth + d, gain: 0.7, pitch: 0.95 + 0.1 * vary(k, 3) }));
-  if (m.berth + SEAL < m.through) cues.push({ sound: 'ship/seal', take: 0, t: m.berth + SEAL, gain: 0.6, pitch: 1 });
+  CLAMP_CLUNKS.forEach((d, k) => cues.push({ sound: 'ship/clamp', take: k, t: m.berth + d, gain: 0.7, pitch: 0.95 + 0.1 * vary(k, 3) }));
+  if (m.berth + SEALED < m.through) cues.push({ sound: 'ship/seal', take: 0, t: m.berth + SEALED, gain: 0.6, pitch: 1 });
   cues.push({ sound: 'ship/airlock', take: 0, t: m.through + LOCK, gain: 0.55, pitch: 1 });
   cues.sort((a, b) => a.t - b.t);
   // The second line ends as the ship touches; the third comes once the passenger is in the bore.

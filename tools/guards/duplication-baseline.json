@@ -908,10 +908,6 @@
     "reason": "dispose() is the usual name for giving resources back."
   },
   {
-    "key": "same name: solarpolis/render/necklace.ts#dispose + solarpolis/render/traffic.ts#dispose",
-    "reason": "The ship traffic view (render/traffic.ts) has the views' own interface (follow each frame, dispose), like the streamed and necklace views, with a body of its own."
-  },
-  {
     "key": "same name: solarpolis/render/necklace.ts#dispose + solarpolis/render/vessel.ts#dispose",
     "reason": "Independent resource/view lifecycle owner. The ship delegates hull geometry and transforms to ShipMeshes/setPose; its room pools, atlas and visitor state must be accounted for and released by their own owner."
   },
@@ -2140,10 +2136,6 @@
     "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
   },
   {
-    "key": "same name: solarpolis/render/guardians.ts#dispose + solarpolis/render/traffic.ts#dispose",
-    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
-  },
-  {
     "key": "same name: solarpolis/render/guardians.ts#dispose + solarpolis/render/vessel.ts#dispose",
     "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
   },
@@ -2262,5 +2254,93 @@
   {
     "key": "idiom: [.w0 .w1] in solarpolis/gen/arrivalTerrace.ts + solarpolis/gen/welcomeSign.ts + solarpolis/main.ts",
     "reason": "A plan rectangle's sides across the ramp (w0, w1 of a StairPlatform or a sign's plan): the stair's own plan data, read where each thing is placed on it; the idiom crossed the finder's rarity bar when gen/welcomeSign.ts was added."
+  },
+  {
+    "key": "same name: solarpolis/app/voyageComputer.ts#bytes + solarpolis/render/dock.ts#bytes",
+    "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12); what it holds is its own (the dock: one clamp geometry all its clamps share)."
+  },
+  {
+    "key": "same name: solarpolis/render/boats.ts#follow + solarpolis/render/dock.ts#follow",
+    "reason": "Each view's per-frame update by its own clock and pose (the dock: its clamps posed and its lamps lit from the berth's state); the name is the views' convention, the bodies share nothing."
+  },
+  {
+    "key": "same name: solarpolis/render/capsules.ts#bytes + solarpolis/render/dock.ts#bytes",
+    "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12); what it holds is its own (the dock: one clamp geometry all its clamps share)."
+  },
+  {
+    "key": "same name: solarpolis/render/dock.ts#bytes + solarpolis/render/fliers.ts#bytes",
+    "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12); what it holds is its own (the dock: one clamp geometry all its clamps share)."
+  },
+  {
+    "key": "same name: solarpolis/render/dock.ts#bytes + solarpolis/render/glassDeck.ts#bytes",
+    "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12); what it holds is its own (the dock: one clamp geometry all its clamps share)."
+  },
+  {
+    "key": "same name: solarpolis/render/dock.ts#bytes + solarpolis/render/habitatLights.ts#bytes",
+    "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12); what it holds is its own (the dock: one clamp geometry all its clamps share)."
+  },
+  {
+    "key": "same name: solarpolis/render/dock.ts#bytes + solarpolis/render/homes.ts#bytes",
+    "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12); what it holds is its own (the dock: one clamp geometry all its clamps share)."
+  },
+  {
+    "key": "same name: solarpolis/render/dock.ts#bytes + solarpolis/render/landmarks.ts#bytes",
+    "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12); what it holds is its own (the dock: one clamp geometry all its clamps share)."
+  },
+  {
+    "key": "same name: solarpolis/render/dock.ts#bytes + solarpolis/render/notice.ts#bytes",
+    "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12); what it holds is its own (the dock: one clamp geometry all its clamps share)."
+  },
+  {
+    "key": "same name: solarpolis/render/dock.ts#bytes + solarpolis/render/solar.ts#bytes",
+    "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12); what it holds is its own (the dock: one clamp geometry all its clamps share)."
+  },
+  {
+    "key": "same name: solarpolis/render/dock.ts#bytes + solarpolis/render/specks.ts#bytes",
+    "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12); what it holds is its own (the dock: one clamp geometry all its clamps share)."
+  },
+  {
+    "key": "same name: solarpolis/render/dock.ts#bytes + solarpolis/space/solarSystem.ts#bytes",
+    "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12); what it holds is its own (the dock: one clamp geometry all its clamps share)."
+  },
+  {
+    "key": "same name: solarpolis/render/dock.ts#bytes + solarpolis/system/ledger.ts#bytes",
+    "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12); what it holds is its own (the dock: one clamp geometry all its clamps share)."
+  },
+  {
+    "key": "same name: solarpolis/render/dock.ts#bytes + solarpolis/talk/conversations.ts#bytes",
+    "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12); what it holds is its own (the dock: one clamp geometry all its clamps share)."
+  },
+  {
+    "key": "same name: solarpolis/render/dock.ts#follow + solarpolis/render/hullDetail.ts#follow",
+    "reason": "Each view's per-frame update by its own clock and pose (the dock: its clamps posed and its lamps lit from the berth's state); the name is the views' convention, the bodies share nothing."
+  },
+  {
+    "key": "same name: solarpolis/render/dock.ts#follow + solarpolis/render/landmarks.ts#follow",
+    "reason": "Each view's per-frame update by its own clock and pose (the dock: its clamps posed and its lamps lit from the berth's state); the name is the views' convention, the bodies share nothing."
+  },
+  {
+    "key": "same name: solarpolis/render/dock.ts#follow + solarpolis/render/necklace.ts#follow",
+    "reason": "Each view's per-frame update by its own clock and pose (the dock: its clamps posed and its lamps lit from the berth's state); the name is the views' convention, the bodies share nothing."
+  },
+  {
+    "key": "same name: solarpolis/render/dock.ts#follow + solarpolis/render/people.ts#follow",
+    "reason": "Each view's per-frame update by its own clock and pose (the dock: its clamps posed and its lamps lit from the berth's state); the name is the views' convention, the bodies share nothing."
+  },
+  {
+    "key": "same name: solarpolis/render/dock.ts#follow + solarpolis/render/plants.ts#follow",
+    "reason": "Each view's per-frame update by its own clock and pose (the dock: its clamps posed and its lamps lit from the berth's state); the name is the views' convention, the bodies share nothing."
+  },
+  {
+    "key": "same name: solarpolis/render/dock.ts#follow + solarpolis/render/terrain.ts#follow",
+    "reason": "Each view's per-frame update by its own clock and pose (the dock: its clamps posed and its lamps lit from the berth's state); the name is the views' convention, the bodies share nothing."
+  },
+  {
+    "key": "same name: solarpolis/render/dock.ts#follow + solarpolis/render/tiled.ts#follow",
+    "reason": "Each view's per-frame update by its own clock and pose (the dock: its clamps posed and its lamps lit from the berth's state); the name is the views' convention, the bodies share nothing."
+  },
+  {
+    "key": "same name: solarpolis/render/solar.ts#follow + solarpolis/render/traffic.ts#follow",
+    "reason": "Each view's per-frame update by its own clock and pose (the dock: its clamps posed and its lamps lit from the berth's state); the name is the views' convention, the bodies share nothing."
   }
 ]
