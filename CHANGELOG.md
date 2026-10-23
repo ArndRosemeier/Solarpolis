@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.165 — Screens share Actors' own textures
+
+- Glowing garments now share Actors' new screen-texture pool instead of our own copy of it. They look the same and cost as little.
+
 ## v0.164 — Clear capsule glass
 
 - A capsule's glass is clear now: it looked milky white from outside and was all but opaque from inside, so you could not see out on a ride.
