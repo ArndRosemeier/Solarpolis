@@ -95,6 +95,18 @@ for (const { name, params } of MATRIX) {
         assert.ok(Math.abs(now.heel) < spec.heel + 1e-9 && Number.isFinite(now.heading), 'upright enough');
         prev = now;
       }
+      // The wind's side holds through each leg (a gust on a run never throws the wing and crew across); it changes only
+      // going about, or on its drive. Followed closely through the first outing.
+      if (out === 1) {
+        const legAt = (u: number): number => { let k = 0; while (k + 1 < all.length && all[k + 1].t <= u - o.start) k++; return k; };
+        let was = boatAt(h, boat, o.start + 1), flips = 0;
+        for (let u = o.start + 4; u < o.end; u += 3) {
+          const now = boatAt(h, boat, u), k = legAt(u);
+          if (now.tack !== was.tack && !all[k].turning && !all[k].motoring && !all[k].spinning && legAt(u - 3) === k) flips++;
+          was = now;
+        }
+        assert.equal(flips, 0, `${boat.kind}: the wind side flipped ${flips} times within a leg`);
+      }
       // In its berth it lies bow out; at a buoy, head to wind.
       const moored = boatAt(h, boat, o.end + 60), lies = boat.harbour >= 0 ? boat.berthHeading : upwindOf(moored.wind);
       assert.ok(!moored.sailing && moored.speed === 0 && Math.abs(wrap(moored.heading - lies)) < 1e-9, 'lying at its berth or buoy');
