@@ -6,7 +6,7 @@ import type { Vec3 } from '../blueprint';
 import { Shape } from '../gen/shapes';
 import { personKey, type Person } from '../sim';
 import { tossAt } from '../sim/props';
-import { arraysGeometry, dropUploaded, freeMesh } from './geometry';
+import { arraysGeometry, dropUploaded, freeMesh, geometryBytes } from './geometry';
 import { PROP } from './materials';
 import type { Figure, AnimState } from './actors/figure';
 import { CMU } from './actors/animator';
@@ -56,9 +56,7 @@ export class ActivityProps {
   private make(kind: Kind, capacity: number): InstancedMesh {
     const geometry = geometryOf(kind), mesh = new InstancedMesh(geometry, PROP.material, capacity);
     mesh.name = `activity ${kind}`; mesh.frustumCulled = false; mesh.count = 0; mesh.castShadow = true;
-    let bytes = mesh.instanceMatrix.array.byteLength;
-    for (const a of Object.values(geometry.attributes)) bytes += a.array.byteLength;
-    bytes += geometry.index?.array.byteLength ?? 0;
+    const bytes = mesh.instanceMatrix.array.byteLength + geometryBytes(geometry);
     mesh.userData.propBytes = bytes;
     this.held += bytes;
     return mesh;

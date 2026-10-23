@@ -336,20 +336,12 @@
     "reason": "ActivityProps owns its mesh pool; conventional creation and disposal names operate on different resources. Mesh disposal uses freeMesh and shader preparation uses the Stage."
   },
   {
-    "key": "same name: solarpolis/render/activityProps.ts#make + solarpolis/render/tiled.ts#make",
-    "reason": "ActivityProps owns its mesh pool; conventional creation and disposal names operate on different resources. Mesh disposal uses freeMesh and shader preparation uses the Stage."
-  },
-  {
     "key": "same name: solarpolis/render/activityProps.ts#prepare + stage/stage.ts#prepare",
     "reason": "ActivityProps owns its small mesh pool; standard prepare, dispose and bytes lifecycle methods operate on different resources. Disposal uses the shared freeMesh seam."
   },
   {
     "key": "same name: solarpolis/render/activityProps.ts#update + solarpolis/render/homes.ts#update",
     "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; each view does its own work in each."
-  },
-  {
-    "key": "same name: solarpolis/render/actors/animal.ts#bytes + solarpolis/render/actors/figure.ts#bytes",
-    "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; the squirrels' view (render/animals.ts) and an animal's figure (render/actors/animal.ts) do their own work in each."
   },
   {
     "key": "same name: solarpolis/render/actors/animal.ts#bytes + solarpolis/render/fliers.ts#bytes",
@@ -2256,19 +2248,11 @@
     "reason": "Each view's per-frame update by its own clock and pose (the dock: its clamps posed and its lamps lit from the berth's state); the name is the views' convention, the bodies share nothing."
   },
   {
-    "key": "same name: solarpolis/render/capsules.ts#bytes + solarpolis/render/dock.ts#bytes",
-    "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12); what it holds is its own (the dock: one clamp geometry all its clamps share)."
-  },
-  {
     "key": "same name: solarpolis/render/dock.ts#bytes + solarpolis/render/fliers.ts#bytes",
     "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12); what it holds is its own (the dock: one clamp geometry all its clamps share)."
   },
   {
     "key": "same name: solarpolis/render/dock.ts#bytes + solarpolis/render/glassDeck.ts#bytes",
-    "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12); what it holds is its own (the dock: one clamp geometry all its clamps share)."
-  },
-  {
-    "key": "same name: solarpolis/render/dock.ts#bytes + solarpolis/render/habitatLights.ts#bytes",
     "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12); what it holds is its own (the dock: one clamp geometry all its clamps share)."
   },
   {
@@ -2280,23 +2264,11 @@
     "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12); what it holds is its own (the dock: one clamp geometry all its clamps share)."
   },
   {
-    "key": "same name: solarpolis/render/dock.ts#bytes + solarpolis/render/notice.ts#bytes",
-    "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12); what it holds is its own (the dock: one clamp geometry all its clamps share)."
-  },
-  {
-    "key": "same name: solarpolis/render/dock.ts#bytes + solarpolis/render/solar.ts#bytes",
-    "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12); what it holds is its own (the dock: one clamp geometry all its clamps share)."
-  },
-  {
     "key": "same name: solarpolis/render/dock.ts#bytes + solarpolis/render/specks.ts#bytes",
     "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12); what it holds is its own (the dock: one clamp geometry all its clamps share)."
   },
   {
     "key": "same name: solarpolis/render/dock.ts#bytes + solarpolis/space/solarSystem.ts#bytes",
-    "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12); what it holds is its own (the dock: one clamp geometry all its clamps share)."
-  },
-  {
-    "key": "same name: solarpolis/render/dock.ts#bytes + solarpolis/system/ledger.ts#bytes",
     "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12); what it holds is its own (the dock: one clamp geometry all its clamps share)."
   },
   {
@@ -2338,5 +2310,37 @@
   {
     "key": "idiom: [.eye .profile] in solarpolis/render/animals.ts + solarpolis/render/birds.ts + solarpolis/render/homes.ts",
     "reason": "`fromWorld(h.profile, ...eye)` is the one way (blueprint) to find where the eye stands in the habitat; each view then does its own thing there. Surfaced only because new files shifted the guard's word weights."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/figure.ts#bytes + solarpolis/render/dock.ts#bytes",
+    "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12), each counting what is its own; the counting itself is `geometryBytes` (render/geometry.ts)."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/figure.ts#bytes + solarpolis/render/fliers.ts#bytes",
+    "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12), each counting what is its own; the counting itself is `geometryBytes` (render/geometry.ts)."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/figure.ts#bytes + solarpolis/render/glassDeck.ts#bytes",
+    "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12), each counting what is its own; the counting itself is `geometryBytes` (render/geometry.ts)."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/figure.ts#bytes + solarpolis/render/homes.ts#bytes",
+    "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12), each counting what is its own; the counting itself is `geometryBytes` (render/geometry.ts)."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/figure.ts#bytes + solarpolis/render/landmarks.ts#bytes",
+    "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12), each counting what is its own; the counting itself is `geometryBytes` (render/geometry.ts)."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/figure.ts#bytes + solarpolis/space/solarSystem.ts#bytes",
+    "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12), each counting what is its own; the counting itself is `geometryBytes` (render/geometry.ts)."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/figure.ts#bytes + solarpolis/talk/conversations.ts#bytes",
+    "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12), each counting what is its own; the counting itself is `geometryBytes` (render/geometry.ts)."
+  },
+  {
+    "key": "same name: solarpolis/render/dock.ts#follow + solarpolis/render/traffic.ts#follow",
+    "reason": "Each view's per-frame update by its own clock and pose (the dock: its clamps posed and its lamps lit from the berth's state); the name is the views' convention, the bodies share nothing."
   }
 ]

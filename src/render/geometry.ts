@@ -121,6 +121,13 @@ export function freeMesh(mesh: Mesh, owned: Owned = 'all'): void {
   mesh.dispose();
 }
 
+/** The bytes a geometry's arrays hold: its attributes and its index (the memory watchdog's count of what it uploads). */
+export function geometryBytes(g: BufferGeometry): number {
+  let n = (g.index?.array as ArrayBufferView | undefined)?.byteLength ?? 0;
+  for (const a of Object.values(g.attributes)) n += (a.array as ArrayBufferView).byteLength;
+  return n;
+}
+
 /** What the renderer has put on the GPU (its own bookkeeping, `info.memoryMap`, three r186), if it keeps it. */
 const uploadedOf = (renderer: Stage['renderer']): WeakMap<object, unknown> | undefined => (renderer.info as unknown as { memoryMap?: WeakMap<object, unknown> }).memoryMap;
 

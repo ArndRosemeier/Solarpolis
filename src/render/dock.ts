@@ -1,16 +1,17 @@
 /**
  * The berths' moving parts (space/dock.ts) in the scene: each collar's clamps, posed every frame from the dock's state
- * (open, swinging shut on a ship's nose one after another, opening before it leaves), and its signal ring and
- * floodlights as lamps (render/lamps.ts). The collars and the clamps' housings are the spindle's (render/hull.ts). Every
+ * (open, swinging shut on a ship's nose one after another, opening before it leaves); its signal ring as lit panels on
+ * the collar's face (LAMP, their colours written each frame) and, with the floodlights, as lamps (render/lamps.ts).
+ * A bright lamp's point burns white at its heart; the panels are what show the ring amber or green. The collars and the clamps' housings are the spindle's (render/hull.ts). Every
  * clamp draws one shared geometry (HARDWARE), posed in the spindle's frame.
  */
 import { Mesh, type BufferGeometry } from 'three/webgpu';
 import type { Stage } from '@futuremagic/stage';
 import { v3add, v3scale, type Vec3 } from '@futuremagic/core';
 import type { Habitat } from '../blueprint';
-import { CLAMPS, DOCK, SIGNALS, apply, berthDockOf, clampPose, closedSwing, dockAt, dockLightsAt, dockShows, mul, transpose, type Berth, type Mat3, type ShipNow, type ShipShape, type Visit } from '../space';
-import { ShapeBuilder, axesOf, freeMesh, posedMesh, setPose, type RGB } from './geometry';
-import { HARDWARE } from './materials';
+import { CLAMPS, DOCK, SIGNALS, apply, berthDockOf, clampPose, closedSwing, dockAt, dockLightsAt, dockShows, mul, shineAt, signalBlink, signalColour, transpose, type Berth, type DockNow, type Mat3, type ShipNow, type ShipShape, type Visit } from '../space';
+import { ShapeBuilder, axesOf, freeMesh, geometryBytes, meshGeometry, posedMesh, setPose, type RGB } from './geometry';
+import { HARDWARE, LAMP } from './materials';
 import { LampPoints } from './lamps';
 
 /** The clamps' paint, their jaws' pads, their knuckles. */
@@ -31,10 +32,29 @@ function clampGeometry(w: number): BufferGeometry {
   return b.build();
 }
 
+/** Each signal's panel on a collar's face, relative to its middle (spindle axes): a quad each, facing out along the arm. */
+function signalGeometry(b: Berth): BufferGeometry {
+  const n = SIGNALS.lights, p = SIGNALS.panel, rc = DOCK.ring * b.width, half = (Math.PI / n) * p.arc, proud = 0.004 * b.width;
+  const pos = new Float32Array(n * 12), idx = new Uint32Array(n * 6);
+  const panelCorner = (j: number, da: number, r: number): Vec3 => {
+    const a = (j / n) * 2 * Math.PI + da, R = b.radial, around: Vec3 = [-R[1], R[0], 0];
+    return v3add(v3scale(R, proud), v3add(v3scale(around, Math.cos(a) * r), [0, 0, Math.sin(a) * r]));
+  };
+  for (let j = 0; j < n; j++) {
+    // Counter-clockwise seen from out along the arm (around × axial is the arm's way out).
+    const corners = [panelCorner(j, -half, p.inner * rc), panelCorner(j, -half, p.outer * rc), panelCorner(j, half, p.outer * rc), panelCorner(j, half, p.inner * rc)];
+    corners.forEach((c, k) => pos.set(c, j * 12 + k * 3));
+    idx.set([0, 1, 2, 0, 2, 3].map((k) => j * 4 + k), j * 6);
+  }
+  return meshGeometry(idx, { position: [pos, 3], color: [new Float32Array(n * 12), 3] });
+}
+
 export class DockView {
   private readonly berths: Berth[];
   private readonly geometry: BufferGeometry;
   private readonly clamps: Mesh[] = [];
+  /** Each berth's signal panels. */
+  private readonly signals: Mesh[];
   private readonly lamps: LampPoints;
   /** Each visit's clamps' closed swing (its ship's nose), while it is at the port. */
   private readonly closed = new Map<string, number>();
@@ -48,11 +68,16 @@ export class DockView {
       m.frustumCulled = false;
       this.clamps.push(m);
     }
+    this.signals = this.berths.map((b, i) => {
+      const m = posedMesh(signalGeometry(b), LAMP.material, `${name} berth ${i} signals`);
+      m.frustumCulled = false;
+      return m;
+    });
     this.lamps = new LampPoints(arms * (SIGNALS.lights + CLAMPS), `${name} dock lights`);
   }
 
   async enter(stage: Stage): Promise<void> {
-    await Promise.all([...this.clamps.map((m) => stage.add(m)), this.lamps.enter(stage)]);
+    await Promise.all([...this.clamps.map((m) => stage.add(m)), ...this.signals.map((m) => stage.add(m)), this.lamps.enter(stage)]);
   }
 
   /**
@@ -71,6 +96,8 @@ export class DockView {
         this.closed.set(visit.id, closed);
       }
       const now = dockAt(this.h, visit, closed, t), shows = dockShows(b, eye, pixelsPerRadian);
+      this.lightSignals(this.signals[i], now, t, shows);
+      if (shows) setPose(this.signals[i], spindleAxes, v3add(origin, apply(spindleAxes, b.collar)));
       for (let k = 0; k < CLAMPS; k++) {
         const m = this.clamps[i * CLAMPS + k];
         m.visible = shows;
@@ -84,16 +111,31 @@ export class DockView {
     this.lamps.send();
   }
 
-  /** The bytes the clamps' one geometry holds. */
+  /** Colour a berth's signal panels for its state at clock time t (written only when they change). */
+  private lightSignals(m: Mesh, now: DockNow, t: number, shows: boolean): void {
+    m.visible = shows && now.signal !== 'idle';
+    if (!m.visible) return;
+    const colour = signalColour(now)!, a = m.geometry.getAttribute('color'), c = a.array as Float32Array, g = SIGNALS.panel.glow;
+    let changed = false;
+    for (let j = 0; j < SIGNALS.lights; j++) {
+      const lit = shineAt(signalBlink(now, j), t) * g;
+      for (let k = 0; k < 4; k++) for (let ch = 0; ch < 3; ch++) {
+        const v = colour[ch] * lit, at = j * 12 + k * 3 + ch;
+        if (c[at] !== v) { c[at] = v; changed = true; }
+      }
+    }
+    if (changed) a.needsUpdate = true;
+  }
+
+  /** The bytes the clamps' one geometry and the signal panels hold. */
   bytes(): number {
-    let n = this.geometry.index?.array.byteLength ?? 0;
-    for (const a of Object.values(this.geometry.attributes)) n += a.array.byteLength;
-    return n;
+    return [this.geometry, ...this.signals.map((m) => m.geometry)].reduce((n, g) => n + geometryBytes(g), 0);
   }
 
   leave(stage: Stage): void {
     // They share one geometry: the last one gives it up.
     this.clamps.forEach((m, k) => { stage.remove(m); freeMesh(m, k === this.clamps.length - 1 ? 'all' : 'none'); });
+    for (const m of this.signals) { stage.remove(m); freeMesh(m); }
     this.lamps.leave(stage);
   }
 }

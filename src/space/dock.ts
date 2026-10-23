@@ -7,7 +7,7 @@
  *   nose (`closedSwing`: as far as that ship's own shape lets it, so a slim sail ship's nose is gripped further in than
  *   a torch ship's broad one), one after another, each ending in the clunk the arrival's score plays (`CLAMP_CLUNKS`).
  *   Before a ship leaves they open again, the last closed first.
- * - A ring of SIGNALS lamps round the collar's face: dark while the berth is idle, amber running round the ring while a
+ * - A ring of SIGNALS round the collar's face (lit panels, and a lamp at each for the eye far off): dark while the berth is idle, amber running round the ring while a
  *   ship comes in or goes out (from its turn at the stand-off), steady amber from contact, green once every clamp is
  *   home and the seal holds (`SEALED`), amber again as it lets go.
  * - FLOODS: a floodlight on each clamp's housing, aimed out along the arm at the final approach, on while the berth has
@@ -55,8 +55,13 @@ export const SEALED = 2.85;
 /** Seconds before a ship leaves its berth that the lights turn amber again; the clamps open in the time after. */
 export const RELEASE = 4;
 
-/** The ring of signal lamps: how many, how bright (cd), how fast the amber runs round it (s a turn). */
-export const SIGNALS = { lights: 8, candela: 1500, turn: 1.6 } as const;
+/**
+ * The ring of signals round the collar's face: how many, how bright each one's lamp is (cd: dim enough that a point of
+ * it keeps its colour from afar), how fast the amber runs round it (s a turn), and each one's lit panel on the face (as
+ * shares of the ring's radius in and out, of its share of the way round, and its luminance, relative to white paper in
+ * full sunlight: bright, and still amber or green, not white).
+ */
+export const SIGNALS = { lights: 8, candela: 200, turn: 1.6, panel: { inner: 0.75, outer: 0.95, arc: 0.55, glow: 1.1 } } as const;
 /** The floodlights: on-axis intensity (cd), and the power of the cosine their intensity falls off with off the axis. */
 export const FLOODS = { candela: 200_000, power: 4 } as const;
 
@@ -188,6 +193,22 @@ export function dockAt(h: Habitat, visit: Visit | null, closed: number, t: numbe
 
 const STEADY: Blink = { period: 0, on: 0, phase: 0 };
 
+/** Signal j's flashing at a berth's state: in turn round the ring while a ship comes or goes, else steady. */
+export function signalBlink(now: DockNow, j: number): Blink {
+  return now.signal === 'approach' ? { period: SIGNALS.turn, on: (SIGNALS.turn / SIGNALS.lights) * 1.5, phase: (j * SIGNALS.turn) / SIGNALS.lights } : STEADY;
+}
+
+/** The signals' colour at a berth's state (luminance 1), or null while it is idle and they are dark. */
+export function signalColour(now: DockNow): Vec3 | null {
+  return now.signal === 'idle' ? null : now.signal === 'latched' ? LIGHT_COLOUR.green : LIGHT_COLOUR.amber;
+}
+
+/** Signal j's direction out from the arm's axis (unit), its middle's angle round from the arm's side. */
+export function signalSpoke(b: Berth, j: number): Vec3 {
+  const R = b.radial, a = (j / SIGNALS.lights) * 2 * Math.PI;
+  return v3add(v3scale([-R[1], R[0], 0], Math.cos(a)), v3scale([0, 0, 1], Math.sin(a)));
+}
+
 /**
  * The berth's lamps as the eye sees them at its state (the eye in the spindle's frame): the signal ring and the
  * floodlights, each's intensity already turned for the eye's direction (the signals face out of the collar's rim and
@@ -196,16 +217,15 @@ const STEADY: Blink = { period: 0, on: 0, phase: 0 };
 export function dockLightsAt(b: Berth, now: DockNow, eye: Vec3): HullLight[] {
   const out: HullLight[] = [], w = b.width, R = b.radial;
   const cosTo = (at: Vec3, n: Vec3): number => v3dot(v3norm(v3sub(eye, at)), n);
-  if (now.signal !== 'idle') {
-    const around: Vec3 = [-R[1], R[0], 0], axial: Vec3 = [0, 0, 1], colour = now.signal === 'latched' ? LIGHT_COLOUR.green : LIGHT_COLOUR.amber;
+  const colour = signalColour(now);
+  if (colour) {
     for (let j = 0; j < SIGNALS.lights; j++) {
-      const a = (j / SIGNALS.lights) * 2 * Math.PI, P = v3add(v3scale(around, Math.cos(a)), v3scale(axial, Math.sin(a)));
+      const P = signalSpoke(b, j);
       // On the edge between the face and the rim, seen from in front of the collar and from round its side.
       const at = v3add(b.collar, v3add(v3scale(P, DOCK.ring * w), v3scale(R, -0.01 * w))), n = v3norm(v3add(P, R));
       const facing = Math.max(0, cosTo(at, n) + 0.3) / 1.3;
       if (facing <= 0) continue;
-      const blink: Blink = now.signal === 'approach' ? { period: SIGNALS.turn, on: SIGNALS.turn / SIGNALS.lights * 1.5, phase: (j * SIGNALS.turn) / SIGNALS.lights } : STEADY;
-      out.push({ frame: 'spindle', at, colour, candela: SIGNALS.candela * facing, blink });
+      out.push({ frame: 'spindle', at, colour, candela: SIGNALS.candela * facing, blink: signalBlink(now, j) });
     }
   }
   if (now.flood) {

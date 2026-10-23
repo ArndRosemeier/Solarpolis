@@ -247,7 +247,7 @@ Canon (Arnd, 2026-10-23): every citizen has a neural link and a visual overlay, 
 
 | Question | The one way |
 |---|---|
-| How do I report memory I hold, or give it back under pressure? | `memory.track(owner, bytes)`, `memory.onPressure('soft' \| 'hard', shed)` (`memory.ts`). Only `browserHeap` reads `performance.memory`. Who holds the heap: a heap snapshot on the render PC (`heapStep` in `scripts/shots/heap.mjs`, views `memory-inside`, `memory-title`). |
+| How do I report memory I hold, or give it back under pressure? | `memory.track(owner, bytes)`, `memory.onPressure('soft' \| 'hard', shed)` (`memory.ts`). A geometry's bytes are `geometryBytes(g)` (`render/geometry.ts`). Only `browserHeap` reads `performance.memory`. Who holds the heap: a heap snapshot on the render PC (`heapStep` in `scripts/shots/heap.mjs`, views `memory-inside`, `memory-title`). |
 | Where do developer tools go? | The debug menu: `debug.add`, `debug.addInfo` (`debug.ts`, made in `main.ts`). Its Copy button puts the info block on the clipboard (`infoText()`). |
 | What version is this, and what changed? | `VERSION`, `whatsNewButton` (`whatsNew.ts`), from `CHANGELOG.md` (`changelog.ts`). |
 | How do habitat parameters go into and out of a URL? | `habitatFromUrl`, `habitatToUrl`, `URL_FIELDS` (`params.ts`). |
