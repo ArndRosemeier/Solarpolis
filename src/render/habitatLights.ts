@@ -27,6 +27,7 @@ import { STARS } from './materials';
 import { dropUploaded, freeMesh, pointsChanged, pointsGeometry, setPoint } from './geometry';
 import { STAR_SIGMA } from './exposure';
 import { toScreen } from './screen';
+import { pickMarks } from '../link';
 import './habitats.css';
 
 /** At most this many habitats lit at once (the points' buffer). */
@@ -249,18 +250,11 @@ export class HabitatLights {
    * Names beside the brightest points on screen (the bible's polities first), as the stars' exposure shows them:
    * `exposure` and `pixelSolidAngle` as the STARS shader has them; `show` false hides them all.
    */
-  label(camera: Camera, width: number, height: number, exposure: number, pixelSolidAngle: number, show: boolean): void {
+  writeNames(camera: Camera, width: number, height: number, exposure: number, pixelSolidAngle: number, show: boolean): void {
     const peakOf = (l: Lit): number => brightness(l.flux) * Math.PI / (2 * Math.PI * STAR_SIGMA * STAR_SIGMA) / pixelSolidAngle * exposure;
-    const chosen: { l: Lit; at: [number, number] }[] = [];
-    if (show && this.naming) {
-      const bright = this.lit.filter((l) => l.shown && peakOf(l) >= NAMED_PEAK).sort((a, b) => Number(b.kept) - Number(a.kept) || peakOf(b) - peakOf(a));
-      for (const l of bright) {
-        if (chosen.length >= MOST_NAMED) break;
-        const at = toScreen(camera, v3scale(l.dir, l.distance * this.far / (this.far + l.distance)), width, height);
-        if (!at || chosen.some((c) => Math.abs(c.at[0] - at[0]) < NAMES_APART[0] && Math.abs(c.at[1] - at[1]) < NAMES_APART[1])) continue;
-        chosen.push({ l, at });
-      }
-    }
+    const bright = show && this.naming ? this.lit.filter((l) => l.shown && peakOf(l) >= NAMED_PEAK).sort((a, b) => Number(b.kept) - Number(a.kept) || peakOf(b) - peakOf(a)) : [];
+    const chosen = pickMarks(bright, (l) => toScreen(camera, v3scale(l.dir, l.distance * this.far / (this.far + l.distance)), width, height), MOST_NAMED, NAMES_APART)
+      .map(({ item, at }) => ({ l: item, at }));
     while (this.names.children.length < chosen.length) this.names.append(document.createElement('span'));
     Array.from(this.names.children).forEach((el, i) => {
       const c = chosen[i], span = el as HTMLElement;

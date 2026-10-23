@@ -1930,5 +1930,21 @@
   {
     "key": "idiom: [.delete .keys .next .value] in solarpolis/sim/flocks.ts + solarpolis/sim/herds.ts + solarpolis/sim/neighbourhood.ts + solarpolis/system/ledger.ts",
     "reason": "The Map-as-LRU eviction one-liner (oldest key out); each cache holds different records with its own byte budget."
+  },
+  {
+    "key": "idiom: [.distance .sort] in solarpolis/app/voyageComputer.ts + solarpolis/render/outside.ts + solarpolis/render/talk.ts",
+    "reason": "Surfaced only because new files raised the idiom finder's file count (its information weights grow with it), not by a new copy: each sorts its own things (destinations, bodies in view, talking parties) nearest first, a one-line comparator a seam would only hide."
+  },
+  {
+    "key": "idiom: [.level .pow Math] in solarpolis/gen/detailTree.ts + solarpolis/gen/liftStairMesh.ts + solarpolis/gen/siteTiles.ts",
+    "reason": "Surfaced only because new files raised the idiom finder's file count (its information weights grow with it), not by a new copy: each part halves its own cell size per detail level from its own root size, the detail tree's rule written where the part's grid is."
+  },
+  {
+    "key": "idiom: [.level .pow Math] in solarpolis/gen/detailTree.ts + solarpolis/gen/liftStairMesh.ts + solarpolis/gen/siteTiles.ts + solarpolis/gen/underMesh.ts",
+    "reason": "Surfaced only because new files raised the idiom finder's file count (its information weights grow with it), not by a new copy: each part halves its own cell size per detail level from its own root size, the detail tree's rule written where the part's grid is."
+  },
+  {
+    "key": "idiom: [.level .pow Math] in solarpolis/gen/hullDetail.ts + solarpolis/gen/liftStairMesh.ts + solarpolis/gen/underMesh.ts",
+    "reason": "Surfaced only because new files raised the idiom finder's file count (its information weights grow with it), not by a new copy: each part halves its own cell size per detail level from its own root size, the detail tree's rule written where the part's grid is."
   }
 ]

@@ -1,0 +1,93 @@
+/*
+ * The neural link's overlay (app/link/link.ts). A thousand years on, the overlay is calm: thin warm-white type on a
+ * little smoked glass, one cool mint for what the link itself points at, nothing that blinks. It sits over the 3D view
+ * and never takes the mouse except on its own sigil, panel and cards.
+ */
+.link {
+  --link: #9de9cd;
+  --link-ink: #eef6f2;
+  --link-quiet: #a9bdb6;
+  --link-glass: #0b1a1ad9;
+  --link-edge: #9de9cd40;
+  position: absolute; inset: 0; pointer-events: none; z-index: 8;
+  color: var(--link-ink); font-size: 13px; letter-spacing: 0.01em;
+}
+.link [hidden] { display: none !important; }
+
+/* The sigil: a thin ring in the corner that opens the link (Tab). */
+.link-sigil {
+  position: absolute; left: 14px; top: 12px; pointer-events: auto; display: flex; align-items: center; gap: 7px;
+  padding: 4px 9px 4px 5px; border-radius: 16px; border: 1px solid transparent; background: #0b1a1a55; cursor: pointer;
+  color: var(--link-quiet); transition: background .2s, border-color .2s, color .2s;
+}
+.link-sigil:hover, .link-sigil:focus-visible, .link.open .link-sigil { border-color: var(--link-edge); background: var(--link-glass); color: var(--link-ink); }
+.link-sigil-ring { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--link); box-shadow: 0 0 8px #9de9cd66, inset 0 0 4px #9de9cd55; }
+.link-sigil-key { font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; }
+
+/* Whispered lines: under the sigil, fading out. */
+.link-lines { position: absolute; left: 16px; top: 50px; display: flex; flex-direction: column; gap: 6px; max-width: min(420px, calc(100% - 32px)); }
+.link-line {
+  margin: 0; padding: 6px 12px 7px; border-left: 2px solid var(--link); background: linear-gradient(90deg, var(--link-glass), #0b1a1a66 80%, transparent);
+  text-shadow: 0 1px 2px #000a; animation: link-in .5s ease-out; transition: opacity 1.4s;
+}
+.link-line.fading { opacity: 0; }
+.link-from { display: block; font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--link); }
+.link-text { font-size: 14px; }
+@keyframes link-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+/* The panel: what every system offers here and now, or one offer's list. */
+.link-panel {
+  position: absolute; left: 14px; top: 50px; width: min(380px, calc(100% - 28px)); max-height: min(70vh, calc(100% - 70px));
+  display: flex; flex-direction: column; pointer-events: auto; border-radius: 12px; border: 1px solid var(--link-edge);
+  background: var(--link-glass); backdrop-filter: blur(12px); box-shadow: 0 10px 40px #0008; animation: link-in .25s ease-out;
+}
+.link-body { display: flex; flex-direction: column; min-height: 0; overflow: auto; padding: 10px 12px 12px; }
+.link-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.link-eyebrow { flex: 1; font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--link); }
+.link-close, .link-back { background: none; border: none; padding: 0 6px; font-size: 20px; line-height: 1; color: var(--link-quiet); cursor: pointer; }
+.link-close:hover, .link-back:hover { color: var(--link-ink); }
+.link-service + .link-service { margin-top: 8px; }
+.link-service-title, .link-group { margin: 8px 0 4px; font-size: 10.5px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--link-quiet); }
+.link-offer, .link-choice {
+  display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 0 10px; width: 100%; text-align: left;
+  padding: 8px 10px; border-radius: 8px; border: 1px solid transparent; background: none; color: var(--link-ink); cursor: pointer;
+}
+.link-offer:hover, .link-offer:focus-visible, .link-choice.on { border-color: var(--link-edge); background: #9de9cd14; }
+.link-offer-title { font-size: 14px; }
+.link-offer-detail { grid-column: 1; font-size: 12px; color: var(--link-quiet); }
+.link-offer-more { grid-column: 2; grid-row: 1 / span 2; align-self: center; color: var(--link); font-size: 18px; }
+.link-choice .link-offer-detail { grid-column: 2; grid-row: 1; }
+.link-search {
+  margin: 2px 0 6px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--link-edge); background: #0006;
+  color: var(--link-ink); font: inherit; font-size: 14px; outline: none;
+}
+.link-search:focus { border-color: var(--link); }
+.link-choices { display: flex; flex-direction: column; }
+.link-empty { margin: 8px 2px; color: var(--link-quiet); font-style: italic; }
+
+/* Live work: a card per system doing something for the player (a capsule coming), top right. */
+.link-cards { position: absolute; right: 16px; top: 12px; display: flex; flex-direction: column; gap: 8px; width: min(280px, calc(100% - 32px)); }
+.link-card {
+  display: flex; flex-direction: column; gap: 2px; padding: 9px 12px 10px; pointer-events: auto; border-radius: 10px;
+  border: 1px solid var(--link-edge); background: var(--link-glass); backdrop-filter: blur(10px); animation: link-in .4s ease-out;
+}
+.link-card-title { font-size: 14px; font-weight: 500; }
+.link-card-detail { font-size: 12px; color: var(--link-quiet); }
+.link-card-track { height: 3px; margin-top: 5px; border-radius: 2px; background: #ffffff1a; overflow: hidden; }
+.link-card-bar { display: block; height: 100%; background: var(--link); transition: width .3s linear; }
+.link-card-cancel { align-self: flex-end; margin-top: 4px; background: none; border: 1px solid #ffffff2a; border-radius: 6px; padding: 2px 9px; font-size: 11.5px; color: var(--link-quiet); cursor: pointer; }
+.link-card-cancel:hover { color: var(--link-ink); border-color: var(--link-quiet); }
+
+/* A mark in the world: a ring on the point, its words beside it. */
+.link-marks { position: absolute; inset: 0; overflow: hidden; }
+.link-mark { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 7px; white-space: nowrap; text-shadow: 0 1px 3px #000c; }
+.link-mark-ring { width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; border: 1.5px solid var(--link); box-shadow: 0 0 10px #9de9cd88; }
+.link-mark-text { margin-top: -7px; font-size: 12.5px; color: var(--link-ink); }
+/* Off screen: the ring becomes an arrow at the edge, pointing the way to turn. */
+.link-mark.edge .link-mark-ring { border-radius: 0; border: none; box-shadow: none; width: 0; height: 0; margin: -8px 0 0 -6px; border-left: 14px solid var(--link); border-top: 8px solid transparent; border-bottom: 8px solid transparent; filter: drop-shadow(0 0 4px #9de9cd99); }
+.link-mark.edge.flip { flex-direction: row-reverse; }
+.link-mark.edge.flip .link-mark-text { position: absolute; right: 14px; }
+
+@media (max-width: 640px) {
+  .link-cards { top: auto; bottom: 120px; }
+}
