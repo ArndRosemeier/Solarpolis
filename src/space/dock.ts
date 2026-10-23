@@ -59,9 +59,9 @@ export const RELEASE = 4;
  * The ring of signals round the collar's face: how many, how bright each one's lamp is (cd: dim enough that a point of
  * it keeps its colour from afar), how fast the amber runs round it (s a turn), and each one's lit panel on the face (as
  * shares of the ring's radius in and out, of its share of the way round, and its luminance, relative to white paper in
- * full sunlight: bright, and still amber or green, not white).
+ * full sunlight: as bright as the sunlit plate round them, and still amber or green, not washed out to white).
  */
-export const SIGNALS = { lights: 8, candela: 200, turn: 1.6, panel: { inner: 0.75, outer: 0.95, arc: 0.55, glow: 1.1 } } as const;
+export const SIGNALS = { lights: 8, candela: 200, turn: 1.6, panel: { inner: 0.75, outer: 0.95, arc: 0.55, glow: 0.45 } } as const;
 /** The floodlights: on-axis intensity (cd), and the power of the cosine their intensity falls off with off the axis. */
 export const FLOODS = { candela: 200_000, power: 4 } as const;
 
