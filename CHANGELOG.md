@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.133 — A new title theme
+
+- The title screen now plays the synth-and-strings theme: a rising arpeggio that opens like a sunrise.
+
 ## v0.132 — The land can be heard
 
 - Sound, starting with your first click: wind, leaves and grass, rivers, the lake and the falls, birds, bees and crickets, each where it really is on the land. The dawn chorus rolls along the cylinder with the light.
