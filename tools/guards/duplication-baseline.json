@@ -1930,5 +1930,17 @@
   {
     "key": "idiom: [.delete .keys .next .value] in solarpolis/sim/flocks.ts + solarpolis/sim/herds.ts + solarpolis/sim/neighbourhood.ts + solarpolis/system/ledger.ts",
     "reason": "The Map-as-LRU eviction one-liner (oldest key out); each cache holds different records with its own byte budget."
+  },
+  {
+    "key": "idiom: [.level .pow Math] in solarpolis/gen/detailTree.ts + solarpolis/gen/liftStairMesh.ts + solarpolis/gen/siteTiles.ts",
+    "reason": "Pre-existing per-level size halving in the gen mesh builders, resurfaced by word weights when the whole-system files were added; each sizes a different structure."
+  },
+  {
+    "key": "idiom: [.level .pow Math] in solarpolis/gen/detailTree.ts + solarpolis/gen/liftStairMesh.ts + solarpolis/gen/siteTiles.ts + solarpolis/gen/underMesh.ts",
+    "reason": "Pre-existing per-level size halving in the gen mesh builders, resurfaced by word weights when the whole-system files were added; each sizes a different structure."
+  },
+  {
+    "key": "idiom: [.level .pow Math] in solarpolis/gen/hullDetail.ts + solarpolis/gen/liftStairMesh.ts + solarpolis/gen/underMesh.ts",
+    "reason": "Pre-existing per-level size halving in the gen mesh builders, resurfaced by word weights when the whole-system files were added; each sizes a different structure."
   }
 ]

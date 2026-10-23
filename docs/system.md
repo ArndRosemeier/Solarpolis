@@ -45,6 +45,12 @@ Residents talk about a piece of news only once its light has reached their habit
 
 Everybody has a neural link with a visual overlay, as common as phones today (Arnd, 2026-10-23, canon). The names beside the habitats' points are what the overlay shows. So is the Habitats part of the Solar system panel, with each polity's light time to home. The same overlay is how later steps show what is going on without telling: a voyage's news catching up, an array's window, a ship passing.
 
+## Visiting another habitat (a proof of concept)
+
+The Habitats panel tells, for the habitat chosen, how far it is from where you are and how long the trip would take by sail, by coasting torch ship and in a hurry (`tripsTo`, `TravelParams`: about two months, a week or two days to Mars; nine months, three months or eight days to Saturn). Visit takes you there at once and you step out on its arrival terrace: the sample habitat at that habitat's size, with its own seed, Mind and people (`blueprintOf`), its news heard with its own light-lag. Clicking a name in view chooses it. Return home goes back. The Outside view stays at home for now.
+
+In the game it will not be this easy (Arnd, 2026-10-23): you find a ship going your way, or have one, or a friend has one, and ships are often people with one or more avatars. The trip times are what such a voyage takes; S5 lives them.
+
 ## Next
 
-The plan's order after this step: a second habitat form drawn near (S3), arrays and sail traffic (S4), voyages lived with the speed hierarchy (sails, coasting torch ships, a full burn only in a hurry) and long voluntary sleep instead of hibernation (S5), law and money (S6), the bible's situations (S7), named places (S8).
+Other habitat forms are parked (Arnd, 2026-10-23): until something is playable, every habitat is drawn and entered as the sample cylinder, sized from its record; the ledger keeps each one's form for later. The plan's order after this step, without S3 (a second form): arrays and sail traffic (S4), voyages lived with the speed hierarchy (sails, coasting torch ships, a full burn only in a hurry) and long voluntary sleep instead of hibernation (S5), law and money (S6), the bible's situations (S7), named places (S8).

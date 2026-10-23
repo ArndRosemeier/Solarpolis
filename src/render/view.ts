@@ -50,6 +50,7 @@ import { SpeckView, type Measured } from './specks';
 import { FlierView } from './fliers';
 import { BoatView } from './boats';
 import { TalkView, type Bubble } from './talk';
+import type { Whereabouts } from '../system';
 import { AnimalView, DEER, SQUIRRELS } from './animals';
 import { BirdView } from './birds';
 import { CabinView } from './lift';
@@ -143,6 +144,8 @@ export class InteriorView {
   private drones: FlierView | null = null;
   /** Who says what in the parties near the eye: the speech bubbles (render/talk.ts). */
   private talk: TalkView | null = null;
+  /** Where the player is in the system (a visit, docs/system.md); null at home. Set before `setHabitat`. */
+  whereabouts: Whereabouts | null = null;
   /** A resident's measured size and colours for the far specks (their look's, or their drone body's), once known. */
   private readonly measured: Measured = (id, design) => {
     if (design >= 0) return this.drones?.measured(design) ?? null;
@@ -226,8 +229,9 @@ export class InteriorView {
   }
 
   /** Make the view: throws `GraphicsUnavailable` where the browser has no WebGPU (the caller shows why). */
-  static async create(habitat: Habitat): Promise<InteriorView> {
+  static async create(habitat: Habitat, whereabouts: Whereabouts | null = null): Promise<InteriorView> {
     const v = new InteriorView(habitat);
+    v.whereabouts = whereabouts;
     // Reversed depth: from a blade of grass at the feet to the far endcap tens of kilometres away, in one view.
     v.renderer = (await createRenderer(v.canvas, { backends: 'webgpu', depth: 'reversed' })).renderer;
     // The near shadow map (render/lights.ts): the key light's, cast by the body and balls.
@@ -637,7 +641,7 @@ export class InteriorView {
     this.scene.add(this.specks.group);
     this.drones = new FlierView(h, this.terrain, this.stage, this.camera, this.pool);
     this.scene.add(this.drones.group);
-    this.talk = new TalkView(h, this.terrain);
+    this.talk = new TalkView(h, this.terrain, this.whereabouts ?? undefined);
     this.people.speaker = this.drones.speaker = this.talk.speaker;
     this.animals = [new AnimalView(SQUIRRELS, h, this.terrain, this.stage, this.camera, this.pool), new AnimalView(DEER, h, this.terrain, this.stage, this.camera, this.pool)];
     for (const a of this.animals) this.scene.add(a.group);

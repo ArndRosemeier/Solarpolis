@@ -79,6 +79,19 @@ export interface NewsParams {
   recent: number;
 }
 
+/**
+ * How fast one goes (Arnd, 2026-10-23: a hierarchy of speeds). Each way speeds up at `accel` (m/s²) to `cruise`
+ * (m/s), coasts, and slows the same way; a `cruise` of Infinity burns all the way, turning over halfway.
+ */
+export interface TravelParams {
+  /** A laser-pushed sail: the arrays at both ends push and brake it; cheapest, slowest. */
+  sail: { accel: number; cruise: number };
+  /** A torch ship that mostly coasts: the middle tier, how most people go. */
+  coast: { accel: number; cruise: number };
+  /** In a hurry: burning all the way wastes fuel and rarely has a reason. */
+  hurry: { accel: number; cruise: number };
+}
+
 export interface SystemParams {
   /** The generic habitats, region by region (the Necklace's own come from `SpaceParams`, the canon from polities.ts). */
   regions: RegionParams[];
@@ -90,4 +103,5 @@ export interface SystemParams {
   /** Whether the world bible's polities are in the system. */
   canon: boolean;
   news: NewsParams;
+  travel: TravelParams;
 }
