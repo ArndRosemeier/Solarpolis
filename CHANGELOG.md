@@ -2,6 +2,13 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.137 — People talk in speech bubbles
+
+- Parties who stop to talk now hold real conversations, shown in quiet speech bubbles over whoever speaks: greetings, how their day is going, and what they care about, from orchards and pottery to letters that take hours to cross the light-lag. Nobody speaks aloud.
+- Every resident has a name, a temperament and pursuits that come from the land around their home. Drone persons and people in shells talk too.
+- Up close you read the words; farther out a small "…" shows who is speaking. The figures' talking gestures follow the conversation.
+- The lines come from Arnd's conversation engine (Conversations v0.1.0).
+
 ## v0.136 — The Understorey can be heard
 
 - Every room echoes as big as it really is: a long stone echo in the pillar forest and the cisterns, shorter in the halls, short at home, a little in the entrance courts. The echo is worked out from each room's size, so a bigger habitat's halls sound bigger.
