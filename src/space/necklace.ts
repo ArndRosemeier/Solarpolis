@@ -5,7 +5,7 @@
  * a pure function of the world's parameters and seed.
  */
 import { Rng, TAU, deriveSeed } from '@futuremagic/core';
-import { derive, isValid, validate, type HabitatParams } from '../blueprint';
+import { derive, isValid, scaleBlueprint, validate, type HabitatParams } from '../blueprint';
 import { EARTH } from './constants';
 
 export interface NecklaceParams {
@@ -37,30 +37,11 @@ export function geostationaryRadius(): number {
   return Math.cbrt((EARTH.gm * EARTH.siderealDay * EARTH.siderealDay) / (TAU * TAU));
 }
 
-/** A seeded neighbour: the home blueprint scaled across (radius, hub, sunline, relief) and along (length, lake width), kept only if it is buildable. */
+/** A seeded neighbour: the home blueprint at a seeded size (`scaleBlueprint`), kept only if it is buildable. */
 function neighbour(home: HabitatParams, rng: Rng, spread: number, seed: number): HabitatParams {
-  const homeArea = home.radius * home.length;
   for (let tries = 0; tries < 16; tries++) {
     const k = Math.pow(spread, rng.range(-1, 1)), j = Math.pow(spread, rng.range(-1, 1));
-    const radius = home.radius * k, length = home.length * j;
-    const p: HabitatParams = {
-      ...home,
-      radius,
-      length,
-      hubRadius: home.hubRadius * k,
-      sunlineRadius: home.sunlineRadius * k,
-      relief: {
-        hills: home.relief.hills * k,
-        ringLake: home.relief.ringLake && { width: home.relief.ringLake.width * j, depth: home.relief.ringLake.depth * k },
-        terraceStep: home.relief.terraceStep * k,
-        massif: home.relief.massif * k,
-        rivers: home.relief.rivers && { ...home.relief.rivers, width: home.relief.rivers.width * k, depth: home.relief.rivers.depth * k },
-      },
-      clouds: home.clouds && { ...home.clouds, base: home.clouds.base * k, thickness: home.clouds.thickness * k, size: home.clouds.size * k },
-      landmarks: home.landmarks && { ...home.landmarks, size: home.landmarks.size * k },
-      population: Math.round((home.population * radius * length) / homeArea),
-      seed,
-    };
+    const p = scaleBlueprint(home, home.radius * k, home.length * j, seed);
     if (isValid(validate(derive(p)))) return p;
   }
   return { ...home, seed };

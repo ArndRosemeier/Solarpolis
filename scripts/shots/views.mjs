@@ -160,6 +160,7 @@ export const views = {
   'under-hamlet': { query: 'view=inside', about: 'below the land under the nearest entrance court, at its wellhead under the light well: up into the oculus (-up), then round the four ways along the bays (-0, -1, -2, -3; a quarter turn is 393 px), one of them toward the court\'s lift cage', settle: 6000, steps: [{ debug: 'Below: under the nearest entrance court' }, { wait: 10000 }, { look: [0, -300] }, { wait: 1500 }, { shot: 'up' }, { look: [0, 300] }, { wait: 800 }, { shot: '0' }, { look: [393, 0] }, { wait: 1200 }, { shot: '1' }, { look: [393, 0] }, { wait: 1200 }, { shot: '2' }, { look: [393, 0] }, { wait: 1200 }, { shot: '3' }, { run: logPeople }] },
   // The hamlets' skies (gen/skies.ts, render/hamletSkies.ts): one bay under each kind in turn, looking up.
   'under-skies': { query: 'view=inside', about: 'below the land, in a bay under each kind of hamlet sky in turn, looking up at it (-open, -aurora, -moon, -mars, -canopy, -deep, -glass); logs the position line (it names the sky)', settle: 6000, steps: [{ debug: 'Below: under the next kind of hamlet sky' }, { wait: 9000 }, { look: [0, -330] }, { wait: 1200 }, { shot: 'open' }, { look: [0, 330] }, { debug: 'Below: under the next kind of hamlet sky' }, { wait: 9000 }, { look: [0, -330] }, { wait: 1200 }, { shot: 'aurora' }, { look: [0, 330] }, { debug: 'Below: under the next kind of hamlet sky' }, { wait: 9000 }, { look: [0, -330] }, { wait: 1200 }, { shot: 'moon' }, { look: [0, 330] }, { debug: 'Below: under the next kind of hamlet sky' }, { wait: 9000 }, { look: [0, -330] }, { wait: 1200 }, { shot: 'mars' }, { look: [0, 330] }, { debug: 'Below: under the next kind of hamlet sky' }, { wait: 9000 }, { look: [0, -330] }, { wait: 1200 }, { shot: 'canopy' }, { look: [0, 330] }, { debug: 'Below: under the next kind of hamlet sky' }, { wait: 9000 }, { look: [0, -330] }, { wait: 1200 }, { shot: 'deep' }, { look: [0, 330] }, { debug: 'Below: under the next kind of hamlet sky' }, { wait: 9000 }, { look: [0, -330] }, { wait: 1200 }, { shot: 'glass' }, { look: [0, 330] }, { run: logPeople }] },
+  'link': { query: 'view=inside', about: 'the neural link: below in the pillar forest, the lift-up card and the mark on the doors or the edge arrow (-ways), turned away so the arrow points back (-behind), then the link open with Tab (-open)', settle: 6000, steps: [{ debug: 'Below: the pillar forest under here' }, { wait: 10000 }, { shot: 'ways' }, { look: [786, 0] }, { wait: 1500 }, { shot: 'behind' }, { key: 'Tab' }, { wait: 800 }, { shot: 'open' }] },
   'under-life': { query: 'view=inside', about: 'neighbours walking to shared halls, nearby faces, the exit compass, and memory below', settle: 6000, steps: [memoryDetails, { debug: 'Below: beside neighbours at a shared hall' }, { wait: 15000 }, { shot: 'neighbours' }, { run: logPeople }, { wait: 5000 }, { shot: 'later' }, { debug: "Below: in a street among a hamlet's homes" }, { wait: 12000 }, { shot: 'street' }, { run: logPeople }, heap('below-life')] },
   'adaptive-home-walk': { query: 'view=inside', about: 'Walk through the actual house doorway, climb the internal stair, and see residents at home', settle: 6000, steps: [
     { debug: 'Below: at an adaptive home doorway' }, { wait: 10000 }, { shot: 'door' }, { key: 'KeyW', hold: 2200 }, { wait: 2000 }, { shot: 'inside' },
@@ -307,6 +308,20 @@ export const views = {
     { wait: 4000 }, { look: [300, 0] }, { wait: 2000 }, { shot: 'velloran' },
     { run: async page => { await page.locator('.solar-controls').getByRole('button', { name: 'Return to habitat', exact: true }).click(); } },
     { wait: 5000 }, { shot: 'home' }, heap('system-habitats'),
+  ] },
+  // Visiting another habitat (docs/system.md, a proof of concept): the trip card for Velloran Reach, then there at once.
+  'visit': { query: 'view=outside', about: 'the Habitats panel with the trip to Velloran Reach (-trip), Visit: its arrival terrace (-arrival) and stepped out (-there), back outside (-outside: the trip card says you are visiting), Return home (-home); a heap snapshot at the end', settle: 6000, steps: [
+    memoryDetails,
+    { run: async page => { await page.locator('.solar-controls > summary').click(); await page.locator('.solar-habitats summary').click(); await page.getByLabel('Polity', { exact: true }).selectOption('velloran'); } },
+    { wait: 2000 }, { shot: 'trip' },
+    { run: async page => { await page.locator('.solar-habitats').getByRole('button', { name: 'Visit', exact: true }).click(); } },
+    { wait: 30000 }, { shot: 'arrival' },
+    { run: async page => { const b = page.getByRole('button', { name: 'Step onto the terrace', exact: true }); if (await b.isVisible()) await b.click(); } },
+    { wait: 6000 }, { shot: 'there' }, { run: logPeople },
+    { run: async page => { await page.getByRole('button', { name: 'Outside', exact: true }).click(); } },
+    { wait: 5000 }, { shot: 'outside' },
+    { run: async page => { await page.locator('.solar-habitats').getByRole('button', { name: 'Return home', exact: true }).click(); } },
+    { wait: 30000 }, { shot: 'home' }, heap('visit'),
   ] },
   'outside-earth': { query: 'view=outside', about: 'looking at Earth (key 2)', steps: [{ key: 'Digit2' }, { wait: 3000 }] },
   'outside-moon': { query: 'view=outside', about: 'looking at the Moon (key 3)', steps: [{ key: 'Digit3' }, { wait: 3000 }] },
