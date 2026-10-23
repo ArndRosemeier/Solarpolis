@@ -115,11 +115,23 @@ export function densNear(ecology: Ecology, plants: readonly Species[], theta: nu
  * there. For the worker (it needs the ecology); `ground` is the ground's height there.
  */
 export function crownsOf(ecology: Ecology): (theta: number, s: number, ground: number) => number {
-  const woods = ecology.climate.biomes.map((b) => canopyOf(b).cover), shares = new Float32Array(woods.length);
+  const canopy = canopyAtOf(ecology);
+  return (theta, s, ground) => canopy(theta, s, ground).cover;
+}
+
+/**
+ * The crowns over a point of the ground: how closed they are (0 … 1) and how tall the trees making them are (m, their
+ * mean; 0 without crowns): the woods of its biomes, or what was planted there, whichever closes more. For the worker.
+ */
+export function canopyAtOf(ecology: Ecology): (theta: number, s: number, ground: number) => { cover: number; height: number } {
+  const woods = ecology.climate.biomes.map(canopyOf), shares = new Float32Array(woods.length);
   return (theta, s, ground) => {
     ecology.biomesAt(theta, s, ground, 0, shares);
-    const cover = woods.reduce((x, w, b) => x + w * shares[b], 0);
-    return Math.max(cover, plantedCanopy(ecology.terrain, theta, s)?.cover ?? 0);
+    let cover = 0, height = 0;
+    woods.forEach((w, b) => { cover += w.cover * shares[b]; height += w.cover * w.height * shares[b]; });
+    const planted = plantedCanopy(ecology.terrain, theta, s);
+    if (planted && planted.cover > cover) return { cover: planted.cover, height: planted.height };
+    return { cover, height: cover > 0 ? height / cover : 0 };
   };
 }
 

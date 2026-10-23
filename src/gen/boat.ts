@@ -53,6 +53,10 @@ export interface BoatSpec {
   crew: [number, number];
   /** How much room it needs: the narrowest water it is sailed on, in its own lengths. */
   room: number;
+  /** How deep it reaches below its waterline (m): its daggerboard, keels or foils. */
+  draft: number;
+  /** How fast it goes on its quiet drive in and out of its harbour (m/s), its wing feathered. */
+  motor: number;
 }
 
 /**
@@ -61,9 +65,9 @@ export interface BoatSpec {
  * a rotating wing mast, a dozen friends aboard and no hurry.
  */
 export const BOAT_KINDS: Readonly<Record<BoatKind, BoatSpec>> = {
-  skiff: { length: 4.6, beam: 1.9, mast: 7.5, noGo: 40 * DEG, beat: 44 * DEG, deep: 155 * DEG, reach: 0.95, top: 8, foil: null, turn: 5, heel: 22 * DEG, crew: [1, 2], room: 8 },
-  foiler: { length: 9.5, beam: 6.8, mast: 13, noGo: 35 * DEG, beat: 40 * DEG, deep: 145 * DEG, reach: 1.15, top: 16, foil: { takeoff: 3.8, lift: 1.8 }, turn: 9, heel: 8 * DEG, crew: [2, 3], room: 16 },
-  cruiser: { length: 12.5, beam: 6.4, mast: 15, noGo: 46 * DEG, beat: 50 * DEG, deep: 180 * DEG, reach: 0.75, top: 7.5, foil: null, turn: 14, heel: 3 * DEG, crew: [2, 12], room: 10 },
+  skiff: { length: 4.6, beam: 1.9, mast: 7.5, noGo: 40 * DEG, beat: 44 * DEG, deep: 155 * DEG, reach: 0.95, top: 8, foil: null, turn: 5, heel: 22 * DEG, crew: [1, 2], room: 8, draft: 1.15, motor: 1.4 },
+  foiler: { length: 9.5, beam: 6.8, mast: 13, noGo: 35 * DEG, beat: 40 * DEG, deep: 145 * DEG, reach: 1.15, top: 16, foil: { takeoff: 3.8, lift: 1.8 }, turn: 9, heel: 8 * DEG, crew: [2, 3], room: 16, draft: 2.4, motor: 2.2 },
+  cruiser: { length: 12.5, beam: 6.4, mast: 15, noGo: 46 * DEG, beat: 50 * DEG, deep: 180 * DEG, reach: 0.75, top: 7.5, foil: null, turn: 14, heel: 3 * DEG, crew: [2, 12], room: 10, draft: 1.7, motor: 1.8 },
 };
 export const BOAT_KIND_LIST = Object.keys(BOAT_KINDS) as BoatKind[];
 

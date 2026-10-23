@@ -7,10 +7,10 @@
  * with the species' pattern over it drawn per pixel (spots, bars, streaks, mottle), fading into its mean where it is
  * finer than a pixel.
  */
-import { abs, attribute, cos, cross, float, fwidth, length, mix, mx_noise_float, normalLocal, normalize, positionLocal, select, sign, sin, smoothstep, varying, vec2, vec3 } from 'three/tsl';
+import { abs, attribute, cos, cross, float, floor, fwidth, length, mix, mx_noise_float, normalLocal, normalize, positionLocal, select, sign, sin, smoothstep, varying, vec2, vec3 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import type { Vec3 } from '../blueprint';
-import { PATTERN, WING, ZONE, type PackedLook } from '../gen/birds';
+import { GLOSS_PACK, PATTERN, WING, ZONE, type PackedLook } from '../gen/birds';
 import { unpack } from './crowdShaders';
 
 type F = Node<'float'>;
@@ -82,7 +82,7 @@ const isZone = (zone: F, z: number): Node<'bool'> => abs(zone.sub(z)).lessThan(0
  * its rest place on the body (for the pattern), how much of the species' pattern it carries, the pattern, and the
  * light where the bird is.
  */
-export function birdPose(): { position: V3; normal: V3; albedo: V3; rest: V3; where: F; pattern: F; dark: V3; light: V3; horizon: V2 } {
+export function birdPose(): { position: V3; normal: V3; albedo: V3; rest: V3; where: F; pattern: F; dark: V3; light: V3; horizon: V2; gloss: F } {
   const inst = attribute<'vec4'>('bird', 'vec4'), fw = attribute<'vec4'>('birdFwd', 'vec4'), upA = attribute<'vec4'>('birdUp', 'vec4');
   const wingA = attribute<'vec4'>('birdWing', 'vec4'), head = attribute<'vec4'>('birdHead', 'vec4');
   const coat = attribute<'vec4'>('birdCoat', 'vec4'), front = attribute<'vec4'>('birdFront', 'vec4'), bits = attribute<'vec4'>('birdBits', 'vec4');
@@ -140,19 +140,21 @@ export function birdPose(): { position: V3; normal: V3; albedo: V3; rest: V3; wh
   for (const [z, col] of zones) albedo = select(isZone(zone, z), col, albedo);
 
   // Where its pattern lies: spots and scaling on the breast and belly, bars over wings, tail and flanks, streaks on the
-  // back, crown and breast, an owl's mottle all over, white bars across a woodpecker's flight feathers.
-  const pattern = bits.z, under = select(isZone(zone, ZONE.breast).or(isZone(zone, ZONE.belly)), float(1), float(0));
+  // back, crown and breast, an owl's mottle and a starling's stars all over, white bars across a woodpecker's flight
+  // feathers. The pattern's number carries the look's gloss in its fraction.
+  const pattern = floor(bits.z), gloss = bits.z.sub(pattern).div(GLOSS_PACK), under = select(isZone(zone, ZONE.breast).or(isZone(zone, ZONE.belly)), float(1), float(0));
   const winged = select(isZone(zone, ZONE.coverts).or(isZone(zone, ZONE.flight)).or(isZone(zone, ZONE.tail)), float(1), float(0));
   const plumage = select(zone.lessThan(ZONE.beak - 0.5).or(isZone(zone, ZONE.mark)), float(1), float(0));
   const backed = select(zone.lessThan(ZONE.face - 0.5).or(isZone(zone, ZONE.breast)), float(1), float(0));
   const where = select(isZone(pattern, PATTERN.spots).or(isZone(pattern, PATTERN.scaled)), under,
     select(isZone(pattern, PATTERN.bars), max1(winged, under), select(isZone(pattern, PATTERN.streaks), backed,
-      select(isZone(pattern, PATTERN.mottle), plumage, select(isZone(pattern, PATTERN.barredWings), select(isZone(zone, ZONE.flight), float(1), float(0)), float(0))))));
-  // Dark marks in the back's colour deepened; light ones (a woodpecker's bars, an owl's pale flecks) in the belly's.
-  const dark = c(coat.y).mul(0.35), light = c(front.z);
+      select(isZone(pattern, PATTERN.mottle).or(isZone(pattern, PATTERN.starry)), plumage, select(isZone(pattern, PATTERN.barredWings), select(isZone(zone, ZONE.flight), float(1), float(0)), float(0))))));
+  // Dark marks in the back's colour deepened; light ones (a woodpecker's bars, an owl's pale flecks) in the belly's, a
+  // starling's stars in its mark's.
+  const dark = c(coat.y).mul(0.35), light = select(isZone(pattern, PATTERN.starry), c(front.w), c(front.z));
   return {
     position, normal: world(n), albedo: varying(albedo), rest: varying(positionLocal), where: varying(where.mul(plumage)), pattern: varying(pattern),
-    dark: varying(dark), light: varying(light), horizon: varying(head.zw),
+    dark: varying(dark), light: varying(light), horizon: varying(head.zw), gloss: varying(gloss),
   };
 }
 
@@ -176,8 +178,10 @@ export function birdPattern(rest: V3, pattern: F): V2 {
   const cq = rest.mul(2 * Math.PI * 30), scaled = fade(cq.div(2 * Math.PI), 0.1, smoothstep(0.6, 0.95, sin(cq.z).mul(sin(cq.x.add(cq.y)))).mul(0.5));
   // A woodpecker's white bars across its flight feathers.
   const wq = rest.z.mul(2 * Math.PI * 22), white = fade(wq.div(2 * Math.PI), 0.35, smoothstep(0.4, 0.75, sin(wq.add(rest.x.mul(40)))));
+  // A starling's pale stars: small tips to its feathers, scattered all over.
+  const sr = rest.mul(80), stars = fade(sr, 0.12, smoothstep(0.42, 0.58, mx_noise_float(sr)));
   const is = (k: number): Node<'bool'> => isZone(pattern, k);
   const darkShare = select(is(PATTERN.spots), spots, select(is(PATTERN.bars), bars, select(is(PATTERN.streaks), streaks, select(is(PATTERN.mottle), mottleDark, select(is(PATTERN.scaled), scaled, float(0))))));
-  const lightShare = select(is(PATTERN.mottle), mottleLight, select(is(PATTERN.barredWings), white, float(0)));
+  const lightShare = select(is(PATTERN.mottle), mottleLight, select(is(PATTERN.barredWings), white, select(is(PATTERN.starry), stars, float(0))));
   return vec2(darkShare, lightShare);
 }
