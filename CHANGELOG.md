@@ -2,6 +2,13 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.153 — You arrive with a body
+
+- After docking you now see yourself step out of the port door and walk to the overlook, the camera following a few metres behind; the walk ends behind you, and the mouse wheel takes you into your eyes.
+- From your eyes, look down: your chest, legs and feet are there, and they walk and jump with you.
+- The mouse wheel zooms in and out even with the pointer over the welcome card or the gravity meter.
+- The arrival landing has a bronze ring where the first transport capsule will wait.
+
 ## v0.152 — The boats have crews
 
 - Every boat is sailed by its own residents, the same people every time, who live under the court nearest its harbour.
