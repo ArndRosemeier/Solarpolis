@@ -8,7 +8,7 @@
 
 | Topic | Decision |
 |---|---|
-| Setting | About 1000 years ahead. Material abundance, with finite resources; people and AIs live together, often indistinguishable. Basically everything technical has a mind; the habitat has one. The wider setting's world bible was shared on 2026-10-23. |
+| Setting | About 1000 years ahead. Material abundance, with finite resources; people and AIs live together, often indistinguishable. Basically everything technical has a mind; the habitat has one. The wider setting is Arnd's [world bible](../world-bible.md) (shared 2026-10-23); this cylinder is a sample habitat in it. |
 | Start | Inside an O'Neill cylinder in Earth orbit, about 200 years old. The cylinder is a building block of a much bigger setting. |
 | Player | A human with some common augmentations. No set objective yet: enjoy the sim. |
 | Surface | Park and nature reserve with only landmark buildings. No houses. |
