@@ -2334,5 +2334,9 @@
   {
     "key": "same name: solarpolis/render/solar.ts#follow + solarpolis/render/traffic.ts#follow",
     "reason": "Each view's per-frame update by its own clock and pose (the dock: its clamps posed and its lamps lit from the berth's state); the name is the views' convention, the bodies share nothing."
+  },
+  {
+    "key": "idiom: [.eye .profile] in solarpolis/render/animals.ts + solarpolis/render/birds.ts + solarpolis/render/homes.ts",
+    "reason": "`fromWorld(h.profile, ...eye)` is the one way (blueprint) to find where the eye stands in the habitat; each view then does its own thing there. Surfaced only because new files shifted the guard's word weights."
   }
 ]
