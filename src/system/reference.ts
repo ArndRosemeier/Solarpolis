@@ -45,4 +45,12 @@ export const REFERENCE_SYSTEM: SystemParams = {
     spread: 10 * 3600,
     recent: 6 * DAY,
   },
+  // A sail at a thousandth of a g up to 100 km/s; a coasting torch ship at a tenth of a g up to 150 km/s; a hurry at
+  // a full g all the way. Earth to Mars at its nearest: about two months, a week, two days; to Saturn about nine
+  // months, three months, eight days.
+  travel: {
+    sail: { accel: 0.01, cruise: 1e5 },
+    coast: { accel: 0.1 * 9.81, cruise: 1.5e5 },
+    hurry: { accel: 9.81, cruise: Infinity },
+  },
 };

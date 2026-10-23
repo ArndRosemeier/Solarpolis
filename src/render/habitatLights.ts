@@ -96,6 +96,8 @@ export class HabitatLights {
   private ready = false;
   /** Names beside the points (the catalogue's checkbox). */
   naming = true;
+  /** A name clicked: the habitat's ledger id. */
+  onPick: ((id: string) => void) | null = null;
 
   constructor(private stage: Stage, private system: SolarSystem, private ledger: Ledger, private far: number) {
     this.mesh = new Mesh(this.points.geometry, STARS.material);
@@ -103,6 +105,10 @@ export class HabitatLights {
     this.mesh.frustumCulled = false;
     this.mesh.geometry.setDrawRange(0, 0);
     this.names.className = 'habitat-names';
+    this.names.addEventListener('click', (e) => {
+      const k = (e.target as HTMLElement).dataset.k;
+      if (k !== undefined) this.onPick?.(this.ledger.nth(Number(k)).id);
+    });
   }
 
   /** The labels' layer, to put over the canvas. */
@@ -261,6 +267,7 @@ export class HabitatLights {
       span.hidden = !c;
       if (!c) return;
       span.textContent = this.nameOfK(c.l.k);
+      span.dataset.k = String(c.l.k);
       span.style.transform = `translate(${Math.round(c.at[0] + 7)}px, ${Math.round(c.at[1] - 8)}px)`;
     });
   }
