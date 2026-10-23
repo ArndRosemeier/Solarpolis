@@ -114,11 +114,11 @@ const RIVER_REACH = 800;
 /** A river stretch falling this steeply (m per m) is a fall; one this flat and wide flows slowly. */
 const FALL_STEEP = 0.3, SLOW_STEEP = 0.004, SLOW_WIDTH = 5;
 /** The light this many seconds ago tells rising light (dawn chorus) from falling light (evening crickets). */
-const LIGHT_LAG = 900;
+export const LIGHT_LAG = 900;
 /** Half loudness this far (m) past the pavilion's deck (the water under its piers) and the summit hut (its banners). */
 const PIERS_HALF = 20, FLAGS_HALF = 25;
 /** How far from its centre the summit hut's timber deck and terrace reach (m). */
-const HUT_REACH = 30;
+export const HUT_REACH = 30;
 
 /** How loud something is at a distance d (m) past its edge, half as loud at `at` m. */
 const falloff = (d: number, at: number): number => 1 / (1 + (Math.max(0, d) / at) ** 2);

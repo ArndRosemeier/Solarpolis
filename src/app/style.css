@@ -124,6 +124,12 @@ button { font: inherit; color: inherit; }
 .title-start { pointer-events: auto; font: inherit; font-size: 16px; letter-spacing: 0.12em; padding: 10px 34px; border-radius: 999px; border: 1px solid #fff8; background: #0006; color: #fff; cursor: pointer; }
 .title-start:hover, .title-start:focus-visible { background: #fff2; border-color: #fff; }
 .title-hint { margin: 0; color: #fff9; font-size: 12px; text-shadow: 0 1px 4px #000c; }
+/* The ship's Mind on the arrival: text on screen, never a voice; low in the frame, like a subtitle. */
+.mind-said { position: absolute; left: 50%; bottom: clamp(48px, 10vh, 120px); transform: translateX(-50%); width: min(720px, calc(100% - 32px)); text-align: center; color: #fff; text-shadow: 0 2px 12px #000e, 0 0 2px #000; pointer-events: none; z-index: 5; animation: mind-in 0.8s ease-out; }
+.mind-said[hidden] { display: none; }
+.mind-who { display: block; font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; color: #9fd8e0; margin-bottom: 6px; }
+.mind-line { margin: 0; font-size: clamp(16px, 2.2vw, 22px); line-height: 1.4; font-weight: 300; }
+@keyframes mind-in { from { opacity: 0; } to { opacity: 1; } }
 .inside.titled .inside-hint { display: none; }
 .top h1 { cursor: pointer; }
 
