@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.183 — The link opens with N
+
+- Your neural link now opens with the N key (or the ring in the top left corner). Tab is kept free for targeting later.
+
 ## v0.182 — A title melody: First Light
 
 - The title has its own theme now. Out of near silence single glassy notes come in like stars, then a solo horn states the melody and the full orchestra takes it up. It has no voices.
