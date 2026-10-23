@@ -4,13 +4,13 @@
  * Where the Actors asset pack is served (vite.config.ts serves and builds it under /actors/,
  * tools/actors/pack.mjs fetches it), and the one place its files are fetched.
  */
-import type { Fetcher, MeshData } from '@actors/core';
+import type { Fetcher } from '@actors/core';
 import { Character, buildCatalog, defaultConfig, type CharacterCatalog, type CharacterConfig } from '@actors/generator';
 import { Human } from '@actors/human';
 import { IRIS_PRESETS, type ActorMaterialKit } from '@actors/three';
 import { nodeMaterials } from '@actors/three/webgpu';
 import type { MeshStandardMaterial } from 'three/webgpu';
-import { screenFabrics } from './screens';
+import { isScreen, plainCloth, screenFabrics } from './screens';
 
 /** The human pack's manifest. */
 export const HUMAN_PACK = `${import.meta.env?.BASE_URL ?? "/"}actors/human/manifest.json`;
@@ -51,22 +51,16 @@ export function humanCatalog(): Promise<{ catalog: CharacterCatalog; base: Chara
   return catalog;
 }
 
-/** Actors' stockings (0.6.6, still in 0.7.0) carry an opaque coverage mask despite their sheer texture.
- * Keep the skin behind the holes; ordinary clothes still remove covered body triangles. */
-export function keepSkinUnderSheerGarment(data: MeshData): void {
-  if (data.def.name === 'stockings' || data.def.name === 'fishnet-stockings') data.hidesBaseVertices = undefined;
-}
-
 /**
- * Actors' shared WebGPU graphs, with pack compatibility fixes applied before hidden skin is calculated, and its screen
- * fabrics handed to `screenFabrics` (screens.ts), which animates and dyes them in this kit.
+ * Actors' shared WebGPU graphs, with its screen garments made as plain cloth and lit as screens of our own
+ * (`screenFabrics`, screens.ts: they share a few aurora textures instead of one each).
  */
 export const actorKit: ActorMaterialKit = {
   ...nodeMaterials,
   mesh(data, actor) {
-    keepSkinUnderSheerGarment(data);
-    const material = nodeMaterials.mesh(data, actor);
-    if (data.def.tags?.includes('fabric:screen')) screenFabrics.adopt(material as MeshStandardMaterial);
+    if (!isScreen(data)) return nodeMaterials.mesh(data, actor);
+    const material = nodeMaterials.mesh(plainCloth(data), actor);
+    screenFabrics.adopt(material as MeshStandardMaterial);
     return material;
   },
 };
