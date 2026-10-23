@@ -170,10 +170,6 @@ button { font: inherit; color: inherit; }
   .inside-hint { max-width: calc(100% - 32px); }
 }
 
-/* The nearest real exit court below, readable without covering the world or intercepting clicks. */
-.exit-marker { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; max-width: calc(100% - 32px); padding: 10px 16px; border: 1px solid #9de9cd80; border-radius: 24px; background: #112c28df; color: #d9fff0; font-size: 14px; pointer-events: none; box-shadow: 0 2px 16px #0005; }
-.exit-marker[hidden] { display: none; }
-.exit-marker-arrow { font-size: 27px; line-height: 1; }
 
 /* A restrained welcome, leaving the cylinder itself as the focal point. */
 .arrival-card { position: absolute; left: clamp(24px, 5vw, 80px); bottom: clamp(52px, 8vh, 100px); max-width: min(580px, calc(100% - 48px)); color: #fff; text-shadow: 0 2px 16px #000c; z-index: 6; pointer-events: none; }

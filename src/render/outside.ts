@@ -600,7 +600,7 @@ export class OutsideView {
     outside.pixelSolidAngle.value = ((this.camera.fov * Math.PI) / 180 / px) ** 2;
     outside.starExposure.value = starExposure(this.exposure, outside.pixelSolidAngle.value, this.sunSeen(), this.heroicStars);
     // The overlay's names, as a citizen's link shows them; not in the title's flight, aboard or on the tour.
-    this.habitatLights.label(this.camera, this.canvas.clientWidth || 1280, this.canvas.clientHeight || 720, outside.starExposure.value, outside.pixelSolidAngle.value,
+    this.habitatLights.writeNames(this.camera, this.canvas.clientWidth || 1280, this.canvas.clientHeight || 720, outside.starExposure.value, outside.pixelSolidAngle.value,
       !this.attracting && !this.vessel?.active && !this.voyage?.active && this.loop.running);
     outside.viewport.value.set((this.canvas.clientWidth || 1280) * ratio, px);
     draw(this.stage);

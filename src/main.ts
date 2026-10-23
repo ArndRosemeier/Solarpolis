@@ -5,7 +5,8 @@ import { neighboursAt } from './sim/neighbourhood';
 import { BOAT_KINDS, BOAT_KIND_LIST, boatAt, boatsNear, sailingOf, type Boat } from './sim/sailing';
 import { HARBOUR } from './gen/harbours';
 import { windAt } from './world/wind';
-import { ExitMarker } from './app/exitMarker';
+import { Link } from './app/link/link';
+import { Ways } from './app/link/ways';
 import { SpeechBubbles } from './app/bubbles';
 import { ArrivalCard } from './app/arrivalCard';
 /**
@@ -176,15 +177,20 @@ class ViewSlot<V extends PageView> {
   }
 }
 
+/** The player's neural link and its overlay (app/link): systems serve it their offers and say their lines through it. */
+const link = new Link();
 const insideSlot = new ViewSlot('Hold the right mouse button to look around · W A S D to move · Shift to run · Space to jump · wheel to see yourself · F to fly (E up, Q down)', 'Building the interior…', 'terrain tiles', async (h) => {
   const v = await InteriorView.create(h, whereabouts);
   // The gravity the player feels, and why (with the spin, against it, higher up): Arnd, 2026-10-22.
   const meter = new GravityMeter(() => (lab.habitat ? { habitat: lab.habitat, ...v.paces } : null));
   insideSlot.box.append(meter.box);
   v.onGravity = (r) => meter.showReading(r);
-  const exits = new ExitMarker();
-  insideSlot.box.append(exits.box);
-  v.onExit = (exit, eye, forward, up) => exits.showExit(exit, eye, forward, up);
+  // The player's neural link (Arnd, 2026-10-23): the one overlay every system speaks through.
+  insideSlot.box.append(link.root);
+  v.onOverlay = (dt, project) => link.frame(dt, project);
+  const ways = new Ways();
+  link.serve(ways);
+  v.onExit = (exit) => ways.showExit(exit);
   // People talk in silent speech bubbles (Arnd, 2026-10-23).
   const speech = new SpeechBubbles(() => h.params.life.talk.words);
   insideSlot.box.append(speech.box);
