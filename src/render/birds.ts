@@ -23,7 +23,7 @@ import type { Terrain } from '../gen/terrain';
 import { horizonAt, OPEN_SKY } from '../gen/horizon';
 import { BODY_WIDTH, POSE, SPECK_STRIDE, writeSpeck } from '../gen/standIn';
 import { BIRD_KINDS, BIRDS, bodyBytes, packedLooks, type BirdBody, type BirdKind, type BirdMesh, type PackedLook } from '../gen/birds';
-import { birdAt, nestsBytes, type BirdNow, type Nest } from '../sim';
+import { birdAt, nestsBytes, type BirdDoing, type BirdNow, type Nest } from '../sim';
 import type { WorkerPool } from '../workers/pool';
 import { BIRD, BIRD_LAYOUT, layInstances, roomForInstances } from './materials';
 import { drawSpecks, ownSpecks, pxPerMetre, roomForSpecks, type OwnSpecks } from './specks';
@@ -45,6 +45,8 @@ const LOW = 40;
 const LIGHT_MOVE = 10;
 /** Room for this many birds of a species and level at first (doubled when more are near). */
 const ROOM = 16;
+/** What a bird does in the air. */
+const AIRBORNE: ReadonlySet<BirdDoing> = new Set(['fly', 'climb', 'hover', 'drop']);
 
 type Level = 0 | 1 | 2;
 const LEVELS = ['near', 'coarse'] as const;
@@ -215,12 +217,18 @@ export class BirdView {
     for (const l of d.levels) roomForInstances(l, need, BIRD_LAYOUT, [l.mesh.geometry]);
   }
 
-  /** The nearest bird to the eye (debug menu: fly to it): where it is, its up and forward, its length. */
-  nearest(eye: Vec3, kind?: BirdKind): { at: Vec3; up: Vec3; fwd: Vec3; length: number } | null {
+  /**
+   * The nearest bird to the eye (debug menu: fly to it): where it is, its up and forward, its length. Birds out come
+   * before birds at roost; with `still`, birds sitting, singing or feeding on the ground before birds in the air (one
+   * stays in sight a while).
+   */
+  nearest(eye: Vec3, kind?: BirdKind, still = false): { at: Vec3; up: Vec3; fwd: Vec3; length: number } | null {
+    const rank = (b: BirdNow): number => (b.doing === 'roost' ? 2 : still && AIRBORNE.has(b.doing) ? 1 : 0);
     let best: BirdNow | null = null;
     for (const one of this.ones.values()) {
       const b = one.now;
-      if (b && (!kind || b.kind === kind) && b.doing !== 'roost' && (!best || away(b.at, eye) < away(best.at, eye))) best = b;
+      if (!b || (kind && b.kind !== kind)) continue;
+      if (!best || rank(b) < rank(best) || (rank(b) === rank(best) && away(b.at, eye) < away(best.at, eye))) best = b;
     }
     return best && { at: best.at, up: best.up, fwd: best.fwd, length: best.length };
   }
