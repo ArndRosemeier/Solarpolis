@@ -12,7 +12,7 @@ for (const { name } of MATRIX) test(`Waterfall (${name}): closed water sections 
   if (!source) { assert.ok(!original.lake, 'without a lake there are no rivers or falls'); return; }
   // (Out of the lakes on the floor, where a river runs under the lake's own water.)
   let i = Math.floor(source.count / 2);
-  for (let k = 0; k < source.count / 2 && original.form.fromWater(riverPoint(source, sampleS(source, i)).theta, sampleS(source, i)) < source.step * 4; k++) i = Math.floor(source.count / 2) + (k % 2 ? k : -k);
+  for (let k = 0; k < source.count / 2 && original.form.inWater(riverPoint(source, sampleS(source, i)).theta, sampleS(source, i), source.step * 4); k++) i = Math.floor(source.count / 2) + (k % 2 ? k : -k);
   const r = { ...source, steep: source.steep.slice() };
   r.steep.fill(1, i - 2, i + 3);
   const t = { ...original, rivers: [r] };

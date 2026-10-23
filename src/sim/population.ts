@@ -385,7 +385,7 @@ function spotOf(h: Habitat, place: Venue, i: number, day: number): [number, numb
   if (place.activity !== 'swim' && place.kind !== 'landmark') {
     if (lake && fromLake(lake, s) < 0) s = besideLake(lake, place.s, r * 0.1);
     // Out of a lake on the floor: back to the place itself.
-    else if (plan.fromWater(theta, s) < 0) { theta = place.theta; s = place.s; }
+    else if (plan.inWater(theta, s)) { theta = place.theta; s = place.s; }
   }
   return [theta, s];
 }
@@ -434,7 +434,7 @@ function memberSpot(h: Habitat, place: Venue, form: Form, activity: Activity, le
     }
   }
   // Nobody is put into the water who did not come to swim: the other way round the party's middle.
-  if (activity !== 'swim' && place.kind !== 'landmark' && planOf(h).fromWater(ct + dy / ring, cs + ds) < 0) { ds = -ds; dy = -dy; }
+  if (activity !== 'swim' && place.kind !== 'landmark' && planOf(h).inWater(ct + dy / ring, cs + ds)) { ds = -ds; dy = -dy; }
   return [ct + dy / ring, cs + ds, heading];
 }
 
@@ -518,7 +518,7 @@ function placeOf(h: Habitat, o: Outings, n: number, court: number, day: number, 
     let toward = b.toward + across, off = b.away > 0;
     // Nobody strolls into the water who did not come to swim: the other way, or not at all.
     const plan = off && activity !== 'swim' ? planOf(h) : null, ringAt = Math.max(1, h.profile.at(ss).r);
-    const wet = (way: number): boolean => !!plan && plan.fromWater(st + (Math.sin(way) * reach) / ringAt, ss + Math.cos(way) * reach) < 0;
+    const wet = (way: number): boolean => !!plan && plan.inWater(st + (Math.sin(way) * reach) / ringAt, ss + Math.cos(way) * reach);
     if (wet(toward)) {
       toward += Math.PI;
       // A game of catch needs both ways dry (each goes out its own way).

@@ -93,7 +93,7 @@ for (const { name } of MATRIX) {
     const paths = pathsOf(h), shares = sharesOf(under, 7);
     for (let j = 0; j < under.along; j += 11) for (let i = 0; i < under.around; i += 13) {
       const use = under.useAt(i, j), { theta, s } = under.centreOf(i, j);
-      const wet = plan.fromWater(theta, s) < 0;
+      const wet = plan.inWater(theta, s);
       if (s < plan.reserveEnd && !wet) assert.equal(use, 'works');
       if (wet) assert.equal(use, 'lake');
       if (use === 'gallery') {

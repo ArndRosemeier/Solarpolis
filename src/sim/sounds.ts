@@ -318,7 +318,7 @@ export function callsIn(e: Ecology, t0: number, t1: number, l: Listener): Call[]
       if (u(0) > CALL_CHANCE * (night ? 0.15 : birds)) continue;
       const theta = (i + u(1)) * dTheta, s = Math.min(h.profile.length, (j + u(2)) * CELL), start = slot * SLOT + u(3) * SLOT;
       if (start < t0 || start >= t1) continue;
-      if (terrain.form.fromWater(theta, s) < 0) continue; // over the water
+      if (terrain.form.inWater(theta, s)) continue; // over the water
       const ground = terrain.heightAt(theta, s);
       const wood = crowns(theta, s, ground);
       let kind: CallKind | null = null, up = 3 + 9 * u(5);

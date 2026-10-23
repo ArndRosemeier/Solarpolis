@@ -95,15 +95,26 @@ export function makeProfile(R: number, L: number, hubRadius: number, endcaps: { 
   };
 
   const nearest = (z: number, r: number): { s: number; h: number } => {
-    let best = Infinity, bestS = 0;
-    for (let i = 0; i < n - 1; i++) {
+    let best = Infinity, bestS = 0, bestI = n;
+    const visit = (i: number): void => {
       const dz = zs[i + 1] - zs[i], dr = rs[i + 1] - rs[i];
       const len2 = dz * dz + dr * dr;
       const t = len2 > 0 ? Math.min(1, Math.max(0, ((z - zs[i]) * dz + (r - rs[i]) * dr) / len2)) : 0;
       const pz = zs[i] + dz * t, pr = rs[i] + dr * t;
       const d2 = (z - pz) * (z - pz) + (r - pr) * (r - pr);
-      if (d2 < best) { best = d2; bestS = ss[i] + Math.sqrt(len2) * t; }
+      // (Of equally near ones, the first along the curve.)
+      if (d2 < best || (d2 === best && i < bestI)) { best = d2; bestS = ss[i] + Math.sqrt(len2) * t; bestI = i; }
+    };
+    // z never falls along the curve, so a segment lies at least as far as z is outside its stretch of z: start at the
+    // segment over z and widen out both ways until every one left is further off than the nearest found.
+    let lo = 0, hi = n - 2;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (zs[mid] <= z) lo = mid; else hi = mid - 1;
     }
+    visit(lo);
+    for (let i = lo - 1; i >= 0; i--) { const gap = z - zs[i + 1]; if (gap > 0 && gap * gap > best) break; visit(i); }
+    for (let i = lo + 1; i < n - 1; i++) { const gap = zs[i] - z; if (gap > 0 && gap * gap > best) break; visit(i); }
     // `toWorld` lifts a point along the smoothed normal, which leans off its segment's perpendicular: walk s until the
     // point lies on the normal at s (secant steps), so this undoes `toWorld` exactly, also far above or below the curve.
     let s = bestS;

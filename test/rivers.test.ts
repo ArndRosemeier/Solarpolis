@@ -62,7 +62,7 @@ for (const { name, params } of MATRIX) {
     // (A sample out of the lakes on the floor, and their shores.)
     const r = t.rivers[0];
     let i = Math.floor(r.count * 0.6);
-    while (i > 0 && t.form.fromWater(riverPoint(r, r.s0 + i * r.step).theta, r.s0 + i * r.step) < r.step * 80) i--;
+    while (i > 0 && t.form.inWater(riverPoint(r, r.s0 + i * r.step).theta, r.s0 + i * r.step, r.step * 80)) i--;
     const s = r.s0 + i * r.step, mid = riverPoint(r, s);
     const rad = h.profile.at(s).r, half = (mid.halfWidth * 30) / rad;
     // A fine tile around the river (cells far finer than it), whose own ground is the true ground.

@@ -74,8 +74,14 @@ export interface Mere {
   /** Its water's surface, as a height above the profile: its room's level, where a river through it rests too. */
   level: number;
   wild: number;
-  /** The shore's lobes: for each harmonic 2, 3, … its amplitude and phase. */
+  /** Its long axis's cosine and sine (of `heading`), and its outline's superellipse power (round when wild, square when made). */
+  cos: number;
+  sin: number;
+  power: number;
+  /** The shore's lobes: for each harmonic 2, 3, … its amplitude times the cosine and the sine of its phase. */
   lobes: Float64Array;
+  /** The lobes' amplitudes summed (the shore's wave is their sum over this, −1 … 1). */
+  lobeSum: number;
 }
 
 /**
@@ -106,19 +112,23 @@ export const mereReach = (m: Mere): number => Math.max(m.along, m.across);
  */
 export function mereEdge(m: Mere, radius: number, theta: number, s: number): number {
   const a = theta - m.theta, du = (a - TURN * Math.round(a / TURN)) * radius, dv = s - m.s;
-  const c = Math.cos(m.heading), sn = Math.sin(m.heading);
-  const x = dv * c + du * sn, y = du * c - dv * sn, r = Math.hypot(x, y);
-  const qx = Math.abs(x) / m.along, qy = Math.abs(y) / m.across, p = MERE.round + (MERE.square - MERE.round) * (1 - m.wild);
-  const rho = Math.pow(Math.pow(qx, p) + Math.pow(qy, p), 1 / p);
-  // The bays: the shore drawn in by up to `bays` of the way to the middle, by the lobes round it.
+  const x = dv * m.cos + du * m.sin, y = du * m.cos - dv * m.sin, r = Math.hypot(x, y);
+  const qx = Math.abs(x) / m.along, qy = Math.abs(y) / m.across, p = m.power;
+  const rho = p === 2 ? Math.hypot(qx, qy) : Math.pow(Math.pow(qx, p) + Math.pow(qy, p), 1 / p);
+  if (rho < 1e-9) return -m.across;
+  // The bays: the shore drawn in by up to `bays` of the way to the middle, by the lobes round it (each harmonic's
+  // cosine and sine from the last's, round the angle of the point on the shape's unit circle).
   let f = 1;
   if (m.wild > 0) {
-    const phi = Math.atan2(y / m.across, x / m.along);
-    let wave = 0, sum = 0;
-    for (let k = 0; k < m.lobes.length; k += 2) { wave += m.lobes[k] * Math.cos((k / 2 + 2) * phi + m.lobes[k + 1]); sum += m.lobes[k]; }
-    f = 1 - m.wild * MERE.bays * (0.5 + (0.5 * wave) / Math.max(sum, 1e-9));
+    const q = Math.hypot(qx, qy), c1 = x / m.along / q, s1 = y / m.across / q;
+    let ck = c1 * c1 - s1 * s1, sk = 2 * c1 * s1, wave = 0;
+    for (let k = 0; k < m.lobes.length; k += 2) {
+      wave += m.lobes[k] * ck - m.lobes[k + 1] * sk;
+      const nc = ck * c1 - sk * s1;
+      sk = sk * c1 + ck * s1; ck = nc;
+    }
+    f = 1 - m.wild * MERE.bays * (0.5 + (0.5 * wave) / m.lobeSum);
   }
-  if (rho < 1e-9) return -m.across * f;
   return r * (1 - f / rho);
 }
 
@@ -322,8 +332,8 @@ export interface Landform {
   readonly meres: readonly Mere[];
   /** The lake on the floor whose shore lies nearest a point, if within `reach` m of it (negative: in the water). */
   mereAt(theta: number, s: number, reach?: number): MereHit | null;
-  /** How far a point lies from any water standing on the floor: the ring lake's shore or a lake's (m, negative in it). */
-  fromWater(theta: number, s: number): number;
+  /** Whether a point lies in water standing on the floor (the ring lake or a lake on it), or within `margin` m of its shore. */
+  inWater(theta: number, s: number, margin?: number): boolean;
 }
 
 export interface Plan extends Landform {
@@ -545,21 +555,24 @@ export function makeLandform(h: Habitat): Landform {
     let best: MereHit | null = null;
     for (let i = 0; i < meres.length; i++) {
       const m = meres[i];
-      if (Math.abs(s - m.s) > reaches[i] + reach) continue;
+      if (Math.abs(s - m.s) > reaches[i] + reach || Math.abs(angleDiff(m.theta, theta)) * R > reaches[i] + reach) continue;
       const edge = mereEdge(m, R, theta, s);
       if (edge <= reach && (!best || edge < best.edge)) best = { mere: m, edge };
     }
     return best;
   };
-  const fromWater = (theta: number, s: number): number => {
-    let d = fromLake(stepped, s);
-    for (let i = 0; i < meres.length; i++) if (Math.abs(s - meres[i].s) - reaches[i] < d) d = Math.min(d, mereEdge(meres[i], R, theta, s));
-    return d;
+  const inWater = (theta: number, s: number, margin = 0): boolean => {
+    if (fromLake(stepped, s) < margin) return true;
+    for (let i = 0; i < meres.length; i++) {
+      const m = meres[i], far = reaches[i] + margin;
+      if (Math.abs(s - m.s) < far && Math.abs(angleDiff(m.theta, theta)) * R < far && mereEdge(m, R, theta, s) < margin) return true;
+    }
+    return false;
   };
 
   return {
     habitat: h, lake: stepped, reserveEnd, valleys: N, faces, mountain, rivers, phase, stairHalfWidth: R * 0.02,
-    careAt, gravityAt, bandAt, valleyAt, acrossAt, ridgeAt, faceAt, routeOf, endcapAt, grounds, ringLine, landformAt, roomAt, meres, mereAt, fromWater,
+    careAt, gravityAt, bandAt, valleyAt, acrossAt, ridgeAt, faceAt, routeOf, endcapAt, grounds, ringLine, landformAt, roomAt, meres, mereAt, inWater,
   };
 }
 
@@ -585,20 +598,28 @@ function meresOf(h: Habitat, base: MereBase): Mere[] {
   const sink = lake ? lake.level : -1;
   const rng = new Rng(deriveSeed(h.seed, 'plan', 'meres'));
   const out: Mere[] = [];
-  const lobes = (): Float64Array => {
+  const lobes = (): Pick<Mere, 'lobes' | 'lobeSum'> => {
     const l = new Float64Array(MERE.harmonics * 2);
-    for (let k = 0; k < MERE.harmonics; k++) { l[k * 2] = rng.range(0.3, 1) / (k + 1); l[k * 2 + 1] = rng.range(0, TURN); }
-    return l;
+    let sum = 0;
+    for (let k = 0; k < MERE.harmonics; k++) {
+      const amp = rng.range(0.3, 1) / (k + 1), phase = rng.range(0, TURN);
+      l[k * 2] = amp * Math.cos(phase); l[k * 2 + 1] = amp * Math.sin(phase); sum += amp;
+    }
+    return { lobes: l, lobeSum: sum };
   };
   const wildOf = (s: number): number => 1 - smoothstep(0.25, 0.7, careAt(s));
   const walkTheta = (s: number): number => valleyAt(0, s) + (SUNWALK_SIDE * gap) / 2;
-  const make = (kind: Mere['kind'], theta: number, s: number, along: number, across: number, heading: number): Mere => ({
-    id: out.length, kind, theta: wrap(theta), s, along, across, heading, depth: spec.depth * across * 2, level: sink + roomAt(theta, s), wild: wildOf(s), lobes: lobes(),
-  });
+  const make = (kind: Mere['kind'], theta: number, s: number, along: number, across: number, heading: number): Mere => {
+    const wild = wildOf(s);
+    return {
+      id: out.length, kind, theta: wrap(theta), s, along, across, heading, depth: spec.depth * across * 2, level: sink + roomAt(theta, s), wild,
+      cos: Math.cos(heading), sin: Math.sin(heading), power: MERE.round + (MERE.square - MERE.round) * (1 - wild), ...lobes(),
+    };
+  };
   /** Whether a lake's footprint and its shore stay off every landform (the Rings' slopes, the Heights). */
   const offForms = (m: Mere): boolean => {
     if (landformAt(m.theta, m.s)) return false;
-    const c = Math.cos(m.heading), sn = Math.sin(m.heading), shore = mereShore(m);
+    const c = m.cos, sn = m.sin, shore = mereShore(m);
     for (let q = 0; q < 24; q++) {
       const a = (q / 24) * TURN, x = Math.cos(a) * m.along, y = Math.sin(a) * m.across;
       // On the line out from its middle through its shore, a shore's width beyond the water.
@@ -872,7 +893,7 @@ export function makePlan(h: Habitat): Plan {
   const nearby = (theta: number, s: number): boolean => {
     near.length = 0; near2.length = 0;
     if (!(s >= reserveEnd && s <= floorEnd) || districts.length === 0) return false;
-    if (form.fromWater(theta, s) < 0) return false;
+    if (form.inWater(theta, s)) return false;
     const u = Math.cos(theta) * R, v = Math.sin(theta) * R;
     theta += (sway / R) * bend.fbm3(u / bendWidth, v / bendWidth, s / bendWidth, 1);
     s += sway * bend.fbm3(u / bendWidth + 31.7, v / bendWidth, s / bendWidth, 1);
@@ -995,8 +1016,7 @@ export function makePlan(h: Habitat): Plan {
   // through one costs as much); courts and works keep off them far enough that a way bent round fits between.
   const mereDiscs: Obstacle[] = [];
   for (const m of meres) {
-    const n = Math.max(1, Math.ceil((m.along / m.across) * 1.5)), c = Math.cos(m.heading), sn = Math.sin(m.heading);
-    const p = MERE.round + (MERE.square - MERE.round) * (1 - m.wild);
+    const n = Math.max(1, Math.ceil((m.along / m.across) * 1.5)), c = m.cos, sn = m.sin, p = m.power;
     for (let i = 0; i < n; i++) {
       // (Its widest across the disc's stretch is at the end nearer the middle.)
       const x = m.along * (-1 + (2 * i + 1) / n), near = Math.max(0, Math.abs(x) - m.along / n) / m.along;
@@ -1005,8 +1025,13 @@ export function makePlan(h: Habitat): Plan {
     }
   }
   /** Whether something reaching `reach` m from a point keeps clear of every lake's discs, and of a way bent round them. */
-  const offMeres = (theta: number, s: number, reach: number): boolean =>
-    mereDiscs.every((o) => dist(o.theta, o.s, theta, s) >= o.keep * 1.25 + reach + widths.way * 2);
+  const offMeres = (theta: number, s: number, reach: number): boolean => {
+    for (const o of mereDiscs) {
+      const keep = o.keep * 1.25 + reach + widths.way * 2;
+      if (Math.abs(o.s - s) < keep && dist(o.theta, o.s, theta, s) < keep) return false;
+    }
+    return true;
+  };
 
   // The signature works (gen/works.ts `SIGNATURE_KINDS`): `landforms.signature` of them, the Spiral, the Wave Field and
   // the Tilt in turn, placed before the entrances (whose courts keep off them) by sightlines: of the throws that fit (on

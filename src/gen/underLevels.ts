@@ -96,12 +96,16 @@ function makeLevels(terrain: Terrain): UnderLevels {
     let v = blocks.get(key);
     if (!v) {
       if (blocks.size >= CACHE / 64) blocks.clear();
-      const n = BLOCK_SAMPLES + 1, out = new Float32Array(n * n * 3);
+      // (Its samples, then the lowest of them.)
+      const n = BLOCK_SAMPLES + 1, out = new Float32Array(n * n * 3 + 1);
       const j0 = bj * BLOCK, j1 = Math.min(along, j0 + BLOCK);
+      let low = Infinity;
       for (let b = 0, k = 0; b < n; b++) for (let a = 0; a < n; a++, k += 3) {
         const x = bi * BLOCK + (a / BLOCK_SAMPLES) * BLOCK, y = j0 + (b / BLOCK_SAMPLES) * (j1 - j0);
         out[k] = x; out[k + 1] = y; out[k + 2] = deckLand(x * dTheta, s0 + y * bay) - under0;
+        low = Math.min(low, out[k + 2]);
       }
+      out[n * n * 3] = low;
       v = out;
       blocks.set(key, v);
     }
@@ -118,9 +122,14 @@ function makeLevels(terrain: Terrain): UnderLevels {
     for (let dj = -BLOCK_REACH; dj <= BLOCK_REACH; dj++) {
       const J = bj + dj;
       if (J < 0 || J >= blocksAlong) continue;
+      const j0 = J * BLOCK, j1 = Math.min(along, j0 + BLOCK), gy = Math.max(0, j0 - j, j - j1);
       for (let di = -BLOCK_REACH; di <= BLOCK_REACH; di++) {
-        const pts = blockOf((((bi + di) % blocksAround) + blocksAround) % blocksAround, J);
-        for (let k = 0; k < pts.length; k += 3) {
+        const I = (((bi + di) % blocksAround) + blocksAround) % blocksAround, pts = blockOf(I, J), end = pts.length - 1;
+        // A block whose lowest sample, as near as the block comes, could not bring the ceiling lower is passed by.
+        let mx = I * BLOCK + BLOCK / 2 - i;
+        mx -= around * Math.round(mx / around);
+        if (pts[end] + rise * Math.hypot(Math.max(0, Math.abs(mx) - BLOCK / 2), gy) - 1e-6 >= c) continue;
+        for (let k = 0; k < end; k += 3) {
           let x = pts[k] - i;
           x -= around * Math.round(x / around);
           const y = pts[k + 1] - j;

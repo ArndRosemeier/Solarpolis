@@ -325,7 +325,7 @@ export function makeTerrain(h: Habitat): Terrain {
   const meresOver = (theta: number, s: number, land: number): number => {
     for (let i = 0; i < meres.length; i++) {
       const m = meres[i];
-      if (Math.abs(s - m.s) > mereReaches[i]) continue;
+      if (Math.abs(s - m.s) > mereReaches[i] || Math.abs(turnOf(theta - m.theta)) * R > mereReaches[i]) continue;
       const edge = mereEdge(m, R, theta, s), shore = mereShore(m);
       if (edge >= shore) continue;
       if (edge < 0) return m.level - m.depth * Math.sqrt(smoothstep(0, 1, mereDeep(m, edge)));
