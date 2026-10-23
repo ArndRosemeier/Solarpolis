@@ -14,6 +14,7 @@ import { POSE } from '../gen/standIn';
 import type { Terrain } from '../gen/terrain';
 import { footingOf, partyKey, partyMembers, talkerAt, voiceOf, type Person } from '../sim';
 import { REFERENCE_SPACE } from '../space';
+import type { Whereabouts } from '../system';
 import type { Conversations } from '../talk';
 import { lineAt, type Line } from '../talk/lines';
 import type { Talker } from './people';
@@ -53,7 +54,8 @@ export class TalkView {
   private t = 0;
   readonly bubbles: Bubble[] = [];
 
-  constructor(private readonly habitat: Habitat, private readonly terrain: Terrain) {}
+  /** `where`: the player's place in the system, for the news heard here (a visited habitat hears with its own lag). */
+  constructor(private readonly habitat: Habitat, private readonly terrain: Terrain, private readonly where: Whereabouts = { home: habitat.params, at: 'home' }) {}
 
   /** Who in someone's party speaks at clock time t: the conversation's speaker where one is held, else `talkerAt`. */
   readonly speaker = (p: Person, t: number): number => this.speaking.get(partyKey(p)) ?? talkerAt(p, t);
@@ -121,14 +123,15 @@ export class TalkView {
 
   /**
    * The conversation engine, loaded the first time anyone near talks (its own chunk), with the system's ledger for the
-   * news from elsewhere: this habitat is the reference world's home, and the Inside clock is the world's.
+   * news from elsewhere: the reference world around the player's home, heard where they are (`where.at`); the Inside
+   * clock is the world's.
    */
   private loadEngine(): void {
     if (this.loading) return;
     this.loading = true;
     void Promise.all([import('../talk'), import('../system')]).then(([m, system]) => {
-      const ledger = system.makeLedger({ ...REFERENCE_SPACE, home: this.habitat.params }, system.REFERENCE_SYSTEM);
-      this.conversations = new m.Conversations(this.habitat, { ledger, at: 'home' });
+      const ledger = system.makeLedger({ ...REFERENCE_SPACE, home: this.where.home }, system.REFERENCE_SYSTEM);
+      this.conversations = new m.Conversations(this.habitat, { ledger, at: this.where.at });
     });
   }
 
