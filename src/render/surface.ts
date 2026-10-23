@@ -79,6 +79,23 @@ export function dragToLook(canvas: HTMLCanvasElement, drag: (dx: number, dy: num
 }
 
 /**
+ * The mouse wheel over the canvas and over anything laid over it in its box (a card, a meter): `wheel(deltaY)`, unless
+ * the pointer is over something in the box that scrolls itself.
+ */
+export function wheelOver(canvas: HTMLCanvasElement, wheel: (deltaY: number) => void): void {
+  window.addEventListener('wheel', (e) => {
+    const box = canvas.parentElement;
+    if (!box || !(e.target instanceof Element) || !box.contains(e.target)) return;
+    for (let el: Element | null = e.target; el && el !== box; el = el.parentElement) {
+      const y = getComputedStyle(el).overflowY;
+      if ((y === 'auto' || y === 'scroll') && el.scrollHeight > el.clientHeight) return;
+    }
+    e.preventDefault();
+    wheel(e.deltaY);
+  }, { passive: false });
+}
+
+/**
  * Left-button (or tap) clicks on the canvas, the pointer free and visible (Arnd, 2026-10-21: the left button clicks
  * things in the world): `use(x, y)` with the click's place in the canvas (pixels), unless the pointer moved between
  * press and release (a drag). Over something `usable(x, y)` says can be used, the pointer shows a hand.
