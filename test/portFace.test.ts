@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { Rng } from '@futuremagic/core';
 import { MATRIX } from '../src/blueprint';
 import { makeSkin } from '../src/gen/skin';
-import { QUARTER, WINDOW_CLOCK_WRAP, bandMean, blockGlow, cellAt, litShare, portFaceOf, quarterGlow, windowAt, windowHours, windowLit, windowsRound } from '../src/gen/portFace';
+import { QUARTER, WINDOW_CLOCK_WRAP, bandMean, blockGlow, blockLit, cellAt, litShare, portFaceOf, quarterGlow, windowAt, windowHours, windowLit, windowsRound } from '../src/gen/portFace';
 import { habitatOf } from './worlds';
 
 for (const { name } of MATRIX) {
@@ -62,7 +62,9 @@ for (const { name } of MATRIX) {
     for (const w of rows) if (w) assert.equal(w.index, rows.find((x) => x)!.index);
     assert.ok(rows.every((w) => w === null) || rows.every((w) => w !== null), 'a block is built or left out whole');
     // Over a day, a window goes on and off a few times, never flickering frame to frame.
-    const w = { band: i, storey: 3, index: 11, shade: 1 };
+    // A block about half lit, so its window has a schedule to keep.
+    const jb = Array.from({ length: 50 }, (_, m) => m).find((m) => Math.abs(blockLit(f, i, 0, m, 0.5) - 0.5) < 0.2)!;
+    const w = { band: i, storey: 0, index: jb * town.blockWindows, kb: 0, jb, shade: 1 };
     let changes = 0, last = windowLit(f, w, 0, 0.5);
     for (let m = 1; m <= 24 * 60; m++) {
       const lit = windowLit(f, w, m / 60, 0.5);

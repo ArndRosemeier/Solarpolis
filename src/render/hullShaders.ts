@@ -441,30 +441,35 @@ function portFaceGlow(): Node<'vec3'> {
   const u = max(r.sub(g.x), 0).div(g.z), k = floor(u), fr = fract(u);
   const kb = floor(k.div(b.x)), kq = floor(kb.div(QUARTER.rows));
   const rq = g.x.add(kq.mul(QUARTER.rows).mul(b.x).mul(g.z));
-  const qa = a.mul(max(floor(rq.mul(2 * Math.PI).div(g.w.mul(b.y).mul(QUARTER.blocks))), 1)), jq = floor(qa), fq = fract(qa);
-  const v = a.mul(max(floor(g.x.add(kb.mul(b.x).mul(g.z)).mul(2 * Math.PI).div(g.w)), 1)), j = floor(v), fj = fract(v), jb = floor(j.div(b.y));
   const salt = (s: number): Node<'uint'> => uint(index.mul(8).add(s));
+  const stagger = toFloat(hash3z(seed, uint(kq), uint(0), salt(PORT_SALT.stagger)));
+  const qa = a.add(stagger).mul(max(floor(rq.mul(2 * Math.PI).div(g.w.mul(b.y).mul(QUARTER.blocks))), 1)), jq = floor(qa), fq = fract(qa);
+  const v = a.mul(max(floor(g.x.add(kb.mul(b.x).mul(g.z)).mul(2 * Math.PI).div(g.w)), 1)), j = floor(v), fj = fract(v), jb = floor(j.div(b.y));
   const ku = uint(k), ju = uint(j);
   const density = toFloat(hash3z(seed, uint(kq), uint(jq), salt(PORT_SALT.quarter))).mul(DENSITY.spread).add(DENSITY.least);
   const builtShare = min(w.w.mul(density), 1);
   // The avenue along each quarter's side, its edge smoothed over the pixel.
   const dq = min(fwidth(qa), 0.5).mul(0.5), street = smoothstep(float(QUARTER.avenue).sub(dq), float(QUARTER.avenue).add(dq), fq);
   const built = toFloat(hash3z(seed, uint(kb), uint(jb), salt(PORT_SALT.block))).lessThan(builtShare);
+  // The block's own share lit (`blockLit`): some buildings bright, some nearly dark.
+  const share = b.w, x = toFloat(hash3z(seed, uint(kb), uint(jb), salt(PORT_SALT.blockLit)));
+  const blockLit = share.add(x.sub(0.5).mul(min(share, share.oneMinus()).mul(2)));
   // The window: glass between sill and head and between mullions, lit on its own schedule, at its own shade.
   const du = fwidth(u).mul(0.5), dv = min(fwidth(v), 0.5).mul(0.5), m = w.z.mul(0.5);
   const glass = band(fr, w.x.sub(du), w.x.add(du), w.y.sub(du), w.y.add(du)).mul(band(fj, m.sub(dv), m.add(dv), m.oneMinus().sub(dv), m.oneMinus().add(dv)));
   const shade = toFloat(hash3z(seed, ku, ju, salt(PORT_SALT.shade))).mul(0.5).add(0.5);
   const period = toFloat(hash3z(seed, ku, ju, salt(PORT_SALT.phase))).add(1).mul(TOGGLE_HOURS);
   const slot = floor(clock.x.div(period).add(toFloat(hash3z(seed, ju, ku, salt(PORT_SALT.phase)))));
-  const lit = toFloat(hash3z(seed, ku.add(uint(slot).mul(uint(4096))), ju, salt(PORT_SALT.lit))).lessThan(b.w);
+  const lit = toFloat(hash3z(seed, ku.add(uint(slot).mul(uint(4096))), ju, salt(PORT_SALT.lit))).lessThan(blockLit);
   const window = glass.mul(select(built.and(lit), shade, float(0))).mul(b.z);
-  // Too far for its windows, a block shows as its own share lit (`blockGlow`); too far for blocks, its quarter
-  // (`quarterGlow`); too far for quarters, the band's mean. Each level averages to the next, so none jumps.
-  const share = b.w, glazedShare = w.y.sub(w.x).mul(w.z.oneMinus()), x = toFloat(hash3z(seed, uint(kb), uint(jb), salt(PORT_SALT.blockLit)));
-  const blockLit = share.add(x.sub(0.5).mul(min(share, share.oneMinus()).mul(2)));
-  const block = select(built, glazedShare.mul(blockLit).mul(MEAN_SHADE).mul(b.z), float(0));
-  const quarter = glazedShare.mul(builtShare).mul(share).mul(MEAN_SHADE).mul(b.z);
-  const near = mix(quarter, mix(block, window, shows(u).mul(shows(v))), shows(u.div(b.x)).mul(shows(v.div(b.y))));
+  // Too far for its windows but near enough for its storeys, a block shows its rows of glass lit by its share; too
+  // far for storeys, the block as a whole (`blockGlow`); too far for blocks, its quarter (`quarterGlow`); too far for
+  // quarters, the band's mean. Each level averages to the next, so none jumps.
+  const lamps = select(built, blockLit.mul(MEAN_SHADE).mul(b.z), float(0));
+  const rows = band(fr, w.x.sub(du), w.x.add(du), w.y.sub(du), w.y.add(du)).mul(w.z.oneMinus()).mul(lamps);
+  const block = w.y.sub(w.x).mul(w.z.oneMinus()).mul(lamps);
+  const quarter = w.y.sub(w.x).mul(w.z.oneMinus()).mul(builtShare).mul(share).mul(MEAN_SHADE).mul(b.z);
+  const near = mix(quarter, mix(block, mix(rows, window, shows(v)), shows(u)), shows(u.div(b.x)).mul(shows(v.div(b.y))));
   const windows = select(inAny, mix(t.w, near.mul(street), shows(u.div(b.x.mul(QUARTER.rows))).mul(shows(qa))), float(0));
   // The bearing ring: a lamp every few handrails, every other one dimmer, so the face's slow turn shows against the dock.
   const inRing = r.greaterThanEqual(face.y).and(r.lessThan(face.z));
