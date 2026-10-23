@@ -28,7 +28,7 @@
 
 - This is a sample habitat: a reusable blueprint for more targeted versions later, not one of the world bible's named polities. Its steward Mind is **A Little More Room Than Strictly Necessary**. Solarpolis remains the name of the whole setting and project.
 - Ceiling skies should read as screens: visible panel joints stay on the physical ceiling, including screens showing the real land above.
-- Bring the living layer to life in this order: neighbourhood routines between homes, halls and lifts; social activity in those places; then ambient details, sounds, maintenance and deliveries. These are the next design steps, not yet implemented.
+- Bring the living layer to life in this order: neighbourhood routines between homes, halls and lifts; social activity in those places; then ambient details, sounds, maintenance and deliveries. The first routines now connect lived-in home frontages with hall and lift approaches. Residents pause there and return home. Detailed activities inside halls, NPC lift rides and ambient life remain later steps.
 - Daily routines reflect chosen pursuits and relationships. The world bible describes abundance without ordinary economic compulsion; a workshop or shared kitchen is a place people choose to participate.
 - A separate agent is building a portable conversation engine. Integrate it later with resident identity, place, activity and social context; do not build a second conversation engine here.
 - Finished work must be pushed to `main` so Arnd can publish and see the results; do not leave completed changes only on a local branch (Arnd, 2026-10-23).

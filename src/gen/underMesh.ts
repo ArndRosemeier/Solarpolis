@@ -62,6 +62,9 @@ const PILLAR = {
   rib: 0.24, ribDeep: 0.12, ring: 0.4, ringDeep: 0.16,
 };
 
+/** The pillar's square plinth reaches this far into each bay (m). */
+export const underPlinth = (h: Habitat): number => PILLAR.plinth * h.pillars.radius;
+
 /** What each detail draws: shaft sides, segments of a quarter circle, rows up a conoid, ribs a quarter, floor cells a side, spandrel rings, mouldings. */
 const DETAIL: Readonly<Record<UnderDetail, { shaft: number; arc: number; rows: number; ribs: number; floor: number; rings: number; moulded: boolean }>> = {
   near: { shaft: 24, arc: 8, rows: 8, ribs: 4, floor: 8, rings: 4, moulded: true },

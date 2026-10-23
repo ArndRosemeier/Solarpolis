@@ -8,6 +8,7 @@
 import type { Terrain } from '../gen/terrain';
 import { MEAN_HEIGHT, POSE } from '../gen/standIn';
 import { residentOf, type Person } from './population';
+import { underFloorAt } from '../gen/underMesh';
 
 export { postureOf } from './beats';
 
@@ -34,13 +35,13 @@ export interface Footing {
  * `height` theirs (a swimmer's feet hang that far under the surface; a drone body's own height).
  */
 export function footingOf(terrain: Terrain, p: Person, deck: number | null, height: number): Footing {
-  const surface = terrain.standAt(p.theta, p.s), still = p.moving ? POSE.upright : p.posture;
+  const surface = p.below ? underFloorAt(terrain, p.theta, p.s) : terrain.standAt(p.theta, p.s), still = p.moving ? POSE.upright : p.posture;
   if (residentOf(terrain.habitat, p.resident).body === 'drone') {
     const under = deck !== null && deck > surface ? deck : surface;
     return { h: under + AT_EYES[still] * MEAN_HEIGHT - height / 2, pose: POSE.upright, swim: false };
   }
   // On a deck over the water (a bridge, the pavilion) they stand on the deck.
   if (deck !== null && deck > surface) return { h: deck, pose: still, swim: false };
-  if (surface - terrain.heightAt(p.theta, p.s) > SWIM_WATER) return { h: surface - SWIM_DEPTH * height, pose: POSE.upright, swim: true };
+  if (!p.below && surface - terrain.heightAt(p.theta, p.s) > SWIM_WATER) return { h: surface - SWIM_DEPTH * height, pose: POSE.upright, swim: true };
   return { h: surface, pose: still, swim: false };
 }

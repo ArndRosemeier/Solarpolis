@@ -26,6 +26,7 @@ import type { Terrain } from '../gen/terrain';
 import { horizonAt } from '../gen/horizon';
 import { MEAN_HEIGHT, POSE, SPECK_STRIDE, STAND_IN_STRIDE, speckBands, standInArrays, writeSpeck } from '../gen/standIn';
 import { floorGap, footingOf, personKey, lifeBytes, peopleAt, residentOf, talkerAt, whereIs, type Footing, type Person, type Resident } from '../sim';
+import { neighbourAt, neighboursAt, neighbourhoodBytes, shedNeighbourhoods } from '../sim/neighbourhood';
 import { CROWD, STAND_IN_LAYOUT, layInstances } from './materials';
 import { arraysGeometry, drawnAnywhere, freeMesh, instancedOf, sendInstances } from './geometry';
 import { Figure, castAsWorn, type AnimState } from './actors/figure';
@@ -189,6 +190,7 @@ export class PeopleView {
   /** The longest a figure's levels took to make on the main thread (ms; the debug line). */
   private slowestLevels = 0;
   private disposed = false;
+  private below = false;
 
   constructor(private readonly habitat: Habitat, private readonly terrain: Terrain, private readonly stage: Stage, private readonly camera: Camera, private readonly deckOf: (theta: number, s: number) => number | null) {
     this.group.name = 'people';
@@ -215,7 +217,12 @@ export class PeopleView {
   }
 
   /** Bring the people up to clock time t (s) around the eye (world), drawn relative to it. `dt`: the frame's (s). */
-  follow(eye: Vec3, t: number, dt: number): void {
+  follow(eye: Vec3, t: number, dt: number, below = false): void {
+    if (below !== this.below) {
+      for (const key of this.people.keys()) this.letGo(key);
+      this.below = below;
+      this.lastScan = -Infinity;
+    }
     const r = this.residents;
     if (!r || !this.mesh) return;
     this.time = t;
@@ -235,7 +242,7 @@ export class PeopleView {
       const d = fresh ? 0 : dist(one.feet, eye);
       const due = fresh || one.figure || d < EVERY_FRAME || (d < HALF_FRAMES ? (k + this.frameNo) % 2 === 0 : (k + this.frameNo) % FAR_SHARE === 0);
       if (due) {
-        const p = whereIs(h, t, one.person, this.terrain);
+        const p = this.below ? neighbourAt(this.terrain, t, one.person) : whereIs(h, t, one.person, this.terrain);
         if (!p) { gone.push(key); continue; }
         const still = !fresh && !p.moving && !one.person.moving && p.theta === one.person.theta && p.s === one.person.s && p.activity === one.person.activity && p.posture === one.person.posture;
         one.person = p;
@@ -257,7 +264,8 @@ export class PeopleView {
     this.lastScan = this.clock;
     this.scannedAt = eye;
     // Newcomers nearest first: their looks are measured in this order, a few each frame.
-    const R = this.habitat.radius, found = peopleAt(this.habitat, t, { theta: at.theta, s: at.s, radius: CROWD_RANGE }, this.terrain);
+    const R = this.habitat.radius, area = { theta: at.theta, s: at.s, radius: this.below ? Math.min(CROWD_RANGE, this.habitat.params.under.mist * 2) : CROWD_RANGE };
+    const found = this.below ? neighboursAt(this.terrain, t, area) : peopleAt(this.habitat, t, area, this.terrain);
     const away = (p: Person): number => floorGap(R, at.theta, at.s, p.theta, p.s);
     for (const p of found.filter((q) => !this.people.has(personKey(q))).sort((a, b) => away(a) - away(b))) {
       const key = personKey(p);
@@ -284,7 +292,7 @@ export class PeopleView {
   private stand(one: Someone): void {
     const h = this.habitat, p = one.person, { profile } = h;
     if (!one.placed || floorGap(h.radius, p.theta, p.s, one.deckAt[0], one.deckAt[1]) > DECK_MOVE) {
-      one.deck = this.deckOf(p.theta, p.s);
+      one.deck = p.below ? null : this.deckOf(p.theta, p.s);
       one.deckAt = [p.theta, p.s];
     }
     // A drone body is placed by the drones' view (render/fliers.ts), from the same footing.
@@ -299,7 +307,7 @@ export class PeopleView {
     one.feet = feet;
     one.up = up;
     one.doing = doing;
-    if (!one.placed || (p.moving && dist(feet, one.litAt) > HORIZON_MOVE)) { one.horizon = horizonAt(this.terrain, p.theta, p.s); one.litAt = feet; }
+    if (!one.placed || (p.moving && dist(feet, one.litAt) > HORIZON_MOVE)) { one.horizon = p.below ? [0, 0] : horizonAt(this.terrain, p.theta, p.s); one.litAt = feet; }
     one.placed = true;
   }
 
@@ -437,7 +445,7 @@ export class PeopleView {
 
   /** Bytes held: the stand-ins' instances, the residents' measures, the figures and the population's caches (memory watchdog). */
   bytes(): number {
-    let n = this.data.byteLength + (this.specks?.data.byteLength ?? 0) * 1.25 + (this.residents?.heldBytes() ?? 0) + this.people.size * 400 + lifeBytes(this.habitat, this.terrain);
+    let n = this.data.byteLength + (this.specks?.data.byteLength ?? 0) * 1.25 + (this.residents?.heldBytes() ?? 0) + this.people.size * 400 + lifeBytes(this.habitat, this.terrain) + neighbourhoodBytes(this.terrain);
     for (const one of this.people.values()) n += one.figure?.figure?.bytes() ?? 0;
     return n;
   }
@@ -445,11 +453,12 @@ export class PeopleView {
   /** Give memory back: the measures of people not in the area are made again when needed. */
   shed(): void {
     this.residents?.forget();
+    shedNeighbourhoods(this.terrain);
   }
 
   /** The debug menu's line. */
   info(): string {
-    return `people: ${this.people.size} up within ${(CROWD_RANGE / 1000).toFixed(1)} km · ${this.figuresDrawn} figures (${this.loads.loading} loading) · ${this.drawn} stand-ins · ${this.specksDrawn} specks · ${this.waiting} waiting for their look · handover holes ${this.holes}, frames with holes ${this.holeFrames} · figure levels made in ${this.slowestLevels.toFixed(0)} ms at most`;
+    return `people: ${this.people.size} ${this.below ? 'below' : 'up'} within ${((this.below ? Math.min(CROWD_RANGE, this.habitat.params.under.mist * 2) : CROWD_RANGE) / 1000).toFixed(1)} km · neighbourhood cache ${(neighbourhoodBytes(this.terrain) / 1048576).toFixed(2)} MB · ${this.figuresDrawn} figures (${this.loads.loading} loading) · ${this.drawn} stand-ins · ${this.specksDrawn} specks · ${this.waiting} waiting for their look · handover holes ${this.holes}, frames with holes ${this.holeFrames} · figure levels made in ${this.slowestLevels.toFixed(0)} ms at most`;
   }
 
   dispose(): void {

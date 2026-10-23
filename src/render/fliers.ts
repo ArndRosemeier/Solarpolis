@@ -169,7 +169,7 @@ export class FlierView {
    * Bring every drone up to clock time t (s), drawn relative to the eye (world), and the people in drone bodies the
    * people's view placed (`aloft`). `dt`: the frame's (s).
    */
-  follow(eye: Vec3, t: number, dt: number, aloft: readonly Aloft[] = []): void {
+  follow(eye: Vec3, t: number, dt: number, aloft: readonly Aloft[] = [], below = false): void {
     const drawn = this.drawn, specks = this.specks;
     this.near.length = 0;
     if (!drawn || !specks) return;
@@ -184,7 +184,7 @@ export class FlierView {
     const frame: Frame = { eye, perMetre: pxPerMetre(this.stage, this.camera, this.screen), specks: 0, written: 0 };
     for (const d of drawn) for (const l of d.levels) l.count = 0;
     this.counts = [0, 0, 0];
-    this.ones.forEach((one, id) => {
+    if (!below) this.ones.forEach((one, id) => {
       const due = !one.flier || away(one.at, eye) < EVERY_FRAME || (id + this.frameNo) % FAR_SHARE === 0;
       if (due) this.putDrone(one, flierAt(this.terrain, id, t), one.flier ? dt : 0);
       this.write(one, byDesign.get(`${one.flier!.role}/${one.flier!.design}`)!, frame, 0);
@@ -205,7 +205,7 @@ export class FlierView {
       here.add(a.key);
     }
     for (const key of this.persons.keys()) if (!here.has(key)) this.persons.delete(key);
-    const all = this.ones.length + aloft.length;
+    const all = (below ? 0 : this.ones.length) + aloft.length;
     if (frame.written !== all) { this.holes += all - frame.written; this.holeFrames++; }
     for (const d of drawn) for (const l of d.levels) {
       for (const m of [l.body, l.veil]) (m.geometry as InstancedBufferGeometry).instanceCount = l.count;

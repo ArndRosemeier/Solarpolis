@@ -31,7 +31,7 @@ import { kept } from '../gen/kept';
 import { fromLake, planOf } from '../gen/plan';
 import type { Habitat } from '../blueprint';
 import { shuffleOf, type Shuffle } from './permute';
-import { floorGap, pointAlong, sunwalkOf, walksOf, type Route } from './walks';
+import { floorGap, pointAlong, routeThrough, sunwalkOf, walksOf, type Route } from './walks';
 import { besideLake, venuesOf, type Activity, type Venue, type Venues } from './venues';
 import { courtFloorOf, courtPassageOf, courtWayIn, courtWayOut } from '../gen/courts';
 import type { Terrain } from '../gen/terrain';
@@ -61,6 +61,8 @@ export interface Resident {
 
 /** Someone up on the land at a moment. */
 export interface Person {
+  /** In the living layer; the same resident and body as on the land. */
+  below?: boolean;
   resident: number;
   theta: number;
   s: number;
@@ -231,6 +233,19 @@ export function residentOf(h: Habitat, i: number): Resident {
     look: hash3i(seed, i, 3, 0),
     walk: life.walk * (0.85 + 0.3 * unit(seed, i, 4, 0)),
   };
+}
+
+/** Residents of one hamlet who spend this day below. Enumerates only that hamlet's two ID ranges.
+ * The first neighbourhood routines leave surface travellers to the existing outing schedule for their whole day.
+ * Thus a resident cannot be drawn on both levels, including during clock jumps. */
+export function stayingBelow(h: Habitat, day: number, court: number): number[] {
+  const c = censusOf(h), courts = venuesOf(h).courts.length;
+  if (!courts || court < 0 || court >= courts) return [];
+  const up = new Set(outingsOf(h, day, court).resident), out: number[] = [];
+  for (let i = Math.ceil(court * c.regulars / courts); i < Math.ceil((court + 1) * c.regulars / courts); i++) if (!up.has(i)) out.push(i);
+  const others = c.residents - c.regulars, sh = shuffleFor(h, day);
+  for (let i = Math.ceil(court * others / courts); i < Math.ceil((court + 1) * others / courts); i++) if (sh.permute(i) >= c.going) out.push(c.regulars + i);
+  return out;
 }
 
 /** Where in the day the bright stretch is over a place along the profile (phase 0 … daylight). */
@@ -460,13 +475,6 @@ function joined(h: Habitat, ground: Terrain, court: number, paths: Route): Route
   return routeThrough(h, all);
 }
 
-/** A route through points (θ, s, …). */
-function routeThrough(h: Habitat, points: Float64Array): Route {
-  const n = points.length / 2, along = new Float64Array(n);
-  for (let i = 1; i < n; i++) along[i] = along[i - 1] + Math.hypot((points[i * 2] - points[i * 2 - 2]) * h.radius, points[i * 2 + 1] - points[i * 2 - 1]);
-  return { points, along, length: n ? along[n - 1] : 0 };
-}
-
 /** Routes through the courts, kept per terrain (a bounded number). */
 const passages = new WeakMap<Terrain, Map<number, Route>>();
 
@@ -613,8 +621,8 @@ export interface Near {
 }
 
 /** One number for someone up on the land today, the same for every level that draws them (court and outing, or the Sunwalker). */
-export function personKey(p: Pick<Person, 'court' | 'outing'>): number {
-  return p.court < 0 ? -1 - p.outing : p.court * 2 ** 22 + p.outing;
+export function personKey(p: Pick<Person, 'court' | 'outing' | 'below'>): number {
+  return p.below ? -(2 ** 40) - p.outing : p.court < 0 ? -1 - p.outing : p.court * 2 ** 22 + p.outing;
 }
 
 /** How long one turn to speak lasts in a party that talks (s), at least; a turn runs on to twice this. */

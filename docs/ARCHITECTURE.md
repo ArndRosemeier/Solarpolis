@@ -169,6 +169,14 @@ Each row is a question you will have while coding, and the one place that answer
 | How do bodies fall, roll and collide? | `PhysicsWorld` (`world.ts`): `create(habitat)` loads Rapier; no engine gravity, each fixed step (`PHYSICS_STEP`) adds `apparentAcceleration` and `airDrag` (`ballDrag`) as a force. A bubble around the player: `needsGround(p)` / `setGround(patch)` (the patch's ground and its trunks) move its origin and rebase the bodies, so floats stay precise anywhere. `addBall`, `remove`, `advance(dt)`, `states()` in world coordinates, `offPatch(p)`, `blend` (for drawing between steps). |
 | How does the player's body move? | `Character` (`character.ts`), from `PhysicsWorld.addCharacter(feet, water)`: a capsule on Rapier's character controller, up from `upAt`, the spin's gravity, Coriolis and the air's drag on the feet and in the air, the legs' grip on the ground, buoyancy in water; set its `stride` (walk velocity, jump) and `legs` (strength, the debug boost). |
 
+## Neighbourhood life and exits
+
+| Question | The one way |
+|---|---|
+| Who walks downstairs, and how do they avoid the buildings? | `neighboursAt(terrain, clock, near)` / `neighbourAt` (`sim/neighbourhood.ts`): existing resident IDs from `stayingBelow` (`population.ts`), stable lived-in home frontages, seeded visits to hall and lift frontages, perimeter walks inset from the actual pillar plinths. No diagonal shortcuts through buildings or cisterns. Travellers scheduled on the surface are reserved to that schedule for their whole day; riding NPCs and indoor hall activities come later. Route, plan and day caches report `neighbourhoodBytes` and release through `shedNeighbourhoods` (8 MiB budget). `routeThrough` in `sim/walks.ts` builds route distances for either level. |
+| How are downstairs residents drawn? | The same `PeopleView`, with a below flag: `footingOf` takes the living floor, `FlierView` draws the residents' drone bodies without the surface fleet, and CROWD/SPECK/DRONE take the lamplight and mist via `personColor`. Figures retain their Actors identities and animations. `below.people` is off during ceiling land captures. |
+| How does a player find an exit below? | `nearestExitCourt` (`gen/exitCourt.ts`) finds the nearest actual lift doors, wrapping the cylinder seam. `InteriorView.onExit` feeds `ExitMarker` (`app/exitMarker.ts`): a compass arrow, court number, straight-line distance and the click instruction at the doors. It hides upstairs and during a ride. |
+
 ## Workers (`src/workers`)
 
 | Question | The one way |

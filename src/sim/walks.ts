@@ -157,3 +157,11 @@ export function pointAlong(route: Route, R: number, d: number): { theta: number;
   const t0 = p[lo * 2], s0 = p[lo * 2 + 1], t1 = p[hi * 2], s1 = p[hi * 2 + 1];
   return { theta: t0 + (t1 - t0) * t, s: s0 + (s1 - s0) * t, heading: Math.atan2((t1 - t0) * R, s1 - s0) };
 }
+
+/** A route through points (θ, s, …). */
+export function routeThrough(h: Habitat, points: Float64Array): Route {
+  const n = points.length / 2, along = new Float64Array(n);
+  for (let i = 1; i < n; i++) along[i] = along[i - 1] + Math.hypot((points[i * 2] - points[i * 2 - 2]) * h.radius, points[i * 2 + 1] - points[i * 2 - 1]);
+  return { points, along, length: n ? along[n - 1] : 0 };
+}
+

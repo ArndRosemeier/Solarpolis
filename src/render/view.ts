@@ -48,6 +48,7 @@ import { AnimalView, DEER, SQUIRRELS } from './animals';
 import { CabinView } from './lift';
 import { GLASS, SKIES, skyOverBay } from '../gen/skies';
 import { GlassDeck, type GlassStage, type GlassWant } from './glassDeck';
+import { nearestExitCourt, type ExitCourt } from '../gen/exitCourt';
 import { underOf } from '../gen/under';
 import { calledFrom, doorsAbove, doorsBelow, doorsHit, eyeInCabin, liftDoorsNear, outside, type LiftDoors } from '../gen/lifts';
 
@@ -144,6 +145,8 @@ export class InteriorView {
   /** Travel speed multiplier from the debug menu. */
   boost = 1;
   /** Called each frame with the gravity the player feels (the page's gravity meter), smoothed over a fraction of a second. */
+  onExit: ((exit: ExitCourt | null, eye: Vec3, forward: Vec3, up: Vec3) => void) | null = null;
+  private exitClock = 0;
   onGravity: ((r: GravityReading) => void) | null = null;
   /** Walking and running speed on foot (m/s), for the gravity meter's explanation. */
   get paces(): { walk: number; run: number } { return { walk: this.walker.speed, run: this.walker.speed * RUN }; }
@@ -582,9 +585,16 @@ export class InteriorView {
     const rideFrom = this.cabin?.aboard ? this.cabin.place(0) : null;
     this.under?.follow(v.eye, rideFrom ? eyeInCabin(this.habitat, rideFrom, EYE_HEIGHT) : v.eye);
     this.cabin?.poseAt(v.eye);
+    this.exitClock += this.frameDt;
+    if (this.onExit && (!this.below || this.exitClock >= 0.1)) {
+      this.exitClock = 0;
+      const at = fromWorld(this.habitat.profile, ...v.eye);
+      this.onExit(this.below && !this.cabin?.aboard ? nearestExitCourt(this.terrain, at.theta, at.s) : null, v.eye, v.look, v.up);
+    }
     this.showLand(!this.below);
-    this.people?.follow(v.eye, this.time, this.frameDt);
-    this.drones?.follow(v.eye, this.time, this.frameDt, this.people?.aloft);
+    below.people.value = this.below ? 1 : 0;
+    this.people?.follow(v.eye, this.time, this.frameDt, this.below);
+    this.drones?.follow(v.eye, this.time, this.frameDt, this.people?.aloft, this.below);
     this.specks?.follow(this.time, this.frameDt, [...(this.people?.near ?? []), ...(this.drones?.near ?? [])], this.measured);
     for (const a of this.animals) a.follow(v.eye, this.time, this.frameDt);
   }
@@ -594,7 +604,7 @@ export class InteriorView {
    * the frame (and the shadow map), and the background is the mist's.
    */
   private showLand(on: boolean): void {
-    for (const g of [this.tiles?.group, this.plants?.group, this.landmarks?.group, this.stair?.group, this.courts?.group, this.crossings?.group, this.halls?.group, this.people?.group, this.specks?.group, this.drones?.group, this.sunline, this.clouds, ...this.animals.map((a) => a.group)]) if (g) g.visible = on;
+    for (const g of [this.tiles?.group, this.plants?.group, this.landmarks?.group, this.stair?.group, this.courts?.group, this.crossings?.group, this.halls?.group, this.specks?.group, this.sunline, this.clouds, ...this.animals.map((a) => a.group)]) if (g) g.visible = on;
   }
 
   /** Where the eye is now (world). */
@@ -951,6 +961,8 @@ export class InteriorView {
   private readonly glassStage: GlassStage = {
     onLand: (at) => {
       this.showLand(!!at || !this.below);
+      below.people.value = !at && this.below ? 1 : 0;
+      for (const g of [this.people?.group, this.drones?.group]) if (g) g.visible = !at;
       if (at) {
         // The land and its specks, not the figures: their shadow shaders are built only as they come near on the land.
         for (const g of [this.people?.group, this.drones?.group, ...this.animals.map((a) => a.group)]) if (g) g.visible = false;

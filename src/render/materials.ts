@@ -716,6 +716,8 @@ const NO_ROOF = new Vector4(0, 0, 0, 0);
  * per metre: a quarter of the light left over `under.mist`).
  */
 export const below = {
+  /** People and their drone bodies are drawn on the current level. Off during the ceiling's land captures. */
+  people: uniform(0),
   lamp: uniform(0.1),
   /** The day's light on the land above (1: the mid floor at midday in the open), which comes down the light wells. */
   day: uniform(0),
@@ -747,6 +749,16 @@ const SCREEN_GLOW = 2.2;
 /** A window's glow in the lamps' floor light (its vertex colour the rooms' light; an unlit one's dark glass). */
 const WINDOW_GLOW = 2.4;
 const SCREEN_DAY = 0.5;
+
+/** Shared crowd materials: below, the lamps and mist replace the surface's sun and haze. */
+function personColor(albedo: Node<'vec3'>, normal: Node<'vec3'>, horizon: Node<'vec2'>, emission: Node<'vec3'> = vec3(0)): Node<'vec3'> {
+  const w = worldPosition(), up = normalize(vec3(w.x.negate(), w.y.negate(), 0));
+  const lamp = below.tint.mul(below.lamp), light = float(0.4).add(max(0, dot(normal, up)).mul(0.6));
+  const kept = exp(below.extinction.negate().mul(length(positionWorld.sub(cameraPosition))));
+  const inside = albedo.mul(lamp).mul(light).add(emission).mul(kept).add(lamp.mul(MIST_GLOW).mul(float(1).sub(kept))).mul(view.exposure);
+  const outside = throughAir(albedo.mul(sunlit(horizon, normal, 0, float(1), true, true)).add(emission));
+  return select(below.people.greaterThan(0), inside, outside);
+}
 export const MIST_GLOW = 0.25;
 
 /**
@@ -818,7 +830,7 @@ export const CROWD = kind('crowd', ['position', 'normal', 'part', ...STAND_IN_AT
   const scale = vec3(pose.width, 1, pose.width).mul(pose.height);
   m.positionNode = stand.xyz.add(turned(pose.local.mul(scale)));
   const n = varying(normalize(turned(pose.normal.div(scale))));
-  m.colorNode = throughAir(varying(pose.color).mul(sunlit(standInHorizon(), normalize(n), 0, float(1), true, true)));
+  m.colorNode = personColor(varying(pose.color), normalize(n), standInHorizon());
   return m;
 });
 
@@ -833,7 +845,7 @@ export const SPECK = kind('speck', ['position', 'corner', ...SPECK_ATTRIBUTES, S
   const look = speckLook(view.eye);
   m.positionNode = look.position;
   m.vertexNode = look.clip;
-  m.colorNode = throughAir(look.color.mul(sunlit(look.horizon, normalize(look.normal), 0, float(1), true, true)));
+  m.colorNode = personColor(look.color, normalize(look.normal), look.horizon);
   m.opacityNode = look.opacity;
   return m;
 });
@@ -855,8 +867,7 @@ export const DRONE = kind('drone', ['position', 'normal', 'paint', 'spin', ...FL
   const band = fract(own.x.add(own.y).add(own.z).div(HAZARD_STRIPE)).lessThan(0.5);
   const albedo = select(code.greaterThan(0.99).and(band.not()), vec3(0.004, 0.004, 0.004), paint.rgb);
   const light = select(code.greaterThan(0).and(code.lessThan(0.99)), code.mul(LIGHT_SCALE), float(0));
-  const lit = albedo.mul(sunlit(pose.horizon, normalize(n), 0, float(1), true, true));
-  m.colorNode = throughAir(select(light.greaterThan(0), paint.rgb.mul(light), lit));
+  m.colorNode = personColor(select(light.greaterThan(0), vec3(0), albedo), normalize(n), pose.horizon, paint.rgb.mul(light));
   return m;
 });
 
@@ -874,7 +885,10 @@ export const DRONE_VEIL = kind('drone veil', ['position', 'normal', 'paint', ...
   const lit = paint.rgb.mul(sunlit(pose.horizon, normalize(n), 0, float(1), true, true));
   // Seen through the air: the blur as any surface is (with the haze before it, as much as it covers); light only dimmed.
   const blur = lit.mul(kept).add(glow).mul(a), added = paint.rgb.mul(VEIL_LIGHT).mul(kept);
-  m.colorNode = select(a.greaterThan(0), blur, added).mul(view.exposure);
+  const underKept = exp(below.extinction.negate().mul(length(positionWorld.sub(cameraPosition))));
+  const underBlur = personColor(paint.rgb, normalize(n), pose.horizon).mul(a);
+  const underAdded = paint.rgb.mul(VEIL_LIGHT).mul(underKept).mul(view.exposure);
+  m.colorNode = select(below.people.greaterThan(0), select(a.greaterThan(0), underBlur, underAdded), select(a.greaterThan(0), blur, added).mul(view.exposure));
   m.opacityNode = a;
   return m;
 });

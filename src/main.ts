@@ -1,3 +1,5 @@
+import { neighboursAt } from './sim/neighbourhood';
+import { ExitMarker } from './app/exitMarker';
 /**
  * The page: the header with the version and What's new, the memory watchdog, the debug menu, and the current view:
  * the Blueprint Lab (design a habitat), Inside (walk in it) or Outside (the habitat in its orbit, with Earth, the Moon,
@@ -125,6 +127,9 @@ const insideSlot = new ViewSlot('Hold the right mouse button to look around · W
   const meter = new GravityMeter(() => (lab.habitat ? { habitat: lab.habitat, ...v.paces } : null));
   insideSlot.box.append(meter.box);
   v.onGravity = (r) => meter.showReading(r);
+  const exits = new ExitMarker();
+  insideSlot.box.append(exits.box);
+  v.onExit = (exit, eye, forward, up) => exits.showExit(exit, eye, forward, up);
   memory.track('player body', () => v.bodyBytes());
   memory.track('people', () => v.peopleBytes());
   memory.track('drones', () => v.droneBytes());
@@ -895,6 +900,18 @@ debug.add({
     }
   },
 });
+debug.add({ label: 'Below: beside neighbours at a shared hall', group: 'Go', run: () => {
+  const h = lab.habitat, v = view(), t = v?.ecology?.terrain;
+  if (!h || !v || !t) return;
+  const m = hamletsNear(h, v.walker.at.theta, v.walker.at.s)[0];
+  if (!m) return;
+  const people = neighboursAt(t, v.time, { ...m.site, radius: m.edge * h.params.under.bay * 1.3 });
+  const p = people.find((p) => !p.moving) ?? people[0];
+  if (!p) return;
+  const u = underOf(h), bay = u.bayAt(p.theta, p.s)!, c = u.centreOf(bay.i, bay.j);
+  const s = c.s + (p.s < c.s ? 5 : -5);
+  v.goBelow(p.theta, s, p.s > s ? 0 : Math.PI);
+} });
 let nextSky = 0;
 debug.add({ label: 'Below: under the next kind of hamlet sky', group: 'Go', run: () => underSky(nextSky++ % SKIES.length) });
 debug.add({ label: 'Below: under a glass deck (the real sky above)', group: 'Go', run: () => underSky(GLASS) });
