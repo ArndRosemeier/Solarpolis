@@ -1222,5 +1222,17 @@
   {
     "key": "same name: solarpolis/space/vesselPassenger.ts#turn + solarpolis/world/walker.ts#turn",
     "reason": "Distinct physical systems: ship-local thrust/freefall and finite-mass rocket integration versus habitat spin walking, geometry and observer flight. The shared movement-input seam is moveKeys/FlyInput."
+  },
+  {
+    "key": "idiom: [.group .removeFromParent] in solarpolis/render/animals.ts + solarpolis/render/people.ts + solarpolis/render/specks.ts",
+    "reason": "One line in each view's dispose (take its group out of the scene); it only crossed the finder's information threshold because a new file changed the word weights. A seam for one call would only hide it."
+  },
+  {
+    "key": "same name: solarpolis/render/animals.ts#heard + solarpolis/render/fliers.ts#heard",
+    "reason": "Each view hands what it holds to the one sound seam (sim/sources.ts `Source`): the animals from their placed moments, the drones from their fliers, the people from their beats. The loops differ by what each view keeps; what a source sounds like is decided once, in sim/sources.ts."
+  },
+  {
+    "key": "same name: solarpolis/render/animals.ts#heard + solarpolis/render/people.ts#heard",
+    "reason": "Each view hands what it holds to the one sound seam (sim/sources.ts `Source`): the animals from their placed moments, the drones from their fliers, the people from their beats. The loops differ by what each view keeps; what a source sounds like is decided once, in sim/sources.ts."
   }
 ]

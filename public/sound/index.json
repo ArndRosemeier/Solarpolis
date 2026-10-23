@@ -1,5 +1,87 @@
 {
  "sounds": {
+  "act/catch": {
+   "kind": "steps",
+   "files": [
+    "act/catch-1.mp3",
+    "act/catch-2.mp3",
+    "act/catch-3.mp3"
+   ],
+   "seconds": [
+    0.41,
+    0.41,
+    0.41
+   ]
+  },
+  "act/clink": {
+   "kind": "steps",
+   "files": [
+    "act/clink-1.mp3",
+    "act/clink-2.mp3",
+    "act/clink-3.mp3",
+    "act/clink-4.mp3"
+   ],
+   "seconds": [
+    0.375,
+    0.41,
+    0.41,
+    0.41
+   ]
+  },
+  "act/mallet": {
+   "kind": "steps",
+   "files": [
+    "act/mallet-1.mp3",
+    "act/mallet-2.mp3",
+    "act/mallet-3.mp3",
+    "act/mallet-4.mp3"
+   ],
+   "seconds": [
+    0.41,
+    0.41,
+    0.41,
+    0.41
+   ]
+  },
+  "act/saw": {
+   "kind": "steps",
+   "files": [
+    "act/saw-1.mp3",
+    "act/saw-2.mp3",
+    "act/saw-3.mp3",
+    "act/saw-4.mp3"
+   ],
+   "seconds": [
+    0.41,
+    0.41,
+    0.41,
+    0.41
+   ]
+  },
+  "act/shears": {
+   "kind": "steps",
+   "files": [
+    "act/shears-1.mp3",
+    "act/shears-2.mp3",
+    "act/shears-3.mp3",
+    "act/shears-4.mp3"
+   ],
+   "seconds": [
+    0.41,
+    0.41,
+    0.41,
+    0.41
+   ]
+  },
+  "act/sit": {
+   "kind": "call",
+   "files": [
+    "act/sit.mp3"
+   ],
+   "seconds": [
+    3.34
+   ]
+  },
   "bed/bees": {
    "kind": "bed",
    "files": [
@@ -54,6 +136,15 @@
     19.845
    ]
   },
+  "bed/flags": {
+   "kind": "bed",
+   "files": [
+    "bed/flags.mp3"
+   ],
+   "seconds": [
+    19.835
+   ]
+  },
   "bed/grass": {
    "kind": "bed",
    "files": [
@@ -88,6 +179,24 @@
    ],
    "seconds": [
     19.84
+   ]
+  },
+  "bed/oaks": {
+   "kind": "bed",
+   "files": [
+    "bed/oaks.mp3"
+   ],
+   "seconds": [
+    19.835
+   ]
+  },
+  "bed/piers": {
+   "kind": "bed",
+   "files": [
+    "bed/piers.mp3"
+   ],
+   "seconds": [
+    21.335
    ]
   },
   "bed/river-riffle": {
@@ -133,6 +242,24 @@
    ],
    "seconds": [
     19.835
+   ]
+  },
+  "body/jump": {
+   "kind": "call",
+   "files": [
+    "body/jump.mp3"
+   ],
+   "seconds": [
+    3.08
+   ]
+  },
+  "body/rush": {
+   "kind": "loop",
+   "files": [
+    "body/rush.mp3"
+   ],
+   "seconds": [
+    8
    ]
   },
   "call/blackbird": {
@@ -207,6 +334,94 @@
     3.825
    ]
   },
+  "deer/graze": {
+   "kind": "call",
+   "files": [
+    "deer/graze.mp3"
+   ],
+   "seconds": [
+    3.369
+   ]
+  },
+  "deer/snort": {
+   "kind": "call",
+   "files": [
+    "deer/snort.mp3"
+   ],
+   "seconds": [
+    0.41
+   ]
+  },
+  "drone/courier": {
+   "kind": "loop",
+   "files": [
+    "drone/courier.mp3"
+   ],
+   "seconds": [
+    8
+   ]
+  },
+  "drone/glider": {
+   "kind": "loop",
+   "files": [
+    "drone/glider.mp3"
+   ],
+   "seconds": [
+    8
+   ]
+  },
+  "drone/high": {
+   "kind": "loop",
+   "files": [
+    "drone/high.mp3"
+   ],
+   "seconds": [
+    8
+   ]
+  },
+  "drone/lifter": {
+   "kind": "loop",
+   "files": [
+    "drone/lifter.mp3"
+   ],
+   "seconds": [
+    8
+   ]
+  },
+  "drone/tender": {
+   "kind": "loop",
+   "files": [
+    "drone/tender.mp3"
+   ],
+   "seconds": [
+    8
+   ]
+  },
+  "lift/hum": {
+   "kind": "loop",
+   "files": [
+    "lift/hum.mp3"
+   ],
+   "seconds": [
+    8
+   ]
+  },
+  "music/dance-a": {
+   "kind": "music",
+   "take": "music/dance-a",
+   "files": [
+    "music/dance-a.mp3"
+   ],
+   "seconds": []
+  },
+  "music/dance-b": {
+   "kind": "music",
+   "take": "music/dance-b",
+   "files": [
+    "music/dance-b.mp3"
+   ],
+   "seconds": []
+  },
   "music/title": {
    "kind": "music",
    "take": "music/title-b",
@@ -214,6 +429,33 @@
     "music/title.mp3"
    ],
    "seconds": []
+  },
+  "shell/servo": {
+   "kind": "call",
+   "files": [
+    "shell/servo.mp3"
+   ],
+   "seconds": [
+    0.731
+   ]
+  },
+  "squirrel/chatter": {
+   "kind": "call",
+   "files": [
+    "squirrel/chatter.mp3"
+   ],
+   "seconds": [
+    3.79
+   ]
+  },
+  "squirrel/scamper": {
+   "kind": "call",
+   "files": [
+    "squirrel/scamper.mp3"
+   ],
+   "seconds": [
+    8.325
+   ]
   },
   "step/floor": {
    "kind": "steps",
@@ -258,6 +500,21 @@
     0.41,
     0.41,
     0.355
+   ]
+  },
+  "step/hoof": {
+   "kind": "steps",
+   "files": [
+    "step/hoof-1.mp3",
+    "step/hoof-2.mp3",
+    "step/hoof-3.mp3",
+    "step/hoof-4.mp3"
+   ],
+   "seconds": [
+    0.41,
+    0.41,
+    0.41,
+    0.41
    ]
   },
   "step/litter": {

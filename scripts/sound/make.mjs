@@ -148,6 +148,15 @@ function bed(x) {
   return fade(scale(t, g), 0.05, 0.05);
 }
 
+/**
+ * A short loop for a sound with a place (a drone's hum, a lift portal, the rush of flight): the middle `secs` of the
+ * trimmed take, levelled as a bed. The player crossfades it onto itself, as it does a bed, so it needs no seam.
+ */
+function loop(x, secs) {
+  const t = trim(x, 0.05), n = Math.min(t.length, Math.round(secs * RATE)), a = Math.floor((t.length - n) / 2);
+  return bed(t.slice(a, a + n));
+}
+
 /** A single call: trimmed, peak at −3 dBFS. */
 function call(x) {
   const t = trim(x, 0.03);
@@ -180,10 +189,13 @@ function steps(x, count) {
   return cuts.slice(0, count).map(({ x: c }) => fade(scale(c, dB(-3) / Math.max(peakOf(c), 1e-6)), 0.004, 0.06));
 }
 
-/** Music stays stereo at 44.1 kHz (it streams, it is never decoded whole), levelled to −16 LUFS. */
-function music(raw, file) {
+/**
+ * Music stays at 44.1 kHz (it streams, it is never decoded whole), levelled to −16 LUFS: stereo, or mono for music
+ * heard from a place in the world (a party's), which is panned to where it plays.
+ */
+function music(raw, file, mono) {
   mkdirSync(dirname(file), { recursive: true });
-  ffmpeg(['-y', '-i', raw, '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11', '-ar', '44100', '-ac', '2', '-c:a', 'libmp3lame', '-b:a', '128k', file]);
+  ffmpeg(['-y', '-i', raw, '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11', '-ar', '44100', '-ac', mono ? '1' : '2', '-c:a', 'libmp3lame', '-b:a', mono ? '64k' : '128k', file]);
 }
 
 const seconds = (x) => Math.round((x.length / RATE) * 1000) / 1000;
@@ -225,17 +237,17 @@ async function main() {
     if (s.kind === 'music') {
       if (!s.out) continue;
       const file = `${s.out}.mp3`;
-      music(raw, join(OUT, file));
+      music(raw, join(OUT, file), !!s.mono);
       const id = s.out;
       index.sounds[id] = { kind: s.kind, take: s.id, files: [file], seconds: [] };
       console.log(`  ${s.id} -> ${file}: ${(statSync(join(OUT, file)).size / 1024).toFixed(0)} KB`);
       continue;
     } else {
       const x = decode(raw);
-      const takes = s.kind === 'steps' ? steps(x, s.count) : [s.kind === 'bed' ? bed(x) : call(x)];
+      const takes = s.kind === 'steps' ? steps(x, s.count) : [s.kind === 'bed' ? bed(x) : s.kind === 'loop' ? loop(x, s.seconds ?? 8) : call(x)];
       if (s.kind === 'steps' && takes.length < s.count) console.warn(`  ${s.id}: only ${takes.length} of ${s.count} steps found`);
       const files = takes.map((t, i) => (takes.length > 1 || s.kind === 'steps' ? `${s.id}-${i + 1}.mp3` : `${s.id}.mp3`));
-      takes.forEach((t, i) => encode(t, join(OUT, files[i]), s.kind === 'bed' ? 64 : 80));
+      takes.forEach((t, i) => encode(t, join(OUT, files[i]), s.kind === 'bed' || s.kind === 'loop' ? 64 : 80));
       index.sounds[s.id] = { kind: s.kind, files, seconds: takes.map(seconds) };
     }
     const bytes = index.sounds[s.id].files.reduce((n, f) => n + statSync(join(OUT, f)).size, 0);
