@@ -29,10 +29,10 @@ export const LOUNGE = {
   /** How far the shot tilts down toward the floor from straight out (rad): the couches and their sitters in the bottom of the frame, the window above them. */
   tilt: 0.3,
   /**
-   * The light of the room's own lamps on the floor (relative to full sunlight: about 400 lux, a quiet evening room), and
+   * The light of the room's own lamps on the floor (relative to full sunlight: about 800 lux, a liner's lit lounge), and
    * the mean albedo of its walls, floor and couches as the eyes' meter takes it.
    */
-  lamps: 0.004,
+  lamps: 0.008,
   albedo: 0.4,
 };
 

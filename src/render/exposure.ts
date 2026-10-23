@@ -119,12 +119,21 @@ export function exposureFor(m: Meterable, rays: readonly Vec3[], darkest: number
     light = Math.max(light, r.light);
     if (r === m.room) { roomSum += Math.log(l); roomRays++; }
   }
-  // In a room with windows the eyes settle on the room they stand in: black space beyond the glass does not open them
-  // further (what the windows show still stops them down, by its highlights and its light).
-  const average = roomRays && m.room?.open ? roomSum / roomRays : sum / counted;
   const anchored = light > 0 ? ANCHOR_LEVEL / light : Infinity;
-  return Math.min(KEY / Math.exp(average), HIGHLIGHT_LEVEL / high, anchored);
+  if (roomRays && m.room?.open) {
+    // In a room with windows the eyes settle on the room they stand in: black space beyond the glass does not open
+    // them further, and a bright view out stops them down only so far (`ROOM_LATITUDE`): it burns out instead.
+    const room = KEY / Math.exp(roomSum / roomRays);
+    return Math.min(room, Math.max(room / ROOM_LATITUDE, Math.min(HIGHLIGHT_LEVEL / high, anchored)));
+  }
+  return Math.min(KEY / Math.exp(sum / counted), HIGHLIGHT_LEVEL / high, anchored);
 }
+
+/**
+ * How far a bright view out of a room's windows (a sunlit spindle, a lit port face) stops the eyes down below what
+ * the room itself asks for: at most this factor. The eyes in a lit room keep it readable and let the windows burn.
+ */
+export const ROOM_LATITUDE = 4;
 
 /**
  * Inside, the eyes open up where the light around them is dimmer than in the open at the same hour (a wood's shade):
