@@ -39,6 +39,7 @@ import { setFloorEye, setRockBeds, setSnow } from './groundShaders';
 import { UNDER_CROWNS, crownsClosed, makeEcology, type Ecology } from '../gen/ecology';
 import { FrameLoop, clickToUse, dragToLook, draw, fitCanvas, moveKeys, wheelOver } from './surface';
 import { freeMesh } from './geometry';
+import { logged } from './loadLog';
 import { cloudClearings, cloudSpan, cloudsAt } from '../world/clouds';
 import { setCloudClearings, setCloudSpan, setCloudState } from './cloudShaders';
 import { LandmarkView } from './landmarks';
@@ -280,15 +281,15 @@ export class InteriorView {
     const v = new InteriorView(habitat);
     v.whereabouts = whereabouts;
     // Reversed depth: from a blade of grass at the feet to the far endcap tens of kilometres away, in one view.
-    v.renderer = (await createRenderer(v.canvas, { backends: 'webgpu', depth: 'reversed' })).renderer;
+    v.renderer = (await logged('interior renderer', () => createRenderer(v.canvas, { backends: 'webgpu', depth: 'reversed' }))).renderer;
     // The near shadow map (render/lights.ts): the key light's, cast by the body and balls.
     v.renderer.shadowMap.enabled = true;
     v.scene.background = new Color(...(air.haze.value as Color).toArray());
     v.stage = new Stage(v.renderer, v.scene, v.camera, { kinds: allKinds, attribute: standInAttribute });
     v.stage.shadowCamera = key.shadow.camera;
     v.place();
-    await v.stage.warmUp();
-    await v.build();
+    await logged('interior warm-up', () => v.stage.warmUp());
+    await logged('interior build', () => v.build());
     v.listen();
     void v.physicsReady();
     v.bodyLoaded = v.loadPlayer();
@@ -305,7 +306,7 @@ export class InteriorView {
 
   /** Load the player's body (the same person for the same world seed) and put it in, hidden until seen. */
   private async loadPlayer(): Promise<void> {
-    const figure = await Figure.load(await playerLook(deriveSeed(this.habitat.params.seed, 'player')));
+    const figure = await logged('player body', async () => Figure.load(await playerLook(deriveSeed(this.habitat.params.seed, 'player'))));
     figure.object.visible = false;
     figure.object.traverse((o) => o.layers.set(HEAD_PARTS.test(o.name) ? HEAD_LAYER : BODY_LAYER));
     castAsWorn(figure.object);
@@ -316,7 +317,7 @@ export class InteriorView {
     // The head's parts are compiled too (the camera sees them only from behind).
     const head = this.camera.layers.isEnabled(HEAD_LAYER);
     this.camera.layers.enable(HEAD_LAYER);
-    await this.stage.prepare(figure.object, { everyCaster: true }).finally(() => { if (!head) this.camera.layers.disable(HEAD_LAYER); });
+    await logged('player body shaders', () => this.stage.prepare(figure.object, { everyCaster: true })).finally(() => { if (!head) this.camera.layers.disable(HEAD_LAYER); });
     this.scene.add(figure.object);
     this.figure = figure;
   }

@@ -9,6 +9,7 @@ import { Character, buildCatalog, defaultConfig, type CharacterCatalog, type Cha
 import { Human } from '@actors/human';
 import { IRIS_PRESETS, type ActorMaterialKit } from '@actors/three';
 import { nodeMaterials } from '@actors/three/webgpu';
+import { logged } from '../loadLog';
 
 /** The human pack's manifest. */
 export const HUMAN_PACK = `${import.meta.env?.BASE_URL ?? "/"}actors/human/manifest.json`;
@@ -41,7 +42,7 @@ let catalog: Promise<{ catalog: CharacterCatalog; base: CharacterConfig; human: 
  * and hair under CC-BY are left out.
  */
 export function humanCatalog(): Promise<{ catalog: CharacterCatalog; base: CharacterConfig; human: Human }> {
-  catalog ??= Human.load(HUMAN_PACK, packFetch).then((human) => {
+  catalog ??= logged('human pack', () => Human.load(HUMAN_PACK, packFetch)).then((human) => {
     const all = buildCatalog(human, Object.keys(IRIS_PRESETS));
     const c: CharacterCatalog = { ...all, garments: all.garments.filter((g) => !g.credit), hair: all.hair.filter((h) => !h.credit) };
     return { catalog: c, base: defaultConfig(c), human };
