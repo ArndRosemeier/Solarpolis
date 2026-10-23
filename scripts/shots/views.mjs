@@ -260,11 +260,11 @@ export const views = {
   // one is out), twice a few seconds apart; then beside the nearest boat under sail from further off, and the great lake.
   // Falls (world/fall.ts, world/catch.ts, render/guardians.ts): the guardians catch a fall that would hurt, the ground's
   // bag one no guardian reaches. From behind (the wheel), so the body, the guardians and the bag are in the frame.
-  catch: { query: 'view=inside', about: 'falls caught, seen from behind: a 50 m drop with no guardian near (the bag bursting out, -bag50; the body let down, -bag50-down), an 8 m drop onto the bag (-bag8), the brink of the nearest drop (-brink) and a step off it (-brink-falling, -brink-caught, -brink-carried, -brink-set-down); the Long Drop a minute in (-long), and caught near the ground (-long-caught); logs the catch line at each; a heap snapshot', settle: 6000, steps: [
-    memoryDetails, { wheel: 600 },
+  catch: { query: 'view=inside', about: 'falls caught, seen from behind, in the nearest meadow: a 50 m drop with no guardian near (the bag bursting out, -bag50; the body let down, -bag50-down), an 8 m drop onto the bag (-bag8), the brink of the deepest drop within 1.5 km (-brink) and a step off it (-brink-falling, -brink-caught, -brink-carried, -brink-set-down); the Long Drop a minute in (-long), and caught near the ground (-long-caught); logs the catch line at each; a heap snapshot', settle: 6000, steps: [
+    memoryDetails, { debug: 'Into the nearest meadow' }, { wait: 8000 }, { wheel: 600 },
     { debug: 'Fall: drop from 50 m here' }, { wait: 2600 }, { shot: 'bag50' }, { wait: 2500 }, { shot: 'bag50-down' }, { wait: 6000 },
     { debug: 'Fall: drop from 8 m here (the bag)' }, { wait: 1200 }, { shot: 'bag8' }, { wait: 6000 },
-    { debug: 'Fall: walk to the brink of the nearest drop (step off it yourself)' }, { wait: 6000 }, { look: [0, 120] }, { wait: 1000 }, { shot: 'brink' }, { look: [0, -120] },
+    { debug: 'Fall: walk to the brink of the deepest drop within 1.5 km (step off it yourself)' }, { wait: 6000 }, { look: [0, 120] }, { wait: 1000 }, { shot: 'brink' }, { look: [0, -120] },
     { key: 'KeyW', hold: 1500 }, { wait: 300 }, { shot: 'brink-falling' }, { wait: 2500 }, { shot: 'brink-caught' }, { wait: 4000 }, { shot: 'brink-carried' }, { wait: 12000 }, { shot: 'brink-set-down' },
     { debug: 'Fall: the Long Drop, step out at capsule height over the floor' }, { wait: 60000 }, { shot: 'long' }, { wait: 85000 }, { shot: 'long-caught' },
     heap('catch')] },
