@@ -39,6 +39,7 @@ import { BlueprintLab } from './lab/blueprintLab';
 import { GraphicsUnavailable } from '@futuremagic/stage';
 import { InteriorView } from './render/view';
 import { loadLog } from './render/loadLog';
+import { loadGate } from './render/loadGate';
 import { talksWithHands } from './render/people';
 import { speckMark } from './render/crowdShaders';
 import { OutsideView } from './render/outside';
@@ -299,6 +300,8 @@ async function flyIn(v: OutsideView): Promise<void> {
   timing.mark('flown');
   await drawCurtain(true);
   timing.mark('closed');
+  // Behind the closed curtain nothing is seen: what waited for a cut goes now.
+  loadGate.hold(false);
   if (tab === 'title') await arriveInside();
   else await drawCurtain(false);
 }
@@ -333,6 +336,8 @@ function showTab(which: Tab): void {
   tourTab.classList.toggle('on', which === 'tour');
   lab.root.hidden = which !== 'lab';
   const titled = which === 'title';
+  // While the title (and the arrival after Start) plays, heavy loading waits for its cuts.
+  loadGate.hold(titled);
   title.show(titled);
   if (titled) sound.music('music/title');
   else if (!arriving) sound.music(null);
@@ -348,7 +353,12 @@ function showTab(which: Tab): void {
     if (!v) return;
     v.setTourMode(which === 'tour');
     v.onTitle = titled ? (x) => title.fade(x) : null;
-    if (titled && !v.attracting) { await v.startAttract(); timing.mark('title'); }
+    if (titled && !v.attracting) {
+      await v.startAttract();
+      timing.mark('title');
+      // The title is the loading screen too: the interior warms up behind it, so Start finds it (nearly) ready.
+      if (!insideSlot.view) starting = (starting ?? Promise.resolve()).then(() => { timing.note('interior view …'); return insideSlot.show(); });
+    }
     else if (!titled && v.attracting) v.stopAttract();
   });
   const q = new URLSearchParams(location.search);

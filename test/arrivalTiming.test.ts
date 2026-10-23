@@ -74,5 +74,5 @@ test('arrival timing: what loaded when after Start', () => {
   now = 1000; t.mark('start');
   now = 3500; t.note('human pack …');
   now = 9000; t.note('human pack ✓');
-  assert.equal(t.loadingLine(), 'arrival\'s loading: 2.5 human pack … · 8.0 human pack ✓');
+  assert.equal(t.loadingLine(), 'arrival\'s loading (s after Start): -1.0 before · 2.5 human pack … · 8.0 human pack ✓');
 });

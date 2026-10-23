@@ -9,6 +9,7 @@ import { Character, buildCatalog, defaultConfig, type CharacterCatalog, type Cha
 import { Human } from '@actors/human';
 import { IRIS_PRESETS, type ActorMaterialKit } from '@actors/three';
 import { nodeMaterials } from '@actors/three/webgpu';
+import { loadGate } from '../loadGate';
 import { logged } from '../loadLog';
 
 /** The human pack's manifest. */
@@ -20,6 +21,7 @@ const coming = new Map<string, Promise<ArrayBuffer>>();
 /**
  * Fetches a pack file; every caller gets its own copy (a runtime may hand buffers on). Nothing is kept once it has
  * arrived: a file asked for again comes from the browser's cache, not from a copy on the heap (CLAUDE.md, rule 12).
+ * While a cinematic plays the file is handed over at its next cut (`loadGate`): reading a pack holds a frame.
  */
 export const packFetch: Fetcher = async (url) => {
   let job = coming.get(url);
@@ -31,7 +33,9 @@ export const packFetch: Fetcher = async (url) => {
     coming.set(url, job);
     void job.finally(() => coming.delete(url)).catch(() => undefined);
   }
-  return (await job).slice(0);
+  const bytes = await job;
+  await loadGate.wait();
+  return bytes.slice(0);
 };
 
 let catalog: Promise<{ catalog: CharacterCatalog; base: CharacterConfig; human: Human }> | undefined;

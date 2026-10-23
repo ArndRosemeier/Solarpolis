@@ -24,6 +24,7 @@ import { NecklaceView } from './necklace';
 import { meshGeometry, setPose } from './geometry';
 import { SHIP_ALBEDO, ShipMeshes, shipAxes } from './ship';
 import { LampPoints } from './lamps';
+import { loadGate } from './loadGate';
 import { BORE_ALBEDO } from './bore';
 import { BORE_LIGHT } from './hullShaders';
 import { FrameLoop, dragToLook, draw, fitCanvas, moveKeys } from './surface';
@@ -596,6 +597,8 @@ export class OutsideView {
         a.done();
       }
     }
+    // A cut in the title or the arrival: the moment heavy loading may hold a frame unseen.
+    if (cut && this.attracting) loadGate.cut();
     if (this.flyer && this.necklace) {
       const held = this.necklace.holdStation(this.flyer.eye, this.flyer.look(), before, this.time);
       this.flyer.eye = held.eye;

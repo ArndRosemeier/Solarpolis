@@ -121,17 +121,16 @@ export class ArrivalTiming {
     if (ms > STUTTER_MS) f.stutters++;
   }
 
-  /** A view says what it loads (render/loadLog.ts): kept from Start on (the first `KEPT_NOTES`). */
+  /** A view says what it loads (render/loadLog.ts): the first `KEPT_NOTES`, from the page's opening on. */
   note(what: string): void {
-    if (!this.marks.has('start') || this.notes.length >= KEPT_NOTES) return;
-    this.notes.push({ what, t: this.now() });
+    if (this.notes.length < KEPT_NOTES) this.notes.push({ what, t: this.now() });
   }
 
-  /** The debug menu's line on what loaded when after Start (s). */
+  /** The debug menu's line on what loaded when, in s after Start (before it, below 0; before Start, after opening). */
   loadingLine(): string {
-    const start = this.marks.get('start');
-    if (start === undefined || !this.notes.length) return '';
-    return `arrival's loading: ${this.notes.map((n) => `${((n.t - start) / 1000).toFixed(1)} ${n.what}`).join(' · ')}`;
+    if (!this.notes.length) return '';
+    const start = this.marks.get('start') ?? 0;
+    return `arrival's loading${this.marks.has('start') ? ' (s after Start)' : ''}: ${this.notes.map((n) => `${((n.t - start) / 1000).toFixed(1)} ${n.what}`).join(' · ')}`;
   }
 
   /** A long frame the browser reported: kept while the flight is under way, the longest few. */
