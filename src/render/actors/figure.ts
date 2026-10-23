@@ -11,6 +11,7 @@ import type { Vec3 } from '../../blueprint';
 import { Character, HUMAN_PACK, actorKit, packFetch } from './pack';
 import { FigureAnimator, type AnimState } from './animator';
 import { screenTextures } from './screens';
+import { geometryBytes } from '../geometry';
 
 export type { AnimState, MoveState, Mood } from './animator';
 
@@ -145,9 +146,7 @@ export class Figure {
     let n = 0;
     this.object.traverse((o) => {
       const g = (o as Mesh).geometry;
-      if (!g) return;
-      for (const a of Object.values(g.attributes)) n += (a.array as ArrayLike<number> & { byteLength: number }).byteLength;
-      if (g.index) n += (g.index.array as ArrayLike<number> & { byteLength: number }).byteLength;
+      if (g) n += geometryBytes(g);
     });
     return n;
   }

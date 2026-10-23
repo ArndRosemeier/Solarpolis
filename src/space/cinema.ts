@@ -157,12 +157,12 @@ export function attractLoop(space: Space, start: number, keepOut: number, shipLe
   };
 }
 
-/** The arrival's shot lengths (s): shot 4 down the corridor, shot 5 at the berth. */
-export const ARRIVAL_SHOTS = [15, 10, 15] as const;
+/** The arrival's shot lengths (s): shot 4 down the corridor, shot 5 at the berth (long enough after contact to see the clamps home and the collar's lights turn green, space/dock.ts), shot 6 through the bore. */
+export const ARRIVAL_SHOTS = [15, 13, 15] as const;
 export const ARRIVAL = ARRIVAL_SHOTS[0] + ARRIVAL_SHOTS[1] + ARRIVAL_SHOTS[2];
 /** Shot 4 starts with the ship this far up its corridor (outer radii; at most half its coast, where it slows). */
 const SHOT4_UP = 1.5;
-/** Shot 5 starts this long before the ship berths (s); the rest of it is the latch and the jolt. */
+/** Shot 5 starts this long before the ship berths (s); the rest of it is the jolt, the clamps and the green light. */
 const SHOT5_BEFORE = 7;
 /** On the final creep in, the thrusters trim about this often (s), and a turn's start and stop is a pair of pulses this far apart (s). */
 const TRIM = 2.6, PAIR = 0.35;

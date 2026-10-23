@@ -9,8 +9,8 @@
  */
 import { Mesh } from 'three/webgpu';
 import type { Stage } from '@futuremagic/stage';
-import { v3len, v3scale, type Vec3 } from '@futuremagic/core';
-import { lampFlux, type HullLight } from '../space';
+import { v3add, v3len, v3scale, type Vec3 } from '@futuremagic/core';
+import { apply, lampFlux, type HullLight, type Mat3 } from '../space';
 import { freeMesh, pointsChanged, pointsGeometry, setPoint } from './geometry';
 import { STARS } from './materials';
 import { outside } from './skyShaders';
@@ -66,6 +66,11 @@ export class LampPoints {
     const most = (LAMP_PEAK * 2 * STAR_SIGMA * STAR_SIGMA * outside.pixelSolidAngle.value) / Math.max(1e-30, outside.starExposure.value);
     const k = 1 / (1 + y / most);
     setPoint(this.position, this.color, this.used++, v3scale(rel, 1 / dist), dist * (1 - LIFT), [flux[0] * k, flux[1] * k, flux[2] * k]);
+  }
+
+  /** The lamps fixed to a body posed with these axes (scene) and origin (relative to the eye), at clock time t. */
+  shineOn(lights: Iterable<HullLight>, axes: Mat3, origin: Vec3, t: number): void {
+    for (const l of lights) this.shine(l, v3add(origin, apply(axes, l.at)), t);
   }
 
   send(): void {

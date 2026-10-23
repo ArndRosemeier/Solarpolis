@@ -416,7 +416,7 @@ export class OutsideView {
     if (at) {
       const axes = shipAxes(at.forward, at.up), stern = v3sub(at.position, eye);
       this.ship.pose(axes, stern, at.throttle);
-      for (const l of this.shipLamps?.lights ?? []) this.shipLamps!.points.shine(l, v3add(stern, apply(axes, l.at)), this.time);
+      if (this.shipLamps) this.shipLamps.points.shineOn(this.shipLamps.lights, axes, stern, this.time);
     } else this.ship.hide();
     this.shipLamps?.points.send();
   }

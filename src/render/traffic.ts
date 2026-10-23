@@ -15,6 +15,7 @@ import { STARS } from './materials';
 import { SHIP_ALBEDO, ShipMeshes, shipAxes, shipFlux } from './ship';
 import type { Hull } from './necklace';
 import { LampPoints } from './lamps';
+import { DockView } from './dock';
 
 /** A ship this many pixels long (with its glowing plume) is drawn as meshes; shorter, as a point. */
 const MESH_PX = 3;
@@ -34,6 +35,8 @@ export class TrafficView {
   private readonly pointCol: Float32Array;
   /** The ships' navigation lights. */
   private readonly lamps: LampPoints;
+  /** The berths' clamps, signals and floodlights. */
+  private readonly dock: DockView;
   /** This frame's ships and craft and where they are (scene axes, relative to the eye). */
   private now: { shape: ShipShape; axes: Mat3; stern: Vec3 }[] = [];
   /** This frame's ships, and the port's craft. */
@@ -52,11 +55,13 @@ export class TrafficView {
     this.points.frustumCulled = false;
     // Every ship at a berth or coming in, the passenger's, and every tug: three lights each.
     this.lamps = new LampPoints((arms * 2 + 1) * 3, `${placed.id} ships' lights`);
+    this.dock = new DockView(placed.habitat, placed.id);
   }
 
   async start(): Promise<void> {
     await this.stage.add(this.points);
     await this.lamps.enter(this.stage);
+    await this.dock.enter(this.stage);
   }
 
   /**
@@ -75,7 +80,7 @@ export class TrafficView {
       let d = this.ships.get(id);
       if (!d) { const shape = made(); d = { shape, lights: shape.params.length > INSPECTOR_SIZE ? shipLightsOf(shape) : [], meshes: null, adding: false }; this.ships.set(id, d); }
       const axes = mul(spindleAxes, shipAxes(forward, up)), stern = v3add(origin, apply(spindleAxes, at));
-      for (const l of d.lights) this.lamps.shine(l, v3add(stern, apply(axes, l.at)), t);
+      this.lamps.shineOn(d.lights, axes, stern, t);
       const L = d.shape.params.length, mid = v3add(stern, v3scale(apply(axes, [1, 0, 0]), L / 2)), dist = v3len(mid);
       const px = ((L + d.shape.plumeLength * throttle) / dist) * pixelsPerRadian, point = k++;
       this.now.push({ shape: d.shape, axes, stern });
@@ -91,6 +96,7 @@ export class TrafficView {
     for (const ship of ships) placeOne(ship.visit.id, () => shipShape(ship.visit.ship), ship.forward, ship.up, ship.position, ship.throttle);
     this.moving = ships;
     const h = this.placed.habitat, shapes = (v: Visit): ShipShape => this.ships.get(v.id)!.shape;
+    this.dock.follow(t, spindleAxes, origin, ships, shapes, pixelsPerRadian);
     this.craft = craftAt(h, this.placed.id, this.space.params.seed, ships, t, shapes);
     for (const c of this.craft) placeOne(c.id, () => craftShape(c), c.forward, c.up, v3sub(c.position, v3scale(c.forward, c.length / 2)), 0);
     for (const [id, d] of this.ships) if (!seen.has(id)) { d.meshes?.removeFrom(this.stage); this.ships.delete(id); }
@@ -128,9 +134,9 @@ export class TrafficView {
     return best;
   }
 
-  /** The bytes its ships' meshes hold on the GPU. */
+  /** The bytes its ships' meshes and the berths' clamps hold on the GPU. */
   shipBytes(): number {
-    let n = 0;
+    let n = this.dock.bytes();
     for (const d of this.ships.values()) n += d.meshes?.bytes ?? 0;
     return n;
   }
@@ -153,5 +159,6 @@ export class TrafficView {
     this.stage.remove(this.points);
     freeMesh(this.points);
     this.lamps.leave(this.stage);
+    this.dock.leave(this.stage);
   }
 }
