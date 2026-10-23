@@ -15,13 +15,18 @@ import { logged } from '../loadLog';
 /** The human pack's manifest. */
 export const HUMAN_PACK = `${import.meta.env?.BASE_URL ?? "/"}actors/human/manifest.json`;
 
+/** A pack's base file (its body and rig), the one costly to read. */
+const PACK_BASE = /\/base\.bin(\?|$)/;
+
 /** Files on their way: asked for twice at once, a file is fetched once. */
 const coming = new Map<string, Promise<ArrayBuffer>>();
 
 /**
  * Fetches a pack file; every caller gets its own copy (a runtime may hand buffers on). Nothing is kept once it has
  * arrived: a file asked for again comes from the browser's cache, not from a copy on the heap (CLAUDE.md, rule 12).
- * While a cinematic plays the file is handed over at its next cut (`loadGate`): reading a pack holds a frame.
+ * While a cinematic plays a pack's base (its body, 4 to 5 MB, read at once: about 250 ms on the render PC) is handed
+ * over at the next cut (`loadGate`); the smaller files (garments, hair, clips) come as they arrive, so a figure is
+ * never kept waiting for cuts file by file.
  */
 export const packFetch: Fetcher = async (url) => {
   let job = coming.get(url);
@@ -34,7 +39,7 @@ export const packFetch: Fetcher = async (url) => {
     void job.finally(() => coming.delete(url)).catch(() => undefined);
   }
   const bytes = await job;
-  await loadGate.wait();
+  if (PACK_BASE.test(url)) await loadGate.wait();
   return bytes.slice(0);
 };
 
