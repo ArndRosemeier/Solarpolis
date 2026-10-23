@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.129 — The setting's world bible is in the repository
+
+- Arnd's world bible, the overview of the whole setting this habitat is part of, is now in the repository as docs/world-bible.md, so every change can be checked against it.
+
 ## v0.128 — The arrival ends in the normal view, and names each habitat by its own Mind
 
 - After the arrival reveal the view is back at its usual width; before, it stayed zoomed out for the rest of the session.
