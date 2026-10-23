@@ -2,6 +2,11 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.179 — Fellow passengers in the lounge
+
+- In the arrival's cabin shot a few other passengers now sit on the couches in front of you, belted in and looking out at the habitat as the ship comes in.
+- They load while the title plays, so nobody pops into the shot; their bodies are given back once you are inside.
+
 ## v0.178 — The arrival from inside the ship
 
 - Halfway through the approach the film cuts inside: you stand in the lounge under the ship's nose, behind the couches, looking out of the tall window that faces the port as the ship creeps in along its berth arm.
