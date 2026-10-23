@@ -4,7 +4,8 @@
     { "id": "new WebGPURenderer", "pattern": "\\bnew\\s+(WebGPURenderer|WebGLRenderer)\\b", "only": [], "why": "one renderer, made by createRenderer from @futuremagic/stage" },
     { "id": "WebGL fallback", "pattern": "\\bforceWebGL\\b|getContext\\(\\s*['\"]webgl", "only": [], "why": "Solarpolis is WebGPU only, with no WebGL fallback (Arnd, 2026-10-21)" },
     { "id": "camera .project(", "pattern": "\\.project\\(\\s*[\\w.]*cam", "flags": "gi", "only": ["src/render/screen.ts"], "why": "world-to-screen goes through screen.toScreen" },
-    { "id": "new Worker", "pattern": "\\bnew\\s+Worker\\s*\\(", "only": ["src/workers/pool.ts"], "why": "workers are created by the one worker pool" },
+    { "id": "new Worker", "pattern": "\\bnew\\s+Worker\\s*\\(", "only": ["src/workers/pool.ts", "src/boot/firstLight.ts"], "why": "workers are created by the one worker pool (and the opening's own renderer, src/boot)" },
+    { "id": "raw WebGPU", "pattern": "\\b(requestDevice|createShaderModule|createRenderPipeline(Async)?|createComputePipeline(Async)?)\\s*\\(|getContext\\(\\s*['\"]webgpu", "only": ["src/boot/"], "why": "everything is drawn through three.js and the material registry (docs/SHADERS.md); the one exception is the opening (src/boot), which draws before three.js has loaded" },
     { "id": "new Material", "pattern": "\\bnew\\s+\\w*Material\\s*\\(", "only": ["src/render/materials.ts"], "why": "every material is a kind in the registry, so warm-up knows every shader (docs/SHADERS.md)" },
     { "id": "geometry.dispose", "pattern": "\\.geometry\\.dispose\\s*\\(", "only": ["src/render/geometry.ts"], "why": "a mesh given up goes through freeMesh (render/geometry.ts): disposing only its geometry leaves three's WebGPU renderer holding the whole mesh" },
     { "id": "onBeforeCompile", "pattern": "\\bonBeforeCompile\\b", "only": [], "why": "shader variants come from the registry's TSL kinds, not from patched source (docs/SHADERS.md)" },
@@ -27,6 +28,7 @@
     { "from": "src/sim", "deny": ["three", "src/render", "src/app", "src/lab", "src/physics"], "why": "the society sim is pure: it runs in a worker and in headless tests" },
     { "from": "src/talk", "deny": ["three", "src/render", "src/app", "src/lab", "src/physics"], "why": "what people say is pure: the conversation engine runs in a worker and in headless tests" },
     { "from": "src/link", "deny": ["three", "src/render", "src/app", "src/lab", "src/physics"], "why": "what the neural link offers and how it picks is pure: render, app and tests all read it, and it never draws" },
+    { "from": "src/boot", "deny": ["three", "src/render", "src/app", "src/lab", "src/world", "src/sim", "src/physics", "src/audio", "src/talk", "src/link"], "allow": ["src/render/exposure.ts", "src/app/params.ts", "src/app/style.css"], "why": "the opening runs before the game has loaded, in a worker: only the pure models, the exposure's numbers and the habitat in the URL" },
     { "from": "src/render", "deny": ["src/app", "src/lab"], "why": "the renderer does not know about the app or the Lab" },
     { "from": "src/persist", "deny": ["three", "src/render", "src/app", "src/lab"], "why": "persistence is a leaf: everything may save and load through it" }
   ],

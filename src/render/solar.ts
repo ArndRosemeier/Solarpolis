@@ -8,7 +8,7 @@ import { apply, mul, transpose, type Mat3 } from '../space/pose';
 import { circleOverlap } from '../space/sky';
 import { asteroid, asteroidPosition, type Asteroid } from '../space/asteroids';
 import type { SolarBody } from '../space/solarData';
-import type { SolarSystem } from '../space/solarSystem';
+import { bodyPointFlux, type SolarSystem } from '../space/solarSystem';
 import type { Space } from '../space/space';
 import { CELESTIAL, PLANET_RING, STARS } from './materials';
 import { dropUploaded, freeMesh, pointsChanged, pointsGeometry, setPoint, setPose } from './geometry';
@@ -92,12 +92,9 @@ export class SolarView {
       const direction = v3scale(s.center, 1 / s.distance);
       const hidden = resolved.some(near => near.distance < s.distance && v3dot(direction, v3norm(near.center)) > 0 && v3len(v3sub(near.center, v3scale(direction, v3dot(near.center, direction)))) < near.body.radius);
       if (hidden) continue;
-      const alpha = Math.acos(Math.max(-1, Math.min(1, v3dot(v3norm(v3scale(s.solar, -1)), v3norm(v3sub(eyeSolar, s.solar))))));
-      const phase = (Math.sin(alpha) + (Math.PI - alpha) * Math.cos(alpha)) / Math.PI;
-      const flux = s.body.albedo * phase * (s.body.radius / s.distance) ** 2 * s.light;
-      if (flux < 1e-17) continue;
-      const luminance = Math.max(.01, .2126 * s.body.colour[0] + .7152 * s.body.colour[1] + .0722 * s.body.colour[2]);
-      setPoint(this.points.position, this.points.color, point++, direction, s.distance * this.far / (this.far + s.distance), v3scale(s.body.colour, flux / luminance));
+      const flux = bodyPointFlux(s.body, s.solar, eyeSolar, s.distance, s.light);
+      if (Math.max(...flux) < 1e-17) continue;
+      setPoint(this.points.position, this.points.color, point++, direction, s.distance * this.far / (this.far + s.distance), flux);
     }
     this.pointMesh.geometry.setDrawRange(0, point * 6);
     pointsChanged(this.pointMesh);

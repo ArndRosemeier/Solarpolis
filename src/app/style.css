@@ -125,6 +125,13 @@ button { font: inherit; color: inherit; }
 .title-start:hover, .title-start:focus-visible { background: #fff2; border-color: #fff; }
 .title-hint { margin: 0; color: #fff9; font-size: 12px; text-shadow: 0 1px 4px #000c; }
 /* The ship's Mind on the arrival: text on screen, never a voice; low in the frame, like a subtitle. */
+/* The opening (design "First Light", src/boot): its own frame under the header until the cut to shot 1, the name
+   fading in from the page's first paint, before any script has run. */
+.first-light { position: fixed; left: 0; right: 0; bottom: 0; top: var(--top, 53px); background: #000; z-index: 15; overflow: hidden; }
+.no-opening .first-light { display: none; }
+.first-light-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.first-light .title-card { opacity: 1; animation: first-name 3.5s ease-out 0.4s both; }
+@keyframes first-name { from { opacity: 0; } to { opacity: 1; } }
 .mind-said { position: absolute; left: 50%; bottom: clamp(48px, 10vh, 120px); transform: translateX(-50%); width: min(720px, calc(100% - 32px)); text-align: center; color: #fff; text-shadow: 0 2px 12px #000e, 0 0 2px #000; pointer-events: none; z-index: 5; animation: mind-in 0.8s ease-out; }
 .mind-said[hidden] { display: none; }
 .mind-who { display: block; font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; color: #9fd8e0; margin-bottom: 6px; }

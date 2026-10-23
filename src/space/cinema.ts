@@ -18,10 +18,15 @@
  * Each shot plays at real speed; the clock jumps at the cuts, so nothing moves faster than it would (the real
  * approach takes many minutes).
  *
+ * Before shot 1, once per page (`opening`): the Necklace round Earth from far beyond home, the ring's habitats strung
+ * as glints round the planet, home the nearest just under its limb. It is drawn the moment the page opens, by its own
+ * small renderer (src/boot), while the Outside view loads behind it; the cut to shot 1 is where the two hand over.
+ *
  * Every distance is a multiple of the home habitat's outer radius, so the same shots frame the smallest and the
- * largest habitat. Positions are in the home habitat's orbit frame (its centre at the origin), float64. Pure.
+ * largest habitat (the opening's are multiples of the ring's radius: it frames the ring, not the habitat). Positions are in the home habitat's orbit frame (its centre at the origin), float64. Pure.
  */
-import { hash3i, hashToFloat, v3add, v3cross, v3dot, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
+import { hash3i, hashToFloat, v3add, v3cross, v3dot, v3len, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
+import { EARTH } from './constants';
 import type { Habitat } from '../blueprint';
 import type { Space } from './space';
 import { skyFrom } from './sky';
@@ -105,9 +110,10 @@ function approachOf(earthDir: Vec3): Vec3 {
 
 /**
  * The attract loop for the home habitat, from clock time `start`. `keepOut` is where torch ships cut their drive (in
- * outer radii), `shipLength` the ship's length (m).
+ * outer radii), `shipLength` the ship's length (m). `titled`: the opening already brought the title up, so it stays up
+ * through the first pass instead of fading in again over shot 1.
  */
-export function attractLoop(space: Space, start: number, keepOut: number, shipLength: number): Cinema {
+export function attractLoop(space: Space, start: number, keepOut: number, shipLength: number, titled = false): Cinema {
   const h = space.home.habitat, Ro = h.exterior.radius, L = h.exterior.portFace - h.exterior.wildFace;
   const sky = skyFrom(space, space.home.orbitFrame, [0, 0, 0], start);
   const earthDir = v3norm(sky.earth.center);
@@ -137,7 +143,7 @@ export function attractLoop(space: Space, start: number, keepOut: number, shipLe
         return {
           shot: 0, time: t, length: SHOTS[0], eye: v3add(eye, drift), target: [0, 0, 0], up, fov: 40,
           ship: { position: ship, forward: v3scale(approach, -1), up, throttle: 1 - smooth(5, 10, t) },
-          title: smooth(3, 8, t),
+          title: titled && elapsed < LOOP ? 1 : smooth(3, 8, t),
         };
       }
       t -= SHOTS[0];
@@ -155,6 +161,70 @@ export function attractLoop(space: Space, start: number, keepOut: number, shipLe
       const eye = v3add(v3scale(across, 2 * Ro), v3scale(port, z));
       const target = v3add(v3scale(across, Ro * 0.6), v3scale(port, z + 2.5 * Ro));
       return { shot: 2, time: t, length: SHOTS[2], eye, target, up: across, fov: 50, ship: null, title: 1 };
+    },
+  };
+}
+
+/**
+ * The opening (before shot 1, once per page): at least this long after its first frame (s), so the name can come up
+ * over it; it lasts until the Outside view is ready behind it, however long that takes.
+ */
+export const OPENING_MIN = 7;
+/**
+ * Where the opening's eye hangs, in radii of the ring (the geostationary orbit): this far beyond home, away from Earth
+ * (home is then the nearest glint, Earth about 10° across), and this far above the ring's plane (the ring opens into
+ * a slim ellipse round Earth, home just under its limb). It drifts round Earth by OPENING_DRIFT rad per second, so the
+ * ring turns slowly against the planet.
+ */
+const OPENING_BACK = 0.7;
+const OPENING_LIFT = 0.19;
+const OPENING_SIDE = 0.1;
+const OPENING_DRIFT = 0.0015;
+/** The opening's field of view (degrees), and how far Earth's centre sits below the middle, in Earth radii. */
+export const OPENING_FOV = 40;
+const OPENING_EARTH_LOW = 0.9;
+
+export interface OpeningFrame {
+  /** Seconds since the opening's first frame, and the clock time it shows (real speed from `start`). */
+  time: number;
+  clock: number;
+  eye: Vec3;
+  target: Vec3;
+  up: Vec3;
+  fov: number;
+}
+
+export interface Opening {
+  start: number;
+  at(elapsed: number): OpeningFrame;
+}
+
+/**
+ * The opening for the home habitat from clock time `start` (chooseStart's moment: home sunlit, Earth gibbous, the Sun
+ * behind the eye). Positions in the home orbit frame, as every frame here.
+ */
+export function opening(space: Space, start: number): Opening {
+  return {
+    start,
+    at(elapsed: number): OpeningFrame {
+      const clock = start + elapsed, f = space.frames;
+      const earth = f.position([0, 0, 0], 'earth', space.home.orbitFrame, clock);
+      const R = v3len(earth);
+      const a = f.relative('earth.fixed', space.home.orbitFrame, clock).axes;
+      const north = v3norm([a[2], a[5], a[8]]);
+      // Home's radial from Earth (in the ring's plane), and the ring's direction of travel.
+      const out = v3norm(v3sub(v3scale(earth, -1), v3scale(north, v3dot(v3scale(earth, -1), north))));
+      const along = v3cross(north, out);
+      const phi = OPENING_SIDE + OPENING_DRIFT * elapsed;
+      const radial = v3add(v3scale(out, Math.cos(phi)), v3scale(along, Math.sin(phi)));
+      const eye = v3add(earth, v3add(v3scale(radial, R * (1 + OPENING_BACK)), v3scale(north, R * OPENING_LIFT)));
+      // Look at a point above Earth's centre, so Earth sits low and the name has the stars above it.
+      const toEarth = v3sub(earth, eye), dist = v3len(toEarth);
+      const lowered = Math.asin(EARTH.radius / dist) * OPENING_EARTH_LOW;
+      const flat = v3norm(v3sub(north, v3scale(toEarth, v3dot(north, toEarth) / (dist * dist))));
+      const look = v3norm(v3add(v3scale(toEarth, Math.cos(lowered) / dist), v3scale(flat, Math.sin(lowered))));
+      const up = v3norm(v3sub(north, v3scale(look, v3dot(north, look))));
+      return { time: elapsed, clock, eye, target: v3add(eye, v3scale(look, dist)), up, fov: OPENING_FOV };
     },
   };
 }

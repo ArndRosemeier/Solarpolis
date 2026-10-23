@@ -12,8 +12,12 @@ import type { ShaderEvent } from '@futuremagic/stage';
 
 /** The moments marked, in the order they come. */
 export type ArrivalMark =
+  /** The opening's first frame is on screen (src/boot: drawn before the game has loaded). */
+  | 'light'
   /** The title's attract loop is flying. */
   | 'title'
+  /** The opening has handed over to the Outside view: the cut to shot 1. */
+  | 'opened'
   /** Start was pressed: the flight begins. */
   | 'start'
   /** The Inside view is built (its warm-up and first tiles). */
@@ -95,10 +99,21 @@ export class ArrivalTiming {
 
   constructor(private readonly now: () => number) {}
 
-  /** Mark a moment (the first time only: a second Start after going back to the title keeps the first figures). */
-  mark(what: ArrivalMark): void {
+  /** How the opening's own frames went (its worker counts them): frames drawn, the slowest (ms), stutters. */
+  private openingFrames: { frames: number; slowest: number; stutters: number } | null = null;
+
+  /**
+   * Mark a moment (the first time only: a second Start after going back to the title keeps the first figures), now or
+   * at `at` (ms on the same clock) for one seen elsewhere first (the opening's worker).
+   */
+  mark(what: ArrivalMark, at?: number): void {
     if (what === 'start' && this.marks.has('start')) return;
-    if (!this.marks.has(what)) this.marks.set(what, this.now());
+    if (!this.marks.has(what)) this.marks.set(what, at ?? this.now());
+  }
+
+  /** The opening's frame figures, once it has ended. */
+  opening(figures: { frames: number; slowest: number; stutters: number }): void {
+    this.openingFrames = figures;
   }
 
   /** When a moment was marked (ms on the clock), or null. */
@@ -182,8 +197,11 @@ export class ArrivalTiming {
   /** The debug menu's line. */
   arrivalLine(): string {
     const s = (ms: number): string => `${(ms / 1000).toFixed(1)} s`, m = this.marks;
-    const title = m.get('title'), start = m.get('start');
-    const parts = [`arrival: title ${title === undefined ? 'not yet' : `${s(title)} after opening`}`];
+    const title = m.get('title'), start = m.get('start'), light = m.get('light'), opened = m.get('opened');
+    const o = this.openingFrames;
+    const first = light === undefined ? '' : `first light ${s(light)}, `;
+    const cut = opened === undefined ? '' : `, the opening cut to it at ${s(opened)}${o ? ` (${o.frames} frames, slowest ${o.slowest.toFixed(0)} ms, ${o.stutters} stutters)` : ''}`;
+    const parts = [`arrival: ${first}title ${title === undefined ? 'not yet' : `${s(title)} after opening`}${cut}`];
     if (start === undefined) return `${parts[0]} · not started`;
     const since = (what: ArrivalMark): string => { const t = m.get(what); return t === undefined ? 'not yet' : s(Math.max(0, t - start)); };
     parts.push(`after Start: interior ${since('inside')}, body ${since('body')}, flight ${since('flown')}`);

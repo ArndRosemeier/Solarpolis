@@ -14,6 +14,7 @@ import type { LinkChoice } from './link/service';
 import { SpeechBubbles } from './app/bubbles';
 import { ArrivalCard } from './app/arrivalCard';
 import { ArrivalTiming, type LongFrame } from './app/arrivalTiming';
+import { firstLight } from './boot/firstLight';
 /**
  * The page: the header with the version and What's new, the memory watchdog, the debug menu, and the current view:
  * the Blueprint Lab (design a habitat), Inside (walk in it) or Outside (the habitat in its orbit, with Earth, the Moon,
@@ -26,7 +27,6 @@ import { busiestNear, deerAt, fleetOf, flierAt, floorGap, herdsNear, peopleAt, p
 import { POSE } from './gen/standIn';
 import { nearestPlace, vineFaceFoot } from './gen/places';
 import { besideRiver, nearestSample, sampleS, type River } from './gen/rivers';
-import './app/style.css';
 import { el } from './app/dom';
 import { GravityMeter } from './app/gravityMeter';
 import { TitleCard } from './app/title';
@@ -45,7 +45,7 @@ import { speckMark } from './render/crowdShaders';
 import { OutsideView } from './render/outside';
 import type { BirdSeen } from './render/birds';
 import { VoyageComputer } from './app/voyageComputer';
-import { arrivalScore, captionAt, hubView, type ArrivalScore } from './space';
+import { OPENING_MIN, arrivalScore, captionAt, hubView, type ArrivalScore } from './space';
 import { apart, fromWorld, toWorld, type DebrisSpec, type Habitat, type HabitatParams, type Vec3 } from './blueprint';
 import { blueprintOf, placeInWords, type Ledger, type Whereabouts } from './system';
 import { levelRunOf, nearestOf, onRow, plantsOf, slopeAt, type Level } from './gen/scatter';
@@ -73,14 +73,15 @@ const app = document.getElementById('app')!;
 const debug = new DebugMenu();
 
 // ---- the header ---------------------------------------------------------------------------------
-const header = el('header', 'top');
+// The header and its name are in the page from the first paint (index.html), over the opening; the rest joins here.
+const header = document.querySelector<HTMLElement>('header.top') ?? el('header', 'top');
 const tabs = el('nav', 'tabs');
 const labTab = el('button', 'tab on', 'Blueprint'), insideTab = el('button', 'tab', 'Inside'), outsideTab = el('button', 'tab', 'Outside'), tourTab = el('button', 'tab', 'Ship Tour');
 tabs.append(labTab, insideTab, outsideTab, tourTab);
-const home = el('h1', '', 'Solarpolis');
+const home = header.querySelector('h1') ?? el('h1', '', 'Solarpolis');
 home.title = 'Back to the title';
 header.append(home, tabs, whatsNewButton());
-app.append(header);
+if (!header.parentElement) app.append(header);
 
 // ---- the memory watchdog --------------------------------------------------------------------------
 const warning = el('div', 'mem-warning');
@@ -91,6 +92,8 @@ const showLevel = (level: PressureLevel): void => {
 };
 const memory = new MemoryWatchdog({ budget: thisDeviceBudget(), readHeap: browserHeap, now: () => performance.now(), onLevel: showLevel });
 memory.start(2000);
+// The opening's own renderer (src/boot) until the cut: its frame, the stars, Earth's and the Moon's maps.
+memory.track('first light', () => firstLight.heldBytes());
 document.body.append(warning);
 
 // ---- sound: the land heard from the Inside view, the title's music (design "Solarpolis: how it sounds") ----------------
@@ -98,6 +101,8 @@ const sound = new Sound(memory, () => (tab === 'inside' ? insideSlot.view?.heari
 header.append(soundButton(sound));
 
 // ---- the view ------------------------------------------------------------------------------------
+/** The habitat visited (a ledger id), or null at home. Declared before the Lab, which reports its first query at once. */
+let visiting: string | null = null;
 const lab = new BlueprintLab(new URLSearchParams(location.search), (query) => {
   // The Lab owns the habitat's fields; the open view rides along. A visit's habitat is not the page's to keep.
   if (visiting) return;
@@ -110,8 +115,6 @@ const lab = new BlueprintLab(new URLSearchParams(location.search), (query) => {
 app.append(lab.root);
 
 // ---- visiting another habitat (docs/system.md: a proof of concept, one arrives at once) ----------------------
-/** The habitat visited (a ledger id), or null at home. */
-let visiting: string | null = null;
 /** Home while away (the habitat left behind): its parameters and the habitat the Outside view keeps showing. */
 let left: { params: HabitatParams; habitat: Habitat } | null = null;
 /** Where the player is in the system, for the Inside view (news heard with the visited habitat's light-lag). */
@@ -244,6 +247,9 @@ const timing = new ArrivalTiming(() => performance.now());
 timing.watchShaders('inside', () => insideSlot.view?.shaderLog ?? null);
 timing.watchShaders('outside', () => outsideSlot.view?.shaderLog ?? null);
 loadLog.note = (what) => timing.note(what);
+// The opening, drawn before this code loaded: when its first frame came, and how its frames went.
+void firstLight.lit.then((at) => { if (at !== null) timing.mark('light', at); });
+void firstLight.ended.then((figures) => { if (figures) timing.opening(figures); });
 // Chrome names the scripts that make a frame long (Long Animation Frames): which work stutters the flight.
 if (typeof PerformanceObserver !== 'undefined' && PerformanceObserver.supportedEntryTypes?.includes('long-animation-frame')) {
   new PerformanceObserver((list) => { for (const e of list.getEntries()) timing.longFrame(e as unknown as LongFrame); }).observe({ type: 'long-animation-frame', buffered: true });
@@ -330,14 +336,17 @@ type Tab = 'title' | 'lab' | 'inside' | 'outside' | 'tour';
 let tab: Tab = 'title';
 function showTab(which: Tab): void {
   tab = which;
+  // Anywhere but the title, the opening is gone at once.
+  if (which !== 'title') firstLight.end();
   labTab.classList.toggle('on', which === 'lab');
   insideTab.classList.toggle('on', which === 'inside');
   outsideTab.classList.toggle('on', which === 'outside');
   tourTab.classList.toggle('on', which === 'tour');
   lab.root.hidden = which !== 'lab';
   const titled = which === 'title';
-  // While the title (and the arrival after Start) plays, heavy loading waits for its cuts.
-  loadGate.hold(titled);
+  // While the title (and the arrival after Start) plays, heavy loading waits for its cuts. Not while the opening
+  // plays: its own worker draws it, so a long step here cannot stutter it.
+  loadGate.hold(titled && !firstLight.playing);
   title.show(titled);
   if (titled) sound.music('music/title');
   else if (!arriving) sound.music(null);
@@ -354,10 +363,12 @@ function showTab(which: Tab): void {
     v.setTourMode(which === 'tour');
     v.onTitle = titled ? (x) => title.fade(x) : null;
     if (titled && !v.attracting) {
-      await v.startAttract();
+      const opening = firstLight.playing;
+      await v.startAttract(opening);
       timing.mark('title');
       // The title is the loading screen too: the interior warms up behind it, so Start finds it (nearly) ready.
       if (!insideSlot.view) starting = (starting ?? Promise.resolve()).then(() => { timing.note('interior view …'); return insideSlot.show(); });
+      if (opening) void cutFromOpening(v);
     }
     else if (!titled && v.attracting) v.stopAttract();
   });
@@ -365,6 +376,33 @@ function showTab(which: Tab): void {
   if (which !== 'title') q.set('view', which); else q.delete('view');
   const query = q.toString();
   history.replaceState(null, '', query ? `?${query}` : location.pathname);
+}
+/**
+ * The cut from the opening to shot 1 (design "First Light"): once the opening has played its least and this view is
+ * ready, shot 1 starts from its first frame behind the opening, is drawn, and the opening steps aside. Until then the
+ * view waits unseen (not drawing), so the opening keeps the GPU to itself.
+ */
+async function cutFromOpening(v: OutsideView): Promise<void> {
+  v.setRunning(false);
+  const after = (s: number): Promise<void> => new Promise((done) => setTimeout(done, s * 1000));
+  // An opening that has not drawn by now, with the view ready, never will: the title goes on without it.
+  const lit = await Promise.race([firstLight.lit, after(OPENING_MIN).then(() => null)]);
+  if (lit === null) firstLight.end();
+  const wait = OPENING_MIN - firstLight.elapsed();
+  // An opening that fails on the way ends at once (`ended`), and the title goes on.
+  if (wait > 0 && firstLight.playing) await Promise.race([after(wait), firstLight.ended]);
+  if (!firstLight.playing || tab !== 'title' || !v.attracting) {
+    if (tab === 'title') { loadGate.hold(true); v.setRunning(true); }
+    return;
+  }
+  // From the cut on, heavy steps wait for the title's cuts again.
+  loadGate.hold(true);
+  v.restartAttract(firstLight.elapsed());
+  v.setRunning(true);
+  // Two frames: the first of shot 1 is drawn under the opening before it goes.
+  await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+  firstLight.end();
+  timing.mark('opened');
 }
 home.addEventListener('click', () => showTab('title'));
 labTab.addEventListener('click', () => showTab('lab'));

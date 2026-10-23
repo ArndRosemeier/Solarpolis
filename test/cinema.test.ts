@@ -1,9 +1,9 @@
 // The title's attract loop and its torch ship: every distance follows the home habitat, over the whole MATRIX.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { v3add, v3dot, v3len, v3norm, v3scale, v3sub } from '@futuremagic/core';
+import { v3add, v3cross, v3dot, v3len, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
 import { MATRIX, exteriorDistance, fromWorld } from '../src/blueprint';
-import { ARRIVAL, ARRIVAL_SHOTS, arrivalScore, captionAt, MIND_LINES, SPIN_UP, LIT_FROM, LIT_TO, LOOP, SHOTS, TORCH_SHIP, arrival, attractLoop, hubView, chooseStart, partSpan, shipAt, skyFrom, torchShip, loungeOf, shipShape } from '../src/space';
+import { OPENING_FOV, OPENING_MIN, opening, ARRIVAL, ARRIVAL_SHOTS, arrivalScore, captionAt, MIND_LINES, SPIN_UP, LIT_FROM, LIT_TO, LOOP, SHOTS, TORCH_SHIP, arrival, attractLoop, hubView, chooseStart, partSpan, shipAt, skyFrom, torchShip, loungeOf, shipShape } from '../src/space';
 import { spaceOf } from './worlds';
 
 const DEG = 180 / Math.PI;
@@ -175,5 +175,50 @@ for (const { name } of MATRIX) {
     const r = Math.hypot(eye[0], eye[1]);
     assert.ok(r > h.params.sunlineRadius && r < h.params.hubRadius, `${name}: ${r} m off the axis is in the sunline or beyond the Hub`);
     assert.ok(look[2] === -1 && eye[2] < h.length);
+  });
+}
+
+for (const { name, params } of MATRIX) {
+  test(`opening (${name}): the ring round Earth, home the nearest glint under its limb, the Sun out of sight`, () => {
+    const space = spaceOf(name);
+    const start = chooseStart(space, 0), o = opening(space, start);
+    for (const t of [0, OPENING_MIN, 4 * OPENING_MIN]) {
+      const f = o.at(t);
+      assert.equal(f.clock, start + t);
+      assert.equal(f.fov, OPENING_FOV);
+      const fwd = v3norm(v3sub(f.target, f.eye)), right = v3cross(fwd, f.up);
+      assert.ok(Math.abs(v3dot(fwd, f.up)) < 1e-9);
+      // Where a point lands in the frame (degrees right and up of the middle).
+      const seen = (p: Vec3): [number, number] => {
+        const d = v3norm(v3sub(p, f.eye)), z = v3dot(d, fwd);
+        assert.ok(z > 0);
+        return [Math.atan(v3dot(d, right) / z) * DEG, Math.atan(v3dot(d, f.up) / z) * DEG];
+      };
+      const sky = skyFrom(space, space.home.orbitFrame, f.eye, f.clock);
+      const earth = v3add(f.eye, sky.earth.center), r = Math.asin(sky.earth.radius / v3len(sky.earth.center)) * DEG;
+      const [ex, ey] = seen(earth), [hx, hy] = seen([0, 0, 0]);
+      // Earth about 10° across, a little below the middle.
+      assert.ok(r > 4 && r < 6.5, `Earth ${r}° in radius`);
+      assert.ok(Math.abs(ex) < 1 && ey < 0 && ey > -10, `Earth at ${ex}, ${ey}`);
+      // Home under Earth's limb, inside the frame.
+      assert.ok(hy < ey - r && hy > -OPENING_FOV / 2 + 2, `home at ${hx}, ${hy}`);
+      assert.ok(Math.abs(hx) < 20);
+      // The Sun is behind the eye, out of the meter's reach (so the stars stay heroic).
+      assert.ok(Math.acos(v3dot(fwd, sky.sunDir)) * DEG > 70);
+      // Most of the ring's other habitats are in the frame.
+      let inFrame = 0;
+      for (const h of space.habitats.slice(1)) {
+        const [x, y] = seen(space.frames.position([0, 0, 0], h.orbitFrame, space.home.orbitFrame, f.clock));
+        if (Math.abs(x) < 33 && Math.abs(y) < OPENING_FOV / 2) inFrame++;
+      }
+      assert.ok(inFrame >= space.habitats.length / 2, `${inFrame} glints in the frame`);
+    }
+    // It drifts: the eye moves, slowly.
+    const a = o.at(0).eye, b = o.at(10).eye, R = v3len(space.frames.position([0, 0, 0], 'earth', space.home.orbitFrame, start));
+    assert.ok(v3len(v3sub(a, b)) > 0 && v3len(v3sub(a, b)) < 0.05 * R);
+    // After the opening the title is up already: the first pass keeps it up, later passes fade it in again.
+    const c = attractLoop(space, start, params.exterior.keepOut, TORCH_SHIP.length, true);
+    assert.equal(c.at(0).title, 1);
+    assert.equal(c.at(LOOP).title, 0);
   });
 }
