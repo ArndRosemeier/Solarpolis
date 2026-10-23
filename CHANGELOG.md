@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.121 — Faces and skin show their textures again
+
+- Update the shared renderer to its merged texture-binding fix: each person's skin photos and eyes now replace the white fallback correctly.
+
 ## v0.120 — The code checks work on Windows too
 
 - The duplication checker now uses the same file names on Windows and Linux, so Windows path separators no longer make existing findings appear to be new copies.
