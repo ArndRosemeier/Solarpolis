@@ -13,7 +13,7 @@ import { Stage, createRenderer } from '@futuremagic/stage';
 import { deriveSeed, smoothstep, v3dot, v3madd, v3norm, v3scale } from '@futuremagic/core';
 import { fromWorld, toView, toWorld, type Habitat, type Vec3 } from '../blueprint';
 import { makeTerrain, type Terrain } from '../gen/terrain';
-import { EYE_HEIGHT, Walker, type View } from '../world/walker';
+import { EYE_HEIGHT, VIEW_FOV, Walker, type View } from '../world/walker';
 import { Flyer } from '../world/flyer';
 import { PhysicsWorld } from '../physics/world';
 import { gravityReading, type GravityReading } from '../world/motion';
@@ -97,7 +97,7 @@ export class InteriorView {
   private renderer!: WebGPURenderer;
   private stage!: Stage;
   private readonly scene = new Scene();
-  private readonly camera = new PerspectiveCamera(70, 1, 0.3, 1e6);
+  private readonly camera = new PerspectiveCamera(VIEW_FOV, 1, 0.3, 1e6);
   private readonly pool = sharedPool();
   private terrain: Terrain;
   /** The land's biomes (built with the terrain). */

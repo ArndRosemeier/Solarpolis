@@ -28,6 +28,8 @@ export interface View {
 
 /** Eye height of a standing human (m). */
 export const EYE_HEIGHT = 1.7;
+/** The camera's vertical field of view on foot and in the air (degrees). */
+export const VIEW_FOV = 70;
 const PITCH_LIMIT = Math.PI / 2 - 0.01;
 
 export class Walker {

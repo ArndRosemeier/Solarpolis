@@ -415,6 +415,8 @@ export interface HabitatParams {
   plan: LandPlan;
   /** The culture, by name (`CULTURES` in cultures.ts): the styles its districts shape their commons in. */
   culture: string;
+  /** The habitat's steward Mind, whose name is the habitat's own (the arrival's welcome shows it). */
+  mind: string;
   /** Same parameters and same seed give the same habitat. */
   seed: number;
 }

@@ -9,7 +9,7 @@ import { CULTURES, cultureOf } from './cultures';
 export type Severity = 'invalid' | 'unusual';
 
 export interface Finding {
-  id: 'spin' | 'hull' | 'hull-thick' | 'axis-air' | 'haze' | 'heat' | 'light' | 'layers' | 'population' | 'sunline' | 'relief' | 'day' | 'brims' | 'collectors' | 'climate' | 'clouds' | 'landmarks' | 'culture' | 'plan' | 'life' | 'under';
+  id: 'spin' | 'hull' | 'hull-thick' | 'axis-air' | 'haze' | 'heat' | 'light' | 'layers' | 'population' | 'sunline' | 'relief' | 'day' | 'brims' | 'collectors' | 'climate' | 'clouds' | 'landmarks' | 'culture' | 'plan' | 'life' | 'under' | 'mind';
   severity: Severity;
   message: string;
 }
@@ -80,6 +80,7 @@ export function validate(h: Habitat): Finding[] {
   if (lm && !(lm.handrail > 0 && lm.size >= lm.handrail * 10 && lm.size < floor / 4))
     out.push({ id: 'landmarks', severity: 'invalid', message: 'landmarks need a handrail height > 0 and a size of at least ten handrails, under a quarter of the floor' });
   if (!climateOf(p.climate)) out.push({ id: 'climate', severity: 'invalid', message: `no climate "${p.climate}" in the catalogue (${Object.keys(CLIMATES).join(', ')})` });
+  if (!p.mind.trim()) out.push({ id: 'mind', severity: 'invalid', message: 'the habitat needs a Mind with a name' });
   if (!cultureOf(p.culture)) out.push({ id: 'culture', severity: 'invalid', message: `no culture "${p.culture}" in the catalogue (${Object.keys(CULTURES).join(', ')})` });
   const pl = p.plan;
   if (!(Number.isInteger(pl.valleys) && pl.valleys >= 1 && pl.reserve >= 0 && pl.reserve <= 0.9 && pl.districtPeople > 0 && pl.entranceSpacing > 0 && Math.abs(pl.spiral) <= Math.PI / 2))
