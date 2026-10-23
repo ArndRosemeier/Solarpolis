@@ -8,3 +8,4 @@ export { fleetOf, flierAt, fliersAt, airBytes, ROLES, type Role, type Job, type 
 export { densNear, squirrelAt, densBytes, crownsOf, SLOT, HOP, RUN, type Den, type Squirrel, type SquirrelDoing } from './fauna';
 export { herdsNear, deerAt, deerLand, herdReady, prepareHerd, herdsBytes, DEER_WALK, DEER_DRIFT, DEER_LAG, DEER_BOUT, HERD_MOST, type Herd, type Deer, type DeerDoing } from './herds';
 export { voiceOf, PURSUITS, TEMPERAMENTS, type Voice, type Pursuit, type Temperament } from './voices';
+export { nestsNear, birdAt, songsIn, wingsFor, lightAt, chorusAt, nestsBytes, SLOT as BIRD_SLOT, LARK_CYCLE, WAKE, WOOD_SHARES, type Nest, type Perch, type BirdNow, type BirdDoing, type Song, type Wings } from './birds';

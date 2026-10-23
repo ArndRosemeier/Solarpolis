@@ -2,6 +2,33 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.143 — Birds you can see and hear
+
+- The woods have birds: blackbirds, robins, wrens, song thrushes, woodpeckers and wood pigeons, each living round its own tree and singing from the tree tops near it. Every bird call you hear now comes from a bird you can find.
+- At dawn the chorus rolls along the cylinder with the light; by day the birds sit, look about, hop and peck on the ground and fly between their trees; at night they roost in the crowns.
+- Skylarks rise singing from the meadows in slow spirals, hang high up for minutes and drop the last metres with wings closed. Tawny owls hoot and fly between their perches at night.
+- Up close a bird has single flight feathers that beat (the hand lagging the arm), fold as it lands, a tail that fans and a beak that opens as it sings, in its species' plumage; far off it becomes a simple shape and then a speck, so it never pops.
+- Flight follows the spin: a bird is heavier flying spinward and lighter against the spin, is pushed sideways climbing or diving, and beats slower in the weaker gravity toward the axis.
+- Debug menu: fly beside the nearest bird, lark or owl, and jump to the dawn chorus or nightfall.
+
+## v0.142 — Sounds for swallows, swifts and starling flocks
+
+- New sounds ready for the birds overhead: a swallow's twitter, swifts' shrill screeching, and a starling murmuration's chatter and the rush of its wings. They are heard once the birds that make them fly in the habitat.
+
+## v0.141 — The arrival can be heard, and music finds its moments
+
+- After Start you hear the flight from inside the ship: the cabin, the thrusters slowing it up its corridor, small trims as it creeps in, then contact, the clamps latching one by one and the hatch sealing. In the bore the great bearing rumbles past, and the air rushes as it brings you up to the habitat's spin. Every sound comes when the ship really does it.
+- The ship's Mind talks to you on screen, in three short lines, never in a voice.
+- Four short pieces of music now play once when the moment is right: dawn at the summit hut, a walk on the Sunwalk in full day, the lake at night, and your first time down in the Understorey. Long quiet in between.
+
+## v0.140 — Lakes on the floor
+
+- A great lake now lies at the Mountain's foot in the wild reserve, down the main valley: about 3.6 by 1.7 km in the reference habitat, with the great river running in at one end and out at the other, and the Sunwalk along its shore.
+- A few smaller lakes lie in the rooms between the Rings: round, with bays, where the land is let go; square stone-edged basins where it is kept.
+- Their shores come down to the water and their beds shelve to their depth; you can swim in them. Courts, works, halls, hamlets below, orchards and people keep out of the water.
+- Debug menu: Go → "Fly: the next lake" and "To the next lake's shore".
+- The tests run a little faster: finding where a point lies on the cylinder's profile and the Understorey's ceilings are quicker, with the same results.
+
 ## v0.139 — Stairs climb
 
 - You walk up stairs without getting stuck: the courts' stairs, the Lift Stair, kerbs and short steps. Before, even ordinary 16 cm steps often stopped you.

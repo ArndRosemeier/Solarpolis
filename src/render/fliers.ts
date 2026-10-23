@@ -28,7 +28,7 @@ import { designBytes, designsOf, type DesignMesh, type DroneDesign } from '../ge
 import { HEARD_WITHIN, type Source } from '../sim/sources';
 import { ROLES, airBytes, fleetOf, flierAt, footingOf, talkerAt, type Flier } from '../sim';
 import type { WorkerPool } from '../workers/pool';
-import { DRONE, DRONE_VEIL, FLIER_LAYOUT, layInstances } from './materials';
+import { DRONE, DRONE_VEIL, FLIER_LAYOUT, layInstances, roomForInstances } from './materials';
 import { drawSpecks, ownSpecks, pxPerMetre, roomForSpecks, type OwnSpecks } from './specks';
 import { turnFor, type Aloft, type Speaker } from './people';
 import { FLIER_STRIDE, writeFlier } from './droneShaders';
@@ -245,12 +245,7 @@ export class FlierView {
 
   /** Room in both of a design's levels for `need` drones: new instances on the same meshes, so nothing is compiled again. */
   private room(d: Drawn, need: number): void {
-    for (const l of d.levels) {
-      if (l.data.length >= need * FLIER_STRIDE) continue;
-      l.data = new Float32Array(Math.max(need, (2 * l.data.length) / FLIER_STRIDE) * FLIER_STRIDE);
-      l.buffer = layInstances(l.body.geometry, l.data, FLIER_LAYOUT);
-      layInstances(l.veil.geometry, l.buffer, FLIER_LAYOUT);
-    }
+    for (const l of d.levels) roomForInstances(l, need, FLIER_LAYOUT, [l.body.geometry, l.veil.geometry]);
   }
 
   /** A drone body's size and colour as the far specks draw it (`design`: which of the bodies people wear), once built. */

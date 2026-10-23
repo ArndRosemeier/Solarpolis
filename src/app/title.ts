@@ -10,6 +10,9 @@ export class TitleCard {
   readonly root = el('div', 'title-card');
   /** Off; showing over the attract loop; or gone while the arrival plays (keys still skip it). */
   private state: 'off' | 'title' | 'arriving' = 'off';
+  /** The ship's Mind's lines during the arrival: text on screen, never a voice (Arnd, 2026-10-23). */
+  private readonly line = el('p', 'mind-line');
+  private readonly said = el('div', 'mind-said');
 
   constructor(start: () => void, skip: () => void) {
     const name = el('h2', 'title-name', 'Solarpolis');
@@ -21,6 +24,8 @@ export class TitleCard {
     bottom.append(go, hint);
     this.root.append(top, bottom);
     this.root.hidden = true;
+    this.said.append(el('span', 'mind-who', "The ship's Mind"), this.line);
+    this.said.hidden = true;
     window.addEventListener('keydown', (e) => {
       // Any plain key; not the debug menu's chord or other shortcuts.
       if (this.state === 'off' || e.repeat || e.ctrlKey || e.altKey || e.metaKey || ['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) return;
@@ -39,6 +44,17 @@ export class TitleCard {
   arriving(): void {
     this.state = 'arriving';
     this.root.hidden = true;
+  }
+
+  /** The element the Mind's lines show in (beside the card, so they stay while the card is gone). */
+  get mind(): HTMLElement {
+    return this.said;
+  }
+
+  /** The Mind's line now (null: none). */
+  caption(text: string | null): void {
+    if (text && this.line.textContent !== text) this.line.textContent = text;
+    this.said.hidden = !text;
   }
 
   /** How far the card has faded in (0–1). */

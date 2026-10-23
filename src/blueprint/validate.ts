@@ -106,6 +106,9 @@ export function validate(h: Habitat): Finding[] {
   const an = lf.animals;
   if (!(an.squirrels >= 0 && an.range > 0 && an.out >= 0 && an.out <= 1 && an.deer >= 0 && an.herd >= 1 && an.roam > 0))
     out.push({ id: 'life', severity: 'invalid', message: 'animals need squirrels ≥ 0 per hectare, a range > 0, a share of the day out between 0 and 1, deer ≥ 0 per km², herds of at least 1 and a roam > 0' });
+  const bi = lf.birds;
+  if (!(bi.woods >= 0 && bi.territory > 0 && bi.larks >= 0 && bi.owls >= 0))
+    out.push({ id: 'life', severity: 'invalid', message: 'birds need songbirds ≥ 0 per hectare of woods, a territory > 0, larks ≥ 0 per hectare and owls ≥ 0 per km²' });
   const tk = lf.talk;
   if (!(tk.words > 0 && tk.dots >= tk.words && Number.isInteger(tk.parties) && tk.parties >= 0 && tk.read > 0 && tk.quiet >= 0))
     out.push({ id: 'life', severity: 'invalid', message: 'talk needs a distance for words > 0, one for bubbles at least that far, a whole number of parties ≥ 0, a reading pace > 0 and a quiet ≥ 0' });

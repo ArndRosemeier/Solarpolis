@@ -23,6 +23,8 @@ import { hash3i, hashToFloat } from '@futuremagic/core';
 import { BEDS, byTime, callsIn, soundscapeAt, stepSurfaceAt, strideAt, type Bed, type Call, type Hearing, type Soundscape } from '../sim/sounds';
 import { ROOM_BEDS, type Room } from '../sim/rooms';
 import { cuesOf, humOf, type Cue, type Hum, type Source } from '../sim/sources';
+import { SHIP_BEDS, type ArrivalScore } from '../space/arrivalScore';
+import { MOMENT_MUSIC, momentAt, type Moment } from '../sim/moments';
 import type { MemoryWatchdog } from '../app/memory';
 import { readSetting, writeSetting } from '../persist/settings';
 
@@ -65,6 +67,10 @@ const CABIN_HUM = 0.35, EARS_SHUT = 1500;
 const STEP_GAIN = 0.45, CALL_GAIN = 0.8, MUSIC_GAIN = 0.7;
 /** How the music fades in and out (s). */
 const MUSIC_IN = 2, MUSIC_OUT = 8;
+/** The arrival's clock is followed again when the frames drift this far from the context's (s; a stalled tab). */
+const FLIGHT_DRIFT = 0.3;
+/** Music moments: held this long before their piece starts (s; going below at once), at least this long apart (s). */
+const MOMENT_HOLD = 10, BELOW_HOLD = 2, MOMENT_GAP = 15 * 60;
 
 interface Index {
   rate: number;
@@ -143,6 +149,10 @@ export class Sound {
   private readonly beds = new Map<Bed, BedVoice>();
   private readonly hums = new Map<string, HumVoice>();
   private party: PartyMusic | null = null;
+  /** The arrival after Start: its score, the context time its second 0 fell at, and how far its cues are laid (s since Start). */
+  private flight: { score: ArrivalScore; base: number; until: number } | null = null;
+  /** Music moments: those heard this visit, the one the listener is in and since when, and when the last began (context time). */
+  private readonly moments = { heard: new Set<Moment>(), now: null as Moment | null, since: 0, last: -Infinity };
   private cuesUntil = -Infinity;
   private cuesPlaying = 0;
   private sourcesHeard = 0;
@@ -208,11 +218,29 @@ export class Sound {
       this.media.crossOrigin = 'anonymous';
       this.mediaSource = ctx.createMediaElementSource(this.media);
       this.mediaSource.connect(this.musicGain);
+      // A piece played to its end leaves room for the next (the moments).
+      this.media.onended = () => { this.wantMusic = null; };
     }
     const src = BASE + file;
     if (!this.media.src.endsWith(src)) { this.media.src = src; this.media.currentTime = 0; }
     void this.media.play().catch(() => undefined);
     g.linearRampToValueAtTime(MUSIC_GAIN, now + MUSIC_IN);
+  }
+
+  /**
+   * The arrival after Start is `elapsed` s in (main.ts, each frame of it): its cues are laid ahead and its loops follow
+   * it (space/arrivalScore.ts). Null: it is over or skipped, and its loops fade.
+   */
+  arrival(score: ArrivalScore | null, elapsed = 0): void {
+    const ctx = this.ctx;
+    if (!score || !ctx) { this.flight = null; return; }
+    const base = ctx.currentTime - elapsed, was = this.flight;
+    if (was?.score === score && Math.abs(was.base - base) < FLIGHT_DRIFT) return;
+    this.flight = { score, base, until: was?.score === score ? Math.max(was.until, elapsed) : elapsed };
+    if (was?.score === score) return;
+    // Fetch all of it now: its first line of sound comes a second or two in.
+    const ids = new Set([...score.cues.map((c) => c.sound), ...SHIP_BEDS]);
+    for (const id of ids) for (const f of this.index?.sounds[id]?.files ?? []) if (!this.takes.has(f)) void this.decodeTake(f);
   }
 
   /** Bytes of decoded audio held (memory watchdog). */
@@ -225,12 +253,15 @@ export class Sound {
   /** A line for the debug menu. */
   hearingLine(): string {
     if (!this.ctx) return `sound: waiting for a click${this.muted ? ' (muted)' : ''}`;
+    const f = this.flight;
+    if (f) return `sound${this.muted ? ' (muted)' : ''}: ${(this.decodedBytes() / MB).toFixed(1)} MB decoded · arrival ${(this.ctx.currentTime - f.base).toFixed(1)} s, ${this.hums.size} loops`;
+    const m = this.moments, moments = ` · moment ${m.now ?? '-'}${m.heard.size ? ` (heard ${[...m.heard].join(', ')})` : ''}`;
     const loud = this.scape ? BEDS.map((b) => [b, this.scape!.beds[b]] as const).filter(([, w]) => w > 0.02).sort((a, b) => b[1] - a[1]).slice(0, 5) : [];
     const beds = loud.map(([b, w]) => `${b} ${w.toFixed(2)}`).join(', ') || 'none';
     const air = this.scape ? `, air ×${this.scape.air.toFixed(2)}, light ${this.scape.light.toFixed(2)}, birds ${this.scape.birds.toFixed(2)}` : '';
     const room = this.scape?.room.wet ? ` · echo ${this.scape.room.t60.toFixed(1)} s ×${this.scape.room.wet.toFixed(2)}` : '';
     const near = `${room} · ${this.sourcesHeard} near, ${this.hums.size} hums, ${this.cuesPlaying} cues${this.party ? `, party music ${this.party.sound}` : ''}`;
-    return `sound${this.muted ? ' (muted)' : ''}: ${(this.decodedBytes() / MB).toFixed(1)} MB decoded, ${this.beds.size} beds, ${this.callsPlaying} calls · ${beds}${air}${near} · steps on ${this.lastSurface || '-'} (${this.stepCount})`;
+    return `sound${this.muted ? ' (muted)' : ''}: ${(this.decodedBytes() / MB).toFixed(1)} MB decoded, ${this.beds.size} beds, ${this.callsPlaying} calls · ${beds}${air}${near} · steps on ${this.lastSurface || '-'} (${this.stepCount})${moments}`;
   }
 
   private openContext(): void {
@@ -274,6 +305,7 @@ export class Sound {
   private onFrame(): void {
     const ctx = this.ctx!, now = ctx.currentTime, dt = Math.min(0.25, Math.max(0, now - this.lastTick));
     this.lastTick = now;
+    this.fly(now);
     const h = this.index ? this.hear() : null;
     if (!h) {
       if (this.scape) { this.scape = null; for (const v of this.beds.values()) v.gain.gain.setTargetAtTime(0, now, GLIDE); }
@@ -299,6 +331,23 @@ export class Sound {
     this.pace(h, dt);
   }
 
+  /** The arrival's cues that start soon, laid at their times, and its loops as loud as the score has them now. */
+  private fly(now: number): void {
+    const f = this.flight;
+    if (!f) {
+      for (const b of SHIP_BEDS) this.hums.get(`ship:${b}`)?.gain.gain.setTargetAtTime(0, now, HUM_FADE);
+      return;
+    }
+    const e = now - f.base, until = e + CALLS_AHEAD;
+    for (const c of f.score.cues) if (c.t >= f.until && c.t < until) this.oneShot(c.sound, c.gain, c.pitch, f.base + c.t, c.take);
+    f.until = Math.max(f.until, until);
+    const beds = f.score.beds(e);
+    for (const b of SHIP_BEDS) {
+      if (beds[b] > 0.003) this.hum(`ship:${b}`, { sound: b, gain: beds[b], pitch: 1 }, null, now, 1);
+      else this.hums.get(`ship:${b}`)?.gain.gain.setTargetAtTime(0, now, HUM_FADE);
+    }
+  }
+
   /** Work out the soundscape, set every bed's gain toward it, lay the calls that start soon. */
   private hearLand(h: Hearing, now: number): void {
     const scape = soundscapeAt(h.ecology, h.time, h.listener);
@@ -318,11 +367,26 @@ export class Sound {
     if (h.time < this.callsUntil - CLOCK_JUMP || h.time > this.callsUntil + CLOCK_JUMP) this.callsUntil = h.time;
     const until = h.time + CALLS_AHEAD;
     if (until > this.callsUntil) {
-      for (const c of callsIn(h.ecology, this.callsUntil, until, h.listener)) this.call(c, now + Math.max(0, c.t - h.time));
+      for (const c of callsIn(h.ecology, h.birds, this.callsUntil, until, h.listener)) this.call(c, now + Math.max(0, c.t - h.time));
       this.callsUntil = until;
     }
     this.hearNear(h, now);
     this.ride(h, now);
+    this.moment(momentAt(h.ecology, h.time, h.listener, scape), now);
+  }
+
+  /**
+   * A music moment's piece (sim/moments.ts): once a visit each, once the listener has been in it a while, long after
+   * the last, and never over other music (nor while the title's still fades).
+   */
+  private moment(m: Moment | null, now: number): void {
+    const s = this.moments;
+    if (m !== s.now) { s.now = m; s.since = now; }
+    if (!m || s.heard.has(m) || this.wantMusic || this.musicGain.gain.value > 0.01) return;
+    if (now - s.since < (m === 'below' ? BELOW_HOLD : MOMENT_HOLD) || now - s.last < MOMENT_GAP) return;
+    s.heard.add(m);
+    s.last = now;
+    this.music(MOMENT_MUSIC[m]);
   }
 
   /** A bed's voice: its gain and two chains panned apart, once its take is decoded. */
@@ -586,20 +650,21 @@ export class Sound {
     this.wasInLift = lift ? lift.court : null;
   }
 
-  /** A sound of the body itself (not placed: in the head), now. */
-  private oneShot(sound: string, gain: number, pitch = 1): void {
-    const file = this.index?.sounds[sound]?.files[0];
-    if (!file) return;
-    const take = this.takes.get(file);
-    if (!take) { void this.decodeTake(file); return; }
+  /** A sound of the body itself or round it (not placed: in the head), now or at context time `when`, from take `take`. */
+  private oneShot(sound: string, gain: number, pitch = 1, when = 0, take = 0): void {
+    const files = this.index?.sounds[sound]?.files;
+    if (!files?.length) return;
+    const file = files[take % files.length];
+    const held = this.takes.get(file);
+    if (!held) { void this.decodeTake(file); return; }
     const ctx = this.ctx!, src = ctx.createBufferSource(), g = ctx.createGain();
-    take.used = ctx.currentTime;
-    src.buffer = take.buffer;
+    held.used = ctx.currentTime;
+    src.buffer = held.buffer;
     src.playbackRate.value = pitch;
     g.gain.value = gain * (this.scape?.air ?? 1);
     src.connect(g).connect(this.steps);
     src.onended = () => g.disconnect();
-    src.start();
+    src.start(when);
   }
 
   /** Fetch and decode a take (once), dropping the least recently used ones past the budget. */

@@ -84,10 +84,6 @@
     "reason": "Plain JavaScript: each waits for its own different loads at once (animation clips, stage meshes, streamed tiles). Nothing to fold; it surfaced when the plan's files raised the file count (the finder weighs names by how few files use them)."
   },
   {
-    "key": "idiom: [.at .max .profile .r .s Math] in solarpolis/gen/water.ts + solarpolis/sim/air.ts + solarpolis/sim/fauna.ts + solarpolis/sim/herds.ts + solarpolis/sim/population.ts + solarpolis/sim/sounds.ts",
-    "reason": "Profile radius with a singularity guard is the same coordinate conversion idiom in water geometry and moving agents, not duplicated behaviour. The soundscape (sim/sounds.ts) samples the crowns round the listener with it too."
-  },
-  {
     "key": "idiom: [.at .max .profile .r .s Math] in solarpolis/gen/water.ts + solarpolis/sim/herds.ts + solarpolis/sim/population.ts",
     "reason": "Profile radius with a singularity guard is the same coordinate conversion idiom in water geometry and moving agents, not duplicated behaviour."
   },
@@ -108,10 +104,6 @@
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) each drive their own StreamCache (render/streamed.ts) the one way it is driven: frame, want, mark, bytes, shed, clear; their requests are told apart by kind and key."
   },
   {
-    "key": "idiom: [.castShadow .material] in solarpolis/render/landmarks.ts + solarpolis/render/people.ts + solarpolis/render/tiled.ts",
-    "reason": "Each view makes its own meshes from its own kind's material and says whether they cast shadows; the shared part (a mesh drawn anywhere) is drawnAnywhere in geometry.ts."
-  },
-  {
     "key": "idiom: [.createElement document] in solarpolis/render/outside.ts + solarpolis/render/solarControls.ts + solarpolis/render/vesselVisit.ts + solarpolis/render/view.ts",
     "reason": "Standard DOM element construction in independent view controls; shared controls have different user actions and state, not duplicated UI logic."
   },
@@ -126,14 +118,6 @@
   {
     "key": "idiom: [.frustumCulled Promise] in solarpolis/render/necklace.ts + solarpolis/render/solar.ts + solarpolis/render/traffic.ts",
     "reason": "Independent renderer owners disable bounds for camera-relative meshes and prepare them through the existing Stage seam."
-  },
-  {
-    "key": "idiom: [.group .name] in solarpolis/render/animals.ts + solarpolis/render/fliers.ts + solarpolis/render/landmarks.ts + solarpolis/render/lift.ts + solarpolis/render/specks.ts",
-    "reason": "Each view names its scene group for the debug menu and the shader monitor's labels: one assignment."
-  },
-  {
-    "key": "idiom: [.group .removeFromParent] in solarpolis/render/animals.ts + solarpolis/render/people.ts + solarpolis/render/specks.ts",
-    "reason": "One line in each view's dispose (take its group out of the scene); it only crossed the finder's information threshold because a new file changed the word weights. A seam for one call would only hide it."
   },
   {
     "key": "idiom: [.habitat .job .params .pool] in solarpolis/render/landmarks.ts + solarpolis/render/specks.ts + solarpolis/render/view.ts",
@@ -160,20 +144,12 @@
     "reason": "Each is a call of the one seam for the Understorey's levels (`levelsOf(t).levelAt(theta, s)`) at a point its caller holds; there is nothing left to fold."
   },
   {
-    "key": "idiom: [.litAt .s .terrain .theta] in solarpolis/render/animals.ts + solarpolis/render/fliers.ts + solarpolis/render/people.ts",
-    "reason": "The views that draw creatures (people, drones, squirrels) name the same things the same way (stage, camera, screen, specks, each one's horizon and litAt, a start promise, a group): their shared steps are seams (ownSpecks, roomForSpecks, drawSpecks, pxPerMetre in render/specks.ts; FigureLoads in render/actors/slots.ts; standAt in render/actors/figure.ts); what is left is each view's own."
-  },
-  {
     "key": "idiom: [.max .min .pitch .yaw Math] in solarpolis/app/voyageComputer.ts + solarpolis/render/vesselVisit.ts + solarpolis/space/vesselPassenger.ts",
     "reason": "Independent camera controls clamp pitch to their own allowed angles; extracting these few assignments would hide input conventions."
   },
   {
     "key": "idiom: [.max .min .pitch Math] in solarpolis/render/outside.ts + solarpolis/render/vesselVisit.ts + solarpolis/space/flyer.ts",
     "reason": "Independent camera controls clamp pitch to their own allowed angles; extracting these few assignments would hide input conventions."
-  },
-  {
-    "key": "idiom: [.mesh .specks] in solarpolis/render/animals.ts + solarpolis/render/fliers.ts + solarpolis/render/people.ts",
-    "reason": "The views that draw creatures (people, drones, squirrels) name the same things the same way (stage, camera, screen, specks, each one's horizon and litAt, a start promise, a group): their shared steps are seams (ownSpecks, roomForSpecks, drawSpecks, pxPerMetre in render/specks.ts; FigureLoads in render/actors/slots.ts; standAt in render/actors/figure.ts); what is left is each view's own."
   },
   {
     "key": "idiom: [.message .textContent String] in solarpolis/app/voyageComputer.ts + solarpolis/lab/blueprintLab.ts + solarpolis/main.ts",
@@ -214,10 +190,6 @@
   {
     "key": "idiom: [.x0 .x1 .y0] in solarpolis/gen/hallMesh.ts + solarpolis/gen/homeInterior.ts + solarpolis/gen/homes.ts",
     "reason": "Rectangle extents shared by independent house layout, hall construction and interior fitting plans."
-  },
-  {
-    "key": "idiom: [Map WeakMap] in solarpolis/gen/kept.ts + solarpolis/sim/neighbourhood.ts + solarpolis/sim/population.ts",
-    "reason": "Neighbourhoods and population have bounded, explicitly shed-able day/route caches, unlike kept which retains one immutable value per owner. They share only the standard Map/WeakMap idiom."
   },
   {
     "key": "same name: solarpolis/app/arrivalCard.ts#show + solarpolis/app/title.ts#show",
@@ -1422,5 +1394,249 @@
   {
     "key": "same name: solarpolis/space/vesselPassenger.ts#turn + solarpolis/world/walker.ts#turn",
     "reason": "Distinct physical systems: ship-local thrust/freefall and finite-mass rocket integration versus habitat spin walking, geometry and observer flight. The shared movement-input seam is moveKeys/FlyInput."
+  },
+  {
+    "key": "idiom: [.add .mul .x .y] in solarpolis/render/birdShaders.ts + solarpolis/render/cloudShaders.ts + solarpolis/render/materials.ts",
+    "reason": "TSL arithmetic (add, mul, sub on nodes) is how every shader writes a formula; the formulas are each shader's own (a bird's wingbeat and plumage, the clouds, the materials)."
+  },
+  {
+    "key": "idiom: [.all .map Promise] in solarpolis/render/birds.ts + solarpolis/render/fliers.ts + solarpolis/render/necklace.ts",
+    "reason": "The views' shared shape (a group named for the debug menu, the stage and camera for pixels per metre, own specks, a scan of homes in a worker, the light where each is): the birds' view (render/birds.ts) follows the pattern of the drones' and animals' views and does its own work in each."
+  },
+  {
+    "key": "idiom: [.at .habitat .max .profile Math] in solarpolis/sim/birds.ts + solarpolis/sim/fauna.ts + solarpolis/sim/herds.ts + solarpolis/sim/sounds.ts",
+    "reason": "Profile radius with a singularity guard read from a habitat's profile: the squirrels', deer's and birds' homes and the calls' reach round the listener (sim/sounds.ts callsIn) each convert their own distances."
+  },
+  {
+    "key": "idiom: [.at .max .profile .r .s Math] in solarpolis/gen/water.ts + solarpolis/sim/air.ts + solarpolis/sim/birds.ts + solarpolis/sim/fauna.ts + solarpolis/sim/herds.ts + solarpolis/sim/population.ts + solarpolis/sim/sounds.ts",
+    "reason": "Profile radius with a singularity guard is the same coordinate conversion idiom in water geometry and moving agents, not duplicated behaviour. The soundscape (sim/sounds.ts) samples the crowns round the listener with it too. The birds (sim/birds.ts, render/birds.ts, render/birdShaders.ts) joined the group with the same plain idiom."
+  },
+  {
+    "key": "idiom: [.byteLength .data .specks] in solarpolis/render/animals.ts + solarpolis/render/birds.ts + solarpolis/render/fliers.ts",
+    "reason": "The views' shared shape (a group named for the debug menu, the stage and camera for pixels per metre, own specks, a scan of homes in a worker, the light where each is): the birds' view (render/birds.ts) follows the pattern of the drones' and animals' views and does its own work in each."
+  },
+  {
+    "key": "idiom: [.camera .screen .stage] in solarpolis/render/animals.ts + solarpolis/render/birds.ts + solarpolis/render/people.ts",
+    "reason": "The views' shared shape (a group named for the debug menu, the stage and camera for pixels per metre, own specks, a scan of homes in a worker, the light where each is): the birds' view (render/birds.ts) follows the pattern of the drones' and animals' views and does its own work in each."
+  },
+  {
+    "key": "idiom: [.castShadow .material] in solarpolis/render/birds.ts + solarpolis/render/landmarks.ts + solarpolis/render/people.ts + solarpolis/render/tiled.ts",
+    "reason": "Each view makes its own meshes from its own kind's material and says whether they cast shadows; the shared part (a mesh drawn anywhere) is drawnAnywhere in geometry.ts. The birds (sim/birds.ts, render/birds.ts, render/birdShaders.ts) joined the group with the same plain idiom."
+  },
+  {
+    "key": "idiom: [.disposed .kind] in solarpolis/render/animals.ts + solarpolis/render/birds.ts + solarpolis/render/specks.ts",
+    "reason": "The views' shared shape (a group named for the debug menu, the stage and camera for pixels per metre, own specks, a scan of homes in a worker, the light where each is): the birds' view (render/birds.ts) follows the pattern of the drones' and animals' views and does its own work in each."
+  },
+  {
+    "key": "idiom: [.group .name] in solarpolis/render/animals.ts + solarpolis/render/birds.ts + solarpolis/render/fliers.ts + solarpolis/render/landmarks.ts + solarpolis/render/lift.ts + solarpolis/render/specks.ts",
+    "reason": "Each view names its scene group for the debug menu and the shader monitor's labels: one assignment. The birds (sim/birds.ts, render/birds.ts, render/birdShaders.ts) joined the group with the same plain idiom."
+  },
+  {
+    "key": "idiom: [.group .removeFromParent] in solarpolis/render/animals.ts + solarpolis/render/birds.ts + solarpolis/render/people.ts + solarpolis/render/specks.ts",
+    "reason": "One line in each view's dispose (take its group out of the scene); it only crossed the finder's information threshold because a new file changed the word weights. A seam for one call would only hide it. The birds (sim/birds.ts, render/birds.ts, render/birdShaders.ts) joined the group with the same plain idiom."
+  },
+  {
+    "key": "idiom: [.heightAt .standAt] in solarpolis/gen/scatter.ts + solarpolis/sim/birds.ts + solarpolis/sim/fauna.ts",
+    "reason": "Plain idioms of the pure layers (profile radius with a guard, a cell's rows and columns, terrain heights, a kept cache) used by the birds' homes and day plan as by the other animals' and people's; each works its own data."
+  },
+  {
+    "key": "idiom: [.index .normals .positions] in solarpolis/render/birds.ts + solarpolis/render/fliers.ts + solarpolis/render/geometry.ts",
+    "reason": "The views' shared shape (a group named for the debug menu, the stage and camera for pixels per metre, own specks, a scan of homes in a worker, the light where each is): the birds' view (render/birds.ts) follows the pattern of the drones' and animals' views and does its own work in each."
+  },
+  {
+    "key": "idiom: [.litAt .s .terrain .theta] in solarpolis/render/animals.ts + solarpolis/render/birds.ts + solarpolis/render/fliers.ts + solarpolis/render/people.ts",
+    "reason": "The views that draw creatures (people, drones, squirrels) name the same things the same way (stage, camera, screen, specks, each one's horizon and litAt, a start promise, a group): their shared steps are seams (ownSpecks, roomForSpecks, drawSpecks, pxPerMetre in render/specks.ts; FigureLoads in render/actors/slots.ts; standAt in render/actors/figure.ts); what is left is each view's own. The birds (sim/birds.ts, render/birds.ts, render/birdShaders.ts) joined the group with the same plain idiom."
+  },
+  {
+    "key": "idiom: [.mesh .specks] in solarpolis/render/animals.ts + solarpolis/render/birds.ts + solarpolis/render/fliers.ts + solarpolis/render/people.ts",
+    "reason": "The views that draw creatures (people, drones, squirrels) name the same things the same way (stage, camera, screen, specks, each one's horizon and litAt, a start promise, a group): their shared steps are seams (ownSpecks, roomForSpecks, drawSpecks, pxPerMetre in render/specks.ts; FigureLoads in render/actors/slots.ts; standAt in render/actors/figure.ts); what is left is each view's own. The birds (sim/birds.ts, render/birds.ts, render/birdShaders.ts) joined the group with the same plain idiom."
+  },
+  {
+    "key": "idiom: [.mesh .specks] in solarpolis/render/birds.ts + solarpolis/render/fliers.ts + solarpolis/render/people.ts",
+    "reason": "The views that draw creatures (people, drones, squirrels) name the same things the same way (stage, camera, screen, specks, each one's horizon and litAt, a start promise, a group): their shared steps are seams (ownSpecks, roomForSpecks, drawSpecks, pxPerMetre in render/specks.ts; FigureLoads in render/actors/slots.ts; standAt in render/actors/figure.ts); what is left is each view's own. The birds (sim/birds.ts, render/birds.ts, render/birdShaders.ts) joined the group with the same plain idiom."
+  },
+  {
+    "key": "idiom: [.mul .sub] in solarpolis/render/birdShaders.ts + solarpolis/render/cloudShaders.ts + solarpolis/render/materials.ts",
+    "reason": "TSL arithmetic (add, mul, sub on nodes) is how every shader writes a formula; the formulas are each shader's own (a bird's wingbeat and plumage, the clouds, the materials)."
+  },
+  {
+    "key": "idiom: [.scannedAt] in solarpolis/render/animals.ts + solarpolis/render/birds.ts + solarpolis/render/people.ts",
+    "reason": "The views' shared shape (a group named for the debug menu, the stage and camera for pixels per metre, own specks, a scan of homes in a worker, the light where each is): the birds' view (render/birds.ts) follows the pattern of the drones' and animals' views and does its own work in each."
+  },
+  {
+    "key": "idiom: [Map WeakMap] in solarpolis/gen/kept.ts + solarpolis/sim/birds.ts + solarpolis/sim/neighbourhood.ts + solarpolis/sim/population.ts",
+    "reason": "Neighbourhoods and population have bounded, explicitly shed-able day/route caches, unlike kept which retains one immutable value per owner. They share only the standard Map/WeakMap idiom. The birds (sim/birds.ts, render/birds.ts, render/birdShaders.ts) joined the group with the same plain idiom."
+  },
+  {
+    "key": "same name: solarpolis/app/title.ts#fade + solarpolis/render/birdShaders.ts#fade",
+    "reason": "Short local helper names (a vertex, a ring, a triangle, a fade, a draw from the seed) in unrelated builders and shaders; each does different work."
+  },
+  {
+    "key": "same name: solarpolis/gen/birds.ts#at + solarpolis/gen/hullDetail.ts#at",
+    "reason": "Short local helper names (a vertex, a ring, a triangle, a fade, a draw from the seed) in unrelated builders and shaders; each does different work."
+  },
+  {
+    "key": "same name: solarpolis/gen/birds.ts#at + solarpolis/render/bore.ts#at",
+    "reason": "Short local helper names (a vertex, a ring, a triangle, a fade, a draw from the seed) in unrelated builders and shaders; each does different work."
+  },
+  {
+    "key": "same name: solarpolis/gen/birds.ts#c + solarpolis/render/birdShaders.ts#c",
+    "reason": "Short local helper names (a vertex, a ring, a triangle, a fade, a draw from the seed) in unrelated builders and shaders; each does different work."
+  },
+  {
+    "key": "same name: solarpolis/gen/birds.ts#done + solarpolis/gen/water.ts#done",
+    "reason": "Short local helper names (a vertex, a ring, a triangle, a fade, a draw from the seed) in unrelated builders and shaders; each does different work."
+  },
+  {
+    "key": "same name: solarpolis/gen/birds.ts#ring + solarpolis/gen/standIn.ts#ring",
+    "reason": "Short local helper names (a vertex, a ring, a triangle, a fade, a draw from the seed) in unrelated builders and shaders; each does different work."
+  },
+  {
+    "key": "same name: solarpolis/gen/birds.ts#ring + solarpolis/gen/summitHut.ts#ring",
+    "reason": "Short local helper names (a vertex, a ring, a triangle, a fade, a draw from the seed) in unrelated builders and shaders; each does different work."
+  },
+  {
+    "key": "same name: solarpolis/gen/birds.ts#tri + solarpolis/gen/trees.ts#tri",
+    "reason": "Short local helper names (a vertex, a ring, a triangle, a fade, a draw from the seed) in unrelated builders and shaders; each does different work."
+  },
+  {
+    "key": "same name: solarpolis/gen/building.ts#q + solarpolis/sim/birds.ts#q",
+    "reason": "Short local helper names (a vertex, a ring, a triangle, a fade, a draw from the seed) in unrelated builders and shaders; each does different work."
+  },
+  {
+    "key": "same name: solarpolis/gen/skin.ts#u + solarpolis/sim/birds.ts#u",
+    "reason": "Short local helper names (a vertex, a ring, a triangle, a fade, a draw from the seed) in unrelated builders and shaders; each does different work."
+  },
+  {
+    "key": "same name: solarpolis/gen/under.ts#nearest + solarpolis/render/birds.ts#nearest",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/activityProps.ts#dispose + solarpolis/render/birds.ts#dispose",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/animal.ts#bytes + solarpolis/render/birds.ts#bytes",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/animal.ts#dispose + solarpolis/render/birds.ts#dispose",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/animals.ts#bytes + solarpolis/render/birds.ts#bytes",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/animals.ts#dispose + solarpolis/render/birds.ts#dispose",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/animals.ts#info + solarpolis/render/birds.ts#info",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/animals.ts#nearest + solarpolis/render/birds.ts#nearest",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/animals.ts#rescan + solarpolis/render/birds.ts#rescan",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/animals.ts#start + solarpolis/render/birds.ts#start",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/birds.ts#bytes + solarpolis/render/fliers.ts#bytes",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/birds.ts#bytes + solarpolis/render/people.ts#bytes",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/birds.ts#bytes + solarpolis/render/specks.ts#bytes",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/birds.ts#dispose + solarpolis/render/fliers.ts#dispose",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/birds.ts#dispose + solarpolis/render/homes.ts#dispose",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/birds.ts#dispose + solarpolis/render/landmarks.ts#dispose",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/birds.ts#dispose + solarpolis/render/people.ts#dispose",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/birds.ts#dispose + solarpolis/render/specks.ts#dispose",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/birds.ts#dispose + solarpolis/render/traffic.ts#dispose",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/birds.ts#follow + solarpolis/render/fliers.ts#follow",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/birds.ts#follow + solarpolis/render/necklace.ts#follow",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/birds.ts#follow + solarpolis/render/people.ts#follow",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/birds.ts#follow + solarpolis/render/plants.ts#follow",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/birds.ts#follow + solarpolis/render/solar.ts#follow",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/birds.ts#follow + solarpolis/render/terrain.ts#follow",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/birds.ts#info + solarpolis/render/outside.ts#info",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/birds.ts#info + solarpolis/render/plants.ts#info",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/birds.ts#rescan + solarpolis/render/people.ts#rescan",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/birds.ts#room + solarpolis/render/fliers.ts#room",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/birds.ts#start + solarpolis/render/fliers.ts#start",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/birds.ts#start + solarpolis/render/people.ts#start",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/birds.ts#start + solarpolis/render/solar.ts#start",
+    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/app/voyageComputer.ts#bytes + solarpolis/render/birds.ts#bytes",
+    "reason": "The views' shared lifecycle: bytes for the memory watchdog, one name on purpose; the birds' view (render/birds.ts) and the voyage computer count their own holdings."
   }
 ]

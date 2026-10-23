@@ -7,7 +7,8 @@
  *   NODE_USE_ENV_PROXY=1 node scripts/sound/make.mjs [--only id,id] [--again id,id] [--raw dir] [--dry]
  *
  * Models follow Arnd's preferences, resolved when the script runs (never a hardcoded version): sounds from the newest
- * ByteDance Seed Audio on the speech endpoint, music from the newest Google Lyria Pro, streamed. Audio is read as
+ * ByteDance Seed Audio on the speech endpoint, music from the newest Google Lyria Pro (Clip for a 30 s piece, `"model": "clip"`),
+ * streamed. Audio is read as
  * bytes from start to end; nothing decodes it as text. The key ($OPEN_ROUTER_KEY or $OPENROUTER_API_KEY) is never
  * printed.
  */
@@ -59,8 +60,9 @@ async function resolveModels() {
   const outs = (m) => m.architecture?.output_modalities ?? [];
   const seed = newest(all.filter((m) => /^bytedance-seed\/seed-audio/.test(m.id) && outs(m).some((o) => o === 'speech' || o === 'audio')));
   const music = newest(all.filter((m) => /lyria/.test(m.id) && /pro/.test(m.id) && outs(m).includes('audio')));
-  if (!seed || !music) throw new Error(`model family missing (seed ${seed}, lyria pro ${music}): ask Arnd, never guess`);
-  return { sound: seed, music };
+  const clip = newest(all.filter((m) => /lyria/.test(m.id) && /clip/.test(m.id) && outs(m).includes('audio')));
+  if (!seed || !music || !clip) throw new Error(`model family missing (seed ${seed}, lyria pro ${music}, clip ${clip}): ask Arnd, never guess`);
+  return { sound: seed, music, clip };
 }
 
 /** One Seed Audio take: the speech endpoint, MP3 bytes. */
@@ -215,10 +217,10 @@ async function main() {
   const startUsage = missing.length && !DRY ? (await (await api('/key')).json()).data.usage : 0;
   if (missing.length) {
     const models = await resolveModels();
-    console.log(`models: sounds ${models.sound}, music ${models.music}; ${missing.length} takes to make`);
+    console.log(`models: sounds ${models.sound}, music ${models.music} (short pieces ${models.clip}); ${missing.length} takes to make`);
     if (DRY) return;
     await pool(missing, 6, async (s) => {
-      const bytes = s.kind === 'music' ? await lyriaTake(models.music, s.prompt) : await seedTake(models.sound, s.prompt);
+      const bytes = s.kind === 'music' ? await lyriaTake(s.model === 'clip' ? models.clip : models.music, s.prompt) : await seedTake(models.sound, s.prompt);
       mkdirSync(dirname(rawOf(s)), { recursive: true });
       writeFileSync(rawOf(s), bytes);
       console.log(`  took ${s.id} (${bytes.length} bytes)`);
@@ -252,6 +254,13 @@ async function main() {
     }
     const bytes = index.sounds[s.id].files.reduce((n, f) => n + statSync(join(OUT, f)).size, 0);
     console.log(`  ${s.id}: ${index.sounds[s.id].files.length} file(s), ${(bytes / 1024).toFixed(0)} KB`);
+  }
+  // A sound taken out of sounds.json leaves the index (its files are removed with it).
+  const listed = new Set([...spec.sounds.map((s) => s.id), ...spec.music.map((s) => s.out).filter(Boolean)]);
+  for (const id of Object.keys(index.sounds)) {
+    if (listed.has(id)) continue;
+    for (const f of index.sounds[id].files) rmSync(join(OUT, f), { force: true });
+    delete index.sounds[id];
   }
   index.rate = RATE;
   index.sounds = Object.fromEntries(Object.entries(index.sounds).sort(([a], [b]) => a.localeCompare(b)));

@@ -13,6 +13,7 @@ import { ArrivalCard } from './app/arrivalCard';
  * the Sun and the stars). The two views are WebGPU only.
  */
 import { nearestFloor, nearestWood, type Ecology, type Found } from './gen/ecology';
+import type { BirdKind } from './gen/birds';
 import { nearestOnPath } from './gen/paths';
 import { busiestNear, deerAt, fleetOf, flierAt, floorGap, herdsNear, peopleAt, personKey, residentOf, venuesOf, type Person } from './sim';
 import { POSE } from './gen/standIn';
@@ -34,7 +35,7 @@ import { talksWithHands } from './render/people';
 import { speckMark } from './render/crowdShaders';
 import { OutsideView } from './render/outside';
 import { VoyageComputer } from './app/voyageComputer';
-import { hubView } from './space';
+import { arrivalScore, captionAt, hubView, type ArrivalScore } from './space';
 import { fromWorld, toWorld, type DebrisSpec, type Habitat, type Vec3 } from './blueprint';
 import { levelRunOf, nearestOf, onRow, plantsOf, slopeAt, type Level } from './gen/scatter';
 import { frameOf, landmarksOf, type Hut, type Pavilion } from './gen/landmarks';
@@ -162,6 +163,7 @@ const insideSlot = new ViewSlot('Hold the right mouse button to look around · W
   memory.track('drones', () => v.droneBytes());
   memory.track('talk', () => v.talkBytes());
   memory.track('animals', () => v.animalBytes());
+  memory.track('birds', () => v.birdBytes());
   return v;
 });
 const outsideSlot = new ViewSlot('Hold the right mouse button to swing around · wheel to come closer · 1 habitat, 2 Earth, 3 Moon, 4 nearest neighbour · F to fly (W A S D, E up, Q down, Shift faster)', 'Building the sky…', 'sky maps, stars and skin detail', (h) => OutsideView.create(h, (...args) => new VoyageComputer(...args)));
@@ -191,6 +193,9 @@ async function startArrival(): Promise<void> {
   arriving = true;
   try { await flyIn(v); } finally {
     arriving = false;
+    v.onArrival = null;
+    title.caption(null);
+    sound.arrival(null);
     // The title theme carries the flight and the first look, then fades into the land.
     sound.music(null);
   }
@@ -200,6 +205,13 @@ let arriving = false;
 async function flyIn(v: OutsideView): Promise<void> {
   title.arriving();
   v.onTitle = null;
+  // The flight's sounds under the title theme, and the ship's Mind's lines on screen.
+  let score: ArrivalScore | null = null;
+  v.onArrival = (elapsed, a) => {
+    score ??= arrivalScore(a.moments, a.guest.ship.seed);
+    sound.arrival(score, elapsed);
+    title.caption(captionAt(score, elapsed));
+  };
   starting = (starting ?? Promise.resolve()).then(() => insideSlot.show());
   await v.arrive();
   if (tab !== 'title') return;
@@ -222,7 +234,7 @@ async function flyIn(v: OutsideView): Promise<void> {
   }
   await drawCurtain(false);
 }
-outsideSlot.box.append(title.root);
+outsideSlot.box.append(title.root, title.mind);
 
 type Tab = 'title' | 'lab' | 'inside' | 'outside' | 'tour';
 let tab: Tab = 'title';
@@ -421,6 +433,22 @@ toAnimal('squirrels', 'Fly: beside the nearest squirrel', 1.2);
 toAnimal('squirrels', 'Fly: the nearest squirrel from 15 m', 15);
 toAnimal('deer', 'Fly: beside the nearest deer', 5);
 toAnimal('deer', 'Fly: the nearest deer from 60 m', 60);
+/** Beside the nearest bird out (not roosting) round the player, `back` m off its side, a little above, looking at it. */
+const toBird = (label: string, back: number, kind?: BirdKind, still = false): void => debug.add({
+  label, group: 'Go', run: () => {
+    const v = view(), eye = v?.eye(), q = v && eye && v.birds?.nearest(eye, kind, still);
+    if (!v || !q) return;
+    const side: Vec3 = [q.up[1] * q.fwd[2] - q.up[2] * q.fwd[1], q.up[2] * q.fwd[0] - q.up[0] * q.fwd[2], q.up[0] * q.fwd[1] - q.up[1] * q.fwd[0]];
+    const from: Vec3 = [q.at[0] + side[0] * back + q.up[0] * back * 0.3, q.at[1] + side[1] * back + q.up[1] * back * 0.3, q.at[2] + side[2] * back + q.up[2] * back * 0.3];
+    const d = Math.hypot(q.at[0] - from[0], q.at[1] - from[1], q.at[2] - from[2]);
+    v.floatAt(from, [(q.at[0] - from[0]) / d, (q.at[1] - from[1]) / d, (q.at[2] - from[2]) / d]);
+  },
+});
+toBird('Fly: beside the nearest bird', 0.8, undefined, true);
+toBird('Fly: the nearest bird from 4 m', 4, undefined, true);
+toBird('Fly: the nearest bird from 20 m', 20, undefined, true);
+toBird('Fly: beside the nearest lark', 1.5, 'lark');
+toBird('Fly: beside the nearest owl', 1.5, 'owl');
 /** Ground one can stand on (a terrace's ledge, not its wall). */
 const ledge = (eco: Ecology) => (pt: number, ps: number): boolean => slopeAt(eco, pt, ps, eco.terrain.heightAt(pt, ps), 2) < 0.2;
 toPlace('Into the nearest orchard', -10, (eco, t, s) => nearestPlace(eco.terrain, 'orchard', t, s, ledge(eco)));
@@ -1072,6 +1100,8 @@ const nextOf = <T>(choices: T[], now: T): T => choices[(choices.indexOf(now) + 1
 debug.add({ label: 'Clock speed: real time → ×60 → ×600 → paused', group: 'Time', run: () => { const v = view(); if (v) v.timeScale = nextOf([1, 60, 600, 0], v.timeScale); } });
 debug.add({ label: 'Two hours later', group: 'Time', run: () => view()?.skip(7200) });
 debug.add({ label: 'Five minutes later', group: 'Time', run: () => view()?.skip(300) });
+debug.add({ label: 'To the dawn chorus (the light coming up here)', group: 'Time', run: () => view()?.skipToLight(0.3, true) });
+debug.add({ label: 'To nightfall here (owls out)', group: 'Time', run: () => view()?.skipToLight(0.03, false) });
 debug.add({ label: 'Clouds: schedule → few → half → overcast → none', group: 'Time', run: () => { const v = view(); if (v) v.cloudCover = nextOf<number | null>([null, 0.15, 0.5, 0.85, 0], v.cloudCover); } });
 const toClouds = (label: string, share: number): void => debug.add({
   label, group: 'Go',
