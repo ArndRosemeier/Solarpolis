@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.127 — Upstairs room controls
+
+- A home's arrangement controls now follow the floor under your feet when climbing its internal stair.
+
 ## v0.126 — Homes that make room for their inhabitants
 
 - Walk inside the living-layer houses: open entrances, lined rooms, upper floors connected by shallow stairs, concealed service surfaces and soft ceiling lights.
