@@ -117,6 +117,14 @@ export function placesInView(l: Lounge, look: number, spread = 0.45): Place[] {
   return l.couches.filter((c) => off(c.angle) <= spread).sort((a, b) => off(a.angle) - off(b.angle)).flatMap((c) => c.places);
 }
 
+/** Seated, one's feet rest this far (m) out from the front of the seat (as on the courts' seats and the capsules'). */
+export const SEAT_FEET = 0.15;
+
+/** Where a passenger seated at `p` has their feet: on the floor, a little out from the seat's front (ship frame). */
+export function seatedFeet(l: Lounge, p: Place): Vec3 {
+  return [l.floor, p.at[1] + p.facing[1] * SEAT_FEET, p.at[2] + p.facing[2] * SEAT_FEET];
+}
+
 /** A point of the ship frame in the frame the ship is posed in (its stern at `position`, nose along `forward`). */
 export function fromShip(pose: { position: Vec3; forward: Vec3; up: Vec3 }, p: Vec3): Vec3 {
   return v3add(pose.position, fromShipDirection(pose, p));

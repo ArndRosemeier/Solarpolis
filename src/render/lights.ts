@@ -101,6 +101,26 @@ export function addLights(scene: Scene): void {
   scene.add(key, key.target, sky);
 }
 
+/**
+ * The Outside view's own pool (an object has one scene): the lounge's lights for Actors' bodies in the arrival's cabin
+ * shot (render/passengers.ts), dark everywhere else. Its cove lamps from above, the light its windows let in from where
+ * it comes from on balance, and the room's light from all round off its pale walls.
+ */
+export const loungeLights = {
+  lamps: new DirectionalLight(0xfff0dc, 0),
+  windows: new DirectionalLight(0xffffff, 0),
+  room: new AmbientLight(0xffffff, 0),
+};
+loungeLights.lamps.name = 'lounge lamps';
+loungeLights.windows.name = 'lounge windows';
+loungeLights.room.name = 'lounge room light';
+
+/** Put the lounge's pool into the Outside scene (once, before its warm-up). */
+export function addLoungeLights(scene: Scene): void {
+  const l = loungeLights;
+  scene.add(l.lamps, l.lamps.target, l.windows, l.windows.target, l.room);
+}
+
 /** Below the land: the share of the lamps' light that comes from all round (the rest from above), and how far above the player the key light stands (m): under the ceiling, so nothing up on the land shades them. */
 const BELOW_ALL_ROUND = 0.4;
 const BELOW_BACK = 8;
