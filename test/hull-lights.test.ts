@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { derive, exteriorDistance, MATRIX } from '../src/blueprint';
-import { LIGHTS, SUN_LUX, deriveShip, hullLightsOf, lampFlux, shineAt, shipLightsOf, shipShape, TORCH_SHIP, type Blink, type HullLight } from '../src/space';
+import { LIGHTS, SUN_LUX, deriveShip, hullLightsOf, lampFlux, lampHidden, shineAt, shipLightsOf, shipShape, TORCH_SHIP, type Blink, type HullLight } from '../src/space';
 
 const habitats = MATRIX.map(({ name, params }) => ({ name, h: derive(params) }));
 
@@ -85,5 +85,17 @@ test('lights: ships show red to port and green to starboard at their widest, a s
     assert.ok(green.at[2] >= shape.params.beam / 2, 'at the widest');
     assert.equal(strobe.at[0], shape.params.length);
     assert.ok(strobe.blink.period > 0);
+  }
+});
+
+test('lights: the body hides a lamp behind it, never the one in front, nor one seen grazing on its own rim', () => {
+  for (const { name, h } of habitats) {
+    const x = h.exterior, s = x.spindle, z = (s.from + s.to) / 2, beside: [number, number, number] = [s.radius * 6, 0, z];
+    assert.ok(!lampHidden(x, beside, [s.radius, 0, z]), `${name}: the spindle's near side`);
+    assert.ok(lampHidden(x, beside, [-s.radius, 0, z]), `${name}: the spindle's far side`);
+    // From out along the axis beyond the dock, every rim light shows; from inside the bore, none.
+    const out: [number, number, number] = [0, s.radius * 3, s.to + x.radius];
+    for (const l of hullLightsOf(h).filter((q) => q.frame === 'body' && Math.abs(q.at[2] - x.portFace) < 1e-6)) assert.ok(!lampHidden(x, out, l.at), `${name}: a rim light hidden`);
+    assert.ok(lampHidden(x, [0, 0, s.bore.bearing + 1], [s.radius, 0, z]), `${name}: seen from inside the bore`);
   }
 });

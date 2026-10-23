@@ -12,7 +12,7 @@ import type { Stage } from '@futuremagic/stage';
 import { smoothstep, v3add, v3len, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
 import { exteriorDistance, type Habitat } from '../blueprint';
 import { columnsOf, makeSkin, skinFlux, type Columns, type Skin } from '../gen/skin';
-import { apply, hullLightsOf, mul, rotZ, sunlightFrom, transpose, type HullLight, type Mat3, type PlacedHabitat, type SkyView, type Space, type Visit } from '../space';
+import { apply, hullLightsOf, lampHidden, mul, rotZ, sunlightFrom, transpose, type HullLight, type Mat3, type PlacedHabitat, type SkyView, type Space, type Visit } from '../space';
 import { HARDWARE, RADIATOR, SKIN, STARS } from './materials';
 import { hideUnder, skinUniforms, type SkinUniforms } from './hullShaders';
 import { hullGeometry } from './hull';
@@ -172,15 +172,17 @@ export class NecklaceView {
       const axes = p.frame === 'body' ? d.axes : d.spindleAxes;
       setPose(p.mesh, axes, v3add(d.origin, apply(axes, p.origin)));
     }
-    // The lights: the body's turn with it, the dock's stand still with the spindle.
+    // The eye in the body's frame.
+    const eye = apply(transpose(d.axes), v3scale(d.origin, -1));
+    // The lights: the body's turn with it, the dock's stand still with the spindle (about the same axis, so the body's
+    // frame tells whether the body hides one).
     m.lamps.points.restart();
     for (const l of m.lamps.lights) {
-      const axes = l.frame === 'body' ? d.axes : d.spindleAxes;
-      m.lamps.points.shine(l, v3add(d.origin, apply(axes, l.at)), this.time);
+      const axes = l.frame === 'body' ? d.axes : d.spindleAxes, rel = v3add(d.origin, apply(axes, l.at));
+      if (!lampHidden(d.habitat.exterior, eye, apply(transpose(d.axes), v3sub(rel, d.origin)))) m.lamps.points.shine(l, rel, this.time);
     }
     m.lamps.points.send();
-    // The drones only near the skin: the eye's distance to the body, in its own frame.
-    const eye = apply(transpose(d.axes), v3scale(d.origin, -1));
+    // The drones only near the skin: the eye's distance to the body.
     const near = exteriorDistance(d.habitat.exterior, eye) < DRONES_WITHIN * d.skin.droneSize;
     m.drones.mesh.visible = near;
     m.drones.points.visible = !near;

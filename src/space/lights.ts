@@ -18,7 +18,7 @@
  * is `lampFlux` and falls off with the square of the distance. Pure.
  */
 import type { Vec3 } from '@futuremagic/core';
-import { berthArmAt, type Habitat } from '../blueprint';
+import { berthArmAt, exteriorDistance, type Exterior, type Habitat } from '../blueprint';
 import type { ShipShape } from './ship';
 
 /** The Sun's illuminance at 1 AU (lux): the unit a light's flux is given in. */
@@ -87,6 +87,29 @@ export function shineAt(b: Blink, t: number): number {
 export function lampFlux(l: HullLight, dist: number, t: number): Vec3 {
   const e = (l.candela * shineAt(l.blink, t)) / (dist * dist * SUN_LUX);
   return [l.colour[0] * e, l.colour[1] * e, l.colour[2] * e];
+}
+
+/** A lamp counts as on the surface it is fixed to within this share of its distance from the eye (and at least 0.5 m). */
+const ON_SURFACE = 0.005;
+/** Steps the walk from the eye to a lamp takes at most; a grazing walk that runs out of them leaves the lamp seen. */
+const STEPS = 64;
+
+/**
+ * Whether the habitat's body (drum, brims, spindle, mast: `exteriorDistance`) stands between the eye and a lamp, both
+ * in the blueprint frame: a walk from the eye by the distance to the body, which stops short of the lamp on whatever
+ * hides it. The lamp's own surface does not hide it; an eye inside the body (the bore) sees none.
+ */
+export function lampHidden(e: Exterior, eye: Vec3, at: Vec3): boolean {
+  const d = Math.hypot(at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]);
+  const dir: Vec3 = [(at[0] - eye[0]) / d, (at[1] - eye[1]) / d, (at[2] - eye[2]) / d];
+  const reach = d - Math.max(0.5, ON_SURFACE * d);
+  let t = 0;
+  for (let k = 0; k < STEPS && t < reach; k++) {
+    const step = exteriorDistance(e, [eye[0] + dir[0] * t, eye[1] + dir[1] * t, eye[2] + dir[2] * t]);
+    if (step < 1e-3 + 1e-6 * t) return true;
+    t += step;
+  }
+  return false;
 }
 
 /** Points evenly round a circle of radius r at height z, the first at angle `start`. */

@@ -13,9 +13,19 @@ import { v3len, v3scale, type Vec3 } from '@futuremagic/core';
 import { lampFlux, type HullLight } from '../space';
 import { freeMesh, pointsChanged, pointsGeometry, setPoint } from './geometry';
 import { STARS } from './materials';
+import { outside } from './skyShaders';
+import { STAR_SIGMA } from './exposure';
 
-/** A lamp is drawn this share of its distance nearer the eye than the part it sits on. */
-const LIFT = 2e-3;
+/**
+ * A lamp is drawn this share of its distance nearer the eye than the part it sits on, so the surface round it does not
+ * cut its flare where it is seen grazing (whether the body hides it is `lampHidden`'s, before it is put).
+ */
+const LIFT = 0.03;
+/**
+ * The brightest a lamp's peak pixel gets (exposed, as `HEROIC_PEAK` for a star of magnitude 0): nearer than where it
+ * would pass this, its flux eases toward it, so a strobe beside the eye is a sharp star, not a disc of glare.
+ */
+export const LAMP_PEAK = 30;
 
 export class LampPoints {
   readonly mesh: Mesh;
@@ -51,7 +61,11 @@ export class LampPoints {
     if (this.used >= this.capacity) return;
     const dist = v3len(rel);
     if (dist <= 0) return;
-    setPoint(this.position, this.color, this.used++, v3scale(rel, 1 / dist), dist * (1 - LIFT), lampFlux(light, dist, t));
+    const flux = lampFlux(light, dist, t), y = 0.2126 * flux[0] + 0.7152 * flux[1] + 0.0722 * flux[2];
+    // Last frame's exposure for points: the flux whose peak is LAMP_PEAK (starPeak in skyShaders.ts, turned round).
+    const most = (LAMP_PEAK * 2 * STAR_SIGMA * STAR_SIGMA * outside.pixelSolidAngle.value) / Math.max(1e-30, outside.starExposure.value);
+    const k = 1 / (1 + y / most);
+    setPoint(this.position, this.color, this.used++, v3scale(rel, 1 / dist), dist * (1 - LIFT), [flux[0] * k, flux[1] * k, flux[2] * k]);
   }
 
   send(): void {
