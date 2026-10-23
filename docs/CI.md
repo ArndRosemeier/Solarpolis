@@ -10,6 +10,8 @@ Arnd (2026-10-21): "A CI limitation to 2 minutes. Don't want to get all dev time
 - **Slow tests live in `test/slow/`** and run with `npm run test:slow`, locally or on demand, never in the PR check.
 - **No wall-clock timings in the PR check.** GitHub's runners differ about 1.6× in speed from run to run, so a millisecond limit there fails at random. Timings (such as a ground tile's 40 ms) live in the slow suite, measured warm (Arnd, 2026-10-21).
 
+- **The fast suite compiles TypeScript itself** (`tools/ci/ts-hooks.mjs`), in the test's own thread and without tsx's `keepNames`, which named every closure the game makes at run time (about 1.5 s of 30 s; 2026-10-23).
+
 ## When a budget is crossed
 
-A warning counts as much as a failure for the PR that causes it: fix it in that PR. Make the test faster (smaller habitat from the `MATRIX`, fewer samples, test the function instead of the whole pipeline), or move it to `test/slow/`. Raise a budget only with a reason in `budget.json`, and never the 2-minute cap without Arnd.
+A warning counts as much as a failure for the PR that causes it: fix it in that PR. Make the test faster (smaller habitat from the `MATRIX`, fewer samples, test the function instead of the whole pipeline, the shared worlds and spaces of `test/worlds.ts`, a CLI run in-process rather than spawned, an assertion's message built only on a miss in a loop of thousands), or move it to `test/slow/`. Profile with `node --cpu-prof` over the same command as `npm test`. Raise a budget only with a reason in `budget.json`, and never the 2-minute cap without Arnd.

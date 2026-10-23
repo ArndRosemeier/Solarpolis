@@ -3,12 +3,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { v3add, v3dot, v3len, v3norm, v3scale, v3sub } from '@futuremagic/core';
 import { MATRIX, exteriorDistance, fromWorld } from '../src/blueprint';
-import { ARRIVAL, ARRIVAL_SHOTS, arrivalScore, captionAt, MIND_LINES, SPIN_UP, LIT_FROM, LIT_TO, LOOP, REFERENCE_SPACE, SHOTS, TORCH_SHIP, arrival, attractLoop, hubView, chooseStart, makeSpace, shipAt, skyFrom, torchShip } from '../src/space';
+import { ARRIVAL, ARRIVAL_SHOTS, arrivalScore, captionAt, MIND_LINES, SPIN_UP, LIT_FROM, LIT_TO, LOOP, SHOTS, TORCH_SHIP, arrival, attractLoop, hubView, chooseStart, shipAt, skyFrom, torchShip } from '../src/space';
+import { spaceOf } from './worlds';
 
 const DEG = 180 / Math.PI;
 
 test('chooseStart: the habitat in sunlight, Earth gibbous behind the approach, the Sun behind the camera', () => {
-  const space = makeSpace(REFERENCE_SPACE);
+  const space = spaceOf('reference');
   const t = chooseStart(space, 0);
   const sky = skyFrom(space, space.home.orbitFrame, [0, 0, 0], t);
   const e = v3norm(sky.earth.center), lit = (1 - v3dot(sky.sunDir, e)) / 2;
@@ -23,7 +24,7 @@ test('chooseStart: the habitat in sunlight, Earth gibbous behind the approach, t
 
 for (const { name, params } of MATRIX) {
   test(`attract loop (${name}): each shot frames the home habitat by its own size`, () => {
-    const space = makeSpace({ ...REFERENCE_SPACE, home: params });
+    const space = spaceOf(name);
     const h = space.home.habitat, Ro = h.exterior.radius, L = h.exterior.portFace - h.exterior.wildFace;
     const keepOut = params.exterior.keepOut;
     const c = attractLoop(space, chooseStart(space, 0), keepOut, TORCH_SHIP.length);
@@ -85,9 +86,9 @@ test('torch ship: every part within its length and beam, wings edge-on to the ex
   assert.deepEqual(torchShip(TORCH_SHIP), torchShip(TORCH_SHIP));
 });
 
-for (const { name, params } of MATRIX) {
+for (const { name } of MATRIX) {
   test(`arrival (${name}): down the corridor past the ship's nose, then the berth as it latches, never inside anything`, () => {
-    const space = makeSpace({ ...REFERENCE_SPACE, home: params }), p = space.home, h = p.habitat, x = h.exterior;
+    const space = spaceOf(name), p = space.home, h = p.habitat, x = h.exterior;
     const a = arrival(space, chooseStart(space, 0) + 40), g = a.guest, L = g.ship.length;
     assert.equal(a.at(ARRIVAL), null);
     let last = -Infinity, berthed = false;
@@ -134,9 +135,9 @@ for (const { name, params } of MATRIX) {
   });
 }
 
-for (const { name, params } of MATRIX) {
+for (const { name } of MATRIX) {
   test(`crossing (${name}): down the bore on the axis, through the bearing into the turning sleeve, toward the Hub`, () => {
-    const space = makeSpace({ ...REFERENCE_SPACE, home: params }), p = space.home, h = p.habitat, b = h.exterior.spindle.bore;
+    const space = spaceOf(name), p = space.home, h = p.habitat, b = h.exterior.spindle.bore;
     const a = arrival(space, chooseStart(space, 0) + 40), from = ARRIVAL_SHOTS[0] + ARRIVAL_SHOTS[1];
     let last: { z: number; clock: number } | null = null, crossed = false;
     for (let e = from; e < ARRIVAL; e += 0.25) {
@@ -158,9 +159,9 @@ for (const { name, params } of MATRIX) {
   });
 }
 
-for (const { name, params } of MATRIX) {
+for (const { name } of MATRIX) {
   test(`hub (${name}): the passenger floats out into the open air of the Hub, beside the sunline, looking down it`, () => {
-    const h = makeSpace({ ...REFERENCE_SPACE, home: params }).home.habitat, { eye, look } = hubView(h);
+    const h = spaceOf(name).home.habitat, { eye, look } = hubView(h);
     const at = fromWorld(h.profile, ...eye);
     assert.ok(at.h > 0, `${name}: ${at.h} m from the endcap's surface`);
     const r = Math.hypot(eye[0], eye[1]);

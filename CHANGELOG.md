@@ -2,6 +2,17 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.149 — The rest of the solar system is peopled
+
+- Some forty-three thousand habitats now fill the solar system, home to about 1.75 billion people, among them the world bible's polities: Aurelipolis, Thraxipolis, Tessivorn, Krillix, Velloran Reach, Grixmaw and the rest.
+- Outside, they shine as points of their own sunlight. From home, the two clouds at the Earth–Moon L4 and L5 show as bands of bright stars beside the Moon's path. Observe Mars or Saturn to see the thousands that orbit them, dark when they pass into the planet's shadow.
+- Your overlay names the bible's polities and the brightest habitats beside their points. A new Habitats part of the Solar system panel tells what each polity is and where it is, and how long its light takes to reach home.
+- News travels at the speed of light: flares, Aurelipolis's arks leaving Mercury, the Assembly's motions and Velloran Reach's elections. Residents talk about a piece of news only after its light has reached the habitat, and they may mention how many minutes it took.
+
+## v0.148 — The checks run faster
+
+- Nothing changes in the game. The automatic checks that guard every change now take about a third less time, so they stay well inside their two-minute limit as the world grows.
+
 ## v0.147 — Harbours on every water
 
 - The boats now lie in harbours round the ring lake, the great lake and the smaller lakes, where the paths come down to the shore: a stone landing, a timber pier on slender bronze piles, a floating pontoon with fingers between the berths, tall guide piles, cleats, lamp bollards and a swimming ladder.

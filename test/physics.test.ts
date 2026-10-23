@@ -7,14 +7,11 @@ import { PhysicsWorld } from '../src/physics/world';
 import { flatOf } from './worlds';
 
 for (const { name } of MATRIX) {
-  // Flat ground (shared with the other tests that want it), so the landing spot is only the turning frame's doing.
+  // Flat ground with no landmarks (whose courts dig into it however flat the land), so the landing spot is only the
+  // turning frame's doing.
   const t = flatOf(name), h = t.habitat;
   const s = (h.profile.floorStart + h.profile.floorEnd) / 2;
-  const height = Math.min(50, h.radius * 0.2);
-  // Away from the entrance courts (the terrain digs them however flat the land): the first angle with none near.
-  const clear = (theta: number): boolean => t.courts.every((c) => Math.hypot(Math.atan2(Math.sin(c.theta - theta), Math.cos(c.theta - theta)) * h.radius, c.s - s) > c.radius + 200);
-  let theta0 = 0;
-  while (!clear(theta0) && theta0 < 2 * Math.PI) theta0 += 0.002;
+  const height = Math.min(50, h.radius * 0.2), theta0 = 0;
 
   test(`motion (${name}): a dropped ball lands antispinward by the blueprint's drop offset`, () => {
     const start = toWorld(h.profile, { theta: 0, s, h: height });

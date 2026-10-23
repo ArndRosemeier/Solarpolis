@@ -7,6 +7,7 @@ import { makeTerrain, type Terrain } from '../src/gen/terrain';
 import { makeEcology, nearestWood, type Ecology } from '../src/gen/ecology';
 import { plantsOf } from '../src/gen/scatter';
 import { nestsNear, type Nest } from '../src/sim/birds';
+import { REFERENCE_SPACE, makeSpace, type Space } from '../src/space';
 
 const habitats = new Map<string, Habitat>(), terrains = new Map<string, Terrain>(), ecologies = new Map<string, Ecology>();
 
@@ -56,4 +57,15 @@ export function woodBirdsOf(name: string): { nests: Nest[]; theta: number; s: nu
   const found = w && { nests: nestsNear(e, plantsOf(e), w.theta, w.s, BIRDS_RADIUS), theta: w.theta, s: w.s };
   woodBirds.set(name, found);
   return found;
+}
+
+/**
+ * The space round a `MATRIX` habitat: the reference ring of habitats with it at home (each neighbour derived twice in
+ * making it, so tens of habitats). A test of the ring being the same every time makes its own.
+ */
+const spaces = new Map<string, Space>();
+export function spaceOf(name: string): Space {
+  let s = spaces.get(name);
+  if (!s) { s = makeSpace({ ...REFERENCE_SPACE, home: MATRIX.find((m) => m.name === name)!.params }); spaces.set(name, s); }
+  return s;
 }

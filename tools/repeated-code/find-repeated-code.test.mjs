@@ -24,6 +24,7 @@ import {
   renderMarkdown,
   BANDS,
   ROWS,
+  runCli,
 } from './find-repeated-code.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -169,7 +170,12 @@ test('scan finds both kinds over a real tree', () => {
 test('CLI exits 0, writes the report, and two runs are byte-identical', () => {
   const { dir, src } = fixture();
   try {
-    const run = (n) => spawnSync(process.execPath, [TOOL, '--src', src, '--report', path.join(dir, `r${n}.md`), '--min-body', '20', '--window', '12'], { encoding: 'utf8' });
+    // In this process (the next test spawns the real script).
+    const run = (n) => {
+      let stdout = '', stderr = '';
+      const status = runCli(['--src', src, '--report', path.join(dir, `r${n}.md`), '--min-body', '20', '--window', '12'], { out: (s) => { stdout += s; }, err: (s) => { stderr += s; } });
+      return { status, stdout, stderr };
+    };
     const a = run(1), b = run(2);
     assert.equal(a.status, 0, a.stderr);
     assert.equal(b.status, 0, b.stderr);

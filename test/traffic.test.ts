@@ -3,10 +3,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { v3add, v3dot, v3len, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
 import { MATRIX, exteriorDistance } from '../src/blueprint';
-import { DOCK_SPEED, FINAL_LENGTHS, REFERENCE_SPACE, SHIP_DESIGN, beforeBerth, berthOf, deriveShip, guestShip, guestVisit, makeSpace, shipAt, shipShape, slotLength, trafficAt, visitIn, visitsAt, type ShipNow } from '../src/space';
+import { DOCK_SPEED, FINAL_LENGTHS, SHIP_DESIGN, beforeBerth, berthOf, deriveShip, guestShip, guestVisit, shipAt, shipShape, slotLength, trafficAt, visitIn, visitsAt, type ShipNow } from '../src/space';
+import { spaceOf } from './worlds';
 
-for (const { name, params } of MATRIX) {
-  const space = makeSpace({ ...REFERENCE_SPACE, home: params }), home = space.home, h = home.habitat, x = h.exterior;
+for (const { name } of MATRIX) {
+  const space = spaceOf(name), home = space.home, h = home.habitat, x = h.exterior;
   const tp = space.params.traffic, P = slotLength(h, tp), seed = space.params.seed;
   const visits = Array.from({ length: 4 }, (_, n) => Array.from({ length: x.spindle.berthArms }, (_, arm) => visitIn(h, home.id, seed, tp, arm, n))).flat().filter((v) => v !== null);
 

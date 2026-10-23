@@ -10,6 +10,7 @@ import {
   AU, DAY, calendarOf, earthAt, moonFromEarthAt, julianDay, makeSpace, geostationaryRadius, siderealTimeAt, obliquityAt, REFERENCE_SPACE,
   type Space,
 } from '../src/space';
+import { spaceOf } from './worlds';
 
 const D = Math.PI / 180;
 const near = (got: number, want: number, tol: number, what: string): void =>
@@ -36,7 +37,7 @@ test('space: Earth is at perihelion in early January and aphelion in early July 
 });
 
 test('space: the Sun crosses the equator at the 2026 March equinox and peaks at the June solstice', () => {
-  const s = makeSpace(REFERENCE_SPACE);
+  const s = spaceOf('reference');
   const dec = (t: number): number => Math.asin(v3norm(s.frames.position([0, 0, 0], 'sun', 'earth.fixed', t))[2]) / D;
   near(dec(tOf(s, 2026, 3, 20 + (14 + 46 / 60) / 24)), 0, 0.03, 'declination at the equinox (°)');
   near(dec(tOf(s, 2026, 6, 21 + (8 + 24 / 60) / 24)), 23.436, 0.03, 'declination at the solstice (°)');
@@ -67,7 +68,7 @@ test('space: Earth turns once per sidereal day, and its tilt has eased slightly 
 });
 
 test('space: the frame tree converts back and forth, and stays exact inside a habitat', () => {
-  const s = makeSpace(REFERENCE_SPACE);
+  const s = spaceOf('reference');
   const p: Vec3 = [1234.5, -321.25, 17000.125];
   const t = 3.7e7;
   for (const to of ['sun', 'earth', 'earth.fixed', 'moon', 'necklace-3.body']) {
@@ -89,8 +90,8 @@ test('space: the Necklace is the same for the same seed, buildable, and evenly s
   assert.notDeepEqual(other.habitats.map((h) => h.params.radius), a.habitats.map((h) => h.params.radius));
 });
 
-for (const { name, params } of MATRIX) {
-  const s = makeSpace({ ...REFERENCE_SPACE, home: params });
+for (const { name } of MATRIX) {
+  const s = spaceOf(name);
   const h = s.home.habitat;
   const t0 = 1.234e8;
 
