@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.160 — Capsules in the debug menu
+
+- The debug menu can stand you beside a waiting capsule's door ("Capsule: walk up to it"), and its capsule line shows how much memory the pod holds.
+
 ## v0.159 — Tugs and inspection drones at the port
 
 - Every berth arm has its own orange harbour tug, parked in a cradle on the dock spindle. When a ship comes in, its tug flies out to hold station beside it and comes in with it, then goes home. It sees the ship out again when it leaves.
