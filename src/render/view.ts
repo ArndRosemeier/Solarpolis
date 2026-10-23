@@ -105,7 +105,7 @@ const HEAD_PARTS = /^(teeth|tongue|eyes|eyelashes|brows-.*|hair-.*|.*-hat|.*glas
  * From the eyes, the body stands this far back (m, for a person of `HUMAN.height`), so the eyes are just in front of
  * the face and chest: looking down one sees their front, not the inside of the neck.
  */
-const FIRST_PERSON_BACK = 0.2;
+const FIRST_PERSON_BACK = 0.3;
 /** How far (in handrails) one steps out of a lift's doors on arriving (`outside`). */
 const STEP_OUT = 1.5;
 /** The glass deck's views: how far over the tallest trees' height (×). */
