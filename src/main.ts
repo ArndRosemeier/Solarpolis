@@ -352,14 +352,21 @@ const go = (label: string, s: (h: NonNullable<typeof lab.habitat>) => number): v
   label, group: 'Go', run: () => { const h = lab.habitat, v = view(); if (v && h) v.goTo(v.walker.at.theta, s(h)); },
 });
 /** Go to a place the ecology finds, `back` metres short of where it starts (negative: that far in), facing it. */
+/** A place on the floor at (theta, s) as found from (t, s0) on a floor of radius r: the way there is the way to face. */
+const towards = (r: number, t: number, s0: number, at: { theta: number; s: number }): Found => {
+  const d = at.theta - t, dx = (d - 2 * Math.PI * Math.round(d / (2 * Math.PI))) * r, dy = at.s - s0, l = Math.hypot(dx, dy) || 1;
+  return { theta: at.theta, s: at.s, way: [dx / l, dy / l] };
+};
+/** Go `back` metres short of a place found, facing it (walker.step: forward is +s, -θ). */
+const goBefore = (v: NonNullable<ReturnType<typeof view>>, eco: Ecology, w: Found, back: number): void => {
+  const r = Math.max(eco.terrain.habitat.profile.at(w.s).r, 1);
+  v.goTo(w.theta - (w.way[0] * back) / r, w.s - w.way[1] * back, Math.atan2(-w.way[0], w.way[1]));
+};
 const toPlace = (label: string, back: number, find: (eco: Ecology, theta: number, s: number) => Found | null): void => debug.add({
   label, group: 'Go', run: () => {
     const v = view(), eco = v?.ecology, at = v?.walker.at;
     const w = eco && at && find(eco, at.theta, at.s);
-    if (!v || !eco || !w) return;
-    const r = Math.max(eco.terrain.habitat.profile.at(w.s).r, 1);
-    // Facing it (walker.step: forward is +s, -θ).
-    v.goTo(w.theta - (w.way[0] * back) / r, w.s - w.way[1] * back, Math.atan2(-w.way[0], w.way[1]));
+    if (v && eco && w) goBefore(v, eco, w, back);
   },
 });
 toPlace('Before the nearest wood', 40, (eco, t, s) => nearestWood(eco, t, s));
@@ -372,8 +379,7 @@ toPlace('Onto the Mountain trail', 0, (eco, t, s) => nearestOnPath(eco.terrain.h
 toPlace('Before the nearest crowd', 12, (eco, t, s) => {
   const h = eco.terrain.habitat, v = view(), b = v && busiestNear(h, v.time, { theta: t, s, radius: 2000 });
   if (!b) return null;
-  const d = b.theta - t, dx = (d - 2 * Math.PI * Math.round(d / (2 * Math.PI))) * h.radius, dy = b.s - s, l = Math.hypot(dx, dy) || 1;
-  return { theta: b.theta, s: b.s, way: [dx / l, dy / l] };
+  return towards(h.radius, t, s, b);
 });
 /** In the busiest entrance court within 3 km now (most people meeting or sitting in it), 12 m from its light well, facing it. */
 toPlace('In the busiest court nearby', 12, (eco, t, s) => {
@@ -383,8 +389,7 @@ toPlace('In the busiest court nearby', 12, (eco, t, s) => {
   for (const p of peopleAt(h, v.time, { theta: t, s, radius: 3000 })) if (p.activity === 'meet' || p.activity === 'bench') count.set(p.court, (count.get(p.court) ?? 0) + 1);
   const best = [...count].sort((a, b) => b[1] - a[1])[0], c = best && venuesOf(h).courts[best[0]];
   if (!c) return null;
-  const d = c.theta - t, dx = (d - 2 * Math.PI * Math.round(d / (2 * Math.PI))) * r, dy = c.s - s, l = Math.hypot(dx, dy) || 1;
-  return { theta: c.theta, s: c.s, way: [dx / l, dy / l] };
+  return towards(r, t, s, c);
 });
 /** 5 m from the nearest party of three or more standing in a ring to talk, facing its middle. */
 toPlace('Beside the nearest talking ring', 5, (eco, t, s) => {
@@ -403,8 +408,7 @@ toPlace('Beside the nearest talking ring', 5, (eco, t, s) => {
     if (g < gap) { gap = g; best = m; }
   }
   if (!best) return null;
-  const d = best.theta - t, dx = (d - 2 * Math.PI * Math.round(d / (2 * Math.PI))) * r, dy = best.s - s, l = Math.hypot(dx, dy) || 1;
-  return { theta: best.theta, s: best.s, way: [dx / l, dy / l] };
+  return towards(r, t, s, best);
 });
 /** 4 m from the nearest person in a drone body staying with others (or else anyone in one), facing them. */
 toPlace('Beside the nearest person in a drone body', 4, (eco, t, s) => {
@@ -414,8 +418,7 @@ toPlace('Beside the nearest person in a drone body', 4, (eco, t, s) => {
   const by = (p: Person): number => floorGap(r, t, s, p.theta, p.s) + (p.moving || p.size < 2 ? 1e6 : 0);
   const best = aloft.sort((a, b) => by(a) - by(b))[0];
   if (!best) return null;
-  const d = best.theta - t, dx = (d - 2 * Math.PI * Math.round(d / (2 * Math.PI))) * r, dy = best.s - s, l = Math.hypot(dx, dy) || 1;
-  return { theta: best.theta, s: best.s, way: [dx / l, dy / l] };
+  return towards(r, t, s, best);
 });
 /** 6 m from the nearest party out on the land that `keep` picks (within `within` m), facing it. */
 const besideParty = (label: string, within: number, keep: (p: Person) => boolean): void => toPlace(label, 6, (eco, t, s) => {
@@ -424,8 +427,7 @@ const besideParty = (label: string, within: number, keep: (p: Person) => boolean
   const some = peopleAt(h, v.time, { theta: t, s, radius: within }, eco.terrain).filter((p) => !p.moving && keep(p));
   const best = some.sort((a, b) => floorGap(r, t, s, a.theta, a.s) - floorGap(r, t, s, b.theta, b.s))[0];
   if (!best) return null;
-  const d = best.theta - t, dx = (d - 2 * Math.PI * Math.round(d / (2 * Math.PI))) * r, dy = best.s - s, l = Math.hypot(dx, dy) || 1;
-  return { theta: best.theta, s: best.s, way: [dx / l, dy / l] };
+  return towards(r, t, s, best);
 });
 // Down on the grass (sitting or lying, not on a seat); then the beats the places offer.
 besideParty('Beside the nearest party on the grass', 6000, (p) => p.size > 1 && p.posture !== POSE.upright && p.activity !== 'bench');
@@ -436,6 +438,20 @@ besideParty('Beside the nearest one stretching', 20000, (p) => p.act === 'stretc
 besideParty('Beside the nearest one at standing work', 20000, (p) => p.act === 'work' && p.posture === POSE.upright);
 // The speech bubbles: a party holding a conversation (Arnd, 2026-10-23).
 besideParty('Beside the nearest party talking', 20000, (p) => p.act === 'talk' && p.size > 1 && p.court >= 0);
+// Commonwear 3026 (Actors 0.7.0): 4 m from the nearest one standing or sitting in a screen (aurora mantle, living canvas,
+// halo), facing them. Their looks are Actors', so its catalogue is loaded first.
+debug.add({ label: 'Beside the nearest one in a screen garment (Commonwear)', group: 'Go', run: async () => {
+  const v = view(), eco = v?.ecology, at = v?.walker.at;
+  if (!v || !eco || !at) return;
+  const { humanCatalog } = await import('./render/actors/pack');
+  const { Residents } = await import('./render/actors/residents');
+  const { catalog, base, human } = await humanCatalog(), looks = new Residents(catalog, base, human);
+  const h = eco.terrain.habitat, { theta: t, s } = at;
+  const near = peopleAt(h, v.time, { theta: t, s, radius: 3000 }, eco.terrain).filter((p) => !p.moving && residentOf(h, p.resident).body === 'grown');
+  near.sort((a, b) => floorGap(h.radius, t, s, a.theta, a.s) - floorGap(h.radius, t, s, b.theta, b.s));
+  const best = near.slice(0, 200).find((p) => looks.figureLook(residentOf(h, p.resident)).outfit.some((g) => /^future-(mantle|screen|halo)$/.test(g)));
+  if (best) goBefore(v, eco, towards(h.radius, t, s, best), 4);
+} });
 /** Before the nearest herd of deer (within a few km, or else in the wild reserve), approached from where the player stands. */
 toPlace('Before the nearest herd', 60, (eco, t, s) => {
   const h = eco.terrain.habitat, v = view(), r = h.radius;

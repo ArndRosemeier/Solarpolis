@@ -47,6 +47,7 @@ import { hallAt } from '../gen/halls';
 import { landmarkTopAt, landmarksOf } from '../gen/landmarks';
 import { speckBands } from '../gen/standIn';
 import { snowFieldOf } from '../gen/snow';
+import { screenFabrics } from './actors/screens';
 import { PeopleView } from './people';
 import { SpeckView, type Measured } from './specks';
 import { FlierView } from './fliers';
@@ -296,7 +297,7 @@ export class InteriorView {
 
   /** Bytes the people around the player hold: figures, stand-ins, measures, the population's caches (memory watchdog). */
   peopleBytes(): number {
-    return (this.people?.bytes() ?? 0) + (this.specks?.bytes() ?? 0);
+    return (this.people?.bytes() ?? 0) + (this.specks?.bytes() ?? 0) + screenFabrics.textureBytes();
   }
 
   /** Bytes the conversations near the player hold: their lines and the residents met (memory watchdog). */
@@ -754,6 +755,7 @@ export class InteriorView {
     this.onRoom?.(room);
     this.physics?.setFurniture(this.homes?.bodies ?? []);
     this.people?.follow(v.eye, this.time, this.frameDt, this.below, this.homes?.intent);
+    screenFabrics.advance(this.frameDt);
     this.drones?.follow(v.eye, this.time, this.frameDt, this.people?.aloft, this.below);
     if (this.talk && this.people) this.talk.bubblesAt(this.people, v.eye, this.time, this.camera, this.canvas.clientWidth, this.canvas.clientHeight);
     this.onTalk?.(this.talk?.bubbles ?? []);
