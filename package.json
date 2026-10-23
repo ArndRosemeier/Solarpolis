@@ -32,6 +32,7 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@types/three": "^0.186.0",
+    "@webgpu/types": "^0.1.66",
     "esbuild": "^0.28.2",
     "playwright-core": "^1.64.1",
     "tsx": "^4.23.15",

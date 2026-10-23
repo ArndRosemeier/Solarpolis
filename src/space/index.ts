@@ -9,8 +9,8 @@ export { makeSpace, type Space, type SpaceParams, type PlacedHabitat } from './s
 export { REFERENCE_SPACE } from './reference';
 export { decodeStars, fluxOfMagnitude, temperatureOfColorIndex, colorOfTemperature, SUN_MAGNITUDE, type StarField } from './stars';
 export { SpaceFlyer, MIN_CLEARANCE, MAX_RANGE, type FlyInput } from './flyer';
-export { skyFrom, sunlightFrom, circleOverlap, type SkyView, type SkyBody } from './sky';
-export { attractLoop, chooseStart, arrival, hubView, SHOTS, LOOP, ARRIVAL, ARRIVAL_SHOTS, CABIN_FOV, SPIN_UP, LIT_FROM, LIT_TO, type Arrival, type ArrivalFrame, type ArrivalMoments, type Cinema, type Frame as CinemaFrame } from './cinema';
+export { skyFrom, sunlightFrom, circleOverlap, cloudOffset, CLOUD_DRIFT, type SkyView, type SkyBody } from './sky';
+export { attractLoop, chooseStart, opening, OPENING_MIN, OPENING_FOV, type Opening, type OpeningFrame, arrival, hubView, SHOTS, LOOP, ARRIVAL, ARRIVAL_SHOTS, CABIN_FOV, SPIN_UP, LIT_FROM, LIT_TO, type Arrival, type ArrivalFrame, type ArrivalMoments, type Cinema, type Frame as CinemaFrame } from './cinema';
 export { torchShip, sailShip, shipShape, deriveShip, partSpan, SHIP_DESIGN, TORCH_SHIP, ROLE_ALBEDO, shipAxesOf, crewSection, type Drive, type ShipParams, type ShipPart, type ShipShape, type ShipRole } from './ship';
 export { approachOf, berthOf, shipAt, trafficAt, guestShip, guestVisit, arrivalTime, beforeBerth, slotLength, visitIn, visitsAt, DOCK_SPEED, FINAL_LENGTHS, TORCH_SHOWN, TURN, type Approach, type Phase, type ShipNow, type TrafficParams, type Visit } from './traffic';
 export { hullLightsOf, shipLightsOf, lampHidden, shineAt, lampFlux, LIGHTS, LIGHT_COLOUR, SUN_LUX, type Blink, type HullLight, type LightFrame } from './lights';

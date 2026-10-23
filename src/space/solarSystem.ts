@@ -1,12 +1,25 @@
 /** Offline astronomy: DE441 Chebyshev fits for major bodies, mean ellipses for the satellite catalogue.
  * Dates are TDB (the game's uniform TT differs by milliseconds), positions J2000 ecliptic metres.
  * The model accepts data; no I/O, rendering dependencies, or implicit clock. */
-import { v3add, v3cross, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
+import { v3add, v3cross, v3dot, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
 import { AU, DAY, JD_J2000, MOON } from './constants';
 import { earthAxesAt } from './ephemeris';
 import { apply, IDENTITY, mul, rotZ, type Mat3 } from './pose';
 import { ellipseAt, polePlane } from './orbits';
 import { DWARF_MOONS, SOLAR_BODIES, type MoonRecord, type SmallRecord, type SolarBody } from './solarData';
+
+/**
+ * The light of a body too small to show a disc, as flux at the eye relative to the Sun's at 1 AU (linear RGB, its
+ * colour at luminance 1): its albedo, the Lambert phase seen from the eye, its solid angle and the sunlight on it
+ * (`light`, relative to 1 AU). `solar` and `eyeSolar` are heliocentric (m), `distance` from the eye.
+ */
+export function bodyPointFlux(body: SolarBody, solar: Vec3, eyeSolar: Vec3, distance: number, light: number): Vec3 {
+  const alpha = Math.acos(Math.max(-1, Math.min(1, v3dot(v3norm(v3scale(solar, -1)), v3norm(v3sub(eyeSolar, solar))))));
+  const phase = (Math.sin(alpha) + (Math.PI - alpha) * Math.cos(alpha)) / Math.PI;
+  const flux = body.albedo * phase * (body.radius / distance) ** 2 * light;
+  const luminance = Math.max(.01, .2126 * body.colour[0] + .7152 * body.colour[1] + .0722 * body.colour[2]);
+  return v3scale(body.colour, flux / luminance);
+}
 
 export interface EphemerisPack { start: number; stop: number; degree: number; bodies: Record<string, { span: number; maxErrorKm: number; coefficients: number[] }> }
 const D = Math.PI / 180;

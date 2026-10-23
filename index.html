@@ -5,10 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Solarpolis</title>
     <link rel="icon" href="data:," />
+    <!-- A page opened straight into a view has no opening (src/boot/boot.ts). -->
+    <script>if (/[?&]view=(?!title\b)/.test(location.search)) document.documentElement.classList.add('no-opening');</script>
   </head>
   <body>
     <noscript><p style="padding: 40vh 16px 0; text-align: center">Solarpolis needs JavaScript.</p></noscript>
-    <div id="app"></div>
-    <script type="module" src="/src/main.ts"></script>
+    <div id="app"><header class="top"><h1>Solarpolis</h1></header></div>
+    <!-- The opening (design "First Light"): drawn by src/boot before the game has loaded, the name over it. -->
+    <div id="first-light" class="first-light">
+      <canvas class="first-light-canvas"></canvas>
+      <div class="title-card">
+        <div class="title-top">
+          <h2 class="title-name">Solarpolis</h2>
+          <p class="title-line">A habitat in the geostationary ring, in the year 3026</p>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/boot/boot.ts"></script>
   </body>
 </html>

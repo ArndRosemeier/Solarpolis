@@ -3,7 +3,7 @@
  * (centre relative to the eye, radius, and their own surface axes for textures), and how much of the Sun's disc is
  * left uncovered by them (eclipses). Pure; the renderer turns it into uniforms.
  */
-import { v3len, v3norm, v3scale, v3sub, v3cross, type Vec3 } from '@futuremagic/core';
+import { Rng, deriveSeed, v3len, v3norm, v3scale, v3sub, v3cross, type Vec3 } from '@futuremagic/core';
 import { EARTH, MOON, SUN } from './constants';
 import type { Mat3 } from './pose';
 import type { Space } from './space';
@@ -71,4 +71,14 @@ export function sunlightFrom(sun: Vec3, earth: Vec3, moon: Vec3, others: { cente
     hidden += circleOverlap(sunRadius, Math.asin(r / dist), angle(sunDir, v3scale(c, 1 / dist)));
   }
   return Math.max(0, 1 - hidden / (Math.PI * sunRadius * sunRadius));
+}
+
+/** How fast Earth's cloud field drifts (its noise offset per day of clock). */
+export const CLOUD_DRIFT = 0.05;
+
+/** Earth's cloud field for a seed: the noise offset the sky shaders read, moved on by `days` of clock. */
+export function cloudOffset(seed: number, days = 0): Vec3 {
+  const rng = new Rng(deriveSeed(seed, 'clouds'));
+  const o: Vec3 = [rng.range(0, 100), rng.range(0, 100), rng.range(0, 100)];
+  return [o[0], o[1], o[2] - days * CLOUD_DRIFT];
 }

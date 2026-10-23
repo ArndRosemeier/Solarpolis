@@ -76,3 +76,14 @@ test('arrival timing: what loaded when after Start', () => {
   now = 9000; t.note('human pack ✓');
   assert.equal(t.loadingLine(), 'arrival\'s loading (s after Start): -1.0 before · 2.5 human pack … · 8.0 human pack ✓');
 });
+
+test('arrival timing: the opening, seen first by its own worker, then its cut to the title', () => {
+  let now = 0;
+  const t = new ArrivalTiming(() => now);
+  now = 900; t.mark('light', 540);
+  now = 3700; t.mark('title');
+  now = 7600; t.mark('opened');
+  t.opening({ frames: 420, slowest: 21.4, stutters: 0 });
+  assert.equal(t.at('light'), 540);
+  assert.match(t.arrivalLine(), /^arrival: first light 0\.5 s, title 3\.7 s after opening, the opening cut to it at 7\.6 s \(420 frames, slowest 21 ms, 0 stutters\) · not started$/);
+});

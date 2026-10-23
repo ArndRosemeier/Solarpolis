@@ -18,7 +18,9 @@ import {
   select, smoothstep, sqrt, texture, uniform, varying, vec2, vec3, vec4, vertexColor,
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
-import { GLARE, GLARE_REACH, STAR_SIGMA } from './exposure';
+import { DISPLAY_CAP, FLARE_FLOOR, FLARE_HALO, FLARE_HALO_PX, FLARE_MAX_PX, FLARE_SPIKE, FLARE_SPIKE_PX, FLARE_SPIKE_WIDTH, GLARE, GLARE_REACH, STAR_HALF, STAR_SIGMA } from './exposure';
+// The look's numbers live with the exposure (pure), so the opening's own shader (src/boot) draws with the same ones.
+export { DISPLAY_CAP, FLARE_FLOOR, FLARE_HALO, FLARE_HALO_PX, FLARE_MAX_PX, FLARE_SPIKE, FLARE_SPIKE_PX, FLARE_SPIKE_WIDTH, STAR_HALF } from './exposure';
 import { filtered } from './textures';
 
 /** Everything the outside's shaders read; set each frame by the view (render/outside.ts). */
@@ -152,35 +154,10 @@ export function skyRadiance(d: Node<'vec3'>): Node<'vec3'> {
   return dome.add(vec3(1, 0.95, 0.88).mul(glare)).mul(outside.irradiance);
 }
 
-/**
- * Exposed light is capped here before it reaches the half-float frame: the Sun's disc, exposed for a dark view, would
- * overflow it to infinity, which the tone mapping turns into a black hole. Anything this bright is white on screen anyway.
- */
-export const DISPLAY_CAP = 1e4;
-
 /** The sky dome's colour: everything beyond the habitat, exposed. */
 export function skyDome(): Node<'vec3'> {
   return min(skyRadiance(normalize(positionWorld)).mul(outside.exposure), DISPLAY_CAP);
 }
-
-/** Star quads: the half size of the quad (px) for a faint star, three σ of the spot. */
-export const STAR_HALF = 3 * STAR_SIGMA;
-
-/**
- * Small lens flares around the brighter stars (Arnd, 2026-10-21): a soft halo and four thin spikes along the screen's
- * axes, as a camera's optics would spread a point. Their light is a share of the star's peak pixel: FLARE_HALO and
- * FLARE_SPIKE at the centre, falling off over FLARE_HALO_PX and FLARE_SPIKE_PX. They reach only as far as they show,
- * at most FLARE_MAX_PX, so faint stars stay a few pixels and only bright ones flare.
- */
-export const FLARE_HALO = 0.04;
-export const FLARE_HALO_PX = 2;
-export const FLARE_SPIKE = 0.1;
-export const FLARE_SPIKE_PX = 4;
-/** The spikes' half width (px, Gaussian σ). */
-export const FLARE_SPIKE_WIDTH = 0.45;
-/** The flare stops where it would add less than this on screen (after exposure, sunlit white = about 1). */
-export const FLARE_FLOOR = 0.01;
-export const FLARE_MAX_PX = 24;
 
 /**
  * The exposure a STARS mesh draws with: the stars' own (heroic), unless the mesh's `userData.plainExposure` says it

@@ -13,9 +13,9 @@
  */
 import { Color, Mesh, PerspectiveCamera, Scene, SphereGeometry, Texture, type WebGPURenderer } from 'three/webgpu';
 import { Stage, createRenderer, type ShaderMonitor } from '@futuremagic/stage';
-import { Rng, deriveSeed, v3add, v3dot, v3len, v3scale, v3sub, v3norm, type Vec3 } from '@futuremagic/core';
+import { v3add, v3dot, v3len, v3scale, v3sub, v3norm, type Vec3 } from '@futuremagic/core';
 import type { Habitat } from '../blueprint';
-import { DAY, EARTH, MOON, REFERENCE_SPACE, SpaceFlyer, arrival, attractLoop, calendarOf, chooseStart, decodeStars, cabinCamera, fromShipDirection, placesInView, guestShip, julianDay, loungeOf, LOUNGE, makeSpace, throughWindow, toShipDirection, windowLight, shipLightsOf, shipShape, skyFrom, type Arrival, type ArrivalFrame, type Cinema, type CinemaFrame, type HullLight, type Mat3, type ShipShape, type Space, type SkyView } from '../space';
+import { CLOUD_DRIFT, cloudOffset, DAY, EARTH, MOON, REFERENCE_SPACE, SpaceFlyer, arrival, attractLoop, calendarOf, chooseStart, decodeStars, cabinCamera, fromShipDirection, placesInView, guestShip, julianDay, loungeOf, LOUNGE, makeSpace, throughWindow, toShipDirection, windowLight, shipLightsOf, shipShape, skyFrom, type Arrival, type ArrivalFrame, type Cinema, type CinemaFrame, type HullLight, type Mat3, type ShipShape, type Space, type SkyView } from '../space';
 import { SKY, STARS, outsideKinds, standInAttribute } from './materials';
 import { filtered } from './textures';
 import { outside, skyMaps } from './skyShaders';
@@ -133,8 +133,7 @@ export class OutsideView {
     this.canvas.className = 'view-canvas';
     // The lounge's lights for the passengers' bodies, before the warm-up (the light count is in every shader's key).
     addLoungeLights(this.scene);
-    const rng = new Rng(deriveSeed(this.space.params.seed, 'clouds'));
-    outside.clouds.value.set(rng.range(0, 100), rng.range(0, 100), rng.range(0, 100));
+    outside.clouds.value.set(...cloudOffset(this.space.params.seed));
     this.frameHabitat();
   }
 
@@ -448,9 +447,10 @@ export class OutsideView {
 
   /**
    * Play the title's attract loop (shots 1 to 3) on the real clock from the moment the cinematographer picks in the
-   * first two days of the game clock, until `stopAttract`.
+   * first two days of the game clock, until `stopAttract`. `titled`: the opening brought the title up already
+   * (src/boot), so it stays up through the first pass.
    */
-  async startAttract(): Promise<void> {
+  async startAttract(titled = false): Promise<void> {
     if (!this.ship) {
       const ship = new ShipMeshes(this.shipShape, 'torch ship');
       const lights = shipLightsOf(this.shipShape), lamps = { lights, points: new LampPoints(lights.length, 'torch ship lights') };
@@ -465,9 +465,21 @@ export class OutsideView {
     if (this.lounge && !this.passengers) this.passengers = new Passengers(this.stage, this.space.params.seed);
     this.flyer = null;
     const start = chooseStart(this.space, 0);
-    const cinema = attractLoop(this.space, start, this.habitat.params.exterior.keepOut, this.shipShape.params.length);
+    const cinema = attractLoop(this.space, start, this.habitat.params.exterior.keepOut, this.shipShape.params.length, titled);
     this.attract = { cinema, elapsed: 0, frame: cinema.at(0) };
     this.time = start;
+  }
+
+  /**
+   * Shot 1 from its first frame again, `after` s of clock past the loop's start: the cut from the opening, which
+   * played that long while this view got ready behind it (the clock jumps forward at a cut, never back).
+   */
+  restartAttract(after = 0): void {
+    const a = this.attract;
+    if (!a) return;
+    a.elapsed = 0;
+    a.frame = a.cinema.at(0);
+    this.time = a.cinema.start + after;
   }
 
   /**
@@ -631,7 +643,7 @@ export class OutsideView {
       this.flyer.eye = held.eye;
       this.flyer.lookAlong(held.look);
     }
-    outside.clouds.value.z = outside.clouds.value.z - (dt * speed / DAY) * 0.05;
+    outside.clouds.value.z = outside.clouds.value.z - (dt * speed / DAY) * CLOUD_DRIFT;
     this.place();
     this.controlClock += dt;
     if (this.controlClock >= .25) {
