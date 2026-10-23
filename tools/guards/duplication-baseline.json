@@ -1900,7 +1900,7 @@
     "reason": "TSL shader node chains (`.add(…).mul(…)`) are how every kind's shader is written in three's node language; this cluster only crossed the idiom finder's information floor because more files raised its weights (neural link files, 2026-10-23), not by a new copy."
   },
   {
-    "key": "idiom: [.at .max .r .s Math] in solarpolis/gen/capsules.ts + solarpolis/sim/birds.ts + solarpolis/sim/flocks.ts + solarpolis/sim/specks.ts + solarpolis/world/capFlight.ts",
+    "key": "idiom: [.at .max .r .s Math] in solarpolis/gen/capsules.ts + solarpolis/link/naming.ts + solarpolis/sim/birds.ts + solarpolis/sim/flocks.ts + solarpolis/sim/specks.ts + solarpolis/world/capFlight.ts",
     "reason": "The radius at a point of the profile, kept off zero, to turn metres round the axis into an angle: a coordinate conversion each module does in its own expression, not shared behaviour."
   },
   {
@@ -2406,5 +2406,9 @@
   {
     "key": "idiom: [.profile .s .theta] in solarpolis/gen/underMesh.ts + solarpolis/render/view.ts + solarpolis/sim/sources.ts",
     "reason": "Each is a call of the one seam for a point's place in the world (`toWorld(habitat.profile, { theta, s, h })`) at a point its caller holds; there is nothing left to fold."
+  },
+  {
+    "key": "idiom: [.max .min .pitch Math] in solarpolis/render/outside.ts + solarpolis/render/vesselVisit.ts + solarpolis/space/flyer.ts",
+    "reason": "Each clamps its own camera's look up and down (the outside view, a vessel visit, the space flyer): the same one-line clamp, not a copy to fold. It only crossed the idiom finder's floor because the names-on-hover files raised the file count (2026-10-23)."
   }
 ]

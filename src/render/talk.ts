@@ -12,7 +12,8 @@ import type { Camera } from 'three';
 import { toView, toWorld, type Habitat, type Vec3 } from '../blueprint';
 import { POSE } from '../gen/standIn';
 import type { Terrain } from '../gen/terrain';
-import { footingOf, partyKey, partyMembers, talkerAt, voiceOf, type Person } from '../sim';
+import { footingOf, partyKey, partyMembers, talkerAt, type Person } from '../sim';
+import { shownName } from '../link';
 import { REFERENCE_SPACE } from '../space';
 import type { Whereabouts } from '../system';
 import type { Conversations } from '../talk';
@@ -25,6 +26,7 @@ export interface Bubble {
   id: string;
   x: number;
   y: number;
+  /** The name the speaker shows to anyone's link ('' when they keep it to themselves, src/link/names.ts). */
   name: string;
   text: string | null;
   /** How far the speaker is (m), for the bubble's size and fade. */
@@ -100,7 +102,7 @@ export class TalkView {
       if (!who) continue;
       const head = this.headOf(who), at = toScreen(camera, toView(eye, head), width, height, MARGIN);
       if (!at) continue;
-      out.push({ id: `${party.key}:${member}`, x: at[0], y: at[1], name: voiceOf(h, who.person.resident).name, text: line ? line.text : null, distance: this.distanceTo(who, eye) });
+      out.push({ id: `${party.key}:${member}`, x: at[0], y: at[1], name: shownName(h, who.person.resident) ?? '', text: line ? line.text : null, distance: this.distanceTo(who, eye) });
     }
   }
 

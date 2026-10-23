@@ -7,7 +7,7 @@
  * the GPU nothing; only its own panel, cards and sigil take the mouse, the world stays clickable everywhere else.
  */
 import type { Vec3 } from '@futuremagic/core';
-import { LINK_KEY, findChoices, type LinkChoice, type LinkLine, type LinkOffer, type LinkService, type LinkStatus, type Sighting } from '../../link';
+import { LINK_KEY, findChoices, type LinkChoice, type LinkLine, type LinkOffer, type LinkService, type LinkStatus, type ScreenPoint, type Sighting } from '../../link';
 import { button, el } from '../dom';
 import './link.css';
 
@@ -31,6 +31,10 @@ export class Link {
   private readonly whispers = el('div', 'link-lines');
   private readonly cards = el('div', 'link-cards');
   private readonly marks = el('div', 'link-marks');
+  /** Names on hover: the name of what the pointer rests on, beside it. */
+  private readonly label = el('div', 'link-name');
+  private readonly labelName = el('span', 'link-name-title');
+  private readonly labelDetail = el('span', 'link-name-detail');
   private readonly services: LinkService[] = [];
   private readonly lines: Whisper[] = [];
   private readonly shown = new Map<string, Card>();
@@ -51,7 +55,9 @@ export class Link {
     this.panel.hidden = true;
     this.panel.append(this.body);
     this.whispers.setAttribute('aria-live', 'polite');
-    this.root.append(this.marks, this.sigil, this.whispers, this.panel, this.cards);
+    this.label.hidden = true;
+    this.label.append(this.labelName, this.labelDetail);
+    this.root.append(this.marks, this.label, this.sigil, this.whispers, this.panel, this.cards);
     window.addEventListener('keydown', (e) => this.keyPressed(e));
   }
 
@@ -77,6 +83,29 @@ export class Link {
     this.whispers.append(box);
     this.lines.push({ box, age: 0 });
     while (this.lines.length > MOST_LINES) this.lines.shift()!.box.remove();
+  }
+
+  /**
+   * Name what the pointer rests on (names on hover, src/link/names.ts) beside it (`at`, px over the view), or nothing.
+   * The same thing named again only moves its label; a new one fades in.
+   */
+  showName(named: { key: string; name: string; detail?: string } | null, at: ScreenPoint = [0, 0]): void {
+    if (!named) { this.label.hidden = true; this.label.dataset.key = ''; return; }
+    if (this.label.dataset.key !== named.key || this.label.hidden) {
+      this.label.dataset.key = named.key;
+      this.label.hidden = false;
+      // Restart the fade in.
+      this.label.classList.remove('shown');
+      void this.label.offsetWidth;
+      this.label.classList.add('shown');
+    }
+    if (this.labelName.textContent !== named.name) this.labelName.textContent = named.name;
+    const detail = named.detail ?? '';
+    if (this.labelDetail.textContent !== detail) this.labelDetail.textContent = detail;
+    this.labelDetail.hidden = !detail;
+    // Beside the pointer, turned to stay on the screen near the right and bottom edges.
+    const w = this.root.clientWidth, h = this.root.clientHeight, flipX = at[0] > w - 240, flipY = at[1] > h - 70;
+    this.label.style.transform = `translate(${(at[0] + (flipX ? -14 : 16)).toFixed(0)}px, ${(at[1] + (flipY ? -14 : 18)).toFixed(0)}px) translate(${flipX ? '-100%' : '0'}, ${flipY ? '-100%' : '0'})`;
   }
 
   open(): void {

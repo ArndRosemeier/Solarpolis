@@ -323,3 +323,9 @@ export function landmarkTopAt(t: Terrain, theta: number, s: number): number | nu
   }
   return null;
 }
+
+/** Where something standing at (θ, s) up on the land rests: the ground or the water, or a landmark's top over them (m over the profile). */
+export function standOnLand(t: Terrain, theta: number, s: number): number {
+  const g = t.standAt(theta, s), top = landmarkTopAt(t, theta, s);
+  return top !== null && top > g ? top : g;
+}
