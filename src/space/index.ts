@@ -13,4 +13,5 @@ export { skyFrom, sunlightFrom, circleOverlap, type SkyView, type SkyBody } from
 export { attractLoop, chooseStart, arrival, hubView, SHOTS, LOOP, ARRIVAL, ARRIVAL_SHOTS, SPIN_UP, LIT_FROM, LIT_TO, type Arrival, type ArrivalFrame, type ArrivalMoments, type Cinema, type Frame as CinemaFrame } from './cinema';
 export { torchShip, sailShip, shipShape, deriveShip, SHIP_DESIGN, TORCH_SHIP, type Drive, type ShipParams, type ShipPart, type ShipShape, type ShipRole } from './ship';
 export { approachOf, berthOf, shipAt, trafficAt, guestShip, guestVisit, arrivalTime, beforeBerth, slotLength, visitIn, visitsAt, DOCK_SPEED, FINAL_LENGTHS, TORCH_SHOWN, TURN, type Approach, type Phase, type ShipNow, type TrafficParams, type Visit } from './traffic';
+export { hullLightsOf, shipLightsOf, shineAt, lampFlux, LIGHTS, LIGHT_COLOUR, SUN_LUX, type Blink, type HullLight, type LightFrame } from './lights';
 export { arrivalScore, captionAt, MIND_LINES, SHIP_BEDS, type ArrivalScore, type Caption, type ScoreCue, type ShipBed } from './arrivalScore';

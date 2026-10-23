@@ -56,10 +56,6 @@
     "reason": "Each radiance formula multiplies by the existing shared exposure uniform; the lighting calculations and colour inputs differ."
   },
   {
-    "key": "idiom: [.frustumCulled Promise] in solarpolis/render/necklace.ts + solarpolis/render/solar.ts + solarpolis/render/traffic.ts",
-    "reason": "Independent renderer owners disable bounds for camera-relative meshes and prepare them through the existing Stage seam."
-  },
-  {
     "key": "idiom: [.heightAt .s .theta] in solarpolis/gen/planted.ts + solarpolis/gen/scatter.ts + solarpolis/sim/sounds.ts",
     "reason": "Each is a call of the one seam for the ground's height (`terrain.heightAt(theta, s)`) at a point its caller holds; there is nothing left to fold."
   },
@@ -1990,5 +1986,13 @@
   {
     "key": "idiom: [.add .mul] in solarpolis/render/hamletSkies.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
     "reason": "TSL shader node chains (`.add(…).mul(…)`) are how every kind's shader is written in three's node language; this cluster only crossed the idiom finder's information floor because more files raised its weights (neural link files, 2026-10-23), not by a new copy."
+  },
+  {
+    "key": "idiom: [.smoothGrid] in solarpolis/gen/boat.ts + solarpolis/gen/building.ts + solarpolis/gen/hallMesh.ts + solarpolis/gen/underMesh.ts",
+    "reason": "Each of these builders calls the one smoothGrid seam (gen/shapes) with its own surface; the finder only surfaced it when new files changed its word weights (PR flight-lights touched none of them)."
+  },
+  {
+    "key": "same name: solarpolis/render/birds.ts#dispose + solarpolis/render/traffic.ts#dispose",
+    "reason": "Views' dispose methods give back what they drew through the one way (freeMesh, stage.remove) and clear their own maps; the bodies differ in what each holds."
   }
 ]
