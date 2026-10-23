@@ -2,6 +2,11 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.139 — Stairs climb
+
+- You walk up stairs without getting stuck: the courts' stairs, the Lift Stair, kerbs and short steps. Before, even ordinary 16 cm steps often stopped you.
+- How high a step you can take depends on how heavy you feel: about half a metre at 1 g, more as you get lighter toward the axis (at most your own height). So the Lift Stair's tall risers near the hub are steps, not walls. Anything higher is a ledge to jump onto.
+
 ## v0.138 — A passenger voyage through the solar system
 
 - A new Ship Tour tab lets you choose planets and their moons in an expandable, searchable tree. Your ship Mind handles the journey, two observation laps, and the return to the cylinder.
