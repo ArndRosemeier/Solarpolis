@@ -17,11 +17,12 @@
  */
 import { Group, type Mesh } from 'three/webgpu';
 import type { Stage } from '@futuremagic/stage';
-import { deriveSeed, hash3i, hashToFloat, v3dot, v3madd, v3norm, type Vec3 } from '@futuremagic/core';
+import { deriveSeed, hash3i, hashToFloat, v3dot, v3norm, v3sub, type Vec3 } from '@futuremagic/core';
 import { fromWorld, toView, type Habitat } from '../blueprint';
-import { capDestinations, capLayout, doorPlace, overFloor, type CapDestination, type CapLayout, type CapPad } from '../gen/capsules';
+import { capDestinations, capLayout, capStopsOf, doorPlace, overFloor, type CapDestination, type CapLayout, type CapPad } from '../gen/capsules';
 import { intoPlace, mappedBytes, outOfPlace, type MappedArrays, type Place } from '../gen/shapes';
 import type { Terrain } from '../gen/terrain';
+import { handrailOf } from '../gen/lifts';
 import { awayFrom, cruiseClear, flightAt, type Flight, type FlightState } from '../world/capFlight';
 import { alighting, boarding, mountPose, seatedPose, stepsSeconds, type MountPose, type MountStep } from '../world/mount';
 import { apparentAcceleration } from '../world/motion';
@@ -55,6 +56,8 @@ const BOARD_FROM = 14;
 const LINGER = 4;
 /** A called pod sets down at least this many handrails from the one who called it. */
 const NOT_ON_TOP = 4;
+/** Where no open ground is near, a called pod waits at a capsule stop up to this many times `reach` away. */
+const STOP_WALK = 5;
 /** Getting in, one walks round the pod this far clear of its widest (m). */
 const CLEAR_WALK = 0.7;
 /** The capsule's own small Mind, as it speaks in the link. */
@@ -104,9 +107,13 @@ export class CapsuleView {
     this.layout = capLayout(habitat);
   }
 
-  /** The places one can ride to (made once, when first asked). */
+  /**
+   * The places one can ride to (made once, when first asked): every court and harbour, and the landmarks that have a
+   * stop (a summit's steep rock may have no ground level enough for one).
+   */
   places(): readonly CapDestination[] {
-    return (this.destinations ??= capDestinations(this.terrain));
+    const stops = capStopsOf(this.terrain);
+    return (this.destinations ??= capDestinations(this.terrain).filter((d) => d.group !== 'Landmarks' || stops.of(d)));
   }
 
   /** Whether the player is in the pod (getting in, seated, riding or getting out). */
@@ -115,7 +122,7 @@ export class CapsuleView {
   }
 
   /** The pod's frame now (flying: where its flight has it), or null while it is nowhere. */
-  place(): Place | null {
+  podAt(): Place | null {
     if (this.flight && (this.phase === 'coming' || this.phase === 'riding' || this.phase === 'leaving')) return flightAt(this.habitat, this.flight, this.elapsed).place;
     return this.phase === 'idle' || this.phase === 'finding' ? null : this.pad;
   }
@@ -124,7 +131,7 @@ export class CapsuleView {
   feel(): { felt: Vec3; weight: number } | null {
     if (!this.carrying) return null;
     if (this.phase === 'riding' && this.flight) { const f: FlightState = flightAt(this.habitat, this.flight, this.elapsed); return { felt: f.felt, weight: f.weight }; }
-    const p = this.place();
+    const p = this.podAt();
     if (!p) return null;
     const felt = apparentAcceleration(this.habitat, p.at, [0, 0, 0]);
     return { felt, weight: Math.hypot(...felt) };
@@ -146,16 +153,18 @@ export class CapsuleView {
       this.say({ from: MIND, text: 'Still here. Click me to get in.' });
       return;
     }
-    const h = this.habitat, hr = handrail(h), caps = h.params.life.caps, ask = this.ask();
-    const comingBack = this.phase === 'leaving' ? this.place() : null;
+    const h = this.habitat, hr = handrailOf(h), caps = h.params.life.caps, ask = this.ask();
+    const comingBack = this.phase === 'leaving' ? this.podAt() : null;
     this.phase = 'finding';
     void this.meshes();
-    const a = await this.pool.job({ kind: 'capPad', params: h.params, theta, s, reach: caps.reach, least: NOT_ON_TOP * hr });
+    const a = await this.pool.job({ kind: 'capPad', params: h.params, theta, s, reach: caps.reach, least: NOT_ON_TOP * hr, orStop: STOP_WALK * caps.reach });
     if (!this.current(ask)) return;
     const pad = 'kind' in a && a.kind === 'capPad' ? a.pad : null;
     if (!pad) { this.phase = 'idle'; this.say({ from: MIND, text: 'There is no open ground near you to set down on. Walk on a little and call again.' }); return; }
+    const at = fromWorld(h.profile, ...pad.at), walk = overFloor(h, theta, s, at.theta, at.s);
+    if (walk > caps.reach) this.say({ from: MIND, text: `No open ground right here: I will wait at the stop ${Math.round(walk / 10) * 10} m away.` });
     const from = comingBack ?? awayFrom(this.terrain, pad, hashToFloat(hash3i(deriveSeed(h.seed, 'cap call'), this.calls++, 0, 0)));
-    const f = await this.plan(from, pad, true, false);
+    const f = await this.planWay(from, pad, true, false);
     if (!f || !this.current(ask) || !(await this.meshes()) || !this.current(ask)) return;
     this.pad = pad;
     this.flight = f;
@@ -171,7 +180,7 @@ export class CapsuleView {
     if (this.phase === 'finding' || this.phase === 'coming') {
       this.ask();
       // Flying in, it turns back the way it came; still looking for ground, it never shows.
-      const p = this.phase === 'coming' ? this.place() : null;
+      const p = this.phase === 'coming' ? this.podAt() : null;
       if (p) void this.leave(p, true); else this.phase = 'idle';
       return;
     }
@@ -180,10 +189,10 @@ export class CapsuleView {
 
   /** Get in, from where the player's feet are (world): the body walks round to the door. False when too far or not here. */
   board(feet: Vec3): boolean {
-    const p = this.place();
+    const p = this.podAt();
     if (this.phase !== 'waiting' && this.phase !== 'parked') return false;
     if (!p) return false;
-    const lay = this.layout, hr = handrail(this.habitat), local = intoPlace(p, feet);
+    const lay = this.layout, hr = handrailOf(this.habitat), local = intoPlace(p, feet);
     if (Math.hypot(local[0] - lay.door.outside[0], local[1] - lay.door.outside[1]) > BOARD_FROM * hr) return false;
     this.steps = boarding(lay.seat, lay.door, [local[0], local[1], 0], WALK, this.around(local));
     this.stepAt = 0;
@@ -206,11 +215,11 @@ export class CapsuleView {
     const h = this.habitat, from = this.pad, ask = this.ask();
     this.destination = dest;
     this.phase = 'planning';
-    const a = await this.pool.job({ kind: 'capPad', params: h.params, theta: dest.theta, s: dest.s, reach: dest.around + h.params.life.caps.reach, least: dest.around });
+    const a = await this.pool.job({ kind: 'capPad', params: h.params, theta: dest.theta, s: dest.s, reach: dest.around + h.params.life.caps.reach, least: dest.around, orStop: STOP_WALK * h.params.life.caps.reach });
     if (!this.current(ask)) return;
     const pad = 'kind' in a && a.kind === 'capPad' ? a.pad : null;
     if (!pad) { this.phase = 'seated'; this.destination = null; this.say({ from: MIND, text: `I can find no open ground to set down on near ${dest.title}. Somewhere else?` }); return; }
-    const f = await this.plan(from, pad, false, false);
+    const f = await this.planWay(from, pad, false, false);
     if (!f || !this.current(ask)) return;
     this.flight = f;
     this.pad = pad;
@@ -232,7 +241,7 @@ export class CapsuleView {
     if (this.phase === 'idle') return;
     this.ask();
     this.steps = null;
-    const p = this.place(), flying = this.phase === 'coming' || this.phase === 'riding' || (this.phase === 'leaving' && !!this.flight);
+    const p = this.podAt(), flying = this.phase === 'coming' || this.phase === 'riding' || (this.phase === 'leaving' && !!this.flight);
     if (!p || this.phase === 'finding') { this.phase = 'idle'; return; }
     void this.leave(p, flying);
   }
@@ -266,12 +275,12 @@ export class CapsuleView {
       // The door opens first; one stands up as it does.
       this.stepAt += dt;
       if (this.stepAt < stepsSeconds(this.steps)) return null;
-      const p = this.place()!, last = mountPose(this.steps, this.stepAt);
+      const p = this.podAt()!, last = mountPose(this.steps, this.stepAt);
       this.steps = null;
       this.phase = 'parked';
       this.wait = LINGER;
       this.destination = null;
-      return { feet: outOfPlace(p, last.feet), front: turned(p, last.front) };
+      return { feet: outOfPlace(p, last.feet), front: wayOutOf(p, last.front) };
     }
     if (this.phase === 'parked') {
       this.wait -= dt;
@@ -284,15 +293,15 @@ export class CapsuleView {
 
   /** The passenger now, or null when no one is aboard. */
   passenger(): Passenger | null {
-    const p = this.place();
+    const p = this.podAt();
     if (!this.carrying || !p) return null;
     const pose = this.steps ? mountPose(this.steps, this.stepAt) : seatedPose(this.layout.seat);
-    return { feet: outOfPlace(p, pose.feet), front: turned(p, pose.front), up: p.ez, pose };
+    return { feet: outOfPlace(p, pose.feet), front: wayOutOf(p, pose.front), up: p.ez, pose };
   }
 
   /** Whether a line of sight from `eye` along `ray` (unit, world) meets the pod (its box), within `most` m. */
   hit(eye: Vec3, ray: Vec3, most: number): boolean {
-    const p = this.place();
+    const p = this.podAt();
     if (!p || this.phase === 'coming' || this.phase === 'leaving') return false;
     const lay = this.layout, o = intoPlace(p, eye), d: Vec3 = [v3dot(ray, p.ex), v3dot(ray, p.ey), v3dot(ray, p.ez)];
     const lo: Vec3 = [-lay.halfLength, -lay.halfWidth, 0], hi: Vec3 = [lay.halfLength, lay.halfWidth, lay.reach];
@@ -309,13 +318,13 @@ export class CapsuleView {
 
   /** Pose the pod and its door for the frame (relative to the eye); nowhere, it is hidden. */
   poseAt(eye: Vec3): void {
-    const d = this.drawn, p = this.place();
+    const d = this.drawn, p = this.podAt();
     this.group.visible = !!d && !!p;
     if (!d || !p) return;
     const axes = axesOf(p), o = toView(eye, p.at);
     setPose(d.body, axes, o);
     setPose(d.glass, axes, o);
-    const hinge = doorPlace(this.layout, this.door), door: Place = { at: outOfPlace(p, hinge.at), ex: turned(p, hinge.ex), ey: turned(p, hinge.ey), ez: turned(p, hinge.ez) };
+    const hinge = doorPlace(this.layout, this.door), door: Place = { at: outOfPlace(p, hinge.at), ex: wayOutOf(p, hinge.ex), ey: wayOutOf(p, hinge.ey), ez: wayOutOf(p, hinge.ez) };
     const doorAxes = axesOf(door), doorAt = toView(eye, door.at);
     setPose(d.doorBody, doorAxes, doorAt);
     setPose(d.doorGlass, doorAxes, doorAt);
@@ -323,7 +332,7 @@ export class CapsuleView {
 
   /** What the link shows of it now: the pod coming, waiting, the ride under way. */
   status(): LinkStatus | null {
-    const p = this.place(), f = this.flight, left = f ? Math.max(0, f.seconds - this.elapsed) : 0;
+    const p = this.podAt(), f = this.flight, left = f ? Math.max(0, f.seconds - this.elapsed) : 0;
     const away = (): void => this.sendAway();
     switch (this.phase) {
       case 'finding': return { from: MIND, title: 'Finding open ground near you', cancel: away };
@@ -384,7 +393,7 @@ export class CapsuleView {
     this.pad = from;
     this.aloft = airborne;
     this.doorWant = 0;
-    const f = await this.plan(from, to, airborne, true);
+    const f = await this.planWay(from, to, airborne, true);
     if (!this.current(ask)) return;
     if (!f) { this.phase = 'idle'; this.flight = null; this.pad = null; return; }
     this.flight = f;
@@ -393,7 +402,7 @@ export class CapsuleView {
   }
 
   /** A flight planned in a worker, or null if the worker failed. */
-  private async plan(from: Place, to: Place, airborneStart: boolean, airborneEnd: boolean): Promise<Flight | null> {
+  private async planWay(from: Place, to: Place, airborneStart: boolean, airborneEnd: boolean): Promise<Flight | null> {
     const a = await this.pool.job({ kind: 'capFlight', params: this.habitat.params, ends: { from, to, airborneStart, airborneEnd } });
     return 'kind' in a && a.kind === 'capFlight' ? a.flight : null;
   }
@@ -413,14 +422,14 @@ export class CapsuleView {
     this.building ??= (async () => {
       const a = await this.pool.job({ kind: 'capsule', params: this.habitat.params });
       if (this.disposed || !('kind' in a) || a.kind !== 'capsule') return null;
-      const mesh = (m: MappedArrays, glass: boolean, name: string): Mesh => {
+      const meshOf = (m: MappedArrays, glass: boolean, name: string): Mesh => {
         const x = posedMesh(builtGeometry(m), glass ? CAP_GLASS.material : BUILT.material, name);
         x.frustumCulled = false;
         x.castShadow = !glass;
         if (glass) x.renderOrder = 2;
         return x;
       };
-      const all = [mesh(a.body, false, 'capsule'), mesh(a.glass, true, 'capsule glass'), mesh(a.doorBody, false, 'capsule door'), mesh(a.doorGlass, true, 'capsule door glass')];
+      const all = [meshOf(a.body, false, 'capsule'), meshOf(a.glass, true, 'capsule glass'), meshOf(a.doorBody, false, 'capsule door'), meshOf(a.doorGlass, true, 'capsule door glass')];
       const bytes = [a.body, a.glass, a.doorBody, a.doorGlass].reduce((n, m) => n + mappedBytes(m), 0);
       await Promise.all(all.map((m) => uploadStatic(this.stage, m)));
       if (this.disposed) { for (const m of all) freeMesh(m); return null; }
@@ -477,10 +486,9 @@ export class CapsuleLink implements LinkService {
   }
 }
 
-const handrail = (h: Habitat): number => h.params.landmarks?.handrail ?? 1.1;
 
 /** A direction given in a place, in the frame it sits in. */
-const turned = (p: Place, v: Vec3): Vec3 => v3norm(v3madd(v3madd(v3madd([0, 0, 0], p.ex, v[0]), p.ey, v[1]), p.ez, v[2]));
+const wayOutOf = (p: Place, v: Vec3): Vec3 => v3norm(v3sub(outOfPlace(p, v), p.at));
 
 /** "About 40 seconds", "About a minute". */
 function seconds(t: number): string {

@@ -10,16 +10,16 @@
  * below it, hinged near the spine. Sizes are in handrails (the habitat's human scale, as the lift's cabin is).
  */
 import { hashToFloat, hash3i, deriveSeed, smoothstep, v3cross, v3dot, v3norm, v3sub, type Vec3 } from '@futuremagic/core';
-import { climateOf, fromWorld, toWorld, wrapAngle, type DebrisSpec, type Habitat, type PlantSpec } from '../blueprint';
+import { climateOf, fromWorld, toWorld, wrapAngle, type Habitat } from '../blueprint';
 import { arrivalTerraceOf } from './arrivalTerrace';
-import type { Ecology } from './ecology';
 import { fleetOf, HARBOUR } from './harbours';
 import { keptClear, landmarkTopAt, landmarksOf } from './landmarks';
 import { liftStairOf, rampOf } from './liftStair';
+import { handrailOf } from './lifts';
 import { FINISH } from './pavilion';
 import { COURT, entrancesOf, planOf, siteOf } from './plan';
-import { standsIn, type Species } from './scatter';
 import { Shape, floorAt, type Place, type RGB } from './shapes';
+import { kept } from './kept';
 import type { Terrain } from './terrain';
 
 /**
@@ -36,8 +36,8 @@ export const CAP = {
 };
 /** The shell's plan and elevation curves (superellipse powers: higher is boxier), and its sections'. */
 const CURVE = { plan: 2.3, nose: 2.0, tail: 2.6, belly: 3.4, section: 2.6 };
-/** How far the door swings up and out when open (rad). */
-export const DOOR_OPEN = 1.25;
+/** How far the door swings up and out when open (rad): a little past level, so one walks out under its foot. */
+export const DOOR_OPEN = 1.65;
 /** Feet this far (m) out from the front of a bench when sitting on it (as on the courts' seats, sim/population.ts). */
 const SEAT_FEET = 0.15;
 
@@ -54,7 +54,6 @@ export const GLASS_VEIL = 0.1;
 const BLUR: RGB = [0.08, 0.08, 0.09];
 export const BLUR_VEIL = 0.45;
 
-const handrailOf = (h: Habitat): number => h.params.landmarks?.handrail ?? 1.1;
 
 /** The shell at x (handrails, −length/2 tail … +length/2 nose): its half width, the top's and the belly's height over the shell's middle line. */
 function section(x: number): { half: number; top: number; low: number } {
@@ -84,7 +83,7 @@ function angleAt(x: number, z: number): number {
 }
 
 /** The glass's lowest edge at x: over the floor amidships, sweeping down toward the nose so one sees ahead and down. */
-const beltAt = (x: number): number => CAP.belly + CAP.floor + CAP.belt - (CAP.belt - CAP.beltNose) * smoothstep(0.1, 0.9, x / (CAP.length / 2));
+const glassEdgeAt = (x: number): number => CAP.belly + CAP.floor + CAP.belt - (CAP.belt - CAP.beltNose) * smoothstep(0.1, 0.9, x / (CAP.length / 2));
 
 /** The capsule's seat and door, in its frame (m): where one's feet are seated and the way one faces; the doorway's middle inside and a step out from it. */
 export interface CapSeat {
@@ -145,7 +144,7 @@ export function buildCapsule(h: Habitat): CapsuleShapes {
   const hr = handrailOf(h), m = (p: Vec3): Vec3 => [p[0] * hr, p[1] * hr, p[2] * hr];
   const body = new Shape(24, true, true), glass = new Shape(24, true, true), doorBody = new Shape(24, true, true), doorGlass = new Shape(24, true, true);
   const L = CAP.length / 2, X = 40, door = CAP.door, hinge = m(shellPoint(0, -CAP.hinge));
-  const beltPhi = (x: number): number => angleAt(x, beltAt(x)), footPhi = (x: number): number => angleAt(x, CAP.belly + CAP.floor + CAP.doorFoot);
+  const beltPhi = (x: number): number => angleAt(x, glassEdgeAt(x)), footPhi = (x: number): number => angleAt(x, CAP.belly + CAP.floor + CAP.doorFoot);
   // A patch of the shell between x0 and x1 and two angles (functions of x), outside (normals out) or its lining inside.
   const patch = (sh: Shape, x0: number, x1: number, a0: (x: number) => number, a1: (x: number) => number, rows: number, cols: number, col: RGB, inside = false, origin: Vec3 = [0, 0, 0]): void => {
     const inset = inside ? CAP.wall : 0;
@@ -270,61 +269,14 @@ export function tallestCrown(h: Habitat): number {
 /** Where a capsule stands, parked: a place (its frame) on open ground. */
 export type CapPad = Place;
 
-/** Something on the ground near a spot that a capsule keeps off: where it stands (m around and along from the spot) and how far off it keeps one's middle. */
-interface Obstacle {
-  x: number;
-  y: number;
-  r: number;
-}
-
-/**
- * Where a capsule can set down near (θ, s): the nearest open ground within `reach` m (and no nearer than `least` m, not
- * on top of who called it) that is dry, not on or by anything built (`keptClear`, `landmarkTopAt`: courts, crossings,
- * halls, harbours, the Lift Stair, the landmarks), clear of trees, bushes, stones and fallen trunks by its own size and
- * their crowns', and level enough under its four feet (along true up). Its door faces (θ, s); null where no such ground
- * is in reach.
- */
-export function landingNear(ecology: Ecology, plants: readonly Species[], theta: number, s: number, reach: number, least = 0): CapPad | null {
-  const t = ecology.terrain, h = t.habitat, { profile } = h, lay = capLayout(h), hr = handrailOf(h);
-  const r0 = Math.max(1, profile.at(s).r), clear = Math.hypot(lay.halfLength, lay.halfWidth) + 0.3 * hr;
-  // The search goes out in stages, each first gathering what stands in the square it can reach (in metres from the
-  // spot): most of the time open ground is found near, and the near square is a small part of the far one's work.
-  const step = Math.max(1.5, 0.6 * clear), seed = deriveSeed(h.seed, 'cap');
-  let ring = Math.max(least, 0);
-  for (const stage of [Math.min(reach, ring + 12), Math.min(reach, ring + 30), reach]) {
-    if (ring > stage) continue;
-    const span = stage + clear + 0.4 * tallestCrown(h);
-    const bounds = { theta0: theta - span / r0, theta1: theta + span / r0, s0: Math.max(0, s - span), s1: Math.min(profile.length, s + span) };
-    const obstacles: Obstacle[] = [];
-    for (const sp of plants) {
-      if (sp.what === 'cover') continue;
-      const spec = sp.spec as PlantSpec | DebrisSpec, tall = spec.height[1];
-      if (sp.what === 'debris' ? (spec as DebrisSpec).form === 'branch' : false) continue;
-      if (tall < 0.25) continue;
-      // A tree's crown reaches out about a third of its height; a bush or a stone its own size.
-      const keep = clear + (sp.what !== 'debris' && tall >= 6 ? 0.35 * tall : 0.6 * tall);
-      standsIn(ecology, sp, bounds, 0, (pt, ps) => obstacles.push({ x: (wrapAngle(pt - theta + Math.PI) - Math.PI) * r0, y: ps - s, r: keep }));
-    }
-    for (; ring <= stage; ring += step) {
-      const n = ring < 1e-6 ? 1 : Math.max(6, Math.ceil((2 * Math.PI * ring) / step)), turn = hashToFloat(hash3i(seed, Math.round(ring * 8), 0, 0));
-      for (let k = 0; k < n; k++) {
-        const a = ((k + turn) / n) * 2 * Math.PI, x = ring * Math.cos(a), y = ring * Math.sin(a);
-        if (obstacles.some((o) => (o.x - x) ** 2 + (o.y - y) ** 2 < o.r * o.r)) continue;
-        const pt = theta + x / r0, ps = s + y;
-        if (ps < 0 || ps > profile.length) continue;
-        const pad = padAt(t, pt, ps, Math.atan2(-x, -y), lay);
-        if (pad) return pad;
-      }
-    }
-  }
-  return null;
-}
+/** Where a pad's ground is read, in its half length and half width: its middle, its corners, where one steps down from its door. */
+const PAD_POINTS = [[0, 0], [1, 1], [1, -1], [-1, 1], [-1, -1], [0, -1.6]] as const;
 
 /**
  * A capsule parked at (θ, s), its door's side turned toward `toward` (rad over the floor: 0 toward +s, π/2 spinward),
  * or null where it cannot stand: wet, on or by something built, or not level enough under its feet.
  */
-function padAt(t: Terrain, theta: number, s: number, toward: number, lay: CapLayout): CapPad | null {
+export function padAt(t: Terrain, theta: number, s: number, toward: number, lay: CapLayout): CapPad | null {
   const h = t.habitat, hr = handrailOf(h);
   const ground = t.heightAt(theta, s);
   if (t.standAt(theta, s) > ground + 0.02 || t.waterDepth(toWorld(h.profile, { theta, s, h: ground })) > 0) return null;
@@ -339,19 +291,34 @@ function padAt(t: Terrain, theta: number, s: number, toward: number, lay: CapLay
   const ey: Vec3 = [-flat[0], -flat[1], -flat[2]], ex = v3cross(ey, up);
   // Level enough: its feet and corners within a small step of each other along true up, and none on anything built.
   let hi = -Infinity, lo = Infinity;
-  for (const [fx, fy] of [[0, 0], [1, 1], [1, -1], [-1, 1], [-1, -1], [0, -1.6]]) {
-    const q = fromWorld(h.profile, ...[0, 1, 2].map((k) => middle[k] + ex[k] * fx * lay.halfLength + ey[k] * fy * lay.halfWidth) as Vec3);
-    if (keptClear(t, q.theta, q.s) || landmarkTopAt(t, q.theta, q.s) !== null) return null;
+  // Over the floor (m around the axis, m along it): its y away from where it faces, its x across that. The ground
+  // first (most places fail there), then whether any of it is on or by something built.
+  const at = PAD_POINTS.map(([fx, fy]) => ({ theta: theta + (ct * fx * lay.halfLength - st * fy * lay.halfWidth) / r, s: s + (-st * fx * lay.halfLength - ct * fy * lay.halfWidth) }));
+  for (const q of at) {
     const g = t.heightAt(q.theta, q.s);
     if (t.standAt(q.theta, q.s) > g + 0.02) return null;
     const d = v3dot(toWorld(h.profile, { theta: q.theta, s: q.s, h: g }), up);
     hi = Math.max(hi, d);
     lo = Math.min(lo, d);
+    if (hi - lo > 0.35 * hr) return null;
   }
-  if (hi - lo > 0.35 * hr) return null;
+  for (const q of at) if (keptClear(t, q.theta, q.s) || landmarkTopAt(t, q.theta, q.s) !== null) return null;
   // It stands on its highest foot.
   const lift = hi - v3dot(middle, up);
   return { at: [middle[0] + up[0] * lift, middle[1] + up[1] * lift, middle[2] + up[2] * lift], ex, ey, ez: up };
+}
+
+/**
+ * The berths built for capsules, as pads: the arrival terrace's, on its landing (gen/arrivalTerrace.ts `berth`), its
+ * door toward the end of the walk.
+ */
+export function berthsOf(h: Habitat): CapPad[] {
+  const b = arrivalTerraceOf(h)?.berth;
+  if (!b) return [];
+  const r = Math.hypot(b.at[0], b.at[1]);
+  if (r < 1e-6) return [];
+  const ez: Vec3 = [-b.at[0] / r, -b.at[1] / r, 0], ey: Vec3 = [-b.out[0], -b.out[1], -b.out[2]];
+  return [{ at: b.at, ex: v3cross(ey, ez), ey, ez }];
 }
 
 /** A place one can ride a capsule to: what the link lists (`title`, `group`), and where on the land it is. */
@@ -377,33 +344,154 @@ const STYLE_NAMES: Readonly<Record<string, string>> = {
  */
 export function capDestinations(t: Terrain): CapDestination[] {
   const h = t.habitat, plan = planOf(h), out: CapDestination[] = [], hr = handrailOf(h);
-  const add = (id: string, title: string, group: string, theta: number, s: number, around = 0): void => { out.push({ id, title, group, theta: wrapAngle(theta), s, around }); };
+  const list = (id: string, title: string, group: string, theta: number, s: number, around = 0): void => { out.push({ id, title, group, theta: wrapAngle(theta), s, around }); };
   const terrace = arrivalTerraceOf(h);
-  if (terrace) { const at = fromWorld(h.profile, ...terrace.feet); add('arrival', 'Arrival terrace', 'Landmarks', at.theta, at.s); }
+  // At its berth when it has one (`landingNear` finds it), else by where one arrives.
+  if (terrace) { const at = fromWorld(h.profile, ...(terrace.berth?.at ?? terrace.feet)); list('arrival', 'Arrival terrace', 'Landmarks', at.theta, at.s); }
   const stair = liftStairOf(h);
   if (stair) {
     const p = stair.platforms[0], at = fromWorld(h.profile, ...rampOf(h).world((p.z0 + p.z1) / 2, (p.w0 + p.w1) / 2, p.e));
-    add('stair-foot', 'Foot of the Lift Stair', 'Landmarks', at.theta, at.s);
+    list('stair-foot', 'Foot of the Lift Stair', 'Landmarks', at.theta, at.s);
   }
   for (const l of landmarksOf(t)) {
     if (l.kind === 'pavilion') {
       // On the shore where its bridge lands (the nearer end, toward the port).
       const b = l.bridges.find((x) => x.dir === 1) ?? l.bridges[0];
-      add('pavilion', 'Lake pavilion', 'Landmarks', l.theta, l.s + (b ? b.dir * (b.to + 4 * hr) : 0));
-    } else add('summit-hut', 'Summit hut', 'Landmarks', l.theta, l.s);
+      list('pavilion', 'Lake pavilion', 'Landmarks', l.theta, l.s + (b ? b.dir * (b.to + 4 * hr) : 0));
+    } else list('summit-hut', 'Summit hut', 'Landmarks', l.theta, l.s);
   }
   const grove = siteOf(plan, 'founders-grove');
-  if (grove) add('grove', "Founders' grove", 'Landmarks', grove.theta, grove.s);
+  if (grove) list('grove', "Founders' grove", 'Landmarks', grove.theta, grove.s);
   entrancesOf(plan).forEach((site, i) => {
     const style = plan.districts[site.district]?.style;
-    add(`court-${i}`, `Court ${i + 1}${style ? `, ${STYLE_NAMES[style] ?? style}` : ''}`, 'Courts', site.theta, site.s, site.size + COURT.clear * hr);
+    // Beyond its pit and the clear ring round it (gen/terrain.ts digs them).
+    const pit = t.courtAt(site.theta, site.s)?.court.radius ?? site.size;
+    list(`court-${i}`, `Court ${i + 1}${style ? `, ${STYLE_NAMES[style] ?? style}` : ''}`, 'Courts', site.theta, site.s, pit + COURT.clear * hr + 0.5 * hr);
   });
   const fleet = fleetOf(h), kinds = { ring: 'ring lake', great: 'great lake', mere: 'lake' } as const;
   fleet.harbours.forEach((hb, i) => {
     const shore = floorAt(h, hb.frame, -(HARBOUR.landing + 3) * hb.handrail, 0), basin = fleet.basins[hb.basin];
-    add(`harbour-${i}`, `Harbour ${i + 1}, ${basin ? kinds[basin.kind] : 'water'}`, 'Harbours', shore.theta, shore.s);
+    list(`harbour-${i}`, `Harbour ${i + 1}, ${basin ? kinds[basin.kind] : 'water'}`, 'Harbours', shore.theta, shore.s);
   });
   return out;
+}
+
+/**
+ * A capsule stop: a destination's pad, where the pod always sets down for it (the arrival terrace's berth, built for
+ * capsules, or a patch of open ground by the place kept free of anything scattered: a small glade), its door toward the
+ * place.
+ */
+export interface CapStop {
+  id: string;
+  pad: CapPad;
+  theta: number;
+  s: number;
+  /** A berth built for capsules (nothing to keep clear: it is on a landing). */
+  built: boolean;
+}
+
+/** A habitat's capsule stops, by destination, and the questions asked of them. */
+export interface CapStops {
+  stops: CapStop[];
+  byId: ReadonlyMap<string, CapStop>;
+  /** A destination's stop (found when first asked for), or null where it has none. */
+  of(d: CapDestination): CapStop | null;
+  /** The nearest stop within `within` m over the floor of (θ, s), or null. */
+  closest(theta: number, s: number, within: number): CapStop | null;
+  /** Whether something scattered at (θ, s) that reaches `out` m round where it stands would reach onto a stop's pad. */
+  keepsOff(theta: number, s: number, out: number): boolean;
+}
+
+/** A landmark's stop may be this many times further than the others' (a summit's rock is steep all round). */
+const LANDMARK_REACH = 4;
+/** A stop is looked for at most this many places round its destination, at most this many on a ring. */
+const STOP_TRIES = 400;
+const STOP_ROUND = 32;
+/** The stops are looked up by stretches of this many metres along the profile. */
+const STOP_STRETCH = 64;
+
+/**
+ * The habitat's capsule stops (kept per terrain): one for each destination (`capDestinations`), found on the ground
+ * alone (`padAt`: dry, level, nothing built), nearest the place beyond what it takes (`around`). Scattered plants,
+ * stones and fallen wood keep off them (gen/scatter.ts `standsIn`), so a pod always has its pad; a destination with no
+ * such ground in reach has none.
+ */
+export const capStopsOf = kept((t: Terrain): CapStops => {
+  const h = t.habitat, lay = capLayout(h), hr = handrailOf(h), reach = h.params.life.caps.reach, margin = 0.3 * hr;
+  const berth = berthsOf(h)[0] ?? null, places = capDestinations(t);
+  // Each stop found when first asked for (a tile's plants ask only for the stops near it).
+  const found = new Map<string, CapStop | null>();
+  const stopOf = (d: CapDestination): CapStop | null => {
+    let st = found.get(d.id);
+    if (st !== undefined) return st;
+    const pad = d.id === 'arrival' && berth ? berth : openGround(t, d, lay, d.group === 'Landmarks' ? LANDMARK_REACH * reach : reach);
+    const at = pad ? fromWorld(h.profile, ...pad.at) : null;
+    st = pad && at ? { id: d.id, pad, theta: at.theta, s: at.s, built: pad === berth } : null;
+    found.set(d.id, st);
+    return st;
+  };
+  // The destinations by stretch of the profile: a stop lies within `far` m of its own along it.
+  const far = Math.max(0, ...places.map((d) => d.around)) + Math.abs(lay.door.outside[1]) + margin + reach;
+  const stretches = new Map<number, CapDestination[]>();
+  for (const d of places) {
+    const k = Math.floor(d.s / STOP_STRETCH);
+    if (!stretches.has(k)) stretches.set(k, []);
+    stretches.get(k)!.push(d);
+  }
+  // The pad's reach from its middle on the ground: the door's step and a margin round it.
+  const foot = Math.hypot(lay.halfLength + margin, Math.max(lay.halfWidth, Math.abs(lay.door.outside[1])) + margin);
+  const most = foot + 0.35 * tallestCrown(h), span = Math.ceil((far + most) / STOP_STRETCH);
+  let all: CapStop[] | null = null;
+  const every = (): CapStop[] => (all ??= places.flatMap((d) => { const st = stopOf(d); return st ? [st] : []; }));
+  return {
+    get stops() { return every(); },
+    get byId() { return new Map(every().map((x) => [x.id, x])); },
+    of: stopOf,
+    closest(theta, s, within) {
+      let best: CapStop | null = null, d = within;
+      const k = Math.floor(s / STOP_STRETCH), n = span + Math.ceil(within / STOP_STRETCH);
+      for (let j = k - n; j <= k + n; j++) for (const p of stretches.get(j) ?? []) {
+        const st = stopOf(p);
+        if (!st) continue;
+        const away = overFloor(h, theta, s, st.theta, st.s);
+        if (away <= d) { d = away; best = st; }
+      }
+      return best;
+    },
+    keepsOff(theta, s, out) {
+      const k = Math.floor(s / STOP_STRETCH), reachOut = Math.min(most, foot + out);
+      for (let j = k - span; j <= k + span; j++) for (const p of stretches.get(j) ?? []) {
+        if (Math.abs(p.s - s) > far + reachOut) continue;
+        const st = stopOf(p);
+        if (st && !st.built && Math.abs(st.s - s) < reachOut && overFloor(h, theta, s, st.theta, st.s) < reachOut) return true;
+      }
+      return false;
+    },
+  };
+});
+
+/**
+ * The nearest pad round a destination on the ground alone (the plants keep off it after): from where its place ends
+ * (`around`) out to `reach` m beyond, in rings, its door toward the place.
+ */
+function openGround(t: Terrain, d: CapDestination, lay: CapLayout, reach: number): CapPad | null {
+  const h = t.habitat, { profile } = h, r0 = Math.max(1, profile.at(d.s).r), hr = handrailOf(h);
+  const step = Math.max(1.5, 0.6 * (Math.hypot(lay.halfLength, lay.halfWidth) + 0.3 * hr)), seed = deriveSeed(h.seed, 'cap stop', d.id);
+  // Its door toward the place: where one steps down is nearer it than the pod's middle.
+  const first = d.around > 0 ? d.around + Math.abs(lay.door.outside[1]) + 0.3 * hr : 0;
+  // Near rings close together and in full, further ones sparser (most places have open ground near; one that has none
+  // costs no more than `STOP_TRIES` tries).
+  for (let ring = first, tries = 0; ring <= first + reach && tries < STOP_TRIES; ring += ring - first < 3 * step ? step : Math.max(step, reach / 12)) {
+    const n = ring < 1e-6 ? 1 : Math.min(STOP_ROUND, Math.max(6, Math.ceil((2 * Math.PI * ring) / step))), turn = hashToFloat(hash3i(seed, Math.round(ring * 8), 0, 0));
+    tries += n;
+    for (let k = 0; k < n; k++) {
+      const a = ((k + turn) / n) * 2 * Math.PI, x = ring * Math.cos(a), y = ring * Math.sin(a), ps = d.s + y;
+      if (ps < 0 || ps > profile.length) continue;
+      const pad = padAt(t, d.theta + x / r0, ps, Math.atan2(-x, -y), lay);
+      if (pad) return pad;
+    }
+  }
+  return null;
 }
 
 /** How far over the floor from one point to another (m): along the axis and around it at the mean radius, the shorter way. */

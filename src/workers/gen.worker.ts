@@ -38,7 +38,8 @@ import { nestsNear, type Nest } from '../sim/birds';
 import { flocksNear, type Flock } from '../sim/flocks';
 import type { VoyageRequest } from './voyage';
 import type { VoyagePlan } from '../space/voyage';
-import { buildCapsule, landingNear, type CapPad } from '../gen/capsules';
+import { buildCapsule, type CapPad } from '../gen/capsules';
+import { landingNear } from '../gen/capLanding';
 import { planFlight, type Flight, type FlightEnds } from '../world/capFlight';
 
 /** The built things that stream in tiles. */
@@ -82,8 +83,8 @@ export type GenRequest =
   | { kind: 'sailing'; params: HabitatParams; day: number }
   /** A transport capsule's shapes (gen/capsules.ts `buildCapsule`): its body, glass, and its door's. */
   | { kind: 'capsule'; params: HabitatParams }
-  /** Where a capsule can set down near (θ, s): within `reach` m, no nearer than `least` (gen/capsules.ts `landingNear`). */
-  | { kind: 'capPad'; params: HabitatParams; theta: number; s: number; reach: number; least: number }
+  /** Where a capsule can set down near (θ, s): within `reach` m, no nearer than `least`, else the nearest stop within `orStop` (gen/capLanding.ts `landingNear`). */
+  | { kind: 'capPad'; params: HabitatParams; theta: number; s: number; reach: number; least: number; orStop?: number }
   /** A capsule's flight between two ends (world/capFlight.ts `planFlight`). */
   | { kind: 'capFlight'; params: HabitatParams; ends: FlightEnds };
 export type GenAnswer =
@@ -239,7 +240,7 @@ self.onmessage = async (e: MessageEvent<GenRequest>) => {
       return;
     }
     if (req.kind === 'capPad') {
-      post({ kind: 'capPad', pad: landingNear(ecology, plants, req.theta, req.s, req.reach, req.least) });
+      post({ kind: 'capPad', pad: landingNear(ecology, plants, req.theta, req.s, req.reach, req.least, req.orStop) });
       return;
     }
     if (req.kind === 'capFlight') {

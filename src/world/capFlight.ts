@@ -20,7 +20,7 @@
  * as the Coriolis force pushes on a climb toward the axis: all from the same sum.
  */
 import { smoothstep, v3cross, v3dot, v3norm, v3sub, type Vec3 } from '@futuremagic/core';
-import { fromWorld, toWorld, type Habitat } from '../blueprint';
+import { apart, fromWorld, toWorld, type Habitat } from '../blueprint';
 import { tallestCrown, type CapPad } from '../gen/capsules';
 import { landmarkTopAt } from '../gen/landmarks';
 import type { Place } from '../gen/shapes';
@@ -78,7 +78,6 @@ const TURNING = 0.25;
 const cyl = (p: Vec3): { theta: number; z: number; rho: number } => ({ theta: Math.atan2(p[1], p[0]), z: p[2], rho: Math.hypot(p[0], p[1]) });
 const fromCyl = (theta: number, z: number, rho: number): Vec3 => [rho * Math.cos(theta), rho * Math.sin(theta), z];
 const madd = (a: Vec3, b: Vec3, k: number): Vec3 => [a[0] + b[0] * k, a[1] + b[1] * k, a[2] + b[2] * k];
-const dist = (a: Vec3, b: Vec3): number => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 const at3 = (a: Float64Array, i: number): Vec3 => [a[3 * i], a[3 * i + 1], a[3 * i + 2]];
 
 /** How high over the ground and the crowns a pod cruises (m), and so how high it climbs off a pad. */
@@ -102,13 +101,13 @@ export function planFlight(t: Terrain, ends: FlightEnds): Flight {
   }
   const across = overTheLand(t, acrossAt(A1, B1, best, ACROSS), rise, rhoMin);
   const way: Vec3[] = [];
-  const column = (a: Vec3, b: Vec3): Vec3[] => { const n = Math.max(1, Math.ceil(dist(a, b) / STEP)); return Array.from({ length: n }, (_, i) => madd(a, v3sub(b, a), i / n)); };
+  const column = (a: Vec3, b: Vec3): Vec3[] => { const n = Math.max(1, Math.ceil(apart(a, b) / STEP)); return Array.from({ length: n }, (_, i) => madd(a, v3sub(b, a), i / n)); };
   if (!ends.airborneStart) way.push(...column(A0, A1));
   way.push(...across);
   if (!ends.airborneEnd) way.push(...column(B1, B0).slice(1), B0);
   const fixed = (i: number): boolean => {
     // The pads' columns stay straight up and down to most of their height; the corners above them round off.
-    const a = !ends.airborneStart && dist(way[i], A0) < rise * 0.6, b = !ends.airborneEnd && dist(way[i], B0) < rise * 0.6;
+    const a = !ends.airborneStart && apart(way[i], A0) < rise * 0.6, b = !ends.airborneEnd && apart(way[i], B0) < rise * 0.6;
     return i === 0 || i === way.length - 1 || a || b;
   };
   for (let pass = 0; pass < 8; pass++) for (let i = 1; i < way.length - 1; i++) if (!fixed(i)) way[i] = smoothed(way, i);
@@ -141,7 +140,7 @@ const smoothed = (w: readonly Vec3[], i: number): Vec3 => [0, 1, 2].map((k) => 0
 function overTheLand(t: Terrain, way: Vec3[], rise: number, rhoMin: number): Vec3[] {
   const h = t.habitat, { profile } = h, n = way.length - 1, ra = cyl(way[0]).rho, rb = cyl(way[n]).rho;
   let length = 0;
-  for (let i = 1; i <= n; i++) length += dist(way[i - 1], way[i]);
+  for (let i = 1; i <= n; i++) length += apart(way[i - 1], way[i]);
   const keep = (i: number): void => {
     let p = way[i];
     const q = fromWorld(profile, ...p), ground = t.standAt(q.theta, q.s);
@@ -163,7 +162,7 @@ function overTheLand(t: Terrain, way: Vec3[], rise: number, rhoMin: number): Vec
 /** A polyline resampled evenly by its length (every `STEP` m or more, at most `MOST` samples). */
 function resample(way: readonly Vec3[]): Vec3[] {
   const run = [0];
-  for (let i = 1; i < way.length; i++) run.push(run[i - 1] + dist(way[i - 1], way[i]));
+  for (let i = 1; i < way.length; i++) run.push(run[i - 1] + apart(way[i - 1], way[i]));
   const total = run[run.length - 1], n = Math.max(2, Math.min(MOST, Math.ceil(total / STEP)));
   const out: Vec3[] = [];
   for (let k = 0, j = 0; k <= n; k++) {
@@ -182,7 +181,7 @@ function resample(way: readonly Vec3[]): Vec3[] {
 function timed(h: Habitat, way: readonly Vec3[], ends: FlightEnds, rise: number, full: boolean): Flight {
   const caps = h.params.life.caps, n = way.length - 1, heaviest = caps.comfort * h.gravityAt(h.radius);
   const run = new Float64Array(n + 1);
-  for (let i = 1; i <= n; i++) run[i] = run[i - 1] + dist(way[i - 1], way[i]);
+  for (let i = 1; i <= n; i++) run[i] = run[i - 1] + apart(way[i - 1], way[i]);
   const total = run[n], v = new Float64Array(n + 1);
   let felt = 0;
   for (let i = 0; i <= n; i++) {
@@ -252,7 +251,7 @@ function positionAt(f: Flight, t: number): { p: Vec3; i: number } {
   if (t >= f.seconds) return { p: at3(f.points, n), i: n - 1 };
   let lo = 0, hi = n;
   while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (f.times[mid] <= t) lo = mid; else hi = mid; }
-  const a = at3(f.points, lo), b = at3(f.points, lo + 1), ds = dist(a, b), v0 = f.speeds[lo], v1 = f.speeds[lo + 1];
+  const a = at3(f.points, lo), b = at3(f.points, lo + 1), ds = apart(a, b), v0 = f.speeds[lo], v1 = f.speeds[lo + 1];
   const acc = ds > 0 ? (v1 * v1 - v0 * v0) / (2 * ds) : 0, tau = t - f.times[lo];
   const d = Math.min(ds, Math.max(0, v0 * tau + 0.5 * acc * tau * tau));
   return { p: ds > 0 ? madd(a, v3sub(b, a), d / ds) : a, i: lo };

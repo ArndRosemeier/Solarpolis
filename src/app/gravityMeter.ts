@@ -27,7 +27,7 @@ const signed = (x: number): string => `${x > 0 ? '+' : '−'}${Math.round(Math.a
  */
 export function describeGravity(r: GravityReading): { value: string; state: string; reason: string; change: number } {
   const spin = r.rest > 0 ? r.felt / r.rest - 1 : 0, height = r.floor > 0 ? r.rest / r.floor - 1 : 0;
-  const doing = r.moving === 'lift' ? 'In a lift' : r.moving === 'fly' ? 'Flying' : r.moving === 'swim' ? 'Swimming' : r.moving === 'air' ? 'In the air' : '';
+  const doing = r.moving === 'capsule' ? 'In a capsule' : r.moving === 'lift' ? 'In a lift' : r.moving === 'fly' ? 'Flying' : r.moving === 'swim' ? 'Swimming' : r.moving === 'air' ? 'In the air' : '';
   const parts: string[] = [];
   const moving = Math.abs(r.spinward) >= STILL && Math.round(Math.abs(spin) * 100) > 0;
   if (moving) parts.push(`${r.spinward > 0 ? 'with' : 'against'} the spin ${signed(spin)}`);

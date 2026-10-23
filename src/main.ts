@@ -8,6 +8,7 @@ import { HARBOUR } from './gen/harbours';
 import { windAt } from './world/wind';
 import { Link } from './app/link/link';
 import { Ways } from './app/link/ways';
+import type { LinkChoice } from './link/service';
 import { SpeechBubbles } from './app/bubbles';
 import { ArrivalCard } from './app/arrivalCard';
 /**
@@ -180,7 +181,7 @@ class ViewSlot<V extends PageView> {
 
 /** The player's neural link and its overlay (app/link): systems serve it their offers and say their lines through it. */
 const link = new Link();
-const insideSlot = new ViewSlot('Hold the right mouse button to look around · W A S D to move · Shift to run · Space to jump · wheel to see yourself · F to fly (E up, Q down)', 'Building the interior…', 'terrain tiles', async (h) => {
+const insideSlot = new ViewSlot('Hold the right mouse button to look around · W A S D to move · Shift to run · Space to jump · wheel to see yourself · Tab for your link (call a capsule) · F to fly (E up, Q down)', 'Building the interior…', 'terrain tiles', async (h) => {
   const v = await InteriorView.create(h, whereabouts);
   // The gravity the player feels, and why (with the spin, against it, higher up): Arnd, 2026-10-22.
   const meter = new GravityMeter(() => (lab.habitat ? { habitat: lab.habitat, ...v.paces } : null));
@@ -192,6 +193,9 @@ const insideSlot = new ViewSlot('Hold the right mouse button to look around · W
   const ways = new Ways();
   link.serve(ways);
   v.onExit = (exit) => ways.showExit(exit);
+  // Transport capsules, called through the link (Arnd, 2026-10-23); their Minds speak through it too.
+  link.serve(v.capsules);
+  v.onLine = (line) => link.say(line);
   // People talk in silent speech bubbles (Arnd, 2026-10-23).
   const speech = new SpeechBubbles(() => h.params.life.talk.words);
   insideSlot.box.append(speech.box);
@@ -992,6 +996,21 @@ debug.add({
   },
 });
 debug.addInfo(() => rideSeen);
+/**
+ * The capsules (render/capsules.ts), through the same link offers the player takes: call one to here, get into the one
+ * waiting, ride to the nearest court further than 150 m, get out.
+ */
+const capOffer = (id: string, choose?: (choices: readonly LinkChoice[]) => LinkChoice | undefined): void => {
+  const offer = view()?.capsules.offers().find((o) => o.id === id);
+  if (!offer) return;
+  if (!choose) { offer.take(); return; }
+  const pick = choose(offer.choices ?? []);
+  if (pick) offer.take(pick.id);
+};
+debug.add({ label: 'Capsule: call one here', group: 'Go', run: () => capOffer('call') });
+debug.add({ label: 'Capsule: get in', group: 'Go', run: () => view()?.boardCapsule() });
+debug.add({ label: 'Capsule: ride to the nearest court', group: 'Go', run: () => capOffer('go', (cs) => cs.filter((c) => c.group !== 'Landmarks' && (c.near ?? 0) > 150).sort((a, b) => (a.near ?? 0) - (b.near ?? 0))[0]) });
+debug.add({ label: 'Capsule: get out', group: 'Go', run: () => capOffer('out') });
 /** Keep the eye beside the boat being ridden with, this frame (dt: s). */
 function rideAlong(dt: number): void {
   const v = view(), h = lab.habitat;

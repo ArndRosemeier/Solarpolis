@@ -72,7 +72,7 @@ export function feltGravity(h: Habitat, p: Vec3, v: Vec3): number {
 }
 
 /** How a body moves, for the gravity it feels: on its feet, in the air, swimming, flying, or riding a lift. */
-export type Moving = 'foot' | 'air' | 'swim' | 'fly' | 'lift';
+export type Moving = 'foot' | 'air' | 'swim' | 'fly' | 'lift' | 'capsule';
 
 /** What the gravity meter shows (app/gravityMeter.ts). */
 export interface GravityReading {

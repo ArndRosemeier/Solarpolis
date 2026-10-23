@@ -7,6 +7,7 @@
  * seats). Pure.
  */
 import { smoothstep, v3sub, type Vec3 } from '@futuremagic/core';
+import { apart } from '../blueprint';
 import { EYE_HEIGHT } from './walker';
 
 /** A seat: where one's feet are while sitting on it and the way one faces (the vehicle's frame, m and unit). */
@@ -58,17 +59,16 @@ export const SEATED_BACK = 0.32;
 const TURN = 0.6;
 const STEP_UP = 1.4;
 
-const length = (a: Vec3, b: Vec3): number => Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
 /** The way from a to b over the floor (the vehicle's z is its up), or `or` where they are one above the other. */
-function across(a: Vec3, b: Vec3, or: Vec3): Vec3 {
+function flatWay(a: Vec3, b: Vec3, or: Vec3): Vec3 {
   const d = v3sub(b, a), k = Math.hypot(d[0], d[1]);
   return k > 1e-6 ? [d[0] / k, d[1] / k, 0] : or;
 }
 
 /** Walking from a to b at `walk` m/s, facing the way (slower by `slow`). */
 function walking(a: Vec3, b: Vec3, walk: number, face: Vec3, slow = 1): MountStep {
-  const f = across(a, b, face);
-  return { posture: 'walk', from: a, to: b, faceFrom: f, faceTo: f, seconds: Math.max(0.2, (length(a, b) / walk) * slow) };
+  const f = flatWay(a, b, face);
+  return { posture: 'walk', from: a, to: b, faceFrom: f, faceTo: f, seconds: Math.max(0.2, (apart(a, b) / walk) * slow) };
 }
 
 /**
@@ -120,7 +120,7 @@ export function mountPose(steps: readonly MountStep[], elapsed: number): MountPo
     const a = a0 + da * smoothstep(0, 1, share), front: Vec3 = [Math.cos(a), Math.sin(a), 0];
     const seated = s.posture === 'sitDown' ? smoothstep(0.15, 0.9, share) : s.posture === 'standUp' ? 1 - smoothstep(0.1, 0.85, share) : 0;
     const posture: Posture = done && s.posture === 'sitDown' ? 'sit' : done && s.posture !== 'standUp' ? 'stand' : s.posture;
-    const speed = s.posture === 'walk' && !done ? length(s.from, s.to) / s.seconds : 0;
+    const speed = s.posture === 'walk' && !done ? apart(s.from, s.to) / s.seconds : 0;
     return { feet, front, posture, share, eye: EYE_HEIGHT + (SEATED_EYE - EYE_HEIGHT) * seated, back: SEATED_BACK * seated, speed, done };
   }
   return { feet: [0, 0, 0], front: [1, 0, 0], posture: 'stand', share: 1, eye: EYE_HEIGHT, back: 0, speed: 0, done: true };

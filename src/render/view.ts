@@ -10,7 +10,7 @@ import type { HomeMode } from '../gen/homeInterior';
  */
 import { Color, CylinderGeometry, Group, Mesh, PerspectiveCamera, Scene, SphereGeometry, Vector3, type WebGPURenderer } from 'three/webgpu';
 import { Stage, createRenderer } from '@futuremagic/stage';
-import { deriveSeed, smoothstep, v3dot, v3madd, v3norm, v3scale } from '@futuremagic/core';
+import { deriveSeed, smoothstep, v3cross, v3dot, v3madd, v3norm, v3scale } from '@futuremagic/core';
 import { fromWorld, toView, toWorld, type Habitat, type Vec3 } from '../blueprint';
 import type { LinkLine, LinkService, Sighting } from '../link';
 import { toScreenOrEdge } from './screen';
@@ -57,6 +57,7 @@ import { AnimalView, DEER, SQUIRRELS } from './animals';
 import { BirdView } from './birds';
 import { CabinView } from './lift';
 import { CapsuleLink, CapsuleView, type Passenger } from './capsules';
+import { SEATED_BACK } from '../world/mount';
 import { GLASS, SKIES, skyOverBay } from '../gen/skies';
 import { GlassDeck, type GlassStage, type GlassWant } from './glassDeck';
 import { nearestExitCourt, type ExitCourt } from '../gen/exitCourt';
@@ -74,6 +75,11 @@ const OVERLAY_INSET = 34;
 const GRAVITY_SMOOTHING = 0.25;
 /** Faster than this (m/s) between two frames, the eye was put somewhere (Go), not moved: no wind for it. */
 const TELEPORT = 300;
+/** In a capsule, the ground where it sets down is asked for this long (s) before it lands. */
+const LANDING_GROUND = 20;
+/** A waiting capsule can be clicked from this far (m); walking in or out, the look eases round to the body's way at this rate (1/s). */
+const CAPSULE_SEEN = 40;
+const RIDE_LOOK_EASE = 1.5;
 /** The physics' ground patch: side (m) and cell (m). */
 const PATCH_SIZE = 192;
 const PATCH_CELL = 1;
@@ -541,7 +547,7 @@ export class InteriorView {
   /** Give the walker a body once the physics has ground under it (at the start, and after landing). */
   private standUp(): void {
     const p = this.physics;
-    if (!p || this.flyer || this.character || this.cabin?.aboard) return;
+    if (!p || this.flyer || this.character || this.cabin?.aboard || this.caps?.carrying) return;
     const { theta, s } = this.walker.at;
     const feet = toWorld(this.habitat.profile, { theta, s, h: this.standOn(theta, s) + 0.05 });
     // Not on a patch of the other level (the land's, when below): ask for one of this one, which stands the body up.
@@ -554,7 +560,9 @@ export class InteriorView {
   private simulate(dt: number, eye: Vec3): void {
     const p = this.physics;
     if (!p) return;
-    if (p.needsGround(eye) || (p.groundPatch && p.groundPatch.below !== this.below)) void this.groundFor(eye);
+    // In a capsule the ground under the eye is not wanted on the way, only where it sets down (asked as it nears).
+    const landing = this.caps?.carrying ? this.caps.landingSoon(LANDING_GROUND) : null, wanted = landing ?? (this.caps?.carrying ? null : eye);
+    if (wanted && (p.needsGround(wanted) || (p.groundPatch && p.groundPatch.below !== this.below))) void this.groundFor(wanted);
     const c = this.character;
     const o = p.groundPatch?.origin;
     if (c && o && p.offPatch(c.feet(), PATCH_EDGE)) {
@@ -797,9 +805,20 @@ export class InteriorView {
     const v = this.walker.view(), cabin = this.cabin?.aboard ? this.cabin.place() : null;
     // In a lift: standing in the cabin, looking round as on foot.
     if (cabin) return { eye: eyeInCabin(this.habitat, cabin, EYE_HEIGHT), look: v.look, up: cabin.ez };
+    // In a capsule: from the passenger's eyes (seated lower and further back), looking round from the way they face.
+    const rider = this.caps?.passenger();
+    if (rider) return this.behind(this.riderView(rider), this.chase);
     // From the eyes, at the body's own eye height (it differs from person to person), so one looks down at its front.
     const f = this.figure, own = f && this.character ? (f.eyeHeight - EYE_HEIGHT) * Math.max(0, 1 - this.chase / HEAD_CLEAR) : 0;
     return this.behind(own ? { ...v, eye: v3madd(v.eye, v.up, own) } : v, this.chase);
+  }
+
+  /** The view from a capsule passenger's eyes: over their feet at their eye height (seated, back over the hips), looking as turned from their facing. */
+  private riderView(r: Passenger): View {
+    const scale = this.figure ? this.figure.eyeHeight / EYE_HEIGHT : 1, right = v3cross(r.front, r.up);
+    const cy = Math.cos(this.rideLook.yaw), sy = Math.sin(this.rideLook.yaw), cp = Math.cos(this.rideLook.pitch), sp = Math.sin(this.rideLook.pitch);
+    const flat = v3madd(v3scale(r.front, cy), right, sy), look = v3norm(v3madd(v3scale(flat, cp), r.up, sp));
+    return { eye: v3madd(v3madd(r.feet, r.front, -r.pose.back), r.up, r.pose.eye * scale), look, up: r.up };
   }
 
   /** The arrival's walk at this moment, while it runs. */
@@ -887,7 +906,8 @@ export class InteriorView {
   private pose(eye: Vec3): void {
     const f = this.figure, c = this.character, reveal = this.reveal();
     // Light and shade around the player (or under the flyer).
-    const centre = reveal ? v3madd(reveal.feet, reveal.up, HUMAN.height / 2) : this.flyer || !c ? eye : v3madd(this.walker.feetAt(), c.up, HUMAN.height / 2);
+    const rider = this.caps?.passenger() ?? null;
+    const centre = reveal ? v3madd(reveal.feet, reveal.up, HUMAN.height / 2) : rider ? v3madd(rider.feet, rider.up, HUMAN.height / 2) : this.flyer || !c ? eye : v3madd(this.walker.feetAt(), c.up, HUMAN.height / 2);
     if (this.below) {
       shineBelow(centre, eye, this.habitat.params.under.lamp);
       below.clock.value = this.time;
@@ -898,14 +918,21 @@ export class InteriorView {
     if (!f) return;
     // The one rule for the body (the capsules' seat follows it too): on foot, or walking out on arrival, the body is
     // there and casts its shadow; the camera sees its head's parts only from behind (HEAD_LAYER).
-    f.object.visible = !!reveal || (!this.flyer && !!c);
+    f.object.visible = !!reveal || !!rider || (!this.flyer && !!c);
     const chase = reveal ? reveal.chase : this.chase;
     if (chase >= HEAD_CLEAR) this.camera.layers.enable(HEAD_LAYER); else this.camera.layers.disable(HEAD_LAYER);
     if (!f.object.visible) return;
-    let feet: Vec3, up: Vec3, front: Vec3, speed: number, move: MoveState;
+    let feet: Vec3, up: Vec3, front: Vec3, speed: number, move: MoveState, anim: AnimState | null = null;
     if (reveal) {
       ({ feet, up, front, speed } = reveal);
       move = speed < 0.3 ? 'idle' : 'walk';
+    } else if (rider) {
+      // Getting in, seated, getting out (world/mount.ts): the clips the courts' sitters play, scrubbed on the steps' time.
+      ({ feet, up, front } = rider);
+      const p = rider.pose;
+      speed = p.speed;
+      move = p.posture === 'walk' && speed > 0.3 ? 'walk' : p.posture === 'sit' ? 'sit' : 'idle';
+      if (p.posture === 'sitDown' || p.posture === 'standUp') anim = { move: 'idle', pose: { clip: p.posture === 'sitDown' ? 'sit down' : 'stand up', hold: Math.min(0.999, p.share) } };
     } else {
       const ch = c!, v = ch.velocity, flat = v3madd(v, ch.up, -v3dot(v, ch.up));
       feet = this.walker.feetAt(); up = ch.up; speed = Math.hypot(...flat);
@@ -914,8 +941,10 @@ export class InteriorView {
       front = v3norm(speed > 0.5 && chase >= HEAD_CLEAR ? flat : ahead);
       move = ch.swimming ? 'swim' : !ch.grounded ? (v3dot(v, up) > 0.5 ? 'jump' : 'fall') : speed < 0.3 ? 'idle' : speed < 2.5 ? 'walk' : speed < 5.5 ? 'run' : 'sprint';
     }
-    const back = FIRST_PERSON_BACK * (f.height / HUMAN.height) * Math.max(0, 1 - chase / HEAD_CLEAR);
-    f.update({ feet: toView(eye, v3madd(feet, front, -back)), up, front, speed, anim: { move } }, this.frameDt, this.time);
+    // Seated, the hips are where the eyes look down from already: the body stays on its seat.
+    const seated = rider ? rider.pose.back / SEATED_BACK : 0;
+    const back = FIRST_PERSON_BACK * (f.height / HUMAN.height) * Math.max(0, 1 - chase / HEAD_CLEAR) * (1 - seated);
+    f.update({ feet: toView(eye, v3madd(feet, front, -back)), up, front, speed, anim: anim ?? { move } }, this.frameDt, this.time);
   }
 
   /**
@@ -981,6 +1010,7 @@ export class InteriorView {
 
   private stand(theta: number, s: number, heading?: number): void {
     if (this.cabin) this.cabin.ride = null;
+    this.caps?.letGo();
     this.flyer = null;
     this.physics?.removeCharacter();
     this.character = null;
@@ -1090,6 +1120,52 @@ export class InteriorView {
     this.standUp();
   }
 
+  /**
+   * Whether the capsule waiting for the player is under a point of the canvas (pixels): on foot, on the land, with no
+   * lift ride under way.
+   */
+  private capsuleUnder(x: number, y: number): boolean {
+    const caps = this.caps;
+    if (!caps || this.flyer || this.below || this.cabin?.ride || (caps.phase !== 'waiting' && caps.phase !== 'parked')) return false;
+    this.camera.updateMatrixWorld();
+    const d = new Vector3((2 * x) / (this.canvas.clientWidth || 1) - 1, 1 - (2 * y) / (this.canvas.clientHeight || 1), 0.5).unproject(this.camera).normalize();
+    return caps.hit(this.current().eye, [d.x, d.y, d.z], CAPSULE_SEEN);
+  }
+
+  /** Get into the waiting capsule: the body walks round to its door from where it stands (too far, the capsule says so). */
+  boardCapsule(): void {
+    const caps = this.caps;
+    if (!caps) return;
+    const feet = this.walker.feetAt(), look = this.walker.view();
+    if (!caps.board(feet)) { this.onLine?.({ from: 'Capsule', text: 'Come a little closer and click me again.' }); return; }
+    this.physics?.removeCharacter();
+    this.character = null;
+    // The look turned from where the body first walks, then easing round to it.
+    const r = caps.passenger();
+    if (r) {
+      const right = v3cross(r.front, r.up);
+      this.rideLook = { yaw: Math.atan2(v3dot(look.look, right), v3dot(look.look, r.front)), pitch: this.walker.pitch };
+    }
+  }
+
+  /** Move the capsule on; once the player is out, they stand on foot where they stepped down, looking as they did. */
+  private capsuleOn(dt: number): void {
+    const caps = this.caps;
+    if (!caps) return;
+    const walking = caps.phase === 'boarding' || caps.phase === 'alighting', rider = caps.passenger();
+    // Walking in or out, the look eases round to the way the body goes.
+    if (walking) this.rideLook.yaw *= Math.exp(-RIDE_LOOK_EASE * dt);
+    const look = rider ? this.riderView(rider).look : null;
+    const out = caps.step(dt);
+    if (rider) this.walker.follow(rider.feet);
+    if (!out) return;
+    const at = fromWorld(this.habitat.profile, ...out.feet);
+    this.below = false;
+    this.walker.land(at.theta, at.s, look ?? out.front);
+    this.walker.pitch = this.rideLook.pitch;
+    this.standUp();
+  }
+
   /** Stand in front of a court's lift doors, facing them (debug menu): above at its portal, below at its cage. */
   toLiftDoors(court: number, below: boolean): void {
     const doors = below ? doorsBelow(this.terrain, court) : doorsAbove(this.terrain, court);
@@ -1101,12 +1177,14 @@ export class InteriorView {
     clickToUse(this.canvas, (x, y) => {
       const doors = this.doorsUnder(x, y);
       if (doors) void this.useDoors(doors);
-    }, (x, y) => !!this.doorsUnder(x, y));
+      else if (this.capsuleUnder(x, y)) this.boardCapsule();
+    }, (x, y) => !!this.doorsUnder(x, y) || this.capsuleUnder(x, y));
     // The pointer stays visible and free (Arnd, 2026-10-21): the right button held down looks around.
     dragToLook(this.canvas, (dx, dy) => {
       if (this.arrivalReveal) this.finishArrivalReveal();
       const k = 0.004;
       if (this.flyer) this.flyer.turn(dx * k, -dy * k);
+      else if (this.caps?.carrying) this.rideLook = { yaw: this.rideLook.yaw + dx * k, pitch: Math.max(-1.4, Math.min(1.4, this.rideLook.pitch - dy * k)) };
       else this.walker.turn(dx * k, -dy * k);
     });
     // The wheel moves the camera on foot between the player's eyes and behind them (flying has no body): over the
@@ -1148,8 +1226,8 @@ export class InteriorView {
     this.glide(dt);
     const { forward, right, up, fast } = moveKeys(this.loop.keys);
     const run = this.boost * (fast ? RUN : 1);
-    if (this.arrivalReveal || this.cabin?.aboard) {
-      // In a lift the keys wait for its doors.
+    if (this.arrivalReveal || this.cabin?.aboard || this.caps?.carrying) {
+      // In a lift the keys wait for its doors; in a capsule, for its Mind to set one down.
     } else if (this.flyer) {
       this.flyer.boost = run;
       this.flyer.step({ forward, right, up }, dt);
@@ -1170,6 +1248,7 @@ export class InteriorView {
     this.time += dt * this.timeScale;
     this.shine();
     this.rideOn(dt);
+    this.capsuleOn(dt);
     this.simulate(dt, this.current().eye);
     this.place();
     const guide = this.arrivalGuide, eye = this.current().eye;
@@ -1189,16 +1268,18 @@ export class InteriorView {
   /** The gravity the player feels now (`feltGravity`), smoothed so a stride's jitter does not show, for `onGravity`. */
   private weigh(dt: number): void {
     if (!this.onGravity || dt <= 0) return;
-    const c = this.character, view = this.current(), aboard = !!this.cabin?.aboard;
-    const onFoot = !!c && !this.flyer && !aboard;
+    const c = this.character, view = this.current(), aboard = !!this.cabin?.aboard, inCapsule = this.caps?.feel() ?? null;
+    const onFoot = !!c && !this.flyer && !aboard && !inCapsule;
     const at = onFoot ? c.feet() : view.eye;
     // On foot the body's own velocity; flying or in a lift, how far the eye went this frame (a jump elsewhere is no speed).
     const last = this.lastAt;
     let v: Vec3 = onFoot ? c.velocity : last ? v3scale([at[0] - last[0], at[1] - last[1], at[2] - last[2]], 1 / dt) : [0, 0, 0];
     if (Math.hypot(...v) > 2000) v = [0, 0, 0];
     this.lastAt = [...at];
-    const moving = aboard ? 'lift' : this.flyer ? 'fly' : !c ? 'foot' : c.swimming ? 'swim' : c.grounded ? 'foot' : 'air';
-    const now = gravityReading(this.habitat, at, v, view.look, view.up, moving), was = this.gravity;
+    const moving = inCapsule ? 'capsule' : aboard ? 'lift' : this.flyer ? 'fly' : !c ? 'foot' : c.swimming ? 'swim' : c.grounded ? 'foot' : 'air';
+    const read = gravityReading(this.habitat, at, v, view.look, view.up, moving), was = this.gravity;
+    // In a capsule what one feels is the pod's own speeding up, slowing and turning as well as the spin's (world/capFlight.ts).
+    const now = inCapsule ? { ...read, felt: inCapsule.weight } : read;
     const k = was ? 1 - Math.exp(-dt / GRAVITY_SMOOTHING) : 1;
     this.gravity = !was ? now : { ...now, felt: was.felt + (now.felt - was.felt) * k, spinward: was.spinward + (now.spinward - was.spinward) * k };
     this.onGravity(this.gravity);

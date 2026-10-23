@@ -56,7 +56,7 @@ async function logPeople(page) {
   await page.keyboard.press('Control+Shift+F12');
   const text = await page.locator('.dbg-panel .dbg-info').innerText({ timeout: 3000 }).catch(() => '');
   await page.locator('.dbg-panel .dbg-close').click().catch(() => {});
-  const lines = text.split('\n').filter((l) => l.startsWith('people') || l.startsWith('understorey') || l.startsWith('home furniture') || l.startsWith('θ') || l.startsWith('specks') || l.startsWith('drones') || l.startsWith('talk') || l.startsWith('animals') || l.startsWith('squirrels') || l.startsWith('deer') || l.startsWith('birds') || l.startsWith('shaders') || l.startsWith('memory') || l.includes('MB') || l.includes('fps'));
+  const lines = text.split('\n').filter((l) => l.startsWith('people') || l.startsWith('capsule') || l.startsWith('understorey') || l.startsWith('home furniture') || l.startsWith('θ') || l.startsWith('specks') || l.startsWith('drones') || l.startsWith('talk') || l.startsWith('animals') || l.startsWith('squirrels') || l.startsWith('deer') || l.startsWith('birds') || l.startsWith('shaders') || l.startsWith('memory') || l.includes('MB') || l.includes('fps'));
   await page.evaluate((ls) => { for (const l of ls) console.warn(l); }, lines.length ? lines : ['(no people line)']);
   // Builds after the warm-up that started sooner than twice the last one's time after it (the cap, docs/SHADERS.md):
   // which, and how (a node-sync one was drawn uncompiled).
@@ -239,6 +239,16 @@ export const views = {
   ] },
   // The boats (gen/boat.ts, render/boats.ts): four hours into the day, riding beside each design in turn (under sail if
   // one is out), twice a few seconds apart; then beside the nearest boat under sail from further off, and the great lake.
+  // The capsules (gen/capsules.ts, world/capFlight.ts, render/capsules.ts): one called to here comes in and sets down,
+  // the body walks round to its door and sits, the ride to the nearest court climbs, crosses and sets down, and the body
+  // gets out. Times are generous: the line logged after each picture says the phase it was in.
+  capsule: { query: 'view=inside', about: 'a capsule called to here coming in (-coming), set down with its door open (-waiting), the body walking round to it and getting in (-boarding, -seated), the ride to the nearest court from behind (-climb, -cruise) and from the seat (-eyes), coming down (-landing), stepping out (-out); logs the capsule line after each; a heap snapshot', settle: 6000, steps: [
+    { wheel: 600 }, { debug: 'Capsule: call one here' }, { wait: 15000 }, { shot: 'coming' }, { run: logPeople }, { wait: 30000 }, { shot: 'waiting' }, { run: logPeople },
+    { debug: 'Capsule: get in' }, { wait: 3000 }, { shot: 'boarding' }, { wait: 8000 }, { shot: 'seated' }, { run: logPeople },
+    { debug: 'Capsule: ride to the nearest court' }, { wait: 12000 }, { shot: 'climb' }, { run: logPeople }, { wait: 14000 }, { shot: 'cruise' },
+    { wheel: -1500 }, { wait: 1500 }, { look: [200, 60] }, { wait: 1000 }, { shot: 'eyes' }, { wheel: 600 }, { run: logPeople },
+    { wait: 40000 }, { shot: 'landing' }, { run: logPeople }, { debug: 'Capsule: get out' }, { wait: 6000 }, { shot: 'out' }, { run: logPeople }, heap('capsule'),
+  ] },
   boats: { query: 'view=inside', about: 'the boats, four hours into the day: riding beside the nearest skiff, foiling trimaran and glass-roofed catamaran in turn (each under sail if one is out; -2 four seconds on), then off the beam of the nearest boat under sail (-sailing), then the great lake from off its end (-lake); a heap snapshot at the end; logs the boats line', settle: 6000, steps: [
     memoryDetails, { debug: 'Two hours later' }, { debug: 'Two hours later' }, { wait: 4000 },
     ...['skiff', 'foiler', 'cruiser'].flatMap((name) => [{ debug: 'Ride beside a boat: skiff → foiler → cruiser → off' }, { wait: 12000 }, { shot: name }, { wait: 4000 }, { shot: `${name}-2` }]),
