@@ -2,6 +2,11 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.164 — Clear capsule glass
+
+- A capsule's glass is clear now: it looked milky white from outside and was all but opaque from inside, so you could not see out on a ride.
+- Riding with the view from your own eyes, you no longer look at the back of your own head.
+
 ## v0.163 — Murmurations you can see from afar
 
 - A starling murmuration now packs its birds as real starlings fly, about a metre apart, so the flock is a dark, shifting cloud over the lake from a few hundred metres off rather than a thin sprinkle you only noticed from inside it.
