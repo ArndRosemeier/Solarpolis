@@ -101,6 +101,8 @@ export class FlierView {
   private readonly ones: One[] = [];
   /** The people in drone bodies drawn here, by `personKey`. */
   private readonly persons = new Map<number, One>();
+  /** The drones of a catch (render/guardians.ts), by their place in the list given. */
+  private readonly extras: One[] = [];
   /** Whom of them this frame drew (`personKey`): the far specks leave them out. */
   readonly near: number[] = [];
   /** Who in a party speaks (the people's view's, so a drone person nods on their turn in a conversation). */
@@ -166,10 +168,11 @@ export class FlierView {
   }
 
   /**
-   * Bring every drone up to clock time t (s), drawn relative to the eye (world), and the people in drone bodies the
-   * people's view placed (`aloft`). `dt`: the frame's (s).
+   * Bring every drone up to clock time t (s), drawn relative to the eye (world), the people in drone bodies the
+   * people's view placed (`aloft`), and drones placed by others (`extra`: the guardians of a catch, render/guardians.ts).
+   * `dt`: the frame's (s).
    */
-  follow(eye: Vec3, t: number, dt: number, aloft: readonly Aloft[] = [], below = false): void {
+  follow(eye: Vec3, t: number, dt: number, aloft: readonly Aloft[] = [], below = false, extra: readonly Flier[] = []): void {
     const drawn = this.drawn, specks = this.specks;
     this.near.length = 0;
     if (!drawn || !specks) return;
@@ -179,8 +182,10 @@ export class FlierView {
     // Room for everyone of each design here now (more people in one body than ever before: its buffers grow).
     const wearing = new Map<Drawn, number>();
     for (const a of aloft) wearing.set(bodyOf(a), (wearing.get(bodyOf(a)) ?? 0) + 1);
+    const extraOf = (f: Flier): Drawn => byDesign.get(`${f.role}/${f.design}`)!;
+    for (const f of extra) wearing.set(extraOf(f), (wearing.get(extraOf(f)) ?? 0) + 1);
     for (const [d, n] of wearing) this.room(d, d.fleet + n);
-    roomForSpecks(specks, this.ones.length + aloft.length);
+    roomForSpecks(specks, this.ones.length + aloft.length + extra.length);
     const frame: Frame = { eye, perMetre: pxPerMetre(this.stage, this.camera, this.screen), specks: 0, written: 0 };
     for (const d of drawn) for (const l of d.levels) l.count = 0;
     this.counts = [0, 0, 0];
@@ -205,7 +210,13 @@ export class FlierView {
       here.add(a.key);
     }
     for (const key of this.persons.keys()) if (!here.has(key)) this.persons.delete(key);
-    const all = (below ? 0 : this.ones.length) + aloft.length;
+    extra.forEach((f, k) => {
+      const one = this.extras[k] ?? (this.extras[k] = this.unplaced(hash3i(this.habitat.seed, k, 47, 0)));
+      this.putDrone(one, f, one.flier ? dt : 0);
+      this.write(one, extraOf(f), frame, 0);
+    });
+    this.extras.length = extra.length;
+    const all = (below ? 0 : this.ones.length) + aloft.length + extra.length;
     if (frame.written !== all) { this.holes += all - frame.written; this.holeFrames++; }
     for (const d of drawn) for (const l of d.levels) {
       for (const m of [l.body, l.veil]) (m.geometry as InstancedBufferGeometry).instanceCount = l.count;
@@ -281,7 +292,7 @@ export class FlierView {
 
   /** The drones near the eye that can be heard (sim/sources.ts): where each is, how it flies, its role. */
   heard(eye: Vec3, out: Source[]): void {
-    for (const one of this.ones) {
+    for (const one of [...this.ones, ...this.extras]) {
       const f = one.flier;
       if (!f || away(one.low, eye) > HEARD_WITHIN.drone) continue;
       out.push({ key: f.id, kind: 'drone', theta: f.theta, s: f.s, h: f.h, at: one.low, speed: f.speed, doing: f.doing, began: 0, role: f.role });

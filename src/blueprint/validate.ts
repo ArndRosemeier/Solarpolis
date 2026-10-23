@@ -120,6 +120,9 @@ export function validate(h: Habitat): Finding[] {
   if (!(cp.cruise > 0 && cp.climb > 0 && cp.climb <= cp.cruise && cp.accel > 0 && cp.turn > 0 && cp.over > 0 && cp.axis > 0 && cp.axis < 0.9
     && p.sunlineRadius < cp.axis * p.radius && cp.comfort > 1 && cp.tilt >= 0 && cp.tilt < Math.PI / 3 && cp.call > 0 && cp.reach > 0))
     out.push({ id: 'life', severity: 'invalid', message: 'capsules need a cruise > 0, a climb > 0 up to the cruise, accelerations > 0, a height over the ground > 0, an axis distance beyond the sunline under 0.9 radii, a comfort above the floor\'s gravity, a tilt under 60°, and a call and reach > 0' });
+  const gd = lf.guard;
+  if (!(gd.harm > 0 && gd.water >= 1 && gd.brake > 1 && gd.speed > 0 && gd.thrust > 0 && gd.carry > 0 && gd.posts > 0 && Number.isInteger(gd.hands) && gd.hands >= 1 && gd.late >= 0 && gd.late < 1 && gd.bag > 2 && gd.cushion > 1))
+    out.push({ id: 'life', severity: 'invalid', message: 'guardians need a harmful landing speed > 0, water at least as soft as ground, a brake over 1 g, a speed, thrust, carrying pace and post spacing > 0, a whole number of hands ≥ 1, a late catch under one radius, and airbags over 2 m tall that stop a body above 1 g' });
   const wd = p.air.wind;
   if (!(Number.isFinite(wd.along) && Number.isFinite(wd.around) && wd.gust >= 0 && wd.gust <= 1 && wd.sun >= 0))
     out.push({ id: 'wind', severity: 'invalid', message: 'the wind needs a finite breeze along and around, gusts from 0 to 1 of it and a sun breeze ≥ 0' });

@@ -6,6 +6,8 @@ import { BOAT_KINDS, BOAT_KIND_LIST, boatAt, boatsNear, sailingOf, type Boat } f
 import { crewsAt, crewsOf } from './sim/crews';
 import { HARBOUR } from './gen/harbours';
 import { windAt } from './world/wind';
+import { footingOf } from './world/fall';
+import { postsNear } from './world/posts';
 import { Link } from './app/link/link';
 import { Ways } from './app/link/ways';
 import type { LinkChoice } from './link/service';
@@ -196,6 +198,8 @@ const insideSlot = new ViewSlot('Hold the right mouse button to look around · W
   v.onExit = (exit) => ways.showExit(exit);
   // Transport capsules, called through the link (Arnd, 2026-10-23); their Minds speak through it too.
   link.serve(v.capsules);
+  // The guardians who catch a fall (design "Nobody falls far"): their card while a catch has the player.
+  link.serve(v.guarding);
   v.onLine = (line) => link.say(line);
   // People talk in silent speech bubbles (Arnd, 2026-10-23).
   const speech = new SpeechBubbles(() => h.params.life.talk.words);
@@ -1210,6 +1214,51 @@ debug.add({
   label: 'To the Threshold: its lowest gallery, by the capsule berth', group: 'Go', run: () => {
     const f = stair(), b = f?.st.threshold?.berth;
     if (f && b) standOnStair(f, b.at[0], b.at[1] + Math.sign(b.toward[1] - b.at[1]) * f.st.width * 0.6);
+  },
+});
+/**
+ * Falls (design "Nobody falls far", render/guardians.ts): stand `up` m over the ground where the player is, facing the
+ * same way, and let go. The guardians catch what would hurt; when none is near enough the ground's bag does.
+ */
+const dropHere = (label: string, up: number): void => debug.add({
+  label: `Fall: ${label}`, group: 'Physics', run: () => {
+    const f = inView((t) => footingOf(t));
+    if (!f) return;
+    const { theta, s } = f.v.walker.at;
+    f.v.dropFrom({ theta, s, h: f.x(theta, s, Infinity).h + up }, f.v.walker.heading);
+  },
+});
+dropHere('drop from 8 m here (the bag)', 8);
+dropHere('drop from 50 m here', 50);
+dropHere('drop from 300 m here', 300);
+debug.add({
+  label: 'Fall: walk to the brink of the nearest drop (step off it yourself)', group: 'Physics', run: () => {
+    const f = inView((t) => t), h = lab.habitat;
+    if (!f || !h) return;
+    const { theta, s } = f.v.walker.at, footing = footingOf(f.x);
+    const post = postsNear(h, footing, theta, s, 600)[0];
+    if (!post) { console.info('No drop that would hurt within 600 m.'); return; }
+    // A few steps back from the post, facing the way the ground falls away (the walker's heading turns the other way round the axis).
+    const back = 2.5, r = Math.max(1, h.profile.at(post.s).r);
+    f.v.goTo(post.theta - (back * Math.sin(post.toward)) / r, post.s - back * Math.cos(post.toward), -post.toward);
+  },
+});
+debug.add({
+  label: 'Fall: the Long Drop, step out at capsule height over the floor', group: 'Physics', run: () => {
+    const f = inView((t) => footingOf(t)), h = lab.habitat;
+    if (!f || !h) return;
+    const { theta, s } = f.v.walker.at, g = h.params.life;
+    // As high as the capsules fly near the axis, a little lower; caught `late` (a share of the radius) over the ground.
+    const r = g.caps.axis * h.radius * 1.05, ground = f.x(theta, s, Infinity).h, top = h.profile.at(s).r - r;
+    f.v.dropFrom({ theta, s, h: Math.max(ground + 20, top) }, f.v.walker.heading, g.guard.late * h.radius);
+  },
+});
+debug.add({
+  label: 'Fall: off the Threshold\'s lowest gallery (down the Gate face)', group: 'Physics', run: () => {
+    const f = stair(), q = f?.st.threshold?.galleries;
+    if (!f || !q?.length) return;
+    const low = q[q.length - 1], w = (low.w0 + low.w1) / 2, at = fromWorld(f.h.profile, ...rampOf(f.h).world(low.z0 - 0.8, w, low.e + 0.05));
+    f.v.dropFrom(at, Math.PI);
   },
 });
 /**
