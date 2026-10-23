@@ -322,9 +322,21 @@ function canopyOf(b: Builder, c: { x: number; base: number; z0: number; z1: numb
 const tubeOf = (b: Builder, points: Vec3[], radius: number, col: RGB): void => b.curvedTube(points, points.map(() => radius), 8, col);
 
 /** The skiff (`BOAT_KINDS.skiff`). */
+/** Each design's hulls (the first its main one, or the port one of a catamaran), from its sizes. */
+const HULLS: Readonly<Record<BoatKind, (s: BoatSpec) => Hull[]>> = {
+  skiff: (s) => [{ x: 0, z: 0, length: s.length, beam: 0.76 * s.beam, draft: 0.055 * s.length, free: 0.085 * s.length, widest: 0.42, transom: 0.85, vee: 0.6 }],
+  foiler: (s) => {
+    const L = s.length, B = s.beam, out = B / 2 - 0.04 * B;
+    return [
+      { x: 0, z: 0, length: L, beam: 0.19 * B, draft: 0.045 * L, free: 0.075 * L, widest: 0.5, transom: 0.6, vee: 0.9 },
+      ...[1, -1].map((side) => ({ x: side * out, z: -0.03 * L, length: 0.86 * L, beam: 0.08 * B, draft: 0.03 * L, free: 0.06 * L, widest: 0.5, transom: 0.4, vee: 1 })),
+    ];
+  },
+  cruiser: (s) => [1, -1].map((side) => ({ x: side * (s.beam / 2 - 0.1 * s.beam), z: 0, length: s.length, beam: 0.2 * s.beam, draft: 0.055 * s.length, free: 0.08 * s.length, widest: 0.45, transom: 0.75, vee: 0.85 })),
+};
+
 function skiff(parts: Parts, s: BoatSpec): Hull[] {
-  const L = s.length, B = s.beam;
-  const hull: Hull = { x: 0, z: 0, length: L, beam: 0.76 * B, draft: 0.055 * L, free: 0.085 * L, widest: 0.42, transom: 0.85, vee: 0.6 };
+  const L = s.length, B = s.beam, hull = HULLS.skiff(s)[0];
   const lines = hullOf(parts, hull), t = (z: number): number => z / L + 0.5;
   // Hiking racks out to the full beam: a tube each side on three struts from the sheer.
   const rack = parts.on(BOAT_FINISH.gloss);
@@ -349,9 +361,8 @@ function skiff(parts: Parts, s: BoatSpec): Hull[] {
 /** The foiling trimaran (`BOAT_KINDS.foiler`). */
 function foiler(parts: Parts, s: BoatSpec): Hull[] {
   const L = s.length, B = s.beam, lift = s.foil?.lift ?? 0;
-  const main: Hull = { x: 0, z: 0, length: L, beam: 0.19 * B, draft: 0.045 * L, free: 0.075 * L, widest: 0.5, transom: 0.6, vee: 0.9 };
+  const [main, ...floats] = HULLS.foiler(s);
   const lines = hullOf(parts, main), t = (z: number): number => z / L + 0.5;
-  const out = B / 2 - 0.04 * B, floats: Hull[] = [1, -1].map((side) => ({ x: side * out, z: -0.03 * L, length: 0.86 * L, beam: 0.08 * B, draft: 0.03 * L, free: 0.06 * L, widest: 0.5, transom: 0.4, vee: 1 }));
   const floatLines = floats.map((f) => hullOf(parts, f));
   // The beams, arched over the water, and the trampolines between them.
   const beams = parts.on(BOAT_FINISH.livery), fore = 0.12 * L, aft = -0.17 * L;
@@ -380,8 +391,7 @@ function foiler(parts: Parts, s: BoatSpec): Hull[] {
 
 /** The glass-roofed catamaran (`BOAT_KINDS.cruiser`). */
 function cruiser(parts: Parts, s: BoatSpec): Hull[] {
-  const L = s.length, B = s.beam;
-  const hulls: Hull[] = [1, -1].map((side) => ({ x: side * (B / 2 - 0.1 * B), z: 0, length: L, beam: 0.2 * B, draft: 0.055 * L, free: 0.08 * L, widest: 0.45, transom: 0.75, vee: 0.85 }));
+  const L = s.length, B = s.beam, hulls = HULLS.cruiser(s);
   const lines = hulls.map((h) => hullOf(parts, h)), free = lines[0].free(0.5);
   // The bridge deck between the hulls, its deck on top.
   const z0 = -0.36 * L, z1 = 0.22 * L, inner = Math.abs(hulls[0].x), under = free * 0.72, top = free * 1.1;
@@ -493,6 +503,53 @@ export function boatDesign(kind: BoatKind): BoatDesign {
     kind, name: kind, body: boatPaint(shape), coarse: boatPaint(simplify(shape, size / COARSE_CELLS)), wake: wakeOf(hulls, spec.length),
     min, max, wing: wingColour(shape),
   };
+}
+
+/**
+ * Where someone of a boat's crew is aboard, in its frame (x to port, y up from the water, z forward; m): the place
+ * their feet are, which way they face (rad from the bow, to port), and how they hold themselves (`POSE` of
+ * gen/standIn.ts: 0 upright, 1 kneeling).
+ */
+export interface Seat {
+  x: number;
+  y: number;
+  z: number;
+  facing: number;
+  pose: number;
+}
+
+/**
+ * The places of a design's crew, member k at place k: at rest and on its drive (`still`), and under sail (`sailing`,
+ * its x on the windward side, the sign turned there: the skiff's two hike out on the rack, the foiler's kneel out on its
+ * windward trampoline). The skiff's sit in its cockpit; the foiler's kneel on its trampolines; aboard the cruiser one
+ * stands at the helm aft, eight stand in the glass deckhouse facing each other across it, two on the foredeck and one
+ * kneels on the net. Heights from the design's own lines.
+ */
+export function seatsOf(kind: BoatKind): { still: readonly Seat[]; sailing: readonly Seat[] } {
+  const spec = BOAT_KINDS[kind], L = spec.length, B = spec.beam, hulls = HULLS[kind](spec), lines = linesOf(hulls[0]), t = (z: number): number => z / L + 0.5;
+  const at = (x: number, y: number, z: number, facing = 0, pose = 1): Seat => ({ x, y, z, facing, pose });
+  if (kind === 'skiff') {
+    const sole = lines.deck(t(-0.44 * L), 0) + 0.004, rack = B / 2 - 0.3, inboard = -Math.PI / 3;
+    return {
+      still: [at(0, sole, -0.3 * L), at(0, sole, -0.16 * L)],
+      sailing: [-0.3, -0.15].map((k) => at(rack, lines.free(t(k * L)), k * L, inboard)),
+    };
+  }
+  if (kind === 'foiler') {
+    const net = (lines.free(0.5) + linesOf(hulls[1]).free(0.5)) / 2 + 0.03 * L + 0.012;
+    return {
+      still: [at(0.2 * B, net, -0.06 * L), at(-0.2 * B, net, -0.06 * L), at(0.2 * B, net, -0.13 * L)],
+      sailing: [at(0.25 * B, net, -0.06 * L), at(0.36 * B, net, -0.1 * L), at(0.25 * B, net, -0.14 * L)],
+    };
+  }
+  const top = lines.free(0.5) * 1.1 + 0.01, net = lines.free(0.5) * 1.02 + 0.01, across = 0.18 * B, up = 0;
+  const all = [
+    at(-0.22 * B, top, -0.33 * L, 0, up),
+    ...[-0.24, -0.14, -0.04, 0.06].flatMap((k) => [at(across, top, k * L, -Math.PI / 2, up), at(-across, top, k * L, Math.PI / 2, up)]),
+    at(0.14 * B, top, 0.18 * L, 0, up), at(-0.14 * B, top, 0.18 * L, 0, up),
+    at(0, net, 0.3 * L),
+  ];
+  return { still: all, sailing: all };
 }
 
 /** Bytes a design's meshes hold. */
