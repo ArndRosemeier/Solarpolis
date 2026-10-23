@@ -2,6 +2,17 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.180 — Boats can be heard
+
+- Sail beside a boat and you hear the water rushing at its hull, louder the faster it goes. A foiling trimaran hisses once it lifts onto its foils.
+- On each tack or gybe the wing sail swings across with a soft whoosh and a clunk.
+- Boats lying at their berths and moorings lap quietly and their fittings tick. Motoring in or out of harbour, their electric drive is all but silent: you hear only the water, less again going astern.
+
+## v0.179 — Fellow passengers in the lounge
+
+- In the arrival's cabin shot a few other passengers now sit on the couches in front of you, belted in and looking out at the habitat as the ship comes in.
+- They load while the title plays, so nobody pops into the shot; their bodies are given back once you are inside.
+
 ## v0.178 — The arrival from inside the ship
 
 - Halfway through the approach the film cuts inside: you stand in the lounge under the ship's nose, behind the couches, looking out of the tall window that faces the port as the ship creeps in along its berth arm.
