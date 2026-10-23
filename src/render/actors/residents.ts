@@ -21,22 +21,33 @@ import { packFetch } from './pack';
 import { SCREEN_BRIGHTNESS } from './screens';
 
 /**
- * What residents wear (Actors' outfit presets), by share. Most wear the Commonwear of 3026 (Actors' Future wardrobe:
- * the everyday wrap and transit trousers; the aurora mantle and halo; the living canvas); the rest like an older cut
- * (an old favourite is no odder in 3026 than a kimono is today), each garment in one plain colour of its own.
+ * What residents wear (Actors' outfit presets), by share. Most wear the Commonwear of 3026 (Actors' Future wardrobe,
+ * eight looks: the everyday wrap and transit trousers; garden commons; the aurora mantle and halo; open courtyard;
+ * drift afternoon; the living canvas; comet trails; lightstream), the rest an older cut (an old favourite is no odder
+ * in 3026 than a kimono is today), each garment in one plain colour of its own.
  */
-const COMMONWEAR: readonly (readonly [string, number])[] = [['future-daily', 0.38], ['future-orbit', 0.16], ['future-festival', 0.1]];
+const COMMONWEAR: readonly (readonly [string, number])[] = [
+  ['future-daily', 0.2], ['future-garden', 0.1], ['future-orbit', 0.08], ['future-courtyard', 0.07],
+  ['future-drift', 0.07], ['future-festival', 0.06], ['future-comet', 0.05], ['future-lightstream', 0.04],
+];
 const CLASSIC = ['casual', 'sporty', 'layers', 'long-skirt', 'polo', 'cargo', 'summer', 'sport', 'kimono', 'shift-dress', 'halter-dress'] as const;
+/** Commonwear's tops and pants mix: a Commonwear outfit swaps its own for another of them by `SWAP`. */
+const TOPS = ['future-wrap', 'future-vest', 'future-screen'];
+const PANTS = ['future-trousers', 'future-flares', 'future-cocoon', 'future-culottes', 'future-screen-leggings', 'future-shorts'];
+const SWAP = { top: 0.25, pants: 0.3 };
 /**
  * Commonwear's accessories have layers of their own, so they go with anything: each one an outfit's preset has is
- * kept by `keep`, and one it lacks is added by `add` (gaiters only over the transit trousers). The halo is left off
- * voluminous hair, which it would cut through (Actors 0.7.0 has no collision for it).
+ * kept by `keep`, and one it lacks is added by `add`, unless what is worn already takes its layer (a mantle or a
+ * bolero, not both; wide pants cover the calves) or it wants other pants (gaiters go over fitted ones). The halo is
+ * left off voluminous hair, which it would cut through (Actors has no collision for it).
  */
-const ACCESSORIES: readonly { id: string; keep: number; add: number; over?: string }[] = [
+const ACCESSORIES: readonly { id: string; keep: number; add: number; over?: readonly string[] }[] = [
   { id: 'future-cuffs', keep: 0.8, add: 0.15 },
   { id: 'future-belt', keep: 0.75, add: 0.12 },
-  { id: 'future-gaiters', keep: 0.7, add: 0.1, over: 'future-trousers' },
+  { id: 'future-gaiters', keep: 0.7, add: 0.1, over: ['future-trousers', 'future-screen-leggings', 'future-shorts'] },
   { id: 'future-mantle', keep: 0.85, add: 0.05 },
+  { id: 'future-bolero', keep: 0.85, add: 0.04 },
+  { id: 'future-sash', keep: 0.8, add: 0.05 },
   { id: 'future-halo', keep: 0.7, add: 0.03 },
 ];
 const ACCESSORY_IDS = ACCESSORIES.map((a) => a.id);
@@ -45,12 +56,16 @@ const VOLUMINOUS = new Set(['hair-afro01', 'hair-afro-puffs', 'hair-cloud', 'hai
 const PRESET_COLOR = 0.45;
 /** Colours a screen glows in (sRGB): the presets' own and a few more, all light (a dark dye would barely glow). */
 const GLOWS = ['#70d5e7', '#d5b6fa', '#e8a3f3', '#9ff1dc', '#f6ca8c', '#a1eddd', '#ffd27a', '#8fd0ff', '#ff9fb0', '#b8f28a', '#f4f1ea'];
-/** Tops whose sleeves reach the wrist, or one of them (the wrap's are unequal); bottoms that leave the shins bare. */
-const LONG_SLEEVES = new Set(['longsleeve', 'fisherman-sweater', 'kimono', 'future-screen']);
+/**
+ * Tops and layers whose sleeves reach the wrist (the bolero's too), or one of them (the wrap's are unequal); bottoms
+ * that leave the shins bare, or half of them (the culottes end at mid-calf).
+ */
+const LONG_SLEEVES = new Set(['longsleeve', 'fisherman-sweater', 'kimono', 'future-screen', 'future-bolero']);
 const HALF_SLEEVES = new Set(['future-wrap']);
-const BARE_SHINS = new Set(['shorts', 'denim-shorts', 'shift-dress']);
-/** How much of a stand-in's top a mantle covers, and of its forearms the cuffs. */
-const MANTLE_SHARE = 0.4, CUFF_SHARE = 0.4;
+const BARE_SHINS = new Set(['shorts', 'denim-shorts', 'shift-dress', 'future-shorts']);
+const HALF_SHINS = new Set(['future-culottes']);
+/** How much of a stand-in's top a mantle or bolero covers, and a sash; of its forearms the cuffs. */
+const MANTLE_SHARE = 0.4, SASH_SHARE = 0.15, CUFF_SHARE = 0.4;
 /** Grown bodies span the middle of Actors' height slider (its ends make 1.3 m and 2.3 m adults); shells any. */
 const GROWN_HEIGHT = 0.6;
 /** A shell stands on its soles and its head plates reach a little over the body (m). */
@@ -145,11 +160,17 @@ export class Residents {
     preset ??= classic.length ? classic[Math.floor(random() * classic.length)] : this.catalog.outfits[0];
     const oneOf = (list: readonly string[]): string => list[Math.floor(random() * list.length)];
     const outfit = outfitGarments(preset, body).filter((g) => !ACCESSORY_IDS.includes(g));
+    if (preset.id.startsWith('future-')) for (const [kind, share] of [[TOPS, SWAP.top], [PANTS, SWAP.pants]] as const) {
+      const k = outfit.findIndex((g) => kind.includes(g));
+      if (k >= 0 && random() < share) outfit[k] = oneOf(kind.filter((g) => g !== outfit[k] && this.garments.has(g)));
+    }
+    const taken = new Set(outfit.flatMap((g) => this.garments.get(g) ?? []));
     for (const a of ACCESSORIES) {
-      const has = preset.garments.includes(a.id), roll = random();
-      if (roll >= (has ? a.keep : a.add) || !this.garments.has(a.id) || (a.over && !outfit.includes(a.over))) continue;
+      const has = preset.garments.includes(a.id), roll = random(), layers = this.garments.get(a.id);
+      if (roll >= (has ? a.keep : a.add) || !layers || layers.some((l) => taken.has(l)) || (a.over && !a.over.some((g) => outfit.includes(g)))) continue;
       if (a.id === 'future-halo' && hair && VOLUMINOUS.has(hair)) continue;
       outfit.push(a.id);
+      for (const l of layers) taken.add(l);
     }
     const garmentColors: Record<string, string> = {};
     for (const g of outfit) {
@@ -266,15 +287,18 @@ export class Residents {
       const c = hexColor(look.garmentColors[g]);
       return this.screens.has(g) ? blendLinear(BLACK, c, SCREEN_BRIGHTNESS) : c;
     };
-    const top = worn('top'), bottom = worn('bottom'), legs = worn('legwear'), mantle = worn('mantle'), cuffs = worn('wrists'), gaiters = worn('gaiters');
-    const torso = mantle ? blendLinear(color(top, skin), color(mantle, skin), MANTLE_SHARE) : color(top, skin);
-    const arm = top && LONG_SLEEVES.has(top) ? color(top, skin) : top && HALF_SLEEVES.has(top) ? blendLinear(skin, color(top, skin), 0.5) : skin;
+    const top = worn('top'), bottom = worn('bottom'), legs = worn('legwear'), mantle = worn('mantle'), sash = worn('sash'), cuffs = worn('wrists'), gaiters = worn('gaiters');
+    const layered = mantle ? blendLinear(color(top, skin), color(mantle, skin), MANTLE_SHARE) : color(top, skin);
+    const torso = sash ? blendLinear(layered, color(sash, skin), SASH_SHARE) : layered;
+    const sleeved = mantle && LONG_SLEEVES.has(mantle) ? mantle : top;
+    const arm = sleeved && LONG_SLEEVES.has(sleeved) ? color(sleeved, skin) : top && HALF_SLEEVES.has(top) ? blendLinear(skin, color(top, skin), 0.5) : skin;
+    const below = bottom && BARE_SHINS.has(bottom) ? color(legs, skin) : bottom && HALF_SHINS.has(bottom) ? blendLinear(color(legs, skin), color(bottom, skin), 0.5) : color(bottom, skin);
     set('skin', skin);
     set('hair', look.hair ? hexColor(look.hairColor ?? '#3b2417') : skin);
     set('top', torso);
     set('sleeve', cuffs ? blendLinear(arm, color(cuffs, skin), CUFF_SHARE) : arm);
     set('bottom', color(bottom, skin));
-    set('shin', gaiters ? color(gaiters, skin) : bottom && !BARE_SHINS.has(bottom) ? color(bottom, skin) : color(legs, skin));
+    set('shin', gaiters ? color(gaiters, skin) : below);
     set('shoes', color(worn('shoes'), skin));
     return out;
   }

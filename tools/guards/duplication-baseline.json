@@ -2068,10 +2068,6 @@
     "reason": "Views' dispose methods give back what they drew through the one way (freeMesh, stage.remove) and clear their own maps; the bodies differ in what each holds."
   },
   {
-    "key": "same name: solarpolis/render/actors/animal.ts#mesh + solarpolis/render/actors/pack.ts#mesh",
-    "reason": "Both are the `mesh` method of Actors' ActorMaterialKit (its interface names it): the animals' kit wraps the people's kit (pack.ts) for its fur and eyes and calls it."
-  },
-  {
     "key": "same name: solarpolis/render/actors/pack.ts#mesh + solarpolis/render/necklace.ts#mesh",
     "reason": "pack.ts's `mesh` is Actors' ActorMaterialKit method (named by its interface); necklace.ts's builds a mesh of the necklace. Different jobs."
   },
