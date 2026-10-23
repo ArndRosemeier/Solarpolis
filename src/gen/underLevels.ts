@@ -91,7 +91,7 @@ function makeLevels(terrain: Terrain): UnderLevels {
   // Each block's ground, sampled coarsely: where (in bays: round, along) and how deep a ceiling it allows.
   const blocksAround = Math.ceil(around / BLOCK), blocksAlong = Math.ceil(along / BLOCK);
   const blocks = new Map<number, Float32Array>();
-  const blockOf = (bi: number, bj: number): Float32Array => {
+  const blockSamples = (bi: number, bj: number): Float32Array => {
     const key = bj * blocksAround + bi;
     let v = blocks.get(key);
     if (!v) {
@@ -124,7 +124,7 @@ function makeLevels(terrain: Terrain): UnderLevels {
       if (J < 0 || J >= blocksAlong) continue;
       const j0 = J * BLOCK, j1 = Math.min(along, j0 + BLOCK), gy = Math.max(0, j0 - j, j - j1);
       for (let di = -BLOCK_REACH; di <= BLOCK_REACH; di++) {
-        const I = (((bi + di) % blocksAround) + blocksAround) % blocksAround, pts = blockOf(I, J), end = pts.length - 1;
+        const I = (((bi + di) % blocksAround) + blocksAround) % blocksAround, pts = blockSamples(I, J), end = pts.length - 1;
         // A block whose lowest sample, as near as the block comes, could not bring the ceiling lower is passed by.
         let mx = I * BLOCK + BLOCK / 2 - i;
         mx -= around * Math.round(mx / around);

@@ -96,7 +96,7 @@ export function makeProfile(R: number, L: number, hubRadius: number, endcaps: { 
 
   const nearest = (z: number, r: number): { s: number; h: number } => {
     let best = Infinity, bestS = 0, bestI = n;
-    const visit = (i: number): void => {
+    const nearer = (i: number): void => {
       const dz = zs[i + 1] - zs[i], dr = rs[i + 1] - rs[i];
       const len2 = dz * dz + dr * dr;
       const t = len2 > 0 ? Math.min(1, Math.max(0, ((z - zs[i]) * dz + (r - rs[i]) * dr) / len2)) : 0;
@@ -112,9 +112,9 @@ export function makeProfile(R: number, L: number, hubRadius: number, endcaps: { 
       const mid = (lo + hi + 1) >> 1;
       if (zs[mid] <= z) lo = mid; else hi = mid - 1;
     }
-    visit(lo);
-    for (let i = lo - 1; i >= 0; i--) { const gap = z - zs[i + 1]; if (gap > 0 && gap * gap > best) break; visit(i); }
-    for (let i = lo + 1; i < n - 1; i++) { const gap = zs[i] - z; if (gap > 0 && gap * gap > best) break; visit(i); }
+    nearer(lo);
+    for (let i = lo - 1; i >= 0; i--) { const gap = z - zs[i + 1]; if (gap > 0 && gap * gap > best) break; nearer(i); }
+    for (let i = lo + 1; i < n - 1; i++) { const gap = zs[i] - z; if (gap > 0 && gap * gap > best) break; nearer(i); }
     // `toWorld` lifts a point along the smoothed normal, which leans off its segment's perpendicular: walk s until the
     // point lies on the normal at s (secant steps), so this undoes `toWorld` exactly, also far above or below the curve.
     let s = bestS;

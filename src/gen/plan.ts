@@ -102,8 +102,11 @@ export interface MereHit {
 export const mereShore = (m: Mere): number =>
   Math.max(m.depth * MERE.shore.depths * m.wild, m.across * (MERE.shore.made + (MERE.shore.natural - MERE.shore.made) * m.wild));
 
-/** How far a lake's shore reaches from its middle at most (m), its shore band not counted. */
-export const mereReach = (m: Mere): number => Math.max(m.along, m.across);
+/**
+ * How far a lake's shore reaches from its middle at most (m), its shore band not counted: a made basin's corners reach
+ * out past its half length (the square superellipse's corner, its bays only ever draw the shore in).
+ */
+export const mereReach = (m: Mere): number => Math.max(m.along, m.across) * Math.pow(2, 0.5 - 1 / m.power);
 
 /**
  * How far a point (θ, s) lies from a lake's shore (m, negative in the water), measured along the line from the lake's
@@ -609,7 +612,7 @@ function meresOf(h: Habitat, base: MereBase): Mere[] {
   };
   const wildOf = (s: number): number => 1 - smoothstep(0.25, 0.7, careAt(s));
   const walkTheta = (s: number): number => valleyAt(0, s) + (SUNWALK_SIDE * gap) / 2;
-  const make = (kind: Mere['kind'], theta: number, s: number, along: number, across: number, heading: number): Mere => {
+  const shapedMere = (kind: Mere['kind'], theta: number, s: number, along: number, across: number, heading: number): Mere => {
     const wild = wildOf(s);
     return {
       id: out.length, kind, theta: wrap(theta), s, along, across, heading, depth: spec.depth * across * 2, level: sink + roomAt(theta, s), wild,
@@ -636,7 +639,7 @@ function meresOf(h: Habitat, base: MereBase): Mere[] {
     const swing = rivers.length ? riverWidth * (rivers[0].meander + 2) : 0;
     // Shrunk until it fits clear of every landform (a Height by the valley), down to two fifths of what was asked.
     for (let k = 1; k > 0.35; k -= 0.1) {
-      const want = make('great', 0, 0, (spec.great.length * R * k) / 2, (spec.great.width * R * k) / 2, 0), shore = mereShore(want);
+      const want = shapedMere('great', 0, 0, (spec.great.length * R * k) / 2, (spec.great.width * R * k) / 2, 0), shore = mereShore(want);
       const along = Math.min(want.along, (hi - lo) / 2 - shore);
       if (along < want.along * 0.4) break;
       const s = lo + shore + along, line = valleyAt(0, s);
@@ -646,7 +649,7 @@ function meresOf(h: Habitat, base: MereBase): Mere[] {
       for (let i = 0; i <= 16; i++) walk = Math.min(walk, (walkTheta(s - along + (i / 8) * along) - line) * R);
       const top = walk - widths.sunwalk * 3, across = want.across, mid = Math.min(top - across, 0);
       if (!(mid + across > swing && mid - across < -swing)) break;
-      const m = make('great', line + mid / R, s, along, across, 0);
+      const m = shapedMere('great', line + mid / R, s, along, across, 0);
       if (offForms(m)) { out.push(m); break; }
     }
   }
@@ -662,7 +665,7 @@ function meresOf(h: Habitat, base: MereBase): Mere[] {
       const d = size * rng.range(0.7, 1.35), aspect = rng.range(1, 1.8), heading = rng.range(0, Math.PI);
       const along = (d / 2) * Math.sqrt(aspect), across = d / 2 / Math.sqrt(aspect);
       const s = rng.range(floorStart, floorEnd), theta = rng.range(0, TURN);
-      const m = make('mere', theta, s, along, across, heading), reach = mereReach(m) + mereShore(m);
+      const m = shapedMere('mere', theta, s, along, across, heading), reach = mereReach(m) + mereShore(m);
       if (s - reach < floorStart + ramp || s + reach > portEnd) continue;
       if (lake && fromLake(lake, s) < reach + shoreOf(lake)) continue;
       if (out.some((o) => Math.hypot(wrap(o.theta - theta) * R, o.s - s) < reach + mereReach(o) + mereShore(o))) continue;

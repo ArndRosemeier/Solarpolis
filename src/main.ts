@@ -40,7 +40,7 @@ import { daisOf } from './gen/grownHall';
 import type { Terrain } from './gen/terrain';
 import { floorAt, floorPoint, outOfPlace, placeAt, type FloorFrame } from './gen/shapes';
 import { crossingsOf, type Crossing, type CrossingKind } from './gen/crossings';
-import { landformOf, planOf, type GroundForm } from './gen/plan';
+import { landformOf, mereShore, planOf, type GroundForm } from './gen/plan';
 import { WORK_KINDS, isDug, isSignature, type DistrictWorkKind, type Work } from './gen/works';
 import { angleDiff } from '@futuremagic/core';
 import { baysOfHamlet, underOf, type Hamlet } from './gen/under';
@@ -753,6 +753,46 @@ debug.add({
   },
 });
 /**
+ * The lakes on the floor (gen/plan.ts `meres`): each press floats by the next, the great lake first, off the end of its
+ * long axis nearer the eye and up a fifth of its length, looking down it; the other entry stands on its shore, facing
+ * the water. The line names which lake it is.
+ */
+let mereTurn = -1, mereSeen = '';
+/** Float at `eye`, looking at `at`. */
+const floatToward = (eye: Vec3, at: Vec3): void => {
+  const d = Math.hypot(at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]);
+  view()?.floatAt(eye, [(at[0] - eye[0]) / d, (at[1] - eye[1]) / d, (at[2] - eye[2]) / d]);
+};
+const nextMere = () => {
+  const h = lab.habitat, meres = h ? planOf(h).meres : [];
+  if (!meres.length) return undefined;
+  mereTurn = (mereTurn + 1) % meres.length;
+  const m = meres[mereTurn];
+  mereSeen = `${m.kind === 'great' ? 'the great lake' : `lake ${m.id}`}, ${(m.along * 2).toFixed(0)} × ${(m.across * 2).toFixed(0)} m, ${m.depth.toFixed(0)} m deep, ${m.wild > 0.5 ? 'natural' : 'made'}`;
+  return m;
+};
+debug.add({
+  label: 'Fly: the next lake', group: 'Go', run: () => {
+    const v = view(), t = v?.ecology?.terrain, h = lab.habitat, m = nextMere();
+    if (!v || !t || !h || !m) return;
+    const R = h.radius, out = m.along + mereShore(m) * 2, side = Math.cos(m.heading) * (v.walker.at.s - m.s) >= 0 ? 1 : -1;
+    const et = m.theta + (side * Math.sin(m.heading) * out) / R, es = m.s + side * Math.cos(m.heading) * out;
+    const { theta, s, level } = m, eye = toWorld(h.profile, { theta: et, s: es, h: Math.max(t.heightAt(et, es), level) + m.along * 0.4 });
+    floatToward(eye, toWorld(h.profile, { theta, s, h: level }));
+  },
+});
+debug.add({
+  label: 'To the next lake\'s shore', group: 'Go', run: () => {
+    const v = view(), h = lab.habitat, m = nextMere();
+    if (!v || !h || !m) return;
+    // Across its long axis, a few metres up from the water, facing it (heading 0 along +s, rising toward −θ).
+    const R = h.radius, out = m.across + Math.min(mereShore(m) * 0.4, 12);
+    const theta = m.theta + (Math.cos(m.heading) * out) / R, s = m.s - Math.sin(m.heading) * out;
+    v.goTo(theta, s, Math.atan2((theta - m.theta) * R, m.s - s));
+  },
+});
+debug.addInfo(() => (mereSeen ? `lake: ${mereSeen}` : ''));
+/**
  * The districts' works (gen/works.ts): each press floats by the work of the next kind (in `WORK_KINDS` order) nearest
  * the eye, two of its radii off and half of one up, looking at its middle; a work that faces along the axis is seen
  * from its face's side. The line names what it is and who made it.
@@ -796,9 +836,8 @@ const signatureOf = (): Work | undefined => {
   return h ? planOf(h).works.filter(isSignature)[signatureTurn] : undefined;
 };
 const lookFrom = (eye: Vec3, w: Work, t: Terrain, h: Habitat): void => {
-  const { theta, s } = w, mid = toWorld(h.profile, { theta, s, h: t.heightAt(theta, s) });
-  const d = Math.hypot(mid[0] - eye[0], mid[1] - eye[1], mid[2] - eye[2]);
-  view()?.floatAt(eye, [(mid[0] - eye[0]) / d, (mid[1] - eye[1]) / d, (mid[2] - eye[2]) / d]);
+  const { theta, s } = w;
+  floatToward(eye, toWorld(h.profile, { theta, s, h: t.heightAt(theta, s) }));
 };
 debug.add({
   label: 'Fly: the next signature work', group: 'Go', run: () => {

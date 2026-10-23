@@ -367,7 +367,6 @@ export function makeTerrain(h: Habitat): Terrain {
     height += raised;
     const k = inLake(s);
     if (k !== null && k > 0 && lake) height -= lake.depth * Math.sqrt(smoothstep(0, 0.6, k));
-    if (f > 0 && meres.length) height = meresOver(theta, s, height);
     if (f < 1) {
       const p = profile.at(s), e = h.radius - p.r, alpha = Math.asin(Math.min(1, Math.abs(p.nz)));
       const g = p.r / R, wild = s < floorStart;
@@ -381,6 +380,8 @@ export function makeTerrain(h: Habitat): Terrain {
     }
     // Small ground roughness everywhere: tufts and hollows of a few tens of centimetres.
     height += Math.min(0.3, hills * 0.01) * detail.fbm3(x / 25, y / 25, z / 25, 3);
+    // (The lakes last: their beds are silt, and their shores never dip under their water.)
+    if (f > 0 && meres.length) height = meresOver(theta, s, height);
     return height;
   };
 
