@@ -2040,7 +2040,7 @@
     "reason": "pool.job({ kind, params: habitat.params, ... }) is the one way to ask the worker pool for a job (workers/pool.ts); each view asks for its own kind of job."
   },
   {
-    "key": "idiom: [.profile .s .theta] in solarpolis/gen/capsules.ts + solarpolis/gen/shapes.ts + solarpolis/gen/underMesh.ts + solarpolis/main.ts + solarpolis/render/birds.ts + solarpolis/render/lights.ts + solarpolis/render/talk.ts + solarpolis/render/view.ts + solarpolis/sim/flocks.ts + solarpolis/sim/sounds.ts + solarpolis/world/catch.ts + solarpolis/world/clouds.ts + solarpolis/world/flyer.ts",
+    "key": "idiom: [.profile .s .theta] in solarpolis/gen/capsules.ts + solarpolis/gen/shapes.ts + solarpolis/gen/underMesh.ts + solarpolis/main.ts + solarpolis/render/birds.ts + solarpolis/render/lights.ts + solarpolis/render/talk.ts + solarpolis/render/view.ts + solarpolis/sim/flocks.ts + solarpolis/sim/sounds.ts + solarpolis/sim/sources.ts + solarpolis/world/catch.ts + solarpolis/world/clouds.ts + solarpolis/world/flyer.ts",
     "reason": "Reading a point's (theta, s) and the habitat's profile together is how every interior layer places things; it crossed the finder's rarity bar only because a new file (gen/portFace.ts) changed the file count, with no new copy."
   },
   {
@@ -2394,5 +2394,9 @@
   {
     "key": "same name: solarpolis/render/homes.ts#dispose + solarpolis/render/passengers.ts#dispose",
     "reason": "`dispose()` is the lifecycle's name every owner of GPU memory uses (CLAUDE.md rule 12); the passengers give back their own figures and dim the lounge's lights (2026-10-23)."
+  },
+  {
+    "key": "idiom: [.profile .s .theta] in solarpolis/gen/underMesh.ts + solarpolis/render/view.ts + solarpolis/sim/sources.ts",
+    "reason": "Each is a call of the one seam for a point's place in the world (`toWorld(habitat.profile, { theta, s, h })`) at a point its caller holds; there is nothing left to fold."
   }
 ]

@@ -67,7 +67,7 @@ import { GlassDeck, type GlassStage, type GlassWant } from './glassDeck';
 import { nearestExitCourt, type ExitCourt } from '../gen/exitCourt';
 import { underOf } from '../gen/under';
 import type { Hearing } from '../sim/sounds';
-import { liftsNear, stagesNear } from '../sim/sources';
+import { boatsHeard, liftsNear, stagesNear } from '../sim/sources';
 import { lightAt } from '../sim/birds';
 import { calledFrom, doorsAbove, doorsBelow, doorsHit, eyeInCabin, liftDoorsNear, outside, type LiftDoors } from '../gen/lifts';
 
@@ -403,6 +403,7 @@ export class InteriorView {
       for (const a of this.animals) a.heard(view.eye, this.time, sources);
       this.drones?.heard(view.eye, sources);
       this.birds?.heard(view.eye, this.time, sources);
+      if (this.boats) sources.push(...boatsHeard(this.terrain, this.time, at.theta, at.s));
     }
     return {
       ecology: e,

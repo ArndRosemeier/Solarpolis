@@ -316,6 +316,42 @@
     18.875
    ]
   },
+  "boat/foil": {
+   "kind": "loop",
+   "files": [
+    "boat/foil.mp3"
+   ],
+   "seconds": [
+    8
+   ]
+  },
+  "boat/hull": {
+   "kind": "loop",
+   "files": [
+    "boat/hull.mp3"
+   ],
+   "seconds": [
+    8
+   ]
+  },
+  "boat/rest": {
+   "kind": "loop",
+   "files": [
+    "boat/rest.mp3"
+   ],
+   "seconds": [
+    8
+   ]
+  },
+  "boat/tack": {
+   "kind": "call",
+   "files": [
+    "boat/tack.mp3"
+   ],
+   "seconds": [
+    3.84
+   ]
+  },
   "body/jump": {
    "kind": "call",
    "files": [

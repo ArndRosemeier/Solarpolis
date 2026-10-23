@@ -4,7 +4,9 @@ import { readFileSync } from 'node:fs';
 import { MATRIX, toWorld } from '../src/blueprint';
 import { TOSS } from '../src/sim/props';
 import { strideAt } from '../src/sim/sounds';
-import { cuesOf, humOf, liftsNear, type Cue, type Source } from '../src/sim/sources';
+import { boatsHeard, cuesOf, humOf, liftsNear, type Cue, type Source } from '../src/sim/sources';
+import { boatAt, legsOf, outingOf, sailingOf } from '../src/sim/sailing';
+import { BOAT_KINDS } from '../src/gen/boat';
 import { ecologyOf } from './worlds';
 
 const e = ecologyOf(MATRIX[0].name), h = e.terrain.habitat, p = h.profile;
@@ -88,4 +90,34 @@ test('sources: drones hum by role while they fly or work, a dancing party plays 
   const lifts = liftsNear(e.terrain, c.theta, c.s, false);
   assert.ok(lifts.some((l) => l.key === 0 && humOf(l)?.sound === 'lift/hum'), 'the portal in the court hums');
   assert.ok(lifts.every((l) => index.sounds[humOf(l)!.sound]));
+});
+
+test('sources: a boat sounds of the water at its hull (a foiler hisses when it flies), its wing swings across on each tack, it ticks at rest', () => {
+  const boats = sailingOf(h).boats;
+  // A boat with an outing that goes about, from the fifth day on.
+  let found: { id: number; o: NonNullable<ReturnType<typeof outingOf>> } | null = null;
+  for (let day = 5; day < 25 && !found; day++) {
+    for (const b of boats) { const o = outingOf(h, b, day); if (o && legsOf(o).some((l) => l.turning)) { found = { id: b.id, o }; break; } }
+  }
+  assert.ok(found, 'an outing with a tack');
+  const { id, o } = found!, boat = boats[id], legs = legsOf(o), half = BOAT_KINDS[boat.kind].turn / 2;
+  const mid = (o.start + o.end) / 2, at = boatAt(h, boat, mid);
+  const near = boatsHeard(e.terrain, mid, at.theta, at.s).find((src) => src.key === id)!;
+  assert.ok(near && near.kind === 'boat' && near.doing === (at.foiling ? 'foil' : 'sail'), 'heard from beside it, sailing');
+  const hum = humOf(near)!;
+  assert.ok(index.sounds[hum.sound], hum.sound);
+  assert.equal(hum.sound, at.foiling ? 'boat/foil' : 'boat/hull');
+  const src = { ...source('boat', 'sail'), key: id };
+  const whole = cuesOf(e, src, o.start, o.end, G), cut = [...cuesOf(e, src, o.start, mid, G), ...cuesOf(e, src, mid, o.end, G)];
+  assert.deepEqual(cut, whole, 'the same however the time is cut');
+  const tacks = legs.filter((l) => l.turning && o.start + l.t + half < o.end).map((l) => o.start + l.t + half);
+  assert.deepEqual(whole.map((c) => c.t), tacks);
+  assert.ok(whole.every((c) => c.sound === 'boat/tack' && index.sounds[c.sound]));
+  // Faster is louder; at rest, the quiet of its mooring.
+  const slow = humOf({ ...src, share: 0.2 })!, fast = humOf({ ...src, share: 0.9 })!;
+  assert.ok(fast.gain > slow.gain);
+  assert.equal(humOf({ ...src, doing: 'moored' })!.sound, 'boat/rest');
+  // Under its electric drive only the water is heard, gently; astern, without its bow wave, less.
+  const motor = humOf({ ...src, doing: 'motor', share: 0.2 })!, astern = humOf({ ...src, doing: 'astern', share: 0.2 })!;
+  assert.ok(motor.sound === 'boat/hull' && astern.sound === 'boat/hull' && astern.gain < motor.gain && motor.gain < humOf({ ...src, share: 0.2 })!.gain + 0.2);
 });
