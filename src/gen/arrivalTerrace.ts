@@ -1,7 +1,7 @@
 /** The existing Lift Stair's upper landing is the port's arrival overlook.
  * Its entrance, clear walking strip and exit all derive from that landing and its last leg. Pure. */
 import type { Habitat, Vec3 } from '../blueprint';
-import { liftStairOf, rampOf, type PlanPoint, type StairPlatform } from './liftStair';
+import { BERTH_CLEAR, liftStairOf, rampOf, type PlanPoint, type StairPlatform } from './liftStair';
 
 /**
  * Where a transport capsule waits for the newcomer (thread "Transport capsules", `capStopsOf` in gen/capsules.ts
@@ -24,19 +24,21 @@ export interface ArrivalTerrace {
   exitWorld: Vec3;
   /** The plan z of the port door's face, at the back of the porch: the newcomer steps out of it. */
   door: number;
-  /** The capsule berth on the open front of the landing, or null where the landing has no room for one. */
+  /**
+   * The capsule berth: on the Threshold's lowest gallery (gen/threshold.ts), or where a habitat has no galleries on the
+   * open front of the landing; null where neither has room for one.
+   */
   berth: ArrivalBerth | null;
 }
 
 /** The door's face from the landing's back edge (handrails), and its half thickness. */
 export const DOOR_BACK = 0.6, DOOR_HALF = 0.08;
-/** The berth's clear radius (handrails): a capsule (about 3.4 × 2.2 m) and room to step round it. */
-export const BERTH_CLEAR = 2.75;
+export { BERTH_CLEAR };
 
 export function arrivalTerraceOf(h: Habitat): ArrivalTerrace | null {
   const stair = liftStairOf(h);
   if (!stair) return null;
-  const platform = stair.platforms[stair.platforms.length - 1], leg = stair.legs[stair.legs.length - 1];
+  const platform = stair.top, leg = stair.topLeg;
   const mid = (platform.w0 + platform.w1) / 2, depth = platform.z1 - platform.z0;
   const start: PlanPoint = [platform.z1 - depth * 0.2, mid];
   const finish: PlanPoint = [platform.z0 + depth * 0.35, mid];
@@ -45,7 +47,8 @@ export function arrivalTerraceOf(h: Habitat): ArrivalTerrace | null {
   return { platform, handrail: hr, start, finish, exit,
     feet: ramp.world(...finish, platform.e), exitWorld: ramp.world(...exit, platform.e),
     door: platform.z1 - hr * (DOOR_BACK + DOOR_HALF),
-    berth: berthOf(h, platform, stair.parapet, hr, finish, exit) };
+    berth: stair.threshold ? (stair.threshold.berth && berthAt(h, stair.threshold.berth.at, stair.threshold.berth.e, stair.threshold.berth.toward, BERTH_CLEAR * hr))
+      : berthOf(h, platform, stair.parapet, hr, finish, exit) };
 }
 
 /**
@@ -61,9 +64,14 @@ function berthOf(h: Habitat, q: StairPlatform, parapet: number, hr: number, fini
   // Room in front of the walk's end, and inside both side parapets.
   if (z + clear > finish[0] - hr * 0.2) return null;
   if (w - clear < q.w0 + parapet - 1e-9 || w + clear > q.w1 - parapet + 1e-9) return null;
-  const ramp = rampOf(h), at = ramp.world(z, w, q.e);
-  // The door faces the end of the walk, along the floor.
-  const toward = ramp.world(finish[0], finish[1], q.e), d = toward.map((v, k) => v - at[k]) as Vec3;
+  // The door faces the end of the walk.
+  return berthAt(h, [z, w], q.e, finish, clear);
+}
+
+/** A berth at a plan point on a floor at height e, its door facing along the floor toward another plan point. */
+function berthAt(h: Habitat, p: PlanPoint, e: number, facing: PlanPoint, clear: number): ArrivalBerth {
+  const ramp = rampOf(h), at = ramp.world(p[0], p[1], e);
+  const toward = ramp.world(facing[0], facing[1], e), d = toward.map((v, k) => v - at[k]) as Vec3;
   const up: Vec3 = [-at[0], -at[1], 0], u = Math.hypot(...up);
   const along = (d[0] * up[0] + d[1] * up[1]) / u;
   const flat = d.map((v, k) => v - (up[k] / u) * along) as Vec3, n = Math.hypot(...flat);

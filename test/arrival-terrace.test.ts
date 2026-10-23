@@ -10,7 +10,7 @@ for (const { name } of MATRIX) test(`arrival terrace (${name}): reveal stays abo
   const h = habitatOf(name), terrace = arrivalTerraceOf(h), stair = liftStairOf(h);
   if (!stair) { assert.equal(terrace, null, 'a blueprint without a Lift Stair keeps its existing hub arrival'); return; }
   assert.ok(terrace);
-  const q = terrace.platform, ramp = rampOf(h), lastLeg = stair.legs[stair.legs.length - 1];
+  const q = terrace.platform, ramp = rampOf(h), lastLeg = stair.topLeg;
   assert.deepEqual(terrace.exit, [lastLeg.to.z, lastLeg.to.w], 'directions lead to the actual opening');
   for (let t = 0; t <= REVEAL_SECONDS; t += 0.25) {
     const frame = revealAt(h, terrace, t), plan = ramp.plan(frame.eye);
@@ -60,7 +60,7 @@ for (const { name } of MATRIX) test(`arrival (${name}): the newcomer walks out w
 
 for (const { name } of MATRIX) test(`arrival (${name}): the capsule berth is clear of the walk, the rails and the porch`, () => {
   const h = habitatOf(name), terrace = arrivalTerraceOf(h), stair = liftStairOf(h);
-  if (!terrace || !stair) return;
+  if (!terrace || !stair || stair.threshold) return; // with galleries, on the lowest of them (threshold.test.ts)
   const q = terrace.platform, b = terrace.berth;
   if (!b) { assert.ok(q.w1 - q.w0 < 2 * (stair.parapet + 2.75 * terrace.handrail) + 1e-9 || q.z1 - q.z0 < 12 * terrace.handrail, 'only a landing too small has none'); return; }
   const c = rampOf(h).plan(b.at);

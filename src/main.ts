@@ -1138,6 +1138,30 @@ byStair('Fly: the Lift Stair from over the floor', 0.3, 900, 120);
 byStair('Fly: beside the Lift Stair', 0.5, 60, 25, 30);
 byStair('Fly: the Lift Stair close up', 0.5, 8, 4, 3);
 byStair('Fly: the Lift Stair near the hub', 0.9, 120, 40);
+/** Float at a plan point and height of the Threshold (gen/threshold.ts), looking at another. */
+const byThreshold = (label: string, place: (st: LiftStair) => { eye: [number, number, number]; at: [number, number, number] } | null): void => debug.add({
+  label, group: 'Go', run: () => {
+    const f = stair(), p = f && f.st.threshold ? place(f.st) : null;
+    if (!f || !p) return;
+    const ramp = rampOf(f.h), eye = ramp.world(...p.eye), at = ramp.world(...p.at);
+    const d = Math.hypot(at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]);
+    f.v.floatAt(eye, [(at[0] - eye[0]) / d, (at[1] - eye[1]) / d, (at[2] - eye[2]) / d]);
+  },
+});
+byThreshold('Fly: the Threshold from off the Gate face', (st) => {
+  const g = st.threshold!.galleries, low = g[g.length - 1], w = (low.w0 + low.w1) / 2;
+  return { eye: [low.z0 - (low.w1 - low.w0) * 0.9, w, st.top.e + st.width], at: [(low.z0 + st.top.z1) / 2, w, low.e] };
+});
+byThreshold('Fly: the Threshold\'s portal', (st) => {
+  const q = st.top, w = (q.w0 + q.w1) / 2;
+  return { eye: [q.z0 + (q.z1 - q.z0) * 0.3, w, q.e + 1.7], at: [q.z1, w, q.e + st.handrail * 2.2] };
+});
+debug.add({
+  label: 'To the Threshold: its lowest gallery, by the capsule berth', group: 'Go', run: () => {
+    const f = stair(), b = f?.st.threshold?.berth;
+    if (f && b) standOnStair(f, b.at[0], b.at[1] + Math.sign(b.toward[1] - b.at[1]) * f.st.width * 0.6);
+  },
+});
 /**
  * Below the land, in the Understorey (gen/under.ts), until the courts' lifts go down: on the floor in the middle of the
  * bay `pick` gives (its i, j), facing along the axis.
