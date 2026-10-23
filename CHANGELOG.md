@@ -2,6 +2,19 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.126 — Homes that make room for their inhabitants
+
+- Walk inside the living-layer houses: open entrances, lined rooms, upper floors connected by shallow stairs, concealed service surfaces and soft ceiling lights.
+- Nearly every interior wall is a display, with visible panel joints and quiet landscapes in different household palettes.
+- Seating, a work or shared table, and a rest surface adapt continuously for gathering, focus, rest or a clear floor. Inside a home, choose an arrangement or let it follow the residents. Furniture leaves occupied floor space clear, and its collisions move with it.
+- Residents now start and end neighbourhood trips inside homes, with shared conversation, quiet time and stretching there. Their identities remain the same on the street; a separate conversation engine can connect later.
+
+## v0.125 — Arrive on the port terrace
+
+- The docking flight now opens into a slow reveal from a sheltered arrival terrace. It introduces the habitat, widens into the cylinder view, then leaves you on foot beside bronze arrows leading to the actual Lift Stair. The terrace has a canopy and seating; looking or pressing a key skips the reveal. The docking close-up now gives the ship more breathing room.
+
+- Small blueprints without a Lift Stair keep their hub arrival. The passage from the bore to the terrace is still a cinematic cut.
+
 ## v0.124 — Legs stay visible through sheer stockings
 
 - Sheer stockings and fishnets now keep the skin underneath. Residents wearing them no longer have transparent, speckled legs.
