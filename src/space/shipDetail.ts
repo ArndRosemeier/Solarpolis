@@ -248,6 +248,9 @@ function latticeSpine(q: Box, add: (q: ShipPart) => void): void {
   add({ shape: 'cylinder', role: 'tank', from: x0, to: x1, radius: w * 0.3, colour: PIPE });
 }
 
+/** A radiator leaf's albedo, as a share of the radiator role's: its coating has a sheen the bare black lacks. */
+const LEAF = 1.6;
+
 /** A radiator wing as leaves on a manifold: each leaf its own tone, a heat pipe down its middle, a rail along the tip. */
 function leaves(q: Box, B: number, rng: Rng, add: (q: ShipPart) => void): void {
   const [cx, , cz] = q.center, [hx, hy, hz] = q.half, side = Math.sign(cz), root = cz - side * hz, tip = cz + side * hz;
@@ -255,7 +258,7 @@ function leaves(q: Box, B: number, rng: Rng, add: (q: ShipPart) => void): void {
   add({ shape: 'cylinder', role: 'fitting', from: cx - hx, to: cx + hx, radius: Math.max(hy * 3, B * 0.025), offset: [0, root], colour: PIPE });
   for (let i = 0; i < n; i++) {
     const x = cx - hx + (i + 0.5) * pitch;
-    add({ shape: 'box', role: 'radiator', center: [x, 0, cz], half: [pitch / 2 - gap / 2, hy, hz], colour: toned(ROLE_ALBEDO.radiator, 1 + rng.range(-0.15, 0.15)) });
+    add({ shape: 'box', role: 'radiator', center: [x, 0, cz], half: [pitch / 2 - gap / 2, hy, hz], colour: toned(ROLE_ALBEDO.radiator, LEAF * (1 + rng.range(-0.15, 0.15))) });
     add({ shape: 'box', role: 'fitting', center: [x, 0, cz], half: [pitch * 0.04, hy * 1.8, hz], colour: FRAME });
   }
   // The rail along the tip, the wing's outermost edge (the navigation lights stand at its middle).
