@@ -1932,18 +1932,6 @@
     "reason": "The Map-as-LRU eviction one-liner (oldest key out); each cache holds different records with its own byte budget."
   },
   {
-    "key": "idiom: [.level .pow Math] in solarpolis/gen/detailTree.ts + solarpolis/gen/liftStairMesh.ts + solarpolis/gen/siteTiles.ts",
-    "reason": "Pre-existing per-level size halving in the gen mesh builders, resurfaced by word weights when the whole-system files were added; each sizes a different structure."
-  },
-  {
-    "key": "idiom: [.level .pow Math] in solarpolis/gen/detailTree.ts + solarpolis/gen/liftStairMesh.ts + solarpolis/gen/siteTiles.ts + solarpolis/gen/underMesh.ts",
-    "reason": "Pre-existing per-level size halving in the gen mesh builders, resurfaced by word weights when the whole-system files were added; each sizes a different structure."
-  },
-  {
-    "key": "idiom: [.level .pow Math] in solarpolis/gen/hullDetail.ts + solarpolis/gen/liftStairMesh.ts + solarpolis/gen/underMesh.ts",
-    "reason": "Pre-existing per-level size halving in the gen mesh builders, resurfaced by word weights when the whole-system files were added; each sizes a different structure."
-  },
-  {
     "key": "idiom: [.add .mul] in solarpolis/render/birdShaders.ts + solarpolis/render/celestialShaders.ts + solarpolis/render/materials.ts + solarpolis/render/vesselShaders.ts",
     "reason": "TSL shader node chains (`.add(…).mul(…)`) are how every kind's shader is written in three's node language; this cluster only crossed the idiom finder's information floor because more files raised its weights (neural link files, 2026-10-23), not by a new copy."
   },
@@ -1990,5 +1978,17 @@
   {
     "key": "idiom: [.add .mul] in solarpolis/render/hamletSkies.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
     "reason": "TSL shader node chains (`.add(…).mul(…)`) are how every kind's shader is written in three's node language; this cluster only crossed the idiom finder's information floor because more files raised its weights (neural link files, 2026-10-23), not by a new copy."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/animal.ts#mesh + solarpolis/render/actors/pack.ts#mesh",
+    "reason": "Both are the `mesh` method of Actors' ActorMaterialKit (its interface names it): the animals' kit wraps the people's kit (pack.ts) for its fur and eyes and calls it."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/pack.ts#mesh + solarpolis/render/necklace.ts#mesh",
+    "reason": "pack.ts's `mesh` is Actors' ActorMaterialKit method (named by its interface); necklace.ts's builds a mesh of the necklace. Different jobs."
+  },
+  {
+    "key": "idiom: [.new Set] in solarpolis/render/actors/animator.ts + solarpolis/render/actors/residents.ts + solarpolis/space/voyage.ts",
+    "reason": "Plain sets of ids (clips loaded, garment kinds, places visited), each a line; nothing shared to fold."
   }
 ]

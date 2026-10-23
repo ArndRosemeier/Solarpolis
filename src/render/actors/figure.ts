@@ -10,6 +10,7 @@ import type { Human } from '@actors/human';
 import type { Vec3 } from '../../blueprint';
 import { Character, HUMAN_PACK, actorKit, packFetch } from './pack';
 import { FigureAnimator, type AnimState } from './animator';
+import { screenFabrics } from './screens';
 
 export type { AnimState, MoveState, Mood } from './animator';
 
@@ -111,6 +112,7 @@ export class Figure {
       ...(share ? { shareWith: { human: share } as unknown as Character } : {}),
     });
     reverseDepthBias(character.object);
+    screenFabrics.dye(character.object, config.garmentColors ?? {});
     const figure = new Figure(character);
     await figure.animator.load();
     return figure;
