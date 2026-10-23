@@ -15,12 +15,14 @@ import { Color, Mesh, PerspectiveCamera, Scene, SphereGeometry, Texture, type We
 import { Stage, createRenderer, type ShaderMonitor } from '@futuremagic/stage';
 import { v3add, v3dot, v3len, v3scale, v3sub, v3norm, type Vec3 } from '@futuremagic/core';
 import type { Habitat } from '../blueprint';
-import { CLOUD_DRIFT, cloudOffset, DAY, EARTH, MOON, REFERENCE_SPACE, SpaceFlyer, arrival, attractLoop, calendarOf, chooseStart, decodeStars, cabinCamera, fromShipDirection, guestShip, julianDay, loungeOf, LOUNGE, makeSpace, throughWindow, toShipDirection, windowLight, shipLightsOf, shipShape, skyFrom, type Arrival, type ArrivalFrame, type Cinema, type CinemaFrame, type HullLight, type Mat3, type ShipShape, type Space, type SkyView } from '../space';
+import { CLOUD_DRIFT, cloudOffset, DAY, EARTH, MOON, REFERENCE_SPACE, SpaceFlyer, arrival, attractLoop, calendarOf, chooseStart, decodeStars, cabinCamera, fromShipDirection, placesInView, guestShip, julianDay, loungeOf, LOUNGE, makeSpace, throughWindow, toShipDirection, windowLight, shipLightsOf, shipShape, skyFrom, type Arrival, type ArrivalFrame, type Cinema, type CinemaFrame, type HullLight, type Mat3, type ShipShape, type Space, type SkyView } from '../space';
 import { SKY, STARS, outsideKinds, standInAttribute } from './materials';
 import { filtered } from './textures';
 import { outside, skyMaps } from './skyShaders';
 import { DARKEST, PERIPHERY, adapt, exposureFor, meterRays, rayLuminance, starExposure, sunInView, type Meterable } from './exposure';
 import { LoungeView } from './lounge';
+import { addLoungeLights } from './lights';
+import { Passengers } from './passengers';
 import { NecklaceView } from './necklace';
 import { meshGeometry, setPose } from './geometry';
 import { SHIP_ALBEDO, ShipMeshes, shipAxes } from './ship';
@@ -80,6 +82,11 @@ export class OutsideView {
   private shipLamps: { lights: HullLight[]; points: LampPoints } | null = null;
   /** The lounge under its nose, for the arrival's cabin shot (null for a ship without one). */
   private lounge: LoungeView | null = null;
+  /** The newcomer's fellow passengers in the lounge, loaded while the title plays and given back after the arrival. */
+  private passengers: Passengers | null = null;
+  /** What the lounge's windows let in this frame (the meter's), for the passengers' light. */
+  private cabinWindows: { all: number; toward: Vec3 } = { all: 0, toward: [0, 0, 0] };
+  private cabinSun: { dir: Vec3; light: number } = { dir: [0, 0, 1], light: 0 };
   /** Called each frame of the attract loop with how far the title has faded in (0–1). */
   onTitle: ((fade: number) => void) | null = null;
   /** Each frame of the arrival after Start: how far in it is (s) and the arrival itself (its sounds and the Mind's lines). */
@@ -124,6 +131,8 @@ export class OutsideView {
     // An afternoon over Europe in March: Earth three-quarters lit behind the habitat.
     this.time = (julianDay(3026, 3, 1 + 14.5 / 24) - this.space.params.epochJd) * DAY;
     this.canvas.className = 'view-canvas';
+    // The lounge's lights for the passengers' bodies, before the warm-up (the light count is in every shader's key).
+    addLoungeLights(this.scene);
     outside.clouds.value.set(...cloudOffset(this.space.params.seed));
     this.frameHabitat();
   }
@@ -173,7 +182,7 @@ export class OutsideView {
 
   /** Bytes this view holds (memory watchdog): the surface maps with their mipmaps, the star field, the skin's detail tiles. */
   bytes(): number {
-    return this.textureBytes + this.starBytes + (this.necklace?.detailBytes() ?? 0) + (this.necklace?.trafficBytes() ?? 0) + (this.ship?.bytes ?? 0) + (this.lounge?.bytes ?? 0) + (this.solar?.bytes() ?? 0) + (this.habitatLights?.bytes() ?? 0) + (this.vessel?.meshes.bytes() ?? 0) + (this.voyage?.bytes() ?? 0);
+    return this.textureBytes + this.starBytes + (this.necklace?.detailBytes() ?? 0) + (this.necklace?.trafficBytes() ?? 0) + (this.ship?.bytes ?? 0) + (this.lounge?.bytes ?? 0) + (this.passengers?.bytes() ?? 0) + (this.solar?.bytes() ?? 0) + (this.habitatLights?.bytes() ?? 0) + (this.vessel?.meshes.bytes() ?? 0) + (this.voyage?.bytes() ?? 0);
   }
 
   /** Give memory back (memory watchdog): Earth's day map drops to half resolution, detail tiles out of sight go. */
@@ -259,6 +268,8 @@ export class OutsideView {
     this.shipLamps = null;
     this.lounge?.removeFrom(this.stage);
     this.lounge = null;
+    this.passengers?.dispose();
+    this.passengers = null;
     this.flyer = null;
     this.frameHabitat();
     await this.buildNecklace();
@@ -450,6 +461,8 @@ export class OutsideView {
       this.shipLamps = lamps;
       this.lounge = lounge;
     }
+    // The cast for the cabin shot, one by one behind the title (their packs' big reads wait for its cuts).
+    if (this.lounge && !this.passengers) this.passengers = new Passengers(this.stage, this.space.params.seed);
     this.flyer = null;
     const start = chooseStart(this.space, 0);
     const cinema = attractLoop(this.space, start, this.habitat.params.exterior.keepOut, this.shipShape.params.length, titled);
@@ -496,6 +509,9 @@ export class OutsideView {
     if (!a) return;
     this.arriving = null;
     if (this.necklace) this.necklace.guest = null;
+    // The arrival is over: the passengers' bodies go (the title loads them again if it plays again).
+    this.passengers?.dispose();
+    this.passengers = null;
     a.done();
   }
 
@@ -639,6 +655,7 @@ export class OutsideView {
     }
     // A cut is a new camera: it meters afresh instead of adapting from the last shot.
     this.meterAndAdapt(cut ? Infinity : dt);
+    this.seatPassengers(dt);
     const ratio = this.renderer.getPixelRatio(), px = (this.canvas.clientHeight || 720) * ratio;
     outside.pixelSolidAngle.value = ((this.camera.fov * Math.PI) / 180 / px) ** 2;
     outside.starExposure.value = starExposure(this.exposure, outside.pixelSolidAngle.value, this.sunSeen(), this.heroicStars);
@@ -647,6 +664,15 @@ export class OutsideView {
       !this.attracting && !this.vessel?.active && !this.voyage?.active && this.loop.running);
     outside.viewport.value.set((this.canvas.clientWidth || 1280) * ratio, px);
     draw(this.stage);
+  }
+
+  /** The passengers in their couches in the cabin shot, lit as the lounge is at the eyes' exposure; hidden otherwise. */
+  private seatPassengers(dt: number): void {
+    const cabin = this.arriving?.frame.cabin, p = this.passengers;
+    if (!p) return;
+    if (!cabin || !this.lounge) { p.hide(); return; }
+    const l = this.lounge.lounge;
+    p.seat(l, placesInView(l, cabin.look), cabin.ship, this.eyeAndTarget().eye, this.cabinWindows, this.cabinSun, this.exposure, dt, this.arriving!.elapsed);
   }
 
   /** How much of the Sun is in view (0–1): the stars fade only then. */
@@ -681,9 +707,11 @@ export class OutsideView {
       // windows and the room round them.
       const l = this.lounge.lounge, ship = cabin.ship, from = cabinCamera(l, cabin.look).eye;
       const windows = windowLight(l, (d) => rayLuminance(metered, fromShipDirection(ship, d)));
-      this.lounge.lit(ship, this.sky.sunDir, this.sky.sunlight * outside.irradiance.value, windows);
+      this.cabinSun = { dir: this.sky.sunDir, light: this.sky.sunlight * outside.irradiance.value };
+      this.lounge.lit(ship, this.cabinSun.dir, this.cabinSun.light, windows);
       const light = LOUNGE.lamps + windows.all / 2;
       metered.room = { luminance: LOUNGE.albedo * light, light, open: (d) => throughWindow(l, from, toShipDirection(ship, d)) };
+      this.cabinWindows = windows;
     }
     this.exposure = adapt(this.exposure, exposureFor(metered, rays, this.nightEyes ? DARKEST.nightEyes : DARKEST.plain), dt);
     outside.exposure.value = this.exposure;

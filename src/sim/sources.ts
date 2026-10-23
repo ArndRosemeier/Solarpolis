@@ -19,9 +19,12 @@ import { floorBelow } from './rooms';
 import { toWorld } from '../blueprint';
 import type { DroneRole } from '../blueprint';
 import { TOSS } from './props';
+import { BOAT_KINDS } from '../gen/boat';
+import { boatsNear, legsOf, outingOf, sailingOf } from './sailing';
+import { dayNumber } from '../world/sunline';
 import { byTime, stepSurfaceAt, strideAt } from './sounds';
 
-export type SourceKind = 'person' | 'shell' | 'deer' | 'squirrel' | 'drone' | 'lift' | 'stage' | 'flock';
+export type SourceKind = 'person' | 'shell' | 'deer' | 'squirrel' | 'drone' | 'lift' | 'stage' | 'flock' | 'boat';
 
 /** A tool at work: sawing at a bench, chopping or tapping a chisel, pruning (tenders in the orchards). */
 export type Tool = 'saw' | 'mallet' | 'shears';
@@ -55,6 +58,9 @@ export interface Source {
   /** Flocks: how many birds make the sound, and how much of the flock does it now (0 … 1; sim/flocks.ts `flockNoise`). */
   birds?: number;
   loud?: number;
+  /** Boats: how fast it goes as a share of its design's top speed, and its design's length (m). */
+  share?: number;
+  length?: number;
 }
 
 /** A one-shot: which sound (an id in public/sound/index.json), which of its takes, from where, when (clock s), how loud and at what pitch. */
@@ -75,7 +81,7 @@ export interface Hum {
 }
 
 /** How far each kind is heard at all (m): past it a view need not hand it over. */
-export const HEARD_WITHIN: Readonly<Record<SourceKind, number>> = { person: 40, shell: 40, deer: 60, squirrel: 30, drone: 150, lift: 40, stage: 90, flock: 800 };
+export const HEARD_WITHIN: Readonly<Record<SourceKind, number>> = { person: 40, shell: 40, deer: 60, squirrel: 30, drone: 150, lift: 40, stage: 90, flock: 800, boat: 80 };
 
 /** A deer's hooves fall this far apart (m): its walk covers a little under a body length a cycle, two hooves heard in it. */
 const HOOF_STRIDE = 0.45;
@@ -157,6 +163,19 @@ export function cuesOf(e: Ecology, src: Source, t0: number, t1: number, gravity:
       // Tenders prune as they work over the orchards and gardens.
       if (src.role === 'tender' && src.doing === 'work') work('shears', 0.5);
       break;
+    case 'boat': {
+      // The wing swings across halfway through each tack or gybe (sim/sailing.ts: its turning legs).
+      const h = e.terrain.habitat, boat = sailingOf(h).boats[src.key], half = BOAT_KINDS[boat.kind].turn / 2;
+      for (let day = dayNumber(h, t0 - half); day <= dayNumber(h, t1); day++) {
+        const o = outingOf(h, boat, day);
+        if (!o || o.end < t0 - half || o.start > t1) continue;
+        legsOf(o).forEach((l, n) => {
+          const t = o.start + l.t + half;
+          if (l.turning && t >= t0 && t < t1) cue('boat/tack', t, 0.6, n);
+        });
+      }
+      break;
+    }
     case 'lift': case 'stage': case 'flock':
       break;
   }
@@ -201,6 +220,17 @@ export function humOf(src: Source): Hum | null {
       if (loud <= 0.01) return null;
       return { sound: src.doing === 'wings' ? 'flock/wings' : 'flock/starlings', gain: loud, pitch: 0.97 + 0.06 * roll(src.key, 47, 0, 0) };
     }
+    case 'boat': {
+      // The water at its hull, louder and quicker with its speed; a foiler's hiss once it flies; at its berth or
+      // mooring, wavelets lapping and its fittings ticking. A bigger hull sounds lower.
+      const share = src.share ?? 0, size = 1.15 - 0.03 * (src.length ?? 5);
+      if (src.doing === 'moored') return { sound: 'boat/rest', gain: 0.35, pitch: size };
+      if (src.doing === 'foil') return { sound: 'boat/foil', gain: 0.4 + 0.5 * share, pitch: 0.9 + 0.25 * share };
+      // Under its drive in or out of harbour: the electric drive is all but silent, so only the water is heard, gently,
+      // and less going astern (no bow wave).
+      if (src.doing === 'motor' || src.doing === 'astern') return { sound: 'boat/hull', gain: (0.2 + 0.5 * share) * (src.doing === 'astern' ? 0.6 : 1), pitch: size * (0.85 + 0.2 * share) };
+      return { sound: 'boat/hull', gain: 0.25 + 0.7 * share, pitch: size * (0.9 + 0.2 * share) };
+    }
     case 'person': case 'shell':
       // A dancing party's music, played from where its first member stands.
       if (src.doing !== 'dance' || src.member !== 0) return null;
@@ -223,6 +253,18 @@ export function liftsNear(t: Terrain, theta: number, s: number, below: boolean):
     out.push({ key: court, kind: 'lift', theta: c.theta, s: c.s, h: 0, at: doors.at, below, speed: 0, doing: 'hum', began: 0 });
   });
   return out;
+}
+
+/** The boats on the water near a listener at clock time t, each from its place on the water (keys are the boats' ids). */
+export function boatsHeard(t: Terrain, time: number, theta: number, s: number): Source[] {
+  const h = t.habitat;
+  return boatsNear(h, time, theta, s, HEARD_WITHIN.boat).map((b) => {
+    const spec = BOAT_KINDS[b.boat.kind];
+    return {
+      key: b.boat.id, kind: 'boat', theta: b.theta, s: b.s, h: b.level, at: toWorld(h.profile, { theta: b.theta, s: b.s, h: b.level }),
+      speed: Math.abs(b.speed), doing: !b.sailing ? 'moored' : b.astern ? 'astern' : b.motoring ? 'motor' : b.foiling ? 'foil' : 'sail', began: 0, share: Math.min(1, Math.abs(b.speed) / spec.top), length: spec.length,
+    };
+  });
 }
 
 /** The stages in the halls near a listener below, each playing from its bay's middle (keys are the bays'). */

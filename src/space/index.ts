@@ -17,5 +17,5 @@ export { hullLightsOf, shipLightsOf, lampHidden, shineAt, lampFlux, LIGHTS, LIGH
 export { arrivalScore, captionAt, MIND_LINES, SHIP_BEDS, type ArrivalScore, type Caption, type ScoreCue, type ShipBed } from './arrivalScore';
 export { CLAMPS, CLAMP_CLUNKS, CLAMP_SWING, DOCK, FLOODS, RELEASE, SEALED, SIGNALS, berthDockOf, clampPose, closedSwing, dockAt, dockLightsAt, dockShows, reachAt, signalBlink, signalColour, signalSpoke, umbilicalPath, UMBILICAL, type Berth, type DockNow, type Signal } from './dock';
 export { INSPECTORS, INSPECTOR_SIZE, TUG_HOLD, TUG_TRANSIT, craftAt, craftShape, inspectorsAt, tugCradle, tugLength, tugsAt, type CraftKind, type CraftNow } from './portCraft';
-export { LOUNGE, loungeOf, windowFacing, cabinCamera, placesInView, fromShip, fromShipDirection, toShipDirection, throughWindow, windowHalf, windowLight, type Lounge, type Couch, type Place } from './lounge';
+export { LOUNGE, loungeOf, windowFacing, cabinCamera, placesInView, fromShip, fromShipDirection, toShipDirection, throughWindow, windowHalf, windowLight, seatedFeet, sunOnSeated, type Lounge, type Couch, type Place } from './lounge';
 export { deckWindows, type DeckWindows } from './shipDetail';
