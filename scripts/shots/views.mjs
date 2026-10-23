@@ -139,9 +139,9 @@ export const views = {
   'adaptive-home-walk': { query: 'view=inside', about: 'Walk through the actual house doorway, climb the internal stair, and see residents at home', settle: 6000, steps: [
     { debug: 'Below: at an adaptive home doorway' }, { wait: 10000 }, { shot: 'door' }, { key: 'KeyW', hold: 2200 }, { wait: 2000 }, { shot: 'inside' },
     { run: async (page) => { if (!await page.locator('.home-controls').isVisible()) throw new Error('Doorway did not lead into a usable room'); } },
-    { debug: 'Below: at an adaptive home stair' }, { wait: 3000 }, { shot: 'stair' }, { key: 'KeyW', hold: 8500 }, { wait: 2000 }, { shot: 'upstairs' },
+    { debug: 'Below: at an adaptive home stair' }, { wait: 3000 }, { shot: 'stair' }, { key: 'KeyW', hold: 14000 }, { wait: 2000 }, { shot: 'upstairs' },
     { run: async (page) => { const line = await page.locator('.home-status').textContent(); if (!line.includes('Level 2')) throw new Error('Stair did not reach the upper floor: ' + line); } },
-    { key: 'KeyA', hold: 1000 }, { look: [-393, 80] }, { wait: 1500 }, { shot: 'upper-room' },
+    { key: 'KeyA', hold: 1000 }, { look: [786, 100] }, { wait: 1500 }, { shot: 'upper-room' },
     { debug: 'Below: beside residents at home' }, { wait: 12000 }, { shot: 'residents' }, { run: logPeople }
   ] },
   'adaptive-home': { query: 'view=inside', about: 'A usable domestic room, wall displays and all four adaptive furniture arrangements', settle: 6000, steps: [

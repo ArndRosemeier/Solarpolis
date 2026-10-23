@@ -13,6 +13,7 @@ import { homeFittings, homePlan, homeUseAt, type Fitting, type HomeMode } from '
 import type { FurnitureBody } from '../physics/world';
 import { dropUploaded, freeMesh } from './geometry';
 import { PROP } from './materials';
+import { EYE_HEIGHT } from '../world/walker';
 
 interface Home { house: House; frame: FloorFrame; modes: HomeMode[]; fittings: Fitting[][] }
 export interface RoomState { mode: HomeMode; automatic: boolean; floor: number; lived: boolean }
@@ -76,7 +77,7 @@ export class HomesView {
       const [x, y] = inFloorFrame(h, home.frame, at.theta, at.s), r = homePlan(home.house, hr).room;
       return x > r.x0 && x < r.x1 && y > r.y0 && y < r.y1 && at.h >= home.house.base && at.h < home.house.base + home.house.storeys * home.house.storey;
     });
-    const floor = current ? Math.min(current.house.storeys - 1, Math.max(0, Math.floor((at.h - current.house.base - hr * 0.3) / current.house.storey))) : 0;
+    const floor = current ? Math.min(current.house.storeys - 1, Math.max(0, Math.floor((at.h - EYE_HEIGHT - current.house.base + hr * 0.05) / current.house.storey))) : 0;
     if (this.selected?.home !== current || this.selected?.floor !== floor) this.override = null;
     this.selected = current ? { home: current, floor } : null;
     const matrix = new Matrix4(), rotation = new Quaternion(), colour = new Color();
