@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MATRIX, REFERENCE, derive, validate, withParams } from '../src/blueprint';
 import { planOf, siteOf } from '../src/gen/plan';
-import { BOAT_KINDS, boatAt, boatsNear, feltShare, sailingOf, inBasin, legsOf, outingOf, polarSpeed, type BoatKind } from '../src/sim/sailing';
+import { BOAT_KINDS, boatAt, boatsNear, dayKnown, feltShare, keepDay, planDay, sailingOf, inBasin, legsOf, outingOf, polarSpeed, type BoatKind } from '../src/sim/sailing';
 import { windAt } from '../src/world/wind';
 import { habitatOf } from './worlds';
 
@@ -97,6 +97,18 @@ for (const { name, params } of MATRIX) {
     assert.ok(boatsNear(h, t, at.theta, at.s, 1).some((x) => x.boat === boat), 'near itself');
   });
 }
+
+test('sailing: a day planned ahead (in a worker) is the day sailed here', () => {
+  const h = habitatOf('small'), fleet = sailingOf(h), day = 9;
+  const planned = planDay(h, day);
+  assert.equal(planned.length, fleet.boats.length);
+  assert.ok(!dayKnown(h, day));
+  keepDay(h, day, planned);
+  assert.ok(dayKnown(h, day));
+  fleet.boats.forEach((b, id) => assert.equal(outingOf(h, b, day), planned[id], 'the very outing kept'));
+  const again = planDay(h, day);
+  again.forEach((o, id) => assert.deepEqual(o, planned[id], 'the same every time'));
+});
 
 test('sailing: sized by the blueprint, and validated', () => {
   const ids = (sailing: typeof REFERENCE.life.sailing) => validate(derive(withParams({ life: { ...REFERENCE.life, sailing } }))).map((f) => f.id);

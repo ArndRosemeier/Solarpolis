@@ -46,9 +46,9 @@ export function writeFlier(d: Float32Array, o: number, f: FlierInstance): void {
 }
 
 /** Turn v about the drone's up (y) by a. */
-const spun = (v: V3, a: F): V3 => { const c = cos(a), s = sin(a); return vec3(v.x.mul(c).add(v.z.mul(s)), v.y, v.z.mul(c).sub(v.x.mul(s))); };
+export const spun = (v: V3, a: F): V3 => { const c = cos(a), s = sin(a); return vec3(v.x.mul(c).add(v.z.mul(s)), v.y, v.z.mul(c).sub(v.x.mul(s))); };
 /** Tilt v nose down by `pitch` (about x), then roll it by `roll` (about z). */
-function tilted(v: V3, pitch: F, roll: F): V3 {
+export function tilted(v: V3, pitch: F, roll: F): V3 {
   const cp = cos(pitch), sp = sin(pitch), cr = cos(roll), sr = sin(roll);
   const y = v.y.mul(cp).sub(v.z.mul(sp)), z = v.y.mul(sp).add(v.z.mul(cp));
   return vec3(v.x.mul(cr).sub(y.mul(sr)), v.x.mul(sr).add(y.mul(cr)), z);

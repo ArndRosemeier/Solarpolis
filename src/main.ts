@@ -2,7 +2,7 @@ import { HomeControls } from './app/homeControls';
 import { homePlan } from './gen/homeInterior';
 import { underHousesIn, bayFrame } from './gen/underMesh';
 import { neighboursAt } from './sim/neighbourhood';
-import { boatsNear, sailingOf } from './sim/sailing';
+import { BOAT_KINDS, BOAT_KIND_LIST, boatAt, boatsNear, sailingOf, type Boat } from './sim/sailing';
 import { windAt } from './world/wind';
 import { ExitMarker } from './app/exitMarker';
 import { SpeechBubbles } from './app/bubbles';
@@ -164,6 +164,7 @@ const insideSlot = new ViewSlot('Hold the right mouse button to look around · W
   memory.track('talk', () => v.talkBytes());
   memory.track('animals', () => v.animalBytes());
   memory.track('birds', () => v.birdBytes());
+  memory.track('boats', () => v.boatBytes());
   return v;
 });
 const outsideSlot = new ViewSlot('Hold the right mouse button to swing around · wheel to come closer · 1 habitat, 2 Earth, 3 Moon, 4 nearest neighbour · F to fly (W A S D, E up, Q down, Shift faster)', 'Building the sky…', 'sky maps, stars and skin detail', (h) => OutsideView.create(h, (...args) => new VoyageComputer(...args)));
@@ -852,6 +853,37 @@ debug.add({
   },
 });
 /**
+ * Riding beside a boat: each press picks the next design (skiff, foiler, cruiser, then off) and the nearest boat of it
+ * under sail (or at its mooring, if none is out), and the eye keeps pace with it every frame, off its lee bow a couple
+ * of its lengths out and a little up, swinging round slowly as it tacks, looking at its wing.
+ */
+let riding: { boat: Boat; angle: number } | null = null, rideTurn = -1, rideSeen = '';
+debug.add({
+  label: 'Ride beside a boat: skiff → foiler → cruiser → off', group: 'Go', run: () => {
+    const v = view(), h = lab.habitat;
+    if (!v || !h) return;
+    rideTurn = (rideTurn + 1) % (BOAT_KIND_LIST.length + 1);
+    const kind = BOAT_KIND_LIST[rideTurn], { theta, s } = v.walker.at;
+    const near = kind ? boatsNear(h, v.time, theta, s, h.radius * 40).filter((b) => b.boat.kind === kind) : [];
+    const boat = near.find((b) => b.sailing) ?? near[0];
+    riding = boat ? { boat: boat.boat, angle: NaN } : null;
+    rideSeen = boat ? `riding beside a ${kind} ${boat.sailing ? 'under sail' : 'at its mooring'}` : kind ? `no ${kind} on this water` : '';
+  },
+});
+debug.addInfo(() => rideSeen);
+/** Keep the eye beside the boat being ridden with, this frame (dt: s). */
+function rideAlong(dt: number): void {
+  const v = view(), h = lab.habitat;
+  if (!riding || !v || !h) return;
+  const b = boatAt(h, riding.boat, v.time), spec = BOAT_KINDS[riding.boat.kind];
+  const want = b.heading - b.tack * 0.75;
+  riding.angle = Number.isFinite(riding.angle) ? riding.angle + angleDiff(riding.angle, want) * Math.min(1, dt * 0.5) : want;
+  const off = 2.2 * spec.length + 6, R = h.radius, ahead = b.speed * 0.5;
+  const at = { theta: b.theta + (Math.sin(b.heading) * ahead) / R, s: b.s + Math.cos(b.heading) * ahead };
+  const eye = toWorld(h.profile, { theta: at.theta + (Math.sin(riding.angle) * off) / R, s: at.s + Math.cos(riding.angle) * off, h: b.level + 0.3 * spec.mast + 1.5 });
+  floatToward(eye, toWorld(h.profile, { theta: at.theta, s: at.s, h: b.level + 0.35 * spec.mast }));
+}
+/**
  * The districts' works (gen/works.ts): each press floats by the work of the next kind (in `WORK_KINDS` order) nearest
  * the eye, two of its radii off and half of one up, looking at its middle; a work that faces along the axis is seen
  * from its face's side. The line names what it is and who made it.
@@ -1130,6 +1162,7 @@ debug.add({ label: 'Free the caches now (as when memory runs short)', group: 'Me
 let last = performance.now();
 const frame = (t: number): void => {
   debug.frame(t - last);
+  rideAlong(Math.min(0.1, (t - last) / 1000));
   last = t;
   requestAnimationFrame(frame);
 };

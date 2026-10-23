@@ -28,11 +28,11 @@ import { designBytes, designsOf, type DesignMesh, type DroneDesign } from '../ge
 import { HEARD_WITHIN, type Source } from '../sim/sources';
 import { ROLES, airBytes, fleetOf, flierAt, footingOf, talkerAt, type Flier } from '../sim';
 import type { WorkerPool } from '../workers/pool';
-import { DRONE, DRONE_VEIL, FLIER_LAYOUT, layInstances, roomForInstances } from './materials';
+import { DRONE, DRONE_VEIL, FLIER_LAYOUT, instancedLevel, roomForInstances } from './materials';
 import { drawSpecks, ownSpecks, pxPerMetre, roomForSpecks, type OwnSpecks } from './specks';
 import { turnFor, type Aloft, type Speaker } from './people';
 import { FLIER_STRIDE, writeFlier } from './droneShaders';
-import { drawnAnywhere, dropUploaded, freeMesh, instancedOf, meshGeometry, sendInstances } from './geometry';
+import { dropUploaded, freeMesh, sendInstances } from './geometry';
 
 /** A drone is drawn whole from this many pixels across, coarse down to `SPECK_PX`, a speck below. Back up at `BACK` × each. */
 const NEAR_PX = 48;
@@ -144,13 +144,10 @@ export class FlierView {
   private async onGpu(design: DroneDesign, fleet: number): Promise<Drawn> {
     const most = fleet + (design.role === 'person' ? PERSONS_ROOM : 0) || 1;
     const meshFor = (m: DesignMesh, name: string, body: boolean, buffer: Float32Array | InstancedInterleavedBuffer): { mesh: Mesh; buffer: InstancedInterleavedBuffer } => {
-      const g = instancedOf(meshGeometry(m.index, { position: [m.positions, 3], normal: [m.normals, 3], paint: [m.paint, 4], spin: body ? [m.spin, 4] : undefined }));
-      const shared = layInstances(g, buffer, FLIER_LAYOUT);
-      g.instanceCount = 0;
-      const mesh = drawnAnywhere(g, (body ? DRONE : DRONE_VEIL).material, `${design.name} ${name}`);
-      mesh.castShadow = body;
-      mesh.renderOrder = body ? 0 : 1;
-      return { mesh, buffer: shared };
+      const level = instancedLevel(m.index, { position: [m.positions, 3], normal: [m.normals, 3], paint: [m.paint, 4], spin: body ? [m.spin, 4] : undefined }, body ? DRONE : DRONE_VEIL, `${design.name} ${name}`, FLIER_LAYOUT, buffer);
+      level.mesh.castShadow = body;
+      level.mesh.renderOrder = body ? 0 : 1;
+      return level;
     };
     const levels = [];
     for (const [k, level] of [design.body, design.coarse.body].entries()) {

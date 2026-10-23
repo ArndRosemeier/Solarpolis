@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MATRIX, derive, fromWorld, toWorld, type Habitat, type HabitatParams } from '../src/blueprint';
+import { MATRIX, fromWorld, toWorld } from '../src/blueprint';
 import { legShapesOf, liftStairOf, onLeg, rampOf, riserAt, stairKeepsClear, stairStandAt, stairTopAt } from '../src/gen/liftStair';
 import { buildStairSolid, buildStairTile, stairGridOf, stairPartsIn, stairTilesFor, type StairParts } from '../src/gen/liftStairMesh';
 import { childrenOf, coverOf, rootTiles, tileId } from '../src/gen/detailTree';
@@ -8,12 +8,7 @@ import { FINISH } from '../src/gen/pavilion';
 import { outOfPlace } from '../src/gen/shapes';
 import { siteOf, planOf } from '../src/gen/plan';
 
-const habitats = new Map<string, Habitat>();
-const habitatOf = (name: string, params: HabitatParams): Habitat => {
-  let h = habitats.get(name);
-  if (!h) { h = derive(params); habitats.set(name, h); }
-  return h;
-};
+import { habitatOf } from './worlds';
 
 for (const { name, params } of MATRIX) {
   test(`lift stair (${name}): climbs the ramp from the floor to near the hub, every floor over the ground, steps of human size`, () => {

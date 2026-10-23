@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import { MATRIX, derive, validate, withParams } from '../src/blueprint';
 import { MAX_CLEARINGS, cloudClearings, cloudSpan, cloudsAt, coverThreshold } from '../src/world/clouds';
 import { planOf } from '../src/gen/plan';
-import { terrainOf } from './worlds';
+import { habitatOf, terrainOf } from './worlds';
 import { toWorld } from '../src/blueprint';
 
 for (const { name, params } of MATRIX) {
   test(`clouds (${name}): a layer over the whole floor, clear of the endcap slopes and the axis`, () => {
-    const h = derive(params), span = cloudSpan(h), c = params.clouds;
+    const h = habitatOf(name), span = cloudSpan(h), c = params.clouds;
     if (!c) { assert.equal(span, null); assert.equal(cloudsAt(h, 1000), null); return; }
     assert.ok(span);
     assert.ok(Math.abs(span.base - (h.radius - c.base)) < 1e-9 && Math.abs(span.base - span.top - c.thickness) < 1e-9);
@@ -26,7 +26,7 @@ for (const { name, params } of MATRIX) {
   });
 
   test(`clouds (${name}): they part round a Height that stands into the layer, out to where its flank falls below it`, () => {
-    const h = derive(params), c = params.clouds, list = cloudClearings(h);
+    const h = habitatOf(name), c = params.clouds, list = cloudClearings(h);
     if (!c) { assert.equal(list.length, 0); return; }
     const tall = planOf(h).grounds.filter((g) => g.kind === 'height' && g.height > c.base * 0.9);
     assert.equal(list.length, Math.min(MAX_CLEARINGS, tall.length));
@@ -39,7 +39,7 @@ for (const { name, params } of MATRIX) {
   });
 
   test(`cloud schedule (${name}): cover in range, changing over days, building in the afternoon, carried by the wind`, () => {
-    const h = derive(params), c = params.clouds;
+    const h = habitatOf(name), c = params.clouds;
     if (!c) return;
     const day = h.params.day.length, light = h.params.day.daylight;
     let lo = 1, hi = 0, sum = 0, n = 0, morning = 0, afternoon = 0;

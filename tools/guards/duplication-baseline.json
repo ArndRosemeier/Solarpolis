@@ -20,10 +20,6 @@
     "reason": "The leaf atlas (ported from Scale's getLeafAtlas) draws each cell with its own little leaf recipe: the twig cells share drawTwigCell and differ only in their numbers (shape, size, colour). That data reads best one recipe per cell, as in Scale."
   },
   {
-    "key": "idiom: [.Array .from] in solarpolis/gen/shapes.ts + solarpolis/render/plants.ts + solarpolis/render/solar.ts",
-    "reason": "Independent fixed-size geometry, plant and solar-population allocation; Array.from is syntax, not shared generation logic."
-  },
-  {
     "key": "idiom: [.acos .max .min Math] in solarpolis/render/solar.ts + solarpolis/space/voyage.ts + solarpolis/world/flyer.ts",
     "reason": "Clamping a dot product to the acos domain is a local floating-point safety idiom in unrelated geometry and attitude calculations."
   },
@@ -76,7 +72,7 @@
     "reason": "Independent renderer owners disable bounds for camera-relative meshes and prepare them through the existing Stage seam."
   },
   {
-    "key": "idiom: [.habitat .job .params .pool] in solarpolis/render/landmarks.ts + solarpolis/render/specks.ts + solarpolis/render/view.ts",
+    "key": "idiom: [.habitat .job .params .pool] in solarpolis/render/boats.ts + solarpolis/render/landmarks.ts + solarpolis/render/specks.ts + solarpolis/render/view.ts",
     "reason": "pool.job({ kind, params: habitat.params, ... }) is the one way to ask the worker pool for a job (workers/pool.ts); each view asks for its own kind of job."
   },
   {
@@ -126,10 +122,6 @@
   {
     "key": "idiom: [.setLayout] in solarpolis/render/builtShaders.ts + solarpolis/render/hamletSkies.ts + solarpolis/render/hullShaders.ts",
     "reason": "Independent TSL function layouts describe different shader formulas; explicit layouts are required by the shader policy."
-  },
-  {
-    "key": "idiom: [.smoothGrid] in solarpolis/gen/building.ts + solarpolis/gen/hallMesh.ts + solarpolis/gen/underMesh.ts",
-    "reason": "Existing building, hall and understorey generators call the same smoothGrid seam for different geometry."
   },
   {
     "key": "idiom: [.x0 .x1 .y0] in solarpolis/gen/hallMesh.ts + solarpolis/gen/homeInterior.ts + solarpolis/gen/homes.ts",
@@ -1344,7 +1336,7 @@
     "reason": "TSL arithmetic (add, mul, sub on nodes) is how every shader writes a formula; the formulas are each shader's own (a bird's wingbeat and plumage, the clouds, the materials)."
   },
   {
-    "key": "idiom: [.all .map Promise] in solarpolis/render/birds.ts + solarpolis/render/fliers.ts + solarpolis/render/necklace.ts",
+    "key": "idiom: [.all .map Promise] in solarpolis/render/birds.ts + solarpolis/render/boats.ts + solarpolis/render/fliers.ts + solarpolis/render/necklace.ts",
     "reason": "The views' shared shape (a group named for the debug menu, the stage and camera for pixels per metre, own specks, a scan of homes in a worker, the light where each is): the birds' view (render/birds.ts) follows the pattern of the drones' and animals' views and does its own work in each."
   },
   {
@@ -1372,7 +1364,7 @@
     "reason": "The views' shared shape (a group named for the debug menu, the stage and camera for pixels per metre, own specks, a scan of homes in a worker, the light where each is): the birds' view (render/birds.ts) follows the pattern of the drones' and animals' views and does its own work in each."
   },
   {
-    "key": "idiom: [.group .name] in solarpolis/render/animals.ts + solarpolis/render/birds.ts + solarpolis/render/fliers.ts + solarpolis/render/landmarks.ts + solarpolis/render/lift.ts + solarpolis/render/specks.ts",
+    "key": "idiom: [.group .name] in solarpolis/render/animals.ts + solarpolis/render/birds.ts + solarpolis/render/boats.ts + solarpolis/render/fliers.ts + solarpolis/render/landmarks.ts + solarpolis/render/lift.ts + solarpolis/render/specks.ts",
     "reason": "Each view names its scene group for the debug menu and the shader monitor's labels: one assignment. The birds (sim/birds.ts, render/birds.ts, render/birdShaders.ts) joined the group with the same plain idiom."
   },
   {
@@ -1393,10 +1385,6 @@
   },
   {
     "key": "idiom: [.mesh .specks] in solarpolis/render/animals.ts + solarpolis/render/birds.ts + solarpolis/render/fliers.ts + solarpolis/render/people.ts",
-    "reason": "The views that draw creatures (people, drones, squirrels) name the same things the same way (stage, camera, screen, specks, each one's horizon and litAt, a start promise, a group): their shared steps are seams (ownSpecks, roomForSpecks, drawSpecks, pxPerMetre in render/specks.ts; FigureLoads in render/actors/slots.ts; standAt in render/actors/figure.ts); what is left is each view's own. The birds (sim/birds.ts, render/birds.ts, render/birdShaders.ts) joined the group with the same plain idiom."
-  },
-  {
-    "key": "idiom: [.mesh .specks] in solarpolis/render/birds.ts + solarpolis/render/fliers.ts + solarpolis/render/people.ts",
     "reason": "The views that draw creatures (people, drones, squirrels) name the same things the same way (stage, camera, screen, specks, each one's horizon and litAt, a start promise, a group): their shared steps are seams (ownSpecks, roomForSpecks, drawSpecks, pxPerMetre in render/specks.ts; FigureLoads in render/actors/slots.ts; standAt in render/actors/figure.ts); what is left is each view's own. The birds (sim/birds.ts, render/birds.ts, render/birdShaders.ts) joined the group with the same plain idiom."
   },
   {
@@ -1582,5 +1570,181 @@
   {
     "key": "same name: solarpolis/app/voyageComputer.ts#bytes + solarpolis/render/birds.ts#bytes",
     "reason": "The views' shared lifecycle: bytes for the memory watchdog, one name on purpose; the birds' view (render/birds.ts) and the voyage computer count their own holdings."
+  },
+  {
+    "key": "clone: solarpolis/render/boatShaders.ts#writeBoat + solarpolis/render/droneShaders.ts#writeFlier",
+    "reason": "Each kind's instance layout written float by float (boatShaders.ts, droneShaders.ts): a shared writer would hide which float the shader reads where."
+  },
+  {
+    "key": "idiom: [.add .group .levels .mesh .specks] in solarpolis/render/birds.ts + solarpolis/render/boats.ts + solarpolis/render/fliers.ts",
+    "reason": "The instanced views' shared shape (render/fliers.ts, birds.ts, boats.ts): designs built in workers and put on the GPU before any is shown, every level written in one frame with its specks, holes counted; each view's own things differ (rotors and people in drone bodies, wingbeats and nests, wings and wakes). The seams they share are layInstances, instancedLevel, roomForInstances, ownSpecks and writeSpeck."
+  },
+  {
+    "key": "idiom: [.buffer .count .geometry .instanceCount] in solarpolis/render/birds.ts + solarpolis/render/boats.ts + solarpolis/render/fliers.ts",
+    "reason": "The instanced views' shared shape (render/fliers.ts, birds.ts, boats.ts): designs built in workers and put on the GPU before any is shown, every level written in one frame with its specks, holes counted; each view's own things differ (rotors and people in drone bodies, wingbeats and nests, wings and wakes). The seams they share are layInstances, instancedLevel, roomForInstances, ownSpecks and writeSpeck."
+  },
+  {
+    "key": "idiom: [.camera .screen .stage] in solarpolis/render/animals.ts + solarpolis/render/boats.ts + solarpolis/render/fliers.ts",
+    "reason": "The instanced views' shared shape (render/fliers.ts, birds.ts, boats.ts): designs built in workers and put on the GPU before any is shown, every level written in one frame with its specks, holes counted; each view's own things differ (rotors and people in drone bodies, wingbeats and nests, wings and wakes). The seams they share are layInstances, instancedLevel, roomForInstances, ownSpecks and writeSpeck."
+  },
+  {
+    "key": "idiom: [.count .data] in solarpolis/render/birds.ts + solarpolis/render/boats.ts + solarpolis/render/fliers.ts",
+    "reason": "The instanced views' shared shape (render/fliers.ts, birds.ts, boats.ts): designs built in workers and put on the GPU before any is shown, every level written in one frame with its specks, holes counted; each view's own things differ (rotors and people in drone bodies, wingbeats and nests, wings and wakes). The seams they share are layInstances, instancedLevel, roomForInstances, ownSpecks and writeSpeck."
+  },
+  {
+    "key": "idiom: [.counts .drawn] in solarpolis/render/birds.ts + solarpolis/render/boats.ts + solarpolis/render/fliers.ts",
+    "reason": "The instanced views' shared shape (render/fliers.ts, birds.ts, boats.ts): designs built in workers and put on the GPU before any is shown, every level written in one frame with its specks, holes counted; each view's own things differ (rotors and people in drone bodies, wingbeats and nests, wings and wakes). The seams they share are layInstances, instancedLevel, roomForInstances, ownSpecks and writeSpeck."
+  },
+  {
+    "key": "idiom: [.counts .level] in solarpolis/render/birds.ts + solarpolis/render/boats.ts + solarpolis/render/fliers.ts",
+    "reason": "The instanced views' shared shape (render/fliers.ts, birds.ts, boats.ts): designs built in workers and put on the GPU before any is shown, every level written in one frame with its specks, holes counted; each view's own things differ (rotors and people in drone bodies, wingbeats and nests, wings and wakes). The seams they share are layInstances, instancedLevel, roomForInstances, ownSpecks and writeSpeck."
+  },
+  {
+    "key": "idiom: [.disposed .mesh .prepare .stage] in solarpolis/render/birds.ts + solarpolis/render/boats.ts + solarpolis/render/fliers.ts",
+    "reason": "The instanced views' shared shape (render/fliers.ts, birds.ts, boats.ts): designs built in workers and put on the GPU before any is shown, every level written in one frame with its specks, holes counted; each view's own things differ (rotors and people in drone bodies, wingbeats and nests, wings and wakes). The seams they share are layInstances, instancedLevel, roomForInstances, ownSpecks and writeSpeck."
+  },
+  {
+    "key": "idiom: [.disposed .now .slowest .some performance] in solarpolis/render/birds.ts + solarpolis/render/boats.ts + solarpolis/render/fliers.ts",
+    "reason": "The instanced views' shared shape (render/fliers.ts, birds.ts, boats.ts): designs built in workers and put on the GPU before any is shown, every level written in one frame with its specks, holes counted; each view's own things differ (rotors and people in drone bodies, wingbeats and nests, wings and wakes). The seams they share are layInstances, instancedLevel, roomForInstances, ownSpecks and writeSpeck."
+  },
+  {
+    "key": "idiom: [.drawn .specks] in solarpolis/render/birds.ts + solarpolis/render/boats.ts + solarpolis/render/fliers.ts",
+    "reason": "The instanced views' shared shape (render/fliers.ts, birds.ts, boats.ts): designs built in workers and put on the GPU before any is shown, every level written in one frame with its specks, holes counted; each view's own things differ (rotors and people in drone bodies, wingbeats and nests, wings and wakes). The seams they share are layInstances, instancedLevel, roomForInstances, ownSpecks and writeSpeck."
+  },
+  {
+    "key": "idiom: [.lessThan .sub] in solarpolis/render/birdShaders.ts + solarpolis/render/builtShaders.ts + solarpolis/render/materials.ts",
+    "reason": "TSL comparisons (a code or distance within a margin), one per shader: nothing to share but the operators."
+  },
+  {
+    "key": "same name: solarpolis/app/voyageComputer.ts#bytes + solarpolis/render/boats.ts#bytes",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/activityProps.ts#dispose + solarpolis/render/boats.ts#dispose",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/animals.ts#bytes + solarpolis/render/boats.ts#bytes",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/animals.ts#dispose + solarpolis/render/boats.ts#dispose",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/birds.ts#bytes + solarpolis/render/boats.ts#bytes",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/birds.ts#dispose + solarpolis/render/boats.ts#dispose",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/birds.ts#start + solarpolis/render/boats.ts#start",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/boats.ts#bytes + solarpolis/render/fliers.ts#bytes",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/boats.ts#bytes + solarpolis/render/glassDeck.ts#bytes",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/boats.ts#bytes + solarpolis/render/homes.ts#bytes",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/boats.ts#bytes + solarpolis/render/people.ts#bytes",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/boats.ts#bytes + solarpolis/render/specks.ts#bytes",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/boats.ts#dispose + solarpolis/render/fliers.ts#dispose",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/boats.ts#dispose + solarpolis/render/homes.ts#dispose",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/boats.ts#dispose + solarpolis/render/landmarks.ts#dispose",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/boats.ts#dispose + solarpolis/render/people.ts#dispose",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/boats.ts#dispose + solarpolis/render/solar.ts#dispose",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/boats.ts#dispose + solarpolis/render/specks.ts#dispose",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/boats.ts#dispose + solarpolis/render/traffic.ts#dispose",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/boats.ts#dispose + solarpolis/render/vessel.ts#dispose",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/boats.ts#follow + solarpolis/render/fliers.ts#follow",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/boats.ts#follow + solarpolis/render/hullDetail.ts#follow",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/boats.ts#follow + solarpolis/render/landmarks.ts#follow",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/boats.ts#follow + solarpolis/render/necklace.ts#follow",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/boats.ts#follow + solarpolis/render/people.ts#follow",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/boats.ts#follow + solarpolis/render/plants.ts#follow",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/boats.ts#follow + solarpolis/render/terrain.ts#follow",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/boats.ts#follow + solarpolis/render/tiled.ts#follow",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/boats.ts#follow + solarpolis/render/traffic.ts#follow",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/boats.ts#info + solarpolis/render/fliers.ts#info",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/boats.ts#info + solarpolis/render/homes.ts#info",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/boats.ts#info + solarpolis/render/specks.ts#info",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/boats.ts#start + solarpolis/render/fliers.ts#start",
+    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
   }
 ]

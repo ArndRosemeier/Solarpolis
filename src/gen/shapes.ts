@@ -145,9 +145,24 @@ export class Shape {
       this.quad(ring(k, 0), ring(k + 1, 0), ring(k + 1, height), ring(k, height), n, col);
     }
     // The cap: a fan around its middle.
-    const base = this.vertices, top = along(c, ex, 0, ey, 0, up, height);
-    for (const p of [top, ...Array.from({ length: sides }, (_, k) => ring(k, height))]) this.put(p, up, col);
-    for (let k = 0; k < sides; k++) this.idx.push(base, base + 1 + k, base + 1 + ((k + 1) % sides));
+    this.capFan(along(c, ex, 0, ey, 0, up, height), Array.from({ length: sides }, (_, k) => ring(k, height)), up, col);
+  }
+
+  /**
+   * A flat cap: triangles from `centre` to each edge of a closed ring of points round it (a transom, a foot), facing
+   * `n` whichever way round the ring is given.
+   */
+  capFan(centre: Vec3, ring: readonly Vec3[], n: Vec3, col?: RGB): void {
+    const base = this.vertices, k = ring.length;
+    // Which way round the ring runs, seen from where n points: by the sum of its triangles' normals.
+    let turn = 0;
+    for (let i = 0; i < k; i++) turn += v3dot(v3cross(v3sub(ring[i], centre), v3sub(ring[(i + 1) % k], centre)), n);
+    this.put(centre, n, col);
+    for (const p of ring) this.put(p, n, col);
+    for (let i = 0; i < k; i++) {
+      const a = base + 1 + i, b = base + 1 + ((i + 1) % k);
+      if (turn >= 0) this.idx.push(base, a, b); else this.idx.push(base, b, a);
+    }
   }
 
   /**

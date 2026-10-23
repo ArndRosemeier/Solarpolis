@@ -11,7 +11,7 @@
  */
 import { MeshBasicNodeMaterial, MeshPhysicalNodeMaterial, MeshStandardNodeMaterial, DoubleSide, BackSide, FrontSide, AdditiveBlending, type Material } from 'three/webgpu';
 import { Fn, If, abs, atan, attribute, faceDirection, mod, screenCoordinate, cross, dFdx, dFdy, floor, fwidth, length, fract, inverseSqrt, log2, mx_noise_float, uv, cameraPosition, hash, normalLocal, step, time, varying, clamp, color, cos, log, select, sign, sqrt, dot, exp, float, max, mix, normalize, min, modelWorldMatrix, normalWorld, positionLocal, positionWorld, pow, sin, smoothstep, texture, uniform, vec2, vec3, vec4, vertexColor } from 'three/tsl';
-import { DataTexture, Uint8BufferAttribute, RGBAFormat, UnsignedByteType, Vector4, DataUtils, Float32BufferAttribute, HalfFloatType, InstancedBufferAttribute, InstancedInterleavedBuffer, InterleavedBufferAttribute, RedFormat, Vector2, Vector3, type BufferGeometry } from 'three/webgpu';
+import { DataTexture, Uint8BufferAttribute, RGBAFormat, UnsignedByteType, Vector4, DataUtils, Float32BufferAttribute, HalfFloatType, InstancedBufferAttribute, InstancedInterleavedBuffer, InterleavedBufferAttribute, RedFormat, Vector2, Vector3, type BufferGeometry, type Mesh } from 'three/webgpu';
 import { PLANT_STRIDE } from '../gen/scatter';
 import { BARK_STRIPS } from '../gen/trees';
 import { BARK_TEXELS } from '../gen/foliage';
@@ -32,6 +32,7 @@ import { cabinScreen, cabinSurface, cabinSign, vesselHull } from './vesselShader
 import { cellHash, floorShare, floorSurface, rockFromAfar, snowOver, woodsFromAfar } from './groundShaders';
 import { RISE_RANGE } from '../gen/tiles';
 import { filtered } from './textures';
+import { drawnAnywhere, instancedOf, meshGeometry } from './geometry';
 import { cloudMarch, cloudShade } from './cloudShaders';
 import { builtAlbedo, roofHorizons, stillWater, windowPane } from './builtShaders';
 import { hamletSky, screenSurface } from './hamletSkies';
@@ -41,6 +42,8 @@ import { speckLook, standInHorizon, standInPose, unpack } from './crowdShaders';
 import { SPECK_ATTRIBUTES, SPECK_SHOWN, SPECK_STRIDE, STAND_IN_ATTRIBUTES, STAND_IN_STRIDE } from '../gen/standIn';
 import { FLIER_ATTRIBUTES, FLIER_STRIDE, flierPose } from './droneShaders';
 import { BIRD_ATTRIBUTES, BIRD_STRIDE, birdPattern, birdPose } from './birdShaders';
+import { BOAT_ATTRIBUTES, BOAT_STRIDE, boatPose, wakePose } from './boatShaders';
+import { BOAT_FINISH } from '../gen/boat';
 import { LIGHT_SCALE, VEIL_LIGHT } from '../gen/drone';
 import { boreColor, flameColor, hardwareColor, lampColor, radiatorColor, skinColor, skinDetailColor, skinShown } from './hullShaders';
 
@@ -274,6 +277,18 @@ export function setCanopyBand(band: readonly [number, number]): void {
 /** The sunline tube's colour where its emission is `glow`: brighter than white, so the tone mapping rolls it off. */
 const tubeLight = (glow: Node<'float'>): Node<'vec3'> => vec3(6, 5.4, 4.6).mul(glow);
 
+/**
+ * The sunline in a mirror at p (world) facing n, seen along `ray` (unit, from the eye): where the reflected ray passes
+ * the axis within the tube's glow, as bright as the tube there. Times the mirror's share, through `tubeLight`.
+ */
+function tubeGlint(p: Node<'vec3'>, ray: Node<'vec3'>, n: Node<'vec3'>): Node<'float'> {
+  const r = ray.sub(n.mul(dot(n, ray).mul(2)));
+  const rxy = max(dot(r.xy, r.xy), 1e-6), t = dot(p.xy, r.xy).negate().div(rxy);
+  const miss = p.xy.add(r.xy.mul(t)).length();
+  const tube = texture(emissionTexture, vec2(p.z.add(r.z.mul(t)).div(light.length), 0.5)).r;
+  return smoothstep(light.nearest.mul(1.5), light.nearest.mul(0.25), miss).mul(step(0, t)).mul(tube);
+}
+
 /** The sunline: the glowing tube along the axis, brighter where the travelling sun is. Brighter than white, so the tone mapping rolls it off. */
 export const SUNLINE = kind('sunline', ['position', 'normal'], { cast: false, receive: false }, () => {
   const m = new MeshBasicNodeMaterial({ side: DoubleSide });
@@ -313,12 +328,7 @@ export const WATER = kind('water', ['position', 'normal', 'flow', 'dir'], { cast
   const ray = normalize(positionWorld.sub(cameraPosition));
   const facing = abs(dot(n, ray.negate()));
   const mirror = pow(float(1).sub(facing), 5).mul(0.9).add(0.04);
-  // The sunline's glint: where the reflected ray passes the axis within the tube's glow, as bright as the tube there.
-  const r = ray.sub(n.mul(dot(n, ray).mul(2)));
-  const rxy = max(dot(r.xy, r.xy), 1e-6), t = dot(p.xy, r.xy).negate().div(rxy);
-  const miss = p.xy.add(r.xy.mul(t)).length();
-  const tube = texture(emissionTexture, vec2(p.z.add(r.z.mul(t)).div(light.length), 0.5)).r;
-  const glint = smoothstep(light.nearest.mul(1.5), light.nearest.mul(0.25), miss).mul(step(0, t)).mul(tube).mul(mirror);
+  const glint = tubeGlint(p, ray, n).mul(mirror);
   const lit = sunlit(vec2(OPEN_SKY, OPEN_SKY), up);
   // The body: deep in the middle, the bed showing in the shallows by the banks.
   const shallow = smoothstep(0.55, 1, abs(flow.x)).mul(0.7).mul(river);
@@ -694,10 +704,11 @@ export function standInAttribute(g: BufferGeometry, name: string): boolean {
   else if (name === SPECK_SHOWN) g.setAttribute(SPECK_SHOWN, new InstancedBufferAttribute(new Float32Array(1), 1));
   else if ((FLIER_ATTRIBUTES as readonly string[]).includes(name)) { if (name === FLIER_ATTRIBUTES[0]) layInstances(g, new Float32Array(FLIER_STRIDE), FLIER_LAYOUT); }
   else if ((BIRD_ATTRIBUTES as readonly string[]).includes(name)) { if (name === BIRD_ATTRIBUTES[0]) layInstances(g, new Float32Array(BIRD_STRIDE), BIRD_LAYOUT); }
+  else if ((BOAT_ATTRIBUTES as readonly string[]).includes(name)) { if (name === BOAT_ATTRIBUTES[0]) layInstances(g, new Float32Array(BOAT_STRIDE), BOAT_LAYOUT); }
   else if (name === 'birdPart' || name === 'birdFiber') g.setAttribute(name, new Float32BufferAttribute(new Array(12).fill(0), 4));
   else if (name === 'birdFolded') g.setAttribute(name, new Float32BufferAttribute(new Array(9).fill(0), 3));
   else if (name === 'paint') g.setAttribute('paint', new Uint8BufferAttribute(new Array(12).fill(0), 4, true));
-  else if (name === 'spin') g.setAttribute('spin', new Float32BufferAttribute(new Array(12).fill(0), 4));
+  else if (name === 'spin' || name === 'rig') g.setAttribute(name, new Float32BufferAttribute(new Array(12).fill(0), 4));
   else if (name === 'part') g.setAttribute('part', new Float32BufferAttribute(new Array(6).fill(0), 2));
   else if (name === 'uv' || name === 'glow') g.setAttribute(name, new Float32BufferAttribute(new Array(6).fill(0), 2));
   else if (name === 'floorA' || name === 'floorB') g.setAttribute(name, new Uint8BufferAttribute(new Array(12).fill(name === 'floorA' ? 255 : 0), 4, true));
@@ -965,25 +976,92 @@ export const BIRD = kind('bird', ['position', 'normal', 'birdFolded', 'birdPart'
   return m;
 });
 
+/**
+ * Boats (render/boats.ts; their designs gen/boat.ts), near and at the coarse level: one instanced mesh per design and
+ * level, each boat posed by `boatPose` (boatShaders.ts: its wing turned to the wind, heeled, trimmed and rocking,
+ * lifted on its foils) and stood along its up as people are. Each surface by its finish (`BOAT_FINISH`): matte decks
+ * and nets; gloss composite and the boat's own livery under a clear coat, which mirrors the haze at grazing angles
+ * and throws back a glint of the sunline where it faces it, as the water does; tinted glass, more mirror than body;
+ * lights of their own; and the wing's film with its battens across it (their mean where they are finer than a
+ * pixel). Lit by the sunline past the horizons where the boat is. They cast shadows.
+ */
+export const BOAT = kind('boat', ['position', 'normal', 'paint', 'rig', ...BOAT_ATTRIBUTES], { cast: true, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial();
+  const pose = boatPose(), turned = uprightAt(pose.at, pose.turn);
+  m.positionNode = pose.at.add(turned(pose.local));
+  const n = normalize(varying(normalize(turned(pose.normal))));
+  const paint = attribute<'vec4'>('paint', 'vec4'), finish = floor(paint.w.mul(255).add(0.5));
+  const is = (f: number): Node<'bool'> => abs(finish.sub(f)).lessThan(0.5);
+  const lamp = is(BOAT_FINISH.light), matte = is(BOAT_FINISH.matte), glass = is(BOAT_FINISH.glass);
+  // The film's battens, across the wing (its own height, before it turns).
+  const y = varying(positionLocal.y), px = fwidth(y), off = abs(fract(y.div(BATTEN)).sub(0.5)).mul(BATTEN);
+  const batten = mix(float(1).sub(smoothstep(BATTEN_WIDTH / 2, px.add(BATTEN_WIDTH / 2 + 1e-4), off)), float(BATTEN_WIDTH / BATTEN), smoothstep(BATTEN * 0.25, BATTEN * 0.6, px));
+  const painted = select(is(BOAT_FINISH.livery), paint.rgb.mul(pose.livery), paint.rgb);
+  const albedo = select(is(BOAT_FINISH.film), mix(painted, vec3(0.03, 0.032, 0.035), batten), painted);
+  // The clear coat (Schlick): its share of mirror from straight on to grazing; none on matte surfaces and lights.
+  const ray = normalize(positionWorld.sub(cameraPosition)), facing = clamp(dot(n, ray.negate()), 0, 1);
+  const base = select(glass, float(0.06), float(0.04)), coat = select(matte, float(0), select(lamp, float(0), float(1)));
+  const mirror = base.add(float(1).sub(base).mul(pow(float(1).sub(facing), 5))).mul(coat);
+  const shine = air.haze.mul(mirror).add(tubeLight(tubeGlint(worldPosition(), ray, n).mul(mirror)));
+  m.colorNode = personColor(select(lamp, vec3(0), albedo.mul(float(1).sub(mirror))), n, pose.horizon, select(lamp, paint.rgb.mul(BOAT_LIGHT), vec3(0)).add(shine));
+  return m;
+});
+
+/**
+ * A boat's wake (gen/boat.ts, its own mesh): white water flat on the surface behind each hull and off its bows,
+ * stretched with its speed (`wakePose`, boatShaders.ts), in patches fixed in the water that the boat slides past and
+ * that churn slowly (their mean where finer than a pixel), fading to its end. Lit as the boat is.
+ */
+export const BOAT_WAKE = kind('boat wake', ['position', 'normal', 'paint', 'rig', ...BOAT_ATTRIBUTES], { cast: false, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial({ side: DoubleSide, transparent: true, depthWrite: false });
+  const pose = wakePose(), turned = uprightAt(pose.at, pose.turn);
+  m.positionNode = pose.at.add(turned(pose.local));
+  const paint = attribute<'vec4'>('paint', 'vec4'), up = normalize(varying(turned(vec3(0, 1, 0))));
+  const q = worldPosition();
+  const patches = mx_noise_float(q.mul(0.8).add(vec3(0, 0, time.mul(0.15)))).mul(0.6).add(mx_noise_float(q.mul(2.9)).mul(0.4)).mul(0.5).add(0.5);
+  const foam = mix(smoothstep(0.35, 0.7, patches), float(0.5), smoothstep(0.1, 0.5, length(fwidth(q.mul(2.9)))));
+  m.colorNode = personColor(paint.rgb, up, pose.horizon);
+  m.opacityNode = paint.w.mul(pow(float(1).sub(pose.along), 1.5)).mul(pose.foam).mul(foam.mul(0.8).add(0.2));
+  return m;
+});
+
+/** The wing film's battens: one every this many metres up it, this wide. A boat's lights, × their colour. */
+const BATTEN = 0.55;
+const BATTEN_WIDTH = 0.035;
+const BOAT_LIGHT = 4;
+
 /** How wide a hazard stripe is (m, along the drone's x + y + z): a pair is twice this. */
 const HAZARD_STRIPE = 0.05;
 
-/** How instances are laid out (gen/standIn.ts, droneShaders.ts, birdShaders.ts): the stand-ins' floats and attributes, the specks', the drones', the birds'. */
+/** How instances are laid out (gen/standIn.ts, droneShaders.ts, birdShaders.ts, boatShaders.ts): the stand-ins' floats and attributes, the specks', the drones', the birds', the boats'. */
 export const STAND_IN_LAYOUT = { stride: STAND_IN_STRIDE, attributes: STAND_IN_ATTRIBUTES } as const;
 export const SPECK_LAYOUT = { stride: SPECK_STRIDE, attributes: SPECK_ATTRIBUTES } as const;
 export const FLIER_LAYOUT = { stride: FLIER_STRIDE, attributes: FLIER_ATTRIBUTES } as const;
 export const BIRD_LAYOUT = { stride: BIRD_STRIDE, attributes: BIRD_ATTRIBUTES } as const;
-export type Layout = typeof STAND_IN_LAYOUT | typeof SPECK_LAYOUT | typeof FLIER_LAYOUT | typeof BIRD_LAYOUT;
+export const BOAT_LAYOUT = { stride: BOAT_STRIDE, attributes: BOAT_ATTRIBUTES } as const;
+export type Layout = typeof STAND_IN_LAYOUT | typeof SPECK_LAYOUT | typeof FLIER_LAYOUT | typeof BIRD_LAYOUT | typeof BOAT_LAYOUT;
 
 /**
  * Put instances on a geometry, `layout.stride` floats each in vec4 attributes: the stand-ins (CROWD), the specks
- * (SPECK), the drones (DRONE, DRONE_VEIL) or the birds (BIRD). Pass the buffer of another mesh to share it (a drone's body and veil).
+ * (SPECK), the drones (DRONE, DRONE_VEIL), the birds (BIRD) or the boats (BOAT, BOAT_WAKE). Pass the buffer of another mesh to share it (a drone's body and veil, a boat's body and wake).
  * The one way.
  */
 export function layInstances(g: BufferGeometry, data: Float32Array | InstancedInterleavedBuffer, layout: Layout): InstancedInterleavedBuffer {
   const buffer = data instanceof InstancedInterleavedBuffer ? data : new InstancedInterleavedBuffer(data, layout.stride);
   layout.attributes.forEach((name, k) => g.setAttribute(name, new InterleavedBufferAttribute(buffer, 4, k * 4)));
   return buffer;
+}
+
+/**
+ * One level of something drawn many times over (a drone's body or veil, a boat's body or wake) as an instanced mesh of
+ * a kind: its vertex `attributes` and `index`, its instances laid out as `layout` in `data` (or in another level's
+ * buffer, to share it), none drawn yet. The one way.
+ */
+export function instancedLevel(index: Uint32Array, attributes: Record<string, readonly [Float32Array | Uint8Array, number] | undefined>, k: Kind, name: string, layout: Layout, data: Float32Array | InstancedInterleavedBuffer): { mesh: Mesh; buffer: InstancedInterleavedBuffer } {
+  const g = instancedOf(meshGeometry(index, attributes));
+  const buffer = layInstances(g, data, layout);
+  g.instanceCount = 0;
+  return { mesh: drawnAnywhere(g, k.material, name), buffer };
 }
 
 /**
@@ -1083,5 +1161,5 @@ export function animalEyeMaterial(): Material {
 
 /** Every kind, for the Stage's warm-up. */
 export function allKinds(): readonly Kind[] {
-  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS, STONE, BUILT, VAULT, PROP, CROWD, SPECK, DRONE, DRONE_VEIL, BIRD, CLOUDS_FAR, CLOUDS_NEAR];
+  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS, STONE, BUILT, VAULT, PROP, CROWD, SPECK, DRONE, DRONE_VEIL, BIRD, BOAT, BOAT_WAKE, CLOUDS_FAR, CLOUDS_NEAR];
 }

@@ -1,14 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MATRIX, derive, validate, withParams } from '../src/blueprint';
-import { terrainOf } from './worlds';
+import { habitatOf, terrainOf } from './worlds';
 import { COURT, GROUND, WAY_CLEAR, courtCap, entrancesOf, fromLake, planOf } from '../src/gen/plan';
 
 const TURN = 2 * Math.PI;
 const wrap = (a: number): number => a - TURN * Math.round(a / TURN);
 
 for (const { name, params } of MATRIX) {
-  const h = derive(params), plan = planOf(h), spec = params.relief.landforms!, R = h.radius, { floorEnd } = h.profile;
+  const h = habitatOf(name), plan = planOf(h), spec = params.relief.landforms!, R = h.radius, { floorEnd } = h.profile;
   const rings = plan.grounds.filter((g) => g.kind === 'ring'), heights = plan.grounds.filter((g) => g.kind === 'height');
 
   test(`landforms (${name}): Rings across the worked floor, apart, clear of the lake; Heights on the ridges, tallest first`, () => {
