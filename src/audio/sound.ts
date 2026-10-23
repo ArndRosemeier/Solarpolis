@@ -367,7 +367,7 @@ export class Sound {
     if (h.time < this.callsUntil - CLOCK_JUMP || h.time > this.callsUntil + CLOCK_JUMP) this.callsUntil = h.time;
     const until = h.time + CALLS_AHEAD;
     if (until > this.callsUntil) {
-      for (const c of callsIn(h.ecology, h.birds, this.callsUntil, until, h.listener)) this.call(c, now + Math.max(0, c.t - h.time));
+      for (const c of callsIn(h.ecology, h.birds, this.callsUntil, until, h.listener, h.flocks)) this.call(c, now + Math.max(0, c.t - h.time));
       this.callsUntil = until;
     }
     this.hearNear(h, now);

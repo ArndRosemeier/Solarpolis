@@ -35,6 +35,7 @@ import { birdBody, type BirdBody, type BirdKind } from '../gen/birds';
 import { boatDesign, type BoatDesign, type BoatKind } from '../gen/boat';
 import { planDay, type Outing } from '../sim/sailing';
 import { nestsNear, type Nest } from '../sim/birds';
+import { flocksNear, type Flock } from '../sim/flocks';
 import type { VoyageRequest } from './voyage';
 import type { VoyagePlan } from '../space/voyage';
 
@@ -69,6 +70,8 @@ export type GenRequest =
   | { kind: 'coats'; ask: CoatAsk }
   /** The birds whose homes lie within `radius` m of (θ, s) (sim/birds.ts). */
   | { kind: 'birds'; params: HabitatParams; theta: number; s: number; radius: number }
+  /** The flocks whose birds may come within `radius` m of (θ, s) (sim/flocks.ts). */
+  | { kind: 'flocks'; params: HabitatParams; theta: number; s: number; radius: number }
   /** A bird species' body at both levels (gen/birds.ts). */
   | { kind: 'bird'; bird: BirdKind }
   /** A boat design, both levels and its wake (gen/boat.ts). */
@@ -96,6 +99,7 @@ export type GenAnswer =
   | { kind: 'herds'; homes: Herd[] }
   | { kind: 'coats'; coats: Coats }
   | { kind: 'birds'; nests: Nest[] }
+  | { kind: 'flocks'; flocks: Flock[] }
   | { kind: 'bird'; body: BirdBody }
   | { kind: 'boat'; design: BoatDesign }
   | { kind: 'sailing'; day: number; outings: (Outing | null)[] }
@@ -224,6 +228,11 @@ self.onmessage = async (e: MessageEvent<GenRequest>) => {
     }
     if (req.kind === 'birds') {
       post({ kind: 'birds', nests: nestsNear(ecology, plants, req.theta, req.s, req.radius) });
+      return;
+    }
+    if (req.kind === 'flocks') {
+      // Copies of the swallows' ground grids go: the flocks are kept here for the next ask.
+      post({ kind: 'flocks', flocks: flocksNear(ecology, plants, req.theta, req.s, req.radius).map((f) => ({ ...f, floor: f.floor && f.floor.slice() })) });
       return;
     }
     if (req.kind === 'herds') {

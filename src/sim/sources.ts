@@ -21,7 +21,7 @@ import type { DroneRole } from '../blueprint';
 import { TOSS } from './props';
 import { byTime, stepSurfaceAt, strideAt } from './sounds';
 
-export type SourceKind = 'person' | 'shell' | 'deer' | 'squirrel' | 'drone' | 'lift' | 'stage';
+export type SourceKind = 'person' | 'shell' | 'deer' | 'squirrel' | 'drone' | 'lift' | 'stage' | 'flock';
 
 /** A tool at work: sawing at a bench, chopping or tapping a chisel, pruning (tenders in the orchards). */
 export type Tool = 'saw' | 'mallet' | 'shears';
@@ -52,6 +52,9 @@ export interface Source {
   tool?: Tool;
   /** Drones: their role. */
   role?: DroneRole;
+  /** Flocks: how many birds make the sound, and how much of the flock does it now (0 … 1; sim/flocks.ts `flockNoise`). */
+  birds?: number;
+  loud?: number;
 }
 
 /** A one-shot: which sound (an id in public/sound/index.json), which of its takes, from where, when (clock s), how loud and at what pitch. */
@@ -72,7 +75,7 @@ export interface Hum {
 }
 
 /** How far each kind is heard at all (m): past it a view need not hand it over. */
-export const HEARD_WITHIN: Readonly<Record<SourceKind, number>> = { person: 40, shell: 40, deer: 60, squirrel: 30, drone: 150, lift: 40, stage: 90 };
+export const HEARD_WITHIN: Readonly<Record<SourceKind, number>> = { person: 40, shell: 40, deer: 60, squirrel: 30, drone: 150, lift: 40, stage: 90, flock: 800 };
 
 /** A deer's hooves fall this far apart (m): its walk covers a little under a body length a cycle, two hooves heard in it. */
 const HOOF_STRIDE = 0.45;
@@ -154,7 +157,7 @@ export function cuesOf(e: Ecology, src: Source, t0: number, t1: number, gravity:
       // Tenders prune as they work over the orchards and gardens.
       if (src.role === 'tender' && src.doing === 'work') work('shears', 0.5);
       break;
-    case 'lift': case 'stage':
+    case 'lift': case 'stage': case 'flock':
       break;
   }
   return out.sort(byTime);
@@ -173,6 +176,9 @@ const DRONE_HUM: Readonly<Record<DroneRole, string>> = {
   courier: 'drone/courier', person: 'drone/courier', tender: 'drone/tender', lifter: 'drone/lifter', glider: 'drone/glider', surveyor: 'drone/high', guardian: 'drone/high',
 };
 
+/** A flock's sound for each bird's square root (a murmuration of 2500 at full strength). */
+const FLOCK_GAIN = 0.02;
+
 /** The music a dancing party plays (files `music/dance-*`), chosen by the party. */
 export const DANCES = ['music/dance-a', 'music/dance-b'] as const;
 
@@ -189,6 +195,12 @@ export function humOf(src: Source): Hum | null {
       return { sound: 'lift/hum', gain: 0.5, pitch: 1 };
     case 'stage':
       return { sound: STAGE, gain: 0.8, pitch: 1 };
+    case 'flock': {
+      // Thousands of birds, each too quiet to pick out: together as loud as the square root of how many.
+      const loud = (src.loud ?? 0) * Math.min(1, FLOCK_GAIN * Math.sqrt(src.birds ?? 0));
+      if (loud <= 0.01) return null;
+      return { sound: src.doing === 'wings' ? 'flock/wings' : 'flock/starlings', gain: loud, pitch: 0.97 + 0.06 * roll(src.key, 47, 0, 0) };
+    }
     case 'person': case 'shell':
       // A dancing party's music, played from where its first member stands.
       if (src.doing !== 'dance' || src.member !== 0) return null;
