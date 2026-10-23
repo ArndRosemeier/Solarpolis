@@ -31,6 +31,7 @@ import { InteriorView } from './render/view';
 import { talksWithHands } from './render/people';
 import { speckMark } from './render/crowdShaders';
 import { OutsideView } from './render/outside';
+import { VoyageComputer } from './app/voyageComputer';
 import { hubView } from './space';
 import { fromWorld, toWorld, type DebrisSpec, type Habitat, type Vec3 } from './blueprint';
 import { levelRunOf, nearestOf, onRow, plantsOf, slopeAt, type Level } from './gen/scatter';
@@ -59,8 +60,8 @@ const debug = new DebugMenu();
 // ---- the header ---------------------------------------------------------------------------------
 const header = el('header', 'top');
 const tabs = el('nav', 'tabs');
-const labTab = el('button', 'tab on', 'Blueprint'), insideTab = el('button', 'tab', 'Inside'), outsideTab = el('button', 'tab', 'Outside');
-tabs.append(labTab, insideTab, outsideTab);
+const labTab = el('button', 'tab on', 'Blueprint'), insideTab = el('button', 'tab', 'Inside'), outsideTab = el('button', 'tab', 'Outside'), tourTab = el('button', 'tab', 'Ship Tour');
+tabs.append(labTab, insideTab, outsideTab, tourTab);
 const home = el('h1', '', 'Solarpolis');
 home.title = 'Back to the title';
 header.append(home, tabs, whatsNewButton());
@@ -86,7 +87,7 @@ const lab = new BlueprintLab(new URLSearchParams(location.search), (query) => {
   // The Lab owns the habitat's fields; the open view rides along.
   const q = new URLSearchParams(query);
   const open = new URLSearchParams(location.search).get('view');
-  if (open === 'inside' || open === 'outside' || open === 'lab') q.set('view', open);
+  if (open === 'inside' || open === 'outside' || open === 'lab' || open === 'tour') q.set('view', open);
   const all = q.toString();
   history.replaceState(null, '', all ? `?${all}` : location.pathname);
 });
@@ -161,7 +162,7 @@ const insideSlot = new ViewSlot('Hold the right mouse button to look around · W
   memory.track('animals', () => v.animalBytes());
   return v;
 });
-const outsideSlot = new ViewSlot('Hold the right mouse button to swing around · wheel to come closer · 1 habitat, 2 Earth, 3 Moon, 4 nearest neighbour · F to fly (W A S D, E up, Q down, Shift faster)', 'Building the sky…', 'sky maps, stars and skin detail', (h) => OutsideView.create(h));
+const outsideSlot = new ViewSlot('Hold the right mouse button to swing around · wheel to come closer · 1 habitat, 2 Earth, 3 Moon, 4 nearest neighbour · F to fly (W A S D, E up, Q down, Shift faster)', 'Building the sky…', 'sky maps, stars and skin detail', (h) => OutsideView.create(h, (...args) => new VoyageComputer(...args)));
 /** A black curtain over the views for the short fade from the crossing into the Hub (Arnd, 2026-10-21). */
 const curtain = el('div', 'curtain');
 app.append(curtain);
@@ -221,13 +222,14 @@ async function flyIn(v: OutsideView): Promise<void> {
 }
 outsideSlot.box.append(title.root);
 
-type Tab = 'title' | 'lab' | 'inside' | 'outside';
+type Tab = 'title' | 'lab' | 'inside' | 'outside' | 'tour';
 let tab: Tab = 'title';
 function showTab(which: Tab): void {
   tab = which;
   labTab.classList.toggle('on', which === 'lab');
   insideTab.classList.toggle('on', which === 'inside');
   outsideTab.classList.toggle('on', which === 'outside');
+  tourTab.classList.toggle('on', which === 'tour');
   lab.root.hidden = which !== 'lab';
   const titled = which === 'title';
   title.show(titled);
@@ -235,7 +237,7 @@ function showTab(which: Tab): void {
   else if (!arriving) sound.music(null);
   outsideSlot.box.classList.toggle('titled', titled);
   for (const [tab, slot] of [['inside', insideSlot], ['outside', outsideSlot]] as const) {
-    const on = which === tab || (titled && tab === 'outside');
+    const on = which === tab || ((titled || which === 'tour') && tab === 'outside');
     slot.box.hidden = !on;
     if (on) starting = (starting ?? Promise.resolve()).then(() => slot.show());
     else slot.view?.setRunning(false);
@@ -243,6 +245,7 @@ function showTab(which: Tab): void {
   starting = (starting ?? Promise.resolve()).then(async () => {
     const v = outsideSlot.view;
     if (!v) return;
+    v.setTourMode(which === 'tour');
     v.onTitle = titled ? (x) => title.fade(x) : null;
     if (titled && !v.attracting) await v.startAttract();
     else if (!titled && v.attracting) v.stopAttract();
@@ -256,8 +259,9 @@ home.addEventListener('click', () => showTab('title'));
 labTab.addEventListener('click', () => showTab('lab'));
 insideTab.addEventListener('click', () => showTab('inside'));
 outsideTab.addEventListener('click', () => showTab('outside'));
+tourTab.addEventListener('click', () => showTab('tour'));
 const opened = new URLSearchParams(location.search).get('view');
-showTab(opened === 'inside' || opened === 'outside' || opened === 'lab' ? opened : 'title');
+showTab(opened === 'inside' || opened === 'outside' || opened === 'lab' || opened === 'tour' ? opened : 'title');
 
 // ---- the debug menu ------------------------------------------------------------------------------
 debug.addInfo(() => `Solarpolis ${VERSION}`);

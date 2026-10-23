@@ -1,0 +1,33 @@
+# Passenger voyages
+
+Open **Ship Tour** on the main screen. Expand a planet or dwarf planet to choose one of its moons, or search the catalogue. The Mind plans the complete return journey before departure. Time starts at 1×; the voyage computer offers pause and acceleration through one simulated week per second. The tour pauses when its tab is left and resumes when reopened. Reloading the page starts a new session.
+
+The catalogue contains the solar system pack's 8 planets, 5 dwarf planets, 465 moons and 3 named asteroids. It is a finite, versioned catalogue, not a claim to include undiscovered satellites. New catalogue moons appear in the tree automatically.
+
+The passenger can select all six ship-relative camera directions, track the destination, look home, or inspect another body. Optical magnification keeps the observer aboard the ship. **Close-up reconstruction** uses a remote virtual viewpoint and explicitly labels the image as a model; it does not move the ship. Distances and the nearby-world buttons always use the actual ship position. The itinerary includes an ecliptic projection of both integrated flight paths. Passenger decks remain accessible while the Mind flies; steering and manual drive controls are hidden during the tour.
+
+## Flight model
+
+- `space/torchTransfer.ts` shoots two constant-direction **9.80665 m/s² thrust** burns at a moving destination, solving all six position/velocity rendezvous constraints. The engine throttles down as mass falls to maintain 1 g. There is a two-minute unpowered turnover; finite propellant can require a longer coast. RK4 includes point-mass gravity from the Sun, planets, Moon and selected target. Playback uses cubic Hermite interpolation of the propagated states, not a straight line between endpoints.
+- Local departure/arrival legs use polar gateways outside the primary's main rings. These are real integrated transfers too. The whole trip matches the cylinder's future position and velocity, ending at an arrival stand-off beside it. It does not yet replay the title's docking corridor or disembark into the habitat.
+- Each target gets exactly two circular observation laps. The prescribed circle follows the moving body's centre, and the required small corrective thrust is computed against the gravity field. These are near-ballistic orbits where possible. Weak, irregular moons can require **guided observation laps** outside a useful stable orbital region. Estimated moon masses and such guided laps are labelled. No surface landing is attempted.
+- Fuel follows the rocket equation over the planned thrust impulse, including the orbit corrections. Both halves are budgeted before launch, with a 12% propellant reserve. The reference 3026-03-01 departure gives about 1.3 days for the Moon, 7.3 days for Mars and 176 days for Eris including the two laps and return. These are simulation results, not ephemeris-provider predictions.
+- The world bible's gravity/propulsion rules remain in force. Arnd explicitly chose 1 g burns and permitted coasting when fusion performance is insufficient; nearby transfers consequently take less than the bible's general “weeks to months” description.
+
+## Reusable ship and engineering assumptions
+
+`TOUR_SHIP` in `space/voyage.ts` derives from the inhabited-ship recipe: **This Will Only Take A Little While**, six comfortable passenger decks, 22 m hull radius, 2,400 t dry mass and 9,600 t initial propellant. The assumed exhaust velocity is 9,000 km/s and installed thrust 120 MN. Maximum wet-mass 1 g jet power is approximately 530 TW. This is speculative thousand-year-future engineering, not a claim that a currently proposed engine can achieve it.
+
+The ideal exhaust kinetic energy is 40.5 TJ/kg. The D–helium-3 reaction releases about 353 TJ/kg of reacting fuel, so this exhaust energy is below the nuclear energy limit. That comparison **does not prove the ship's power density, fuel packaging or thermal design**. Direct exhaust must carry most reaction energy away. A detailed reactor, shielding and radiator mass/heat budget remains future engineering work. NASA distinguishes energy, exhaust velocity and jet specific power as separate propulsion constraints ([NASA, Fusion for Space Propulsion](https://ntrs.nasa.gov/citations/20020067391)); the reaction yield comes from the [DOE-hosted fusion reaction table](https://www.osti.gov/servlets/purl/4351926).
+
+## Accuracy, bounds and ownership
+
+- Newtonian point masses; no relativity, oblateness, ring-particle collisions, detailed moon shape gravity or radiation shielding simulation. The close-up models retain the base solar system's low resolution and approximate future moon phases. A converged route is not a flight-certified navigation solution.
+- Major satellite GM values use [JPL satellite physical parameters](https://ssd.jpl.nasa.gov/sats/phys_par/sep.html). Unknown values use an explicitly estimated bulk density. Spherical body clearances are checked at adaptive trajectory samples; navigation rejects unresolved/unsafe rendezvous instead of spending infinite fuel or snapping into orbit.
+- The ephemeris is finite (3020–3080); planning requires room for a complete return and rejects out-of-range dates.
+- `app/voyageComputer.ts` owns the UI and supplies a `VoyagePanel` to `OutsideView`. The renderer shares its existing solar scene, camera and astronomy pack with Outside. `workers/voyage.ts` is a job on the existing `WorkerPool`, loaded lazily. Planning astronomy is job-local and is not cached in the worker. Cancellation ignores late replies. The view accounts for trajectory arrays and transient planning memory; the existing ship meshes can shed while idle.
+- Fast tests cover finite-fuel transfers, moving rendezvous, two laps, continuity, reserve and return to the actual cylinder. `test/slow/voyage.slow.test.ts` audits every destination separately from the fast CI budget. WebGPU exercise: `npm run shots -- --views ship-tour` (catalogue, departure, reconstructed closeups, passenger deck and full accelerated return).
+- Local WebGPU validation on 2026-10-23: desktop and tablet layouts, 35 shader modules, no GPU/pipeline errors or shader-policy violations, worst build 6 ms. The merged version's tablet run retained about 159 MB total (78 MB JS heap), including the existing exterior astronomy and ship rooms. Report: `.render/out/ship-tour-tablet-final/report.json` (local, ignored).
+- The complete 481-destination reference-epoch audit passed in 379 seconds; the merged fast suite passed 943 tests in 16.1 seconds. The exhaustive audit is deliberately outside the fast CI budget.
+
+COPIES: 1 — checked (`torchTransfer`, `voyageAt`, `VesselVisit`, `sharedPool`, `el`, `shipAxes`); UI and renderer share one flight model and one solar renderer.

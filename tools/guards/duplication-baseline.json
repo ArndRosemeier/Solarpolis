@@ -24,6 +24,10 @@
     "reason": "Independent fixed-size geometry, plant and solar-population allocation; Array.from is syntax, not shared generation logic."
   },
   {
+    "key": "idiom: [.acos .max .min Math] in solarpolis/render/solar.ts + solarpolis/space/voyage.ts + solarpolis/world/flyer.ts",
+    "reason": "Clamping a dot product to the acos domain is a local floating-point safety idiom in unrelated geometry and attitude calculations."
+  },
+  {
     "key": "idiom: [.add .mul .sub] in solarpolis/render/crowdShaders.ts + solarpolis/render/hamletSkies.ts + solarpolis/render/hullShaders.ts",
     "reason": "TSL arithmetic (add, mul, sub on nodes) is how every shader writes a formula; the formulas are each shader's own (a hamlet sky's halo, a crowd's pose, the hull's panels)."
   },
@@ -66,6 +70,10 @@
   {
     "key": "idiom: [.createElement document] in solarpolis/render/outside.ts + solarpolis/render/solarControls.ts + solarpolis/render/vesselVisit.ts + solarpolis/render/view.ts",
     "reason": "Standard DOM element construction in independent view controls; shared controls have different user actions and state, not duplicated UI logic."
+  },
+  {
+    "key": "idiom: [.distance .sort] in solarpolis/app/voyageComputer.ts + solarpolis/render/outside.ts + solarpolis/render/talk.ts",
+    "reason": "A one-expression ascending distance comparator for independent astronomy, exposure and conversation lists; no shared selection behavior."
   },
   {
     "key": "idiom: [.exposure .mul] in solarpolis/render/celestialShaders.ts + solarpolis/render/hullShaders.ts + solarpolis/render/materials.ts",
@@ -112,12 +120,20 @@
     "reason": "The views that draw creatures (people, drones, squirrels) name the same things the same way (stage, camera, screen, specks, each one's horizon and litAt, a start promise, a group): their shared steps are seams (ownSpecks, roomForSpecks, drawSpecks, pxPerMetre in render/specks.ts; FigureLoads in render/actors/slots.ts; standAt in render/actors/figure.ts); what is left is each view's own."
   },
   {
-    "key": "idiom: [.max .min .pitch Math] in solarpolis/render/outside.ts + solarpolis/render/vesselVisit.ts + solarpolis/space/flyer.ts + solarpolis/space/vesselPassenger.ts",
-    "reason": "Standard scalar clamp; orbit, exterior flight and ship-local passenger views deliberately have different pitch limits and coordinate conventions."
+    "key": "idiom: [.max .min .pitch .yaw Math] in solarpolis/app/voyageComputer.ts + solarpolis/render/vesselVisit.ts + solarpolis/space/vesselPassenger.ts",
+    "reason": "Independent camera controls clamp pitch to their own allowed angles; extracting these few assignments would hide input conventions."
+  },
+  {
+    "key": "idiom: [.max .min .pitch Math] in solarpolis/render/outside.ts + solarpolis/render/vesselVisit.ts + solarpolis/space/flyer.ts",
+    "reason": "Independent camera controls clamp pitch to their own allowed angles; extracting these few assignments would hide input conventions."
   },
   {
     "key": "idiom: [.mesh .specks] in solarpolis/render/animals.ts + solarpolis/render/fliers.ts + solarpolis/render/people.ts",
     "reason": "The views that draw creatures (people, drones, squirrels) name the same things the same way (stage, camera, screen, specks, each one's horizon and litAt, a start promise, a group): their shared steps are seams (ownSpecks, roomForSpecks, drawSpecks, pxPerMetre in render/specks.ts; FigureLoads in render/actors/slots.ts; standAt in render/actors/figure.ts); what is left is each view's own."
+  },
+  {
+    "key": "idiom: [.message .textContent String] in solarpolis/app/voyageComputer.ts + solarpolis/lab/blueprintLab.ts + solarpolis/main.ts",
+    "reason": "Displaying a caught Error as status text is a short DOM error-reporting idiom, not shared application behavior."
   },
   {
     "key": "idiom: [.mul .sub] in solarpolis/render/cloudShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
@@ -152,10 +168,6 @@
     "reason": "Existing building, hall and understorey generators call the same smoothGrid seam for different geometry."
   },
   {
-    "key": "idiom: [.start Promise] in solarpolis/render/animals.ts + solarpolis/render/fliers.ts + solarpolis/render/people.ts",
-    "reason": "Each view loads its own assets in an async start() its constructor calls; the shared shape is two words, and it surfaced only because new files changed how rare the finder rates these names (its weights count files)."
-  },
-  {
     "key": "idiom: [.x0 .x1 .y0] in solarpolis/gen/hallMesh.ts + solarpolis/gen/homeInterior.ts + solarpolis/gen/homes.ts",
     "reason": "Rectangle extents shared by independent house layout, hall construction and interior fitting plans."
   },
@@ -186,6 +198,54 @@
   {
     "key": "same name: solarpolis/app/title.ts#show + solarpolis/lab/lifeView.ts#show",
     "reason": "The Blueprint Lab's map views (PlanView, LifeView) share one shape: show(habitat | null) from the Lab, then a private draw once the parameters settle. The title card's show is the app's own panel call. Same verbs, different things shown."
+  },
+  {
+    "key": "same name: solarpolis/app/voyageComputer.ts#bytes + solarpolis/render/animals.ts#bytes",
+    "reason": "Independent memory owners report their own retained buffers through the shared memory-watchdog interface; these sum different resource sets."
+  },
+  {
+    "key": "same name: solarpolis/app/voyageComputer.ts#bytes + solarpolis/render/fliers.ts#bytes",
+    "reason": "Independent memory owners report their own retained buffers through the shared memory-watchdog interface; these sum different resource sets."
+  },
+  {
+    "key": "same name: solarpolis/app/voyageComputer.ts#bytes + solarpolis/render/glassDeck.ts#bytes",
+    "reason": "Independent memory owners report their own retained buffers through the shared memory-watchdog interface; these sum different resource sets."
+  },
+  {
+    "key": "same name: solarpolis/app/voyageComputer.ts#bytes + solarpolis/render/homes.ts#bytes",
+    "reason": "Independent memory owners report their own retained buffers through the shared memory-watchdog interface; these sum different resource sets."
+  },
+  {
+    "key": "same name: solarpolis/app/voyageComputer.ts#bytes + solarpolis/render/people.ts#bytes",
+    "reason": "Independent memory owners report their own retained buffers through the shared memory-watchdog interface; these sum different resource sets."
+  },
+  {
+    "key": "same name: solarpolis/app/voyageComputer.ts#bytes + solarpolis/render/specks.ts#bytes",
+    "reason": "Independent memory owners report their own retained buffers through the shared memory-watchdog interface; these sum different resource sets."
+  },
+  {
+    "key": "same name: solarpolis/app/voyageComputer.ts#bytes + solarpolis/space/solarSystem.ts#bytes",
+    "reason": "Independent memory owners report their own retained buffers through the shared memory-watchdog interface; these sum different resource sets."
+  },
+  {
+    "key": "same name: solarpolis/app/voyageComputer.ts#turn + solarpolis/gen/terrain.ts#turn",
+    "reason": "Passenger camera, local ship movement and world steering expose separate turn interfaces; only the yaw/pitch clamp idiom overlaps, with different coordinate conventions."
+  },
+  {
+    "key": "same name: solarpolis/app/voyageComputer.ts#turn + solarpolis/render/vesselVisit.ts#turn",
+    "reason": "Passenger camera, local ship movement and world steering expose separate turn interfaces; only the yaw/pitch clamp idiom overlaps, with different coordinate conventions."
+  },
+  {
+    "key": "same name: solarpolis/app/voyageComputer.ts#turn + solarpolis/space/flyer.ts#turn",
+    "reason": "Passenger camera, local ship movement and world steering expose separate turn interfaces; only the yaw/pitch clamp idiom overlaps, with different coordinate conventions."
+  },
+  {
+    "key": "same name: solarpolis/app/voyageComputer.ts#turn + solarpolis/space/vesselPassenger.ts#turn",
+    "reason": "Passenger camera, local ship movement and world steering expose separate turn interfaces; only the yaw/pitch clamp idiom overlaps, with different coordinate conventions."
+  },
+  {
+    "key": "same name: solarpolis/app/voyageComputer.ts#turn + solarpolis/world/walker.ts#turn",
+    "reason": "Passenger camera, local ship movement and world steering expose separate turn interfaces; only the yaw/pitch clamp idiom overlaps, with different coordinate conventions."
   },
   {
     "key": "same name: solarpolis/gen/courts.ts#box + solarpolis/gen/liftStairMesh.ts#box",
@@ -476,6 +536,10 @@
     "reason": "The views' own interface (bytes, info, dispose), which InteriorView and the memory watchdog call on each of them; GlassDeck (render/glassDeck.ts) is one more such view, holding the glass deck's atlas."
   },
   {
+    "key": "same name: solarpolis/render/animals.ts#bytes + solarpolis/render/outside.ts#bytes",
+    "reason": "Independent memory owners report their own retained buffers through the shared memory-watchdog interface; these sum different resource sets."
+  },
+  {
     "key": "same name: solarpolis/render/animals.ts#bytes + solarpolis/render/people.ts#bytes",
     "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; the squirrels' view (render/animals.ts) and an animal's figure (render/actors/animal.ts) do their own work in each."
   },
@@ -538,10 +602,6 @@
   {
     "key": "same name: solarpolis/render/animals.ts#loadFigure + solarpolis/render/people.ts#loadFigure",
     "reason": "The squirrels' view follows the people's view's steps (rescan in a worker, figures for the nearest, loadFigure compiling every level first) with its own rules: who gets a figure (size on screen, not distance), what a figure is (AnimalFigure, not a person's Figure), what the worker answers. Their shared part, one figure loading at a time into a slot handed over when drawn, is one seam: FigureLoads (render/actors/slots.ts)."
-  },
-  {
-    "key": "same name: solarpolis/render/animals.ts#place + solarpolis/render/outside.ts#place",
-    "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; each view does its own work in each."
   },
   {
     "key": "same name: solarpolis/render/animals.ts#rescan + solarpolis/render/people.ts#rescan",
@@ -940,10 +1000,6 @@
     "reason": "Independent resource/view lifecycle owner. The ship delegates hull geometry and transforms to ShipMeshes/setPose; its room pools, atlas and visitor state must be accounted for and released by their own owner."
   },
   {
-    "key": "same name: solarpolis/render/lift.ts#step + solarpolis/render/vesselVisit.ts#step",
-    "reason": "Distinct physical systems: ship-local thrust/freefall and finite-mass rocket integration versus habitat spin walking, geometry and observer flight. The shared movement-input seam is moveKeys/FlyInput."
-  },
-  {
     "key": "same name: solarpolis/render/necklace.ts#dispose + solarpolis/render/tiled.ts#dispose",
     "reason": "dispose() is the usual name for giving resources back."
   },
@@ -984,8 +1040,8 @@
     "reason": "Everything that can give memory back does so through a shed() method the memory watchdog calls (CLAUDE.md rule 12); each sheds its own buffers."
   },
   {
-    "key": "same name: solarpolis/render/outside.ts#bytes + solarpolis/talk/conversations.ts#bytes",
-    "reason": "Everything holding memory reports it through a bytes() method the memory watchdog reads (CLAUDE.md rule 12); each counts its own buffers."
+    "key": "same name: solarpolis/render/outside.ts#bytes + solarpolis/render/people.ts#bytes",
+    "reason": "Independent memory owners report their own retained buffers through the shared memory-watchdog interface; these sum different resource sets."
   },
   {
     "key": "same name: solarpolis/render/outside.ts#frame + solarpolis/render/view.ts#frame",
@@ -1270,6 +1326,10 @@
   {
     "key": "same name: solarpolis/render/vesselVisit.ts#step + solarpolis/space/flyer.ts#step",
     "reason": "Distinct physical systems: ship-local thrust/freefall and finite-mass rocket integration versus habitat spin walking, geometry and observer flight. The shared movement-input seam is moveKeys/FlyInput."
+  },
+  {
+    "key": "same name: solarpolis/render/vesselVisit.ts#step + solarpolis/space/vesselPassenger.ts#step",
+    "reason": "VesselVisit coordinates rooms and externally driven flight; VesselPassenger integrates local collision-aware movement. Their step interfaces operate at different layers."
   },
   {
     "key": "same name: solarpolis/render/vesselVisit.ts#step + solarpolis/world/flyer.ts#step",
