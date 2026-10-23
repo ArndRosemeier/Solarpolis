@@ -9,6 +9,8 @@ import { Character, buildCatalog, defaultConfig, type CharacterCatalog, type Cha
 import { Human } from '@actors/human';
 import { IRIS_PRESETS, type ActorMaterialKit } from '@actors/three';
 import { nodeMaterials } from '@actors/three/webgpu';
+import type { MeshStandardMaterial } from 'three/webgpu';
+import { screenFabrics } from './screens';
 
 /** The human pack's manifest. */
 export const HUMAN_PACK = `${import.meta.env?.BASE_URL ?? "/"}actors/human/manifest.json`;
@@ -49,18 +51,23 @@ export function humanCatalog(): Promise<{ catalog: CharacterCatalog; base: Chara
   return catalog;
 }
 
-/** Actors 0.6.6 stockings carry an opaque coverage mask despite their sheer texture.
+/** Actors' stockings (0.6.6, still in 0.7.0) carry an opaque coverage mask despite their sheer texture.
  * Keep the skin behind the holes; ordinary clothes still remove covered body triangles. */
 export function keepSkinUnderSheerGarment(data: MeshData): void {
   if (data.def.name === 'stockings' || data.def.name === 'fishnet-stockings') data.hidesBaseVertices = undefined;
 }
 
-/** Actors' shared WebGPU graphs, with pack compatibility fixes applied before hidden skin is calculated. */
+/**
+ * Actors' shared WebGPU graphs, with pack compatibility fixes applied before hidden skin is calculated, and its screen
+ * fabrics handed to `screenFabrics` (screens.ts), which animates and dyes them in this kit.
+ */
 export const actorKit: ActorMaterialKit = {
   ...nodeMaterials,
   mesh(data, actor) {
     keepSkinUnderSheerGarment(data);
-    return nodeMaterials.mesh(data, actor);
+    const material = nodeMaterials.mesh(data, actor);
+    if (data.def.tags?.includes('fabric:screen')) screenFabrics.adopt(material as MeshStandardMaterial);
+    return material;
   },
 };
 

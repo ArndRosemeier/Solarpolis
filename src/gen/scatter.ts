@@ -34,6 +34,7 @@ import { pathsOf, type PathNet } from './paths';
 import { plantedIn, plantingsOf, scatterKeepsOff } from './planted';
 import { bytesOf } from './shapes';
 import { kept } from './kept';
+import { capStopsOf } from './capsules';
 
 /** Shapes per plant form: plants of a species pick one of these by their own hash. */
 export const PLANT_VARIANTS = 3;
@@ -320,9 +321,12 @@ export function plantPoint(foot: Vec3, pose: Pose, x: number, y: number, z: numb
 export function standsIn(ecology: Ecology, sp: Species, b: { theta0: number; theta1: number; s0: number; s1: number }, level: Level, visit: (theta: number, s: number, ground: number, f: (q: number) => number, along: number) => void): void {
   const t = ecology.terrain, h = t.habitat, { profile } = h, spec = sp.spec;
   const seed = deriveSeed(h.seed, 'scatter', spec.name, sp.biome);
+  // The capsules' stops are kept clear (gen/capsules.ts): of a tree as far as its crown spreads, of anything else its size.
+  const stops = capStopsOf(t), tall = (spec as PlantSpec).height?.[1] ?? 0, out = sp.what !== 'debris' && tall >= 6 ? 0.35 * tall : 0.5 * tall;
   if (sp.what === 'planted') {
     // Each where it was planted, its shape from its own hash.
     for (const p of plantedIn(t, spec.name, b)) {
+      if (stops.keepsOff(p.theta, p.s, out)) continue;
       const ground = t.heightAt(p.theta, p.s), own = hash3f(seed, Math.round(p.s * 16), Math.round(p.theta * 1e5), 5);
       visit(p.theta, p.s, ground, (q) => (q === 3 ? p.height : q === 4 ? p.turn : own), 0);
     }
@@ -360,6 +364,7 @@ export function standsIn(ecology: Ecology, sp: Species, b: { theta0: number; the
       if (keptClear(t, pt, ps)) continue; // under a landmark, or on the way onto it
       if (sp.what !== 'cover' && scatterKeepsOff(t, pt, ps)) continue; // a grove's clearing (its lawn stays)
       if (sp.what !== 'cover' && onPath(paths, pt, ps, sp.what === 'debris' ? 0 : 0.25)) continue; // a path, and its verges for plants
+      if (sp.what !== 'cover' && stops.keepsOff(pt, ps, out)) continue; // a capsule stop
       if (ps < profile.floorStart && snowKeepsOff(ecology, sp, pt, ps, ground, f(6))) continue;
       if (!cover) {
         const slope = slopeAt(ecology, pt, ps, ground, gap);
