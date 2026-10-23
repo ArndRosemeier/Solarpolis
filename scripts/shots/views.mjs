@@ -80,6 +80,28 @@ const heap = (label) => ({ run: async (page) => { await (await import(`./heap.mj
 const memoryDetails = { debug: 'Show memory details' };
 
 export const views = {
+  'ship-tour': { query: 'view=tour', about: 'Passenger destination tree, physical camera, closeups, decks and a complete accelerated lunar return', settle: 5000, steps: [
+    { shot: 'destinations' },
+    { run: async (page) => { await page.locator('.voyage-launch').click(); await page.locator('.voyage-hud').waitFor({ state: 'visible', timeout: 60000 }); } },
+    { wait: 1500 }, { shot: 'departure' },
+    { run: async (page) => { await page.getByLabel('Voyage clock', { exact: true }).selectOption('0'); await page.getByLabel('Observe a world', { exact: true }).selectOption('earth'); await page.getByLabel('Observation mode', { exact: true }).selectOption('model'); } },
+    { wait: 1500 }, { shot: 'earth-closeup' },
+    { run: async (page) => { await page.getByLabel('Observe a world', { exact: true }).selectOption('saturn'); } },
+    { wait: 1500 }, { shot: 'saturn-closeup' },
+    { run: async (page) => {
+      for (const side of ['forward', 'aft', 'port', 'starboard', 'above', 'below']) { await page.getByLabel('Look toward', { exact: true }).selectOption(side); await page.waitForTimeout(120); }
+      await page.getByLabel('Look toward', { exact: true }).selectOption('body');
+      await page.locator('.voyage-details > summary').click();
+    } }, { shot: 'route' },
+    { run: async (page) => { await page.locator('.voyage-details > summary').click(); await page.getByRole('button', { name: 'Outside', exact: true }).click(); await page.getByRole('button', { name: 'Ship Tour', exact: true }).click(); await page.locator('.voyage-hud').waitFor({ state: 'visible' }); } },
+    { run: async (page) => { await page.locator('.voyage-visit').click(); await page.locator('.vessel-panel').waitFor({ state: 'visible', timeout: 30000 }); } },
+    { wait: 2000 }, { shot: 'passenger-deck' },
+    { run: async (page) => { await page.getByRole('button', { name: 'Return to voyage computer' }).click(); await page.getByLabel('Observe a world', { exact: true }).selectOption('moon'); await page.getByLabel('Look toward', { exact: true }).selectOption('destination'); await page.getByLabel('Observation mode', { exact: true }).selectOption('window'); await page.getByLabel('Voyage clock', { exact: true }).selectOption('3600'); } },
+    { wait: 7000 }, { shot: 'under-way' },
+    { run: async (page) => { await page.getByLabel('Voyage clock', { exact: true }).selectOption('604800'); await page.waitForFunction(() => document.querySelector('.voyage-hud h2')?.textContent?.includes('Welcome home'), { timeout: 30000 }); } },
+    { wait: 1000 }, { shot: 'home' },
+    { run: logPeople }, heap('ship-tour'),
+  ] },
   title: { query: '', about: 'the title card over the attract flight', default: true },
   arrival: {
     query: '', about: 'Docking, the turning bore, the sheltered threshold, the cylinder reveal and an on-foot arrival terrace',

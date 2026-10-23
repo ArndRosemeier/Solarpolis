@@ -34,6 +34,8 @@ import { SolarView } from './solar';
 import { SolarControls } from './solarControls';
 import { polePlane } from '../space/orbits';
 import { VesselVisit } from './vesselVisit';
+import type { VoyagePanel, VoyagePanelFactory } from './voyagePanel';
+import { TOUR_SHIP } from '../space/voyage';
 
 /**
  * Clock seconds per real second by default: real time (Arnd, 2026-10-21). A faster clock spins the habitat fast
@@ -94,6 +96,8 @@ export class OutsideView {
   private observer: { id: string; yaw: number; pitch: number; distance: number } | null = null;
   private controlClock = 0;
   private vessel!: VesselVisit;
+  private voyage!: VoyagePanel;
+  private voyageCameraKey = '';
 
   private constructor(private habitat: Habitat, private system: SolarSystem) {
     this.space = makeSpace({ ...REFERENCE_SPACE, home: habitat.params }, system);
@@ -107,7 +111,7 @@ export class OutsideView {
   }
 
   /** Make the view: throws `GraphicsUnavailable` where the browser has no WebGPU (the caller shows why). */
-  static async create(habitat: Habitat): Promise<OutsideView> {
+  static async create(habitat: Habitat, makeVoyagePanel: VoyagePanelFactory): Promise<OutsideView> {
     const load = async <T>(name: string): Promise<T> => {
       const response = await fetch(`${base}space/${name}.json`);
       if (!response.ok) throw new Error(`Could not load the solar system (${name})`);
@@ -129,14 +133,18 @@ export class OutsideView {
     await Promise.all([v.stage.add(v.dome), v.buildNecklace(), v.loadMaps('full'), v.loadStars(), v.solar.start()]);
     outside.bodiesInDome.value = 0;
     v.solarControls = new SolarControls(v.system, id => v.observe(id), () => { v.observer = null; v.flyer = null; v.frameHabitat(); }, n => { v.timeScale = n; });
-    v.vessel = new VesselVisit(v.stage, () => { v.stopAttract(); v.observer = null; v.flyer = null; v.timeScale = 1; v.exposure = 1; }, () => v.frameHabitat());
+    v.vessel = new VesselVisit(v.stage, () => { v.stopAttract(); v.observer = null; v.flyer = null; v.timeScale = 1; v.exposure = 1; }, () => { v.frameHabitat(); v.voyage?.showCabin(false); }, TOUR_SHIP);
+    v.voyage = makeVoyagePanel(v.system, () => v.space, () => v.time, () => { v.stopAttract(); v.vessel.close(); v.observer = null; v.flyer = null; v.exposure = 1; }, () => {
+      v.vessel.inside = true;
+      void v.vessel.open().then(() => v.voyage.showCabin(v.vessel.active));
+    });
     v.bindControls();
     return v;
   }
 
   /** Bytes this view holds (memory watchdog): the surface maps with their mipmaps, the star field, the skin's detail tiles. */
   bytes(): number {
-    return this.textureBytes + this.starBytes + (this.necklace?.detailBytes() ?? 0) + (this.solar?.bytes() ?? 0) + (this.vessel?.meshes.bytes() ?? 0);
+    return this.textureBytes + this.starBytes + (this.necklace?.detailBytes() ?? 0) + (this.solar?.bytes() ?? 0) + (this.vessel?.meshes.bytes() ?? 0) + (this.voyage?.bytes() ?? 0);
   }
 
   /** Give memory back (memory watchdog): Earth's day map drops to half resolution, detail tiles out of sight go. */
@@ -206,6 +214,7 @@ export class OutsideView {
     if (h === this.habitat) return;
     this.habitat = h;
     this.space = makeSpace({ ...REFERENCE_SPACE, home: h.params }, this.system);
+    this.voyage?.reset();
     this.shipShape = shipShape(guestShip(this.space, this.space.home));
     // The title's ship was made for the last habitat's berths: made again when the title next plays.
     this.ship?.removeFrom(this.stage);
@@ -276,7 +285,9 @@ export class OutsideView {
 
   /** Where the eye is in the orbit frame, and what it looks at. */
   private eyeAndTarget(): { eye: Vec3; target: Vec3 } {
+    const voyage = this.voyage?.active ? this.voyage.camera() : null;
     if (this.vessel?.active) return this.vessel.camera();
+    if (voyage) return voyage;
     const shot = this.shot;
     if (shot) return { eye: shot.eye, target: shot.target };
     if (this.flyer) return { eye: this.flyer.eye, target: v3add(this.flyer.eye, this.flyer.look()) };
@@ -323,6 +334,8 @@ export class OutsideView {
   private place(): void {
     const t = this.time, sp = this.space, f = sp.home.orbitFrame;
     const { eye, target } = this.eyeAndTarget();
+    const voyageCamera = this.voyage?.active && !this.vessel?.active ? this.voyage.camera() : null;
+    if (voyageCamera) this.camera.fov = voyageCamera.fov;
     const sky = skyFrom(sp, f, eye, t);
     this.sky = sky;
     const eD = Math.hypot(...sky.earth.center), mD = Math.hypot(...sky.moon.center);
@@ -347,10 +360,10 @@ export class OutsideView {
     this.camera.position.set(0, 0, 0);
     const shot = this.shot;
     const aboard = this.vessel?.active ? this.vessel.camera() : null;
-    this.camera.up.set(...(aboard?.up ?? shot?.up ?? [0, 0, 1]));
+    this.camera.up.set(...(voyageCamera?.up ?? aboard?.up ?? shot?.up ?? [0, 0, 1]));
     const look = v3sub(target, eye);
     this.camera.lookAt(look[0], look[1], look[2]);
-    this.camera.fov = aboard?.fov ?? (shot ? shot.fov : this.look === 'habitat' || this.flyer || this.observer ? 45 : this.zoom);
+    this.camera.fov = voyageCamera?.fov ?? aboard?.fov ?? (shot ? shot.fov : this.look === 'habitat' || this.flyer || this.observer ? 45 : this.zoom);
     this.placeShip(eye, shot?.ship ?? null);
     this.vessel?.place(eye);
     // Close to a surface the near plane comes in with it; reversed depth keeps the far side precise.
@@ -428,6 +441,7 @@ export class OutsideView {
     // The pointer stays free (Arnd, 2026-10-21): the right button held swings the camera around the habitat.
     dragToLook(this.canvas, (dx, dy) => {
       if (this.vessel?.active) { this.vessel.turn(dx, dy); return; }
+      if (this.voyage?.active) { this.voyage.turn(dx, dy); return; }
       if (this.flyer) { this.flyer.turn(-dx * 0.004, -dy * 0.004); return; }
       if (this.observer) { this.observer.yaw -= dx * .005; this.observer.pitch = Math.max(-1.5, Math.min(1.5, this.observer.pitch + dy * .005)); return; }
       this.yaw -= dx * 0.005;
@@ -436,6 +450,7 @@ export class OutsideView {
     this.canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
       if (this.vessel?.active) { this.vessel.zoom(e.deltaY); return; }
+      if (this.voyage?.active) { this.voyage.magnify(e.deltaY); return; }
       const k = Math.exp(e.deltaY * 0.001);
       if (this.flyer) return;
       if (this.observer) {
@@ -451,6 +466,7 @@ export class OutsideView {
   /** F flies or lands; 1 to 4 pick what to look at (flying, they turn the camera toward it). */
   private key(e: KeyboardEvent): void {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
+    if (this.voyage?.active) return;
     if (this.vessel?.active) { if (e.code === 'Space') e.preventDefault(); return; }
     if (e.code === 'KeyF' && !e.repeat) this.toggleFlying();
     if (e.code === 'Space') e.preventDefault();
@@ -473,8 +489,20 @@ export class OutsideView {
   setRunning(on: boolean): void {
     if (this.solarControls && this.canvas.parentElement && !this.solarControls.element.parentElement) this.canvas.parentElement.append(this.solarControls.element);
     if (this.vessel && this.canvas.parentElement && !this.vessel.launch.parentElement) this.canvas.parentElement.append(this.vessel.launch, this.vessel.element, this.vessel.help);
-    this.vessel?.show(on && !this.attracting);
+    if (this.voyage && this.canvas.parentElement && !this.voyage.element.parentElement) this.canvas.parentElement.append(this.voyage.element);
+    this.vessel?.show(on && !this.attracting && !this.voyage?.active);
     this.loop.set(on);
+  }
+
+  /** The Ship Tour tab shares this renderer and astronomy pack with Outside. */
+  setTourMode(on: boolean): void {
+    if (on) { this.stopAttract(); this.vessel.close(); this.flyer = null; this.observer = null; }
+    this.voyage.setActive(on);
+    if (!on) { this.vessel.close(); this.vessel.setFlight(null); }
+    if (on && this.voyage.plan) { this.voyage.tick(0); this.time = this.voyage.clock; }
+    this.canvas.parentElement?.classList.toggle('tour-mode', on);
+    this.vessel.show(!on && !this.attracting);
+    this.solarControls.element.hidden = on || this.attracting;
   }
 
   private frame(dt: number): void {
@@ -483,6 +511,7 @@ export class OutsideView {
     // The title runs on the real clock: every shot plays at real speed.
     const speed = this.attracting ? 1 : this.timeScale;
     let cut = false;
+    if (this.voyage?.active && this.voyage.cameraKey !== this.voyageCameraKey) { this.voyageCameraKey = this.voyage.cameraKey; cut = true; }
     if (this.attract) {
       const a = this.attract;
       a.elapsed += dt;
@@ -492,8 +521,14 @@ export class OutsideView {
       this.onTitle?.(next.title);
     }
     const before = this.time;
-    this.time += dt * speed;
+    if (this.voyage?.active && this.voyage.plan) { this.voyage.tick(dt); this.time = this.voyage.clock; }
+    else this.time += dt * speed;
     this.limitClock();
+    if (this.voyage?.active && this.voyage.state) {
+      const s = this.voyage.state, frame = this.space.home.orbitFrame;
+      const flightDirection = (v: Vec3): Vec3 => this.space.frames.direction(v, 'sun', frame, this.time);
+      this.vessel.setFlight({ origin: this.space.frames.position(s.p, 'sun', frame, this.time), axes: shipAxes(flightDirection(s.forward), flightDirection(s.up)), acceleration: v3len(s.thrust), fuel: s.fuel, speed: v3len(s.v) });
+    }
     const input = document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLSelectElement ? new Set<string>() : this.loop.keys;
     this.vessel?.step(dt, moveKeys(input), this.loop.keys.has('KeyB'));
     if (this.arriving) {
@@ -521,8 +556,8 @@ export class OutsideView {
     this.controlClock += dt;
     if (this.controlClock >= .25) {
       this.controlClock = 0;
-      this.solarControls.element.hidden = this.attracting || this.vessel?.active;
-      this.vessel?.show(!this.attracting);
+      this.solarControls.element.hidden = this.attracting || this.vessel?.active || this.voyage?.active;
+      this.vessel?.show(!this.attracting && (!this.voyage?.active || this.vessel.active));
       this.solarControls.update(dateOf(this.space.jd(this.time)), this.observer?.id ?? null, this.sky?.sunDistance ?? AU);
     }
     // A cut is a new camera: it meters afresh instead of adapting from the last shot.

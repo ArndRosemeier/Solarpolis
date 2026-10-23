@@ -1,0 +1,45 @@
+.voyage-computer { position:absolute; inset:0; z-index:10; pointer-events:none; color:#e8eadd; font:13px/1.5 system-ui; }
+.voyage-computer[hidden],.voyage-hud[hidden] { display:none; }
+.voyage-catalogue,.voyage-hud { pointer-events:auto; background:#102523f2; border:1px solid #a5bdae66; box-shadow:0 12px 50px #0005; border-radius:18px; box-sizing:border-box; }
+.voyage-catalogue { position:absolute; top:18px; left:18px; width:320px; max-height:calc(100% - 36px); overflow:auto; padding:16px 20px; }
+.voyage-catalogue h2 { font:500 25px/1.2 Georgia,serif; color:#f0dfb9; }
+.voyage-computer summary { cursor:pointer; color:#d4dec9; }
+.voyage-welcome,.voyage-description { color:#c5d4c9; }
+.voyage-computer button,.voyage-computer select,.voyage-computer input { font:inherit; color:#edf0df; background:#284239; border:1px solid #8da69277; border-radius:8px; padding:8px 10px; cursor:pointer; box-sizing:border-box; }
+.voyage-computer input { width:100%; background:#122d27; cursor:text; }
+.voyage-computer button:hover { background:#3b5d4e; }
+.voyage-computer button:disabled { opacity:.5; cursor:default; }
+.voyage-computer button:focus-visible,.voyage-computer select:focus-visible,.voyage-computer summary:focus-visible { outline:2px solid #e6c386; outline-offset:2px; }
+.voyage-tree { max-height:38vh; overflow:auto; margin:12px 0; scrollbar-width:thin; }
+.voyage-branch { padding:5px 0; border-bottom:1px solid #708e7540; }
+.voyage-branch ul { list-style:none; margin:5px 0 0; padding:0 0 0 10px; border-left:1px solid #8fa39466; }
+.voyage-branch li { margin:3px 0; }
+.voyage-branch .voyage-moon { padding-left:14px; }
+.voyage-branch button { width:100%; text-align:left; padding:5px 8px; background:transparent; border-color:transparent; }
+.voyage-branch button[aria-pressed=true] { color:#ffe4af; background:#405649; border-color:#d6bb7f66; }
+.voyage-launch { width:100%; margin:8px 0; background:#d3d4ad!important; color:#203c30!important; }
+.voyage-message { color:#e9cb95; font-size:12px; }
+.voyage-cancel { display:none; }
+.voyage-computer.planning .voyage-cancel { display:block; }
+.voyage-hud { position:absolute; right:18px; bottom:18px; width:min(600px,calc(100% - 375px)); max-height:calc(100% - 36px); overflow:auto; padding:18px 22px; }
+.voyage-hud h2 { font:500 19px/1.3 Georgia,serif; margin:0 0 12px; color:#f4e4c2; }
+.voyage-computer .voyage-compact { float:right; margin:0 0 6px 12px; padding:4px 7px; font-size:10px; }
+.voyage-hud.compact .voyage-stats,.voyage-hud.compact .voyage-observation,.voyage-hud.compact .voyage-encounters,.voyage-hud.compact .voyage-details,.voyage-hud.compact .voyage-visit,.voyage-hud.compact .voyage-instruments label:not(:first-child) { display:none; }
+.voyage-hud.compact .voyage-instruments { grid-template-columns:1fr; margin-top:8px; }
+.voyage-hud progress { width:100%; height:5px; accent-color:#bfcea3; }
+.voyage-stats { white-space:pre-line; font-variant-numeric:tabular-nums; color:#d6e0cf; font-size:12px; }
+.voyage-instruments { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.voyage-instruments label { font-size:10px; text-transform:uppercase; letter-spacing:.07em; color:#adc4b8; }
+.voyage-instruments select { display:block; width:100%; margin-top:4px; font-size:12px; text-transform:none; letter-spacing:normal; }
+.voyage-observation { font-size:11px; color:#cfdbc4; }
+.voyage-encounters { display:flex; gap:6px; flex-wrap:wrap; margin:12px 0; }
+.voyage-encounters span { width:100%; color:#cbbd97; font-size:11px; }
+.voyage-encounters button { font-size:11px; padding:5px 8px; }
+.voyage-details { font-size:11px; color:#c1d0c5; }
+.voyage-computer.cabin .voyage-catalogue { display:none; }
+.voyage-computer.cabin .voyage-visit { display:none; }
+.voyage-visit { margin-bottom:10px; }
+.voyage-itinerary { padding-left:20px; }
+.voyage-chart { display:block; width:100%; margin-top:8px; border:1px solid #6c8f7655; border-radius:8px; background:#061a1788; }
+.tour-mode > .inside-hint { display:none; }
+@media(max-width:800px) { .voyage-catalogue { top:8px; left:8px; width:calc(100% - 16px); max-height:55%; } .voyage-catalogue:not([open]) { width:auto; } .voyage-hud { left:8px; right:8px; bottom:8px; width:auto; max-height:65%; padding:12px; } .voyage-catalogue[open] + .voyage-hud { display:none; } }

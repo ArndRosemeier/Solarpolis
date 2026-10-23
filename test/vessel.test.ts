@@ -2,14 +2,18 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EXPLORER, vesselPlan, VesselDrive, type VesselRecipe } from '../src/space/vessel';
 import { VesselPassenger } from '../src/space/vesselPassenger';
+import { TOUR_SHIP } from '../src/space/voyage';
 
 const variants: VesselRecipe[] = [
   { ...EXPLORER, id: 'compact', radius: 8, deckHeight: 3.2, decks: EXPLORER.decks.slice(0, 2) },
   EXPLORER,
+  TOUR_SHIP,
   { ...EXPLORER, id: 'extended', radius: 18, deckHeight: 5, decks: [...EXPLORER.decks, ...EXPLORER.decks] },
 ];
 for (const recipe of variants) test(`ship recipe (${recipe.id}): every room fits the pressure hull and keeps the circulation core clear`, () => {
   const p = vesselPlan(recipe), keys = new Set<string>();
+  for (const part of p.shape.parts) if (part.role === 'tank' && part.shape === 'cylinder')
+    assert.ok(part.to + part.radius * .4 < p.start, 'tank shoulder must stay outside passenger decks');
   assert.ok(p.start > .8 * p.shape.params.length && p.end < .961 * p.shape.params.length);
   for (const d of p.decks) {
     assert.ok(d.ceiling - d.floor >= 2.9);
