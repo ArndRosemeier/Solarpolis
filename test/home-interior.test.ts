@@ -35,11 +35,17 @@ for (const { name } of MATRIX) test(`home interiors (${name}): entry stays open,
       const start = new Vector3(p.doorX, p.doorY + house.door * hr * 0.5, house.base + hr * 1.5);
       const ray = new Ray(start, new Vector3(0, -house.door, 0));
       const point = new Vector3(), a = new Vector3(), b = new Vector3(), c = new Vector3();
+      let first = { distance: Infinity, finish: -1 };
       for (let i = 0; i < shape.idx.length; i += 3) {
         a.fromArray(shape.pos, shape.idx[i] * 3); b.fromArray(shape.pos, shape.idx[i + 1] * 3); c.fromArray(shape.pos, shape.idx[i + 2] * 3);
-        if (ray.intersectTriangle(a, b, c, false, point)) assert.ok(point.distanceTo(start) > hr, `${detail}: an open human-height passage`);
+        if (!ray.intersectTriangle(a, b, c, false, point)) continue;
+        if (point.distanceTo(start) < first.distance) first = { distance: point.distanceTo(start), finish: shape.fin[shape.idx[i]] };
       }
-      if (detail === 'near') assert.ok(shape.fin.includes(FINISH.domestic), 'real display surfaces');
+      // Far off no rooms are built: the doorway, closed, shows them as the screens seen through it.
+      if (detail === 'far') assert.ok(first.distance < hr && first.finish === FINISH.domestic, 'far: the doorway shows the rooms');
+      else assert.ok(first.distance > hr, `${detail}: an open human-height passage`);
+      if (detail !== 'solid') assert.equal(shape.fin.includes(FINISH.domestic), true, `${detail}: display surfaces, or the doorway showing them`);
+      if (detail === 'solid') assert.equal(shape.fin.includes(FINISH.domestic), false, 'solid: no screens for the physics');
     }
   }
 });

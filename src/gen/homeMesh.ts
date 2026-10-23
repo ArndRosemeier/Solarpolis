@@ -15,7 +15,7 @@ import { Rng } from '@futuremagic/core';
 import { FINISH } from './pavilion';
 import { shade, type RGB, type Shape } from './shapes';
 import { HOME_RHYTHM, YARD_WALL, type Build, type House } from './homes';
-import { homeInteriorShape } from './homeInterior';
+import { homeDisplay, homeInteriorShape, type RoomDetail } from './homeInterior';
 import { WALL, blockShape, sidesOf, upright, wallRun, type Block, type BuildDetail, type LevelsAt, type Opening } from './building';
 
 /** Each build's colour (linear albedo) and finish; plaster comes in the district's washes. */
@@ -65,7 +65,7 @@ function blockOf(house: House, hr: number): Block {
         const c = (s.length * (m + 0.5)) / n;
         if (side === doorSide && k === 0 && m === door) {
           const dw = Math.min(H.door * hr, 0.8 * s.length / n);
-          out.push({ u0: c - dw / 2, u1: c + dw / 2, z0: f, z1: f + Math.min(H.doorHigh * hr, house.storey - 0.5 * hr), col: DOOR, finish: FINISH.timber, door: true, open: true });
+          out.push({ u0: c - dw / 2, u1: c + dw / 2, z0: f, z1: f + Math.min(H.doorHigh * hr, house.storey - 0.5 * hr), col: homeDisplay(house), finish: FINISH.domestic, door: true, open: true });
           continue;
         }
         const lit = house.lived && rng.chance(LIT);
@@ -77,7 +77,7 @@ function blockOf(house: House, hr: number): Block {
     }
     return out;
   });
-  return { body: house.body, base: house.base, storeys: house.storeys, storey: house.storey, col, finish, openings, enterable: true };
+  return { body: house.body, base: house.base, storeys: house.storeys, storey: house.storey, col, finish, openings };
 }
 
 /** Its yard's walls round the plot, the gate (`gate`, along x) in the wall on the door's side. */
@@ -100,9 +100,14 @@ function yardWalls(sh: Shape, house: House, hr: number, levelsAt: LevelsAt, col:
  * shape's finish is left as it was.
  */
 export function houseShape(sh: Shape, house: House, levelsAt: LevelsAt, hr: number, detail: BuildDetail): void {
+  houseInto(sh, house, levelsAt, hr, detail, detail);
+}
+
+/** The house at a detail outside, its rooms at one inside (none far off: its doorway shows what lies behind it). */
+function houseInto(sh: Shape, house: House, levelsAt: LevelsAt, hr: number, detail: BuildDetail, rooms: RoomDetail): void {
   const before = sh.finish, block = blockOf(house, hr);
   blockShape(sh, block, levelsAt, hr, detail);
-  homeInteriorShape(sh, house, hr, detail);
+  if (rooms !== 'far') homeInteriorShape(sh, house, hr, rooms);
   // The yard's walls, the gate in line with the door.
   const door = block.openings[house.door < 0 ? 0 : 1].find((o) => o.door), b = house.body;
   sh.finish = block.finish;
@@ -110,7 +115,10 @@ export function houseShape(sh: Shape, house: House, levelsAt: LevelsAt, hr: numb
   sh.finish = before;
 }
 
-/** One house's solid parts into a bay's shape (its frame), for the physics: the house and its plinth, the yard's walls, the steps. */
+/**
+ * One house's solid parts into a bay's shape (its frame), for the physics: the house and its plinth with its windows
+ * and open door, the yard's walls, the steps, and its rooms' structure (floors, walls, stairs as ramps; no screens).
+ */
 export function houseSolid(sh: Shape, house: House, levelsAt: LevelsAt, hr: number): void {
-  houseShape(sh, house, levelsAt, hr, 'mid');
+  houseInto(sh, house, levelsAt, hr, 'mid', 'solid');
 }

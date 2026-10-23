@@ -541,10 +541,25 @@ function strip(sh: Shape, at: (t: number) => Vec3, out: (t: number) => Vec3, sid
   }, col);
 }
 
-/** The bays a tile covers. */
-function baysOf(u: Under, key: TileKey): { i: number; j: number }[] {
+/** The bays a tile covers (each tile holds whole bays). */
+export function tileBays(u: Under, key: TileKey): { i: number; j: number }[] {
   const size = Math.pow(2, key.level), out: { i: number; j: number }[] = [];
   for (let j = key.j; j < Math.min(key.j + size, u.along); j++) for (let i = key.i; i < Math.min(key.i + size, u.around); i++) out.push({ i, j });
+  return out;
+}
+
+/**
+ * The home bays whose rooms the drawn tiles build, and at which detail: rooms only at mid and near (far houses are
+ * closed, their doorways showing the rooms' screens). What goes with the rooms (render/homes.ts: the furniture) is
+ * drawn for exactly these, so it comes and goes with its tile.
+ */
+export function furnishedBays(t: Terrain, drawn: readonly TileKey[]): Map<string, { i: number; j: number; level: Exclude<UnderDetail, 'far'> }> {
+  const u = underOf(t.habitat), out = new Map<string, { i: number; j: number; level: Exclude<UnderDetail, 'far'> }>();
+  for (const key of drawn) {
+    const level = underDetailOf(key);
+    if (level === 'far') continue;
+    for (const { i, j } of tileBays(u, key)) if (u.useAt(i, j) === 'home') out.set(`${i}/${j}`, { i, j, level });
+  }
   return out;
 }
 
@@ -558,7 +573,7 @@ export function buildUnderTile(t: Terrain, key: TileKey, detail: UnderDetail = u
   const mid = { theta: (key.i + Math.min(size, u.around - key.i) / 2) * u.dTheta, s: u.s0 + (key.j + Math.min(size, u.along - key.j) / 2) * u.bay };
   const origin = placeAt(h, mid.theta, mid.s, lv.levelAt(mid.theta, mid.s).floor);
   const out = new Shape(d.shaft, true, true), glow: number[] = [];
-  for (const { i, j } of baysOf(u, key)) {
+  for (const { i, j } of tileBays(u, key)) {
     const b = new Shape(d.shaft, true, true), first = out.vertices;
     buildBay(b, lv, s, i, j, detail);
     bendInto(out, h, bayFrame(u, i, j), b, origin);

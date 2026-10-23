@@ -97,6 +97,9 @@ export class TiledView {
     return this.source.grid ? `${name}: ${this.drawn.length} tiles drawn, ${this.cache.built.size} kept (${(this.cache.bytes / 1048576).toFixed(1)} MB), ${this.cache.building} building` : `${name}: none`;
   }
 
+  /** The tiles drawn this frame (empty ones too): what a view that goes with the tiles' levels follows (render/homes.ts). */
+  drawnKeys(): TileKey[] { return this.drawn.map((e) => e.key); }
+
   /** Whether the last frame's tiles covered all the eye wanted (an `inside` source draws nothing until they do). */
   complete = false;
 

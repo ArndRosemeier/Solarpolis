@@ -298,6 +298,7 @@ export class InteriorView {
       this.crossings?.info() ?? 'river crossings: none',
       this.halls?.info() ?? 'grown halls: none',
       this.under?.info() ?? 'understorey: none',
+      this.homes?.info() ?? 'home furniture: none',
       this.glass?.info() ?? 'glass deck: none',
       this.people?.info() ?? 'people: none',
       this.specks?.info() ?? 'specks: none',
@@ -612,7 +613,7 @@ export class InteriorView {
     }
     this.showLand(!this.below);
     below.people.value = this.below ? 1 : 0;
-    const room = this.homes?.update(v.eye, this.time, this.frameDt, this.below) ?? null;
+    const room = this.homes?.update(v.eye, this.time, this.frameDt, this.below, this.under?.drawnKeys() ?? []) ?? null;
     this.onRoom?.(room);
     this.physics?.setFurniture(this.homes?.bodies ?? []);
     this.people?.follow(v.eye, this.time, this.frameDt, this.below, this.homes?.intent);
