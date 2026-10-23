@@ -40,7 +40,7 @@
     "reason": "Profile radius with a singularity guard is the same coordinate conversion idiom in water geometry and moving agents, not duplicated behaviour."
   },
   {
-    "key": "idiom: [.bayAt .s .theta] in solarpolis/gen/lifts.ts + solarpolis/main.ts + solarpolis/render/homes.ts + solarpolis/render/view.ts",
+    "key": "idiom: [.bayAt .s .theta] in solarpolis/gen/lifts.ts + solarpolis/main.ts + solarpolis/render/view.ts",
     "reason": "All callers use the shared underOf bay lookup; the same coordinate fields are not a duplicate algorithm."
   },
   {
@@ -216,10 +216,6 @@
     "reason": "The Actors figure and animator are ported from Dunfinity with their method names, which follow Actors' own Character API (load, update, stop, dispose); the plan moves the animator into Actors, and keeping the names keeps that swap a drop-in."
   },
   {
-    "key": "same name: solarpolis/physics/world.ts#dispose + solarpolis/render/homes.ts#dispose",
-    "reason": "Independent owner lifecycle and byte reporting; adaptive furnishings own their bounded instance pool and nearby layout state."
-  },
-  {
     "key": "same name: solarpolis/physics/world.ts#dispose + solarpolis/render/hullDetail.ts#dispose",
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
@@ -294,6 +290,10 @@
   {
     "key": "same name: solarpolis/render/activityProps.ts#prepare + stage/stage.ts#prepare",
     "reason": "ActivityProps owns its small mesh pool; standard prepare, dispose and bytes lifecycle methods operate on different resources. Disposal uses the shared freeMesh seam."
+  },
+  {
+    "key": "same name: solarpolis/render/activityProps.ts#update + solarpolis/render/homes.ts#update",
+    "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; each view does its own work in each."
   },
   {
     "key": "same name: solarpolis/render/actors/animal.ts#bytes + solarpolis/render/actors/figure.ts#bytes",
@@ -408,6 +408,10 @@
     "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; the squirrels' view (render/animals.ts) and an animal's figure (render/actors/animal.ts) do their own work in each."
   },
   {
+    "key": "same name: solarpolis/render/animals.ts#dispose + solarpolis/render/homes.ts#dispose",
+    "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; each view does its own work in each."
+  },
+  {
     "key": "same name: solarpolis/render/animals.ts#dispose + solarpolis/render/people.ts#dispose",
     "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; the squirrels' view (render/animals.ts) and an animal's figure (render/actors/animal.ts) do their own work in each."
   },
@@ -426,6 +430,10 @@
   {
     "key": "same name: solarpolis/render/animals.ts#follow + solarpolis/render/specks.ts#follow",
     "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; the squirrels' view (render/animals.ts) and an animal's figure (render/actors/animal.ts) do their own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/animals.ts#info + solarpolis/render/homes.ts#info",
+    "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; each view does its own work in each."
   },
   {
     "key": "same name: solarpolis/render/animals.ts#info + solarpolis/render/outside.ts#info",
@@ -516,8 +524,16 @@
     "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
   },
   {
+    "key": "same name: solarpolis/render/fliers.ts#info + solarpolis/render/homes.ts#info",
+    "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; each view does its own work in each."
+  },
+  {
     "key": "same name: solarpolis/render/fliers.ts#info + solarpolis/render/specks.ts#info",
     "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/glassDeck.ts#bytes + solarpolis/render/homes.ts#bytes",
+    "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; each view does its own work in each."
   },
   {
     "key": "same name: solarpolis/render/glassDeck.ts#bytes + solarpolis/render/people.ts#bytes",
@@ -548,12 +564,8 @@
     "reason": "The views' own interface (bytes, info, dispose), which InteriorView and the memory watchdog call on each of them; GlassDeck (render/glassDeck.ts) is one more such view, holding the glass deck's atlas."
   },
   {
-    "key": "same name: solarpolis/render/homes.ts#bytes + solarpolis/render/plants.ts#bytes",
-    "reason": "Independent owner lifecycle and byte reporting; adaptive furnishings own their bounded instance pool and nearby layout state."
-  },
-  {
-    "key": "same name: solarpolis/render/homes.ts#bytes + solarpolis/render/terrain.ts#bytes",
-    "reason": "Independent owner lifecycle and byte reporting; adaptive furnishings own their bounded instance pool and nearby layout state."
+    "key": "same name: solarpolis/render/homes.ts#bytes + solarpolis/render/specks.ts#bytes",
+    "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; each view does its own work in each."
   },
   {
     "key": "same name: solarpolis/render/homes.ts#dispose + solarpolis/render/hullDetail.ts#dispose",
@@ -568,6 +580,10 @@
     "reason": "Independent owner lifecycle and byte reporting; adaptive furnishings own their bounded instance pool and nearby layout state."
   },
   {
+    "key": "same name: solarpolis/render/homes.ts#dispose + solarpolis/render/people.ts#dispose",
+    "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; each view does its own work in each."
+  },
+  {
     "key": "same name: solarpolis/render/homes.ts#dispose + solarpolis/render/specks.ts#dispose",
     "reason": "Independent owner lifecycle and byte reporting; adaptive furnishings own their bounded instance pool and nearby layout state."
   },
@@ -578,6 +594,14 @@
   {
     "key": "same name: solarpolis/render/homes.ts#dispose + solarpolis/render/traffic.ts#dispose",
     "reason": "Independent owner lifecycle and byte reporting; adaptive furnishings own their bounded instance pool and nearby layout state."
+  },
+  {
+    "key": "same name: solarpolis/render/homes.ts#info + solarpolis/render/specks.ts#info",
+    "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; each view does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/homes.ts#info + solarpolis/render/traffic.ts#info",
+    "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; each view does its own work in each."
   },
   {
     "key": "same name: solarpolis/render/homes.ts#shed + solarpolis/render/landmarks.ts#shed",
@@ -906,10 +930,6 @@
   {
     "key": "same name: solarpolis/render/plants.ts#id + solarpolis/render/tiled.ts#id",
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/plants.ts#info + solarpolis/render/view.ts#info",
-    "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; each view does its own work in each."
   },
   {
     "key": "same name: solarpolis/render/plants.ts#make + solarpolis/render/terrain.ts#make",
