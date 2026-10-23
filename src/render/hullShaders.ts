@@ -16,7 +16,7 @@ import {
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { GLINT_GAIN, GLINT_POWER, LOOK, SALT, type Columns, type Skin } from '../gen/skin';
-import { MEAN_SHADE, PORT_SALT, PORT_TINT, TOGGLE_HOURS, bandMean, litShare, type PortFace } from '../gen/portFace';
+import { DENSITY, MEAN_SHADE, PORT_SALT, PORT_TINT, QUARTER, TOGGLE_HOURS, bandMean, litShare, type PortFace } from '../gen/portFace';
 import { DISPLAY_CAP, outside } from './skyShaders';
 import { MASK_WORDS, ROOT_SPAN, type CoverMask } from '../gen/detailTree';
 import { band, keepMean, lineAt, shows } from './shaderMath';
@@ -409,7 +409,7 @@ const port: Record<string, Node<'vec4'>> = {};
 for (const k of portKeys) port[k] = uniform(new Vector4()).onObjectUpdate(({ object }) => ((object?.userData.port as PortUniforms | undefined) ?? noPort)[k]);
 
 /** The brightest window shows at this level once the eyes have opened for the dark (with the Sun out of view). */
-export const WINDOW_PEAK = 1.2;
+export const WINDOW_PEAK = 3;
 
 /**
  * The port face's windows and its bearing ring, per pixel, exactly as `windowAt` and `windowLit` in gen/portFace.ts:
@@ -436,26 +436,36 @@ function portFaceGlow(): Node<'vec3'> {
     index = select(here, float(i), index) as Node<'float'>;
     inAny = inAny.or(here);
   }
-  // Its storey and its window round the ring; a block's storeys share their count round, so their windows stack.
+  // Its storey, block row and quarter row; its window, block and quarter round the ring (`cellAt` in gen/portFace.ts).
+  // A block's storeys share their count round, so their windows stack.
   const u = max(r.sub(g.x), 0).div(g.z), k = floor(u), fr = fract(u);
-  const kb = floor(k.div(b.x)), base = g.x.add(kb.mul(b.x).mul(g.z));
-  const v = a.mul(max(floor(base.mul(2 * Math.PI).div(g.w)), 1)), j = floor(v), fj = fract(v);
-  const du = fwidth(u).mul(0.5), dv = min(fwidth(v), 0.5).mul(0.5), m = w.z.mul(0.5);
-  const glass = band(fr, w.x.sub(du), w.x.add(du), w.y.sub(du), w.y.add(du)).mul(band(fj, m.sub(dv), m.add(dv), m.oneMinus().sub(dv), m.oneMinus().add(dv)));
+  const kb = floor(k.div(b.x)), kq = floor(kb.div(QUARTER.rows));
+  const rq = g.x.add(kq.mul(QUARTER.rows).mul(b.x).mul(g.z));
+  const qa = a.mul(max(floor(rq.mul(2 * Math.PI).div(g.w.mul(b.y).mul(QUARTER.blocks))), 1)), jq = floor(qa), fq = fract(qa);
+  const v = a.mul(max(floor(g.x.add(kb.mul(b.x).mul(g.z)).mul(2 * Math.PI).div(g.w)), 1)), j = floor(v), fj = fract(v), jb = floor(j.div(b.y));
   const salt = (s: number): Node<'uint'> => uint(index.mul(8).add(s));
   const ku = uint(k), ju = uint(j);
-  const built = toFloat(hash3z(seed, uint(kb), uint(floor(j.div(b.y))), salt(PORT_SALT.block))).lessThan(w.w);
+  const density = toFloat(hash3z(seed, uint(kq), uint(jq), salt(PORT_SALT.quarter))).mul(DENSITY.spread).add(DENSITY.least);
+  const builtShare = min(w.w.mul(density), 1);
+  // The avenue along each quarter's side, its edge smoothed over the pixel.
+  const dq = min(fwidth(qa), 0.5).mul(0.5), street = smoothstep(float(QUARTER.avenue).sub(dq), float(QUARTER.avenue).add(dq), fq);
+  const built = toFloat(hash3z(seed, uint(kb), uint(jb), salt(PORT_SALT.block))).lessThan(builtShare);
+  // The window: glass between sill and head and between mullions, lit on its own schedule, at its own shade.
+  const du = fwidth(u).mul(0.5), dv = min(fwidth(v), 0.5).mul(0.5), m = w.z.mul(0.5);
+  const glass = band(fr, w.x.sub(du), w.x.add(du), w.y.sub(du), w.y.add(du)).mul(band(fj, m.sub(dv), m.add(dv), m.oneMinus().sub(dv), m.oneMinus().add(dv)));
   const shade = toFloat(hash3z(seed, ku, ju, salt(PORT_SALT.shade))).mul(0.5).add(0.5);
   const period = toFloat(hash3z(seed, ku, ju, salt(PORT_SALT.phase))).add(1).mul(TOGGLE_HOURS);
   const slot = floor(clock.x.div(period).add(toFloat(hash3z(seed, ju, ku, salt(PORT_SALT.phase)))));
   const lit = toFloat(hash3z(seed, ku.add(uint(slot).mul(uint(4096))), ju, salt(PORT_SALT.lit))).lessThan(b.w);
   const window = glass.mul(select(built.and(lit), shade, float(0))).mul(b.z);
-  // Too far for its windows, a block shows as its own share lit (`blockGlow`); too far for blocks, the band's mean.
-  const share = b.w, x = toFloat(hash3z(seed, uint(kb), uint(floor(j.div(b.y))), salt(PORT_SALT.blockLit)));
+  // Too far for its windows, a block shows as its own share lit (`blockGlow`); too far for blocks, its quarter
+  // (`quarterGlow`); too far for quarters, the band's mean. Each level averages to the next, so none jumps.
+  const share = b.w, glazedShare = w.y.sub(w.x).mul(w.z.oneMinus()), x = toFloat(hash3z(seed, uint(kb), uint(jb), salt(PORT_SALT.blockLit)));
   const blockLit = share.add(x.sub(0.5).mul(min(share, share.oneMinus()).mul(2)));
-  const block = select(built, w.y.sub(w.x).mul(w.z.oneMinus()).mul(blockLit).mul(MEAN_SHADE).mul(b.z), float(0));
-  const blocks = shows(u.div(b.x)).mul(shows(v.div(b.y)));
-  const windows = select(inAny, mix(t.w, mix(block, window, shows(u).mul(shows(v))), blocks), float(0));
+  const block = select(built, glazedShare.mul(blockLit).mul(MEAN_SHADE).mul(b.z), float(0));
+  const quarter = glazedShare.mul(builtShare).mul(share).mul(MEAN_SHADE).mul(b.z);
+  const near = mix(quarter, mix(block, window, shows(u).mul(shows(v))), shows(u.div(b.x)).mul(shows(v.div(b.y))));
+  const windows = select(inAny, mix(t.w, near.mul(street), shows(u.div(b.x.mul(QUARTER.rows))).mul(shows(qa))), float(0));
   // The bearing ring: a lamp every few handrails, every other one dimmer, so the face's slow turn shows against the dock.
   const inRing = r.greaterThanEqual(face.y).and(r.lessThan(face.z));
   const q = a.mul(face.w), lamp = band(fract(q), 0.15, 0.3, 0.7, 0.85).mul(select(fract(floor(q).mul(0.5)).greaterThan(0.25), float(0.35), float(1)));

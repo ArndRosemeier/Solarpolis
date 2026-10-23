@@ -66,7 +66,7 @@ export interface PortFace {
 }
 
 /** The hash's third argument for the port face, past the skin's own (`SALT` in gen/skin.ts); each band its own four. */
-export const PORT_SALT = { block: 32, lit: 33, phase: 34, shade: 35, blockLit: 36 } as const;
+export const PORT_SALT = { block: 32, lit: 33, phase: 34, shade: 35, blockLit: 36, quarter: 37 } as const;
 const bandSalt = (salt: number, band: number): number => salt + band * 8;
 
 /** A storey, in handrails: tall rooms (as gen/homes.ts). */
@@ -128,6 +128,59 @@ export function windowsRound(b: PortBand, r: number): number {
   return Math.max(1, Math.floor((2 * Math.PI * r) / b.pitch));
 }
 
+/**
+ * Quarters: `rows` block rows deep and about `blocks` blocks round, each built up more or less densely than its band
+ * (`DENSITY`), with an avenue along one side (`avenue` of its width: blank face between quarters). From afar, where
+ * blocks are too small to tell apart, the quarters still show as brighter and darker patches with dark lanes between,
+ * as a city does at night.
+ */
+export const QUARTER = { rows: 6, blocks: 10, avenue: 0.08 } as const;
+/** A quarter's density: its blocks are built `least + spread · x` times as often as its band's (x even on 0–1, mean 1). */
+export const DENSITY = { least: 0.3, spread: 1.4 } as const;
+
+/** Where a point of the face lies: band, storey, block, quarter, and the shares across each. */
+export interface PortCell {
+  band: number;
+  /** Storey (k) and the share up it from its inner side; block row (kb); quarter row (kq). */
+  k: number;
+  fr: number;
+  kb: number;
+  kq: number;
+  /** Window round its ring (j) and the share across it; block (jb); quarter (jq) and the share across it. */
+  j: number;
+  fj: number;
+  jb: number;
+  jq: number;
+  fq: number;
+  /** How densely its quarter is built (`DENSITY`). */
+  density: number;
+}
+
+/** The cell at radius r and angle θ (rad) on the face, or null outside every band. The shader finds the same per pixel. */
+export function cellAt(f: PortFace, r: number, theta: number): PortCell | null {
+  for (let band = 0; band < f.bands.length; band++) {
+    const b = f.bands[band];
+    if (r < b.r0 || r >= b.r1) continue;
+    const u = (r - b.r0) / b.storey, k = Math.floor(u), kb = Math.floor(k / b.blockStoreys), kq = Math.floor(kb / QUARTER.rows);
+    const a = ((theta / (2 * Math.PI)) % 1 + 1) % 1;
+    const rq = b.r0 + kq * QUARTER.rows * b.blockStoreys * b.storey, nq = Math.max(1, Math.floor((2 * Math.PI * rq) / (b.pitch * b.blockWindows * QUARTER.blocks)));
+    const q = a * nq, jq = Math.floor(q);
+    const v = a * windowsRound(b, b.r0 + kb * b.blockStoreys * b.storey), j = Math.floor(v);
+    const density = DENSITY.least + DENSITY.spread * hashToFloat(hash3i(f.seed, kq, jq, bandSalt(PORT_SALT.quarter, band)));
+    return { band, k, fr: u - k, kb, kq, j, fj: v - j, jb: Math.floor(j / b.blockWindows), jq, fq: q - jq, density };
+  }
+  return null;
+}
+
+/** The share of a quarter's blocks built. */
+export const builtShare = (b: PortBand, density: number): number => Math.min(1, b.blocks * density);
+
+/** Whether a cell's block stands (not left out, not on an avenue). */
+function built(f: PortFace, c: PortCell): boolean {
+  const b = f.bands[c.band];
+  return c.fq >= QUARTER.avenue && hashToFloat(hash3i(f.seed, c.kb, c.jb, bandSalt(PORT_SALT.block, c.band))) < builtShare(b, c.density);
+}
+
 /** A window on the face: its storey and number round its ring, and its own shade (0.5–1). */
 export interface PortWindow {
   band: number;
@@ -138,21 +191,14 @@ export interface PortWindow {
 
 /**
  * The window at radius r and angle θ (rad) on the face, or null for blank face, a mullion, a wall between sill and
- * head, or a block left out. The shader finds the same window per pixel.
+ * head, an avenue or a block left out. The shader finds the same window per pixel.
  */
 export function windowAt(f: PortFace, r: number, theta: number): PortWindow | null {
-  for (let i = 0; i < f.bands.length; i++) {
-    const b = f.bands[i];
-    if (r < b.r0 || r >= b.r1) continue;
-    const u = (r - b.r0) / b.storey, k = Math.floor(u), fr = u - k;
-    if (fr < b.sill || fr >= b.head) return null;
-    const kb = Math.floor(k / b.blockStoreys), n = windowsRound(b, b.r0 + kb * b.blockStoreys * b.storey);
-    const a = ((theta / (2 * Math.PI)) % 1 + 1) % 1, v = a * n, j = Math.floor(v), fj = v - j;
-    if (fj < b.mullion / 2 || fj >= 1 - b.mullion / 2) return null;
-    if (hashToFloat(hash3i(f.seed, kb, Math.floor(j / b.blockWindows), bandSalt(PORT_SALT.block, i))) >= b.blocks) return null;
-    return { band: i, storey: k, index: j, shade: 0.5 + 0.5 * hashToFloat(hash3i(f.seed, k, j, bandSalt(PORT_SALT.shade, i))) };
-  }
-  return null;
+  const c = cellAt(f, r, theta);
+  if (!c) return null;
+  const b = f.bands[c.band];
+  if (c.fr < b.sill || c.fr >= b.head || c.fj < b.mullion / 2 || c.fj >= 1 - b.mullion / 2 || !built(f, c)) return null;
+  return { band: c.band, storey: c.k, index: c.j, shade: 0.5 + 0.5 * hashToFloat(hash3i(f.seed, c.k, c.j, bandSalt(PORT_SALT.shade, c.band))) };
 }
 
 /** Hours on the window clock: the clock (s) in hours, wrapped so a float32 holds it to about a second. */
@@ -171,7 +217,7 @@ export function windowLit(f: PortFace, w: PortWindow, hours: number, share: numb
 }
 
 /** A window's glass: the share of its storey and of its pitch that is glazed. */
-const glazed = (b: PortBand): number => (b.head - b.sill) * (1 - b.mullion);
+export const glazed = (b: PortBand): number => (b.head - b.sill) * (1 - b.mullion);
 
 /** A window's mean shade (`PortWindow.shade` runs evenly over 0.5–1). */
 export const MEAN_SHADE = 0.75;
@@ -179,19 +225,32 @@ export const MEAN_SHADE = 0.75;
 /**
  * A block's light seen from too far to tell its windows apart, but near enough to tell the blocks (outside units):
  * its glass at the mean shade, lit by its own share around the band's (as many above as below it, so the blocks keep
- * the band's mean), and none for a block left out. The face reads as buildings, some brighter, some dark, not paint.
+ * the band's mean), and none for a block left out or an avenue. The face reads as buildings, some bright, some dark.
  */
-export function blockGlow(f: PortFace, band: number, kb: number, jb: number, share: number): number {
-  const b = f.bands[band];
-  if (hashToFloat(hash3i(f.seed, kb, jb, bandSalt(PORT_SALT.block, band))) >= b.blocks) return 0;
-  const spread = 2 * Math.min(share, 1 - share), x = hashToFloat(hash3i(f.seed, kb, jb, bandSalt(PORT_SALT.blockLit, band)));
+export function blockGlow(f: PortFace, c: PortCell, share: number): number {
+  if (!built(f, c)) return 0;
+  const b = f.bands[c.band], spread = 2 * Math.min(share, 1 - share), x = hashToFloat(hash3i(f.seed, c.kb, c.jb, bandSalt(PORT_SALT.blockLit, c.band)));
   return glazed(b) * (share + (x - 0.5) * spread) * MEAN_SHADE * b.glow;
+}
+
+/** A quarter's light seen from too far to tell its blocks apart: its blocks' mean, dark on its avenue. */
+export function quarterGlow(f: PortFace, c: PortCell, share: number): number {
+  const b = f.bands[c.band];
+  return c.fq < QUARTER.avenue ? 0 : glazed(b) * builtShare(b, c.density) * share * MEAN_SHADE * b.glow;
+}
+
+/** The mean share of a band's blocks built, over its quarters' densities (`builtShare` averaged over x on 0–1). */
+export function meanBuilt(b: PortBand): number {
+  const { least, spread } = DENSITY, x0 = (1 / b.blocks - least) / spread;
+  if (x0 >= 1) return b.blocks;
+  if (x0 <= 0) return 1;
+  return b.blocks * (least * x0 + (spread / 2) * x0 * x0) + (1 - x0);
 }
 
 /**
  * The face's mean luminance over a band (outside units), its windows' light spread over it: what the face shows from
- * too far for one window to be told apart, and what the shader fades to before the windows would alias.
+ * too far for its quarters to be told apart, and what every nearer level averages to, so none jumps as the eye comes in.
  */
 export function bandMean(b: PortBand, night: number): number {
-  return glazed(b) * b.blocks * litShare(b, night) * b.glow * MEAN_SHADE;
+  return glazed(b) * meanBuilt(b) * (1 - QUARTER.avenue) * litShare(b, night) * b.glow * MEAN_SHADE;
 }

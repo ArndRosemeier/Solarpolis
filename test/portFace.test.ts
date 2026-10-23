@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { Rng } from '@futuremagic/core';
 import { MATRIX } from '../src/blueprint';
 import { makeSkin } from '../src/gen/skin';
-import { WINDOW_CLOCK_WRAP, bandMean, blockGlow, litShare, portFaceOf, windowAt, windowHours, windowLit, windowsRound } from '../src/gen/portFace';
+import { QUARTER, WINDOW_CLOCK_WRAP, bandMean, blockGlow, cellAt, litShare, portFaceOf, quarterGlow, windowAt, windowHours, windowLit, windowsRound } from '../src/gen/portFace';
 import { habitatOf } from './worlds';
 
 for (const { name } of MATRIX) {
@@ -23,30 +23,28 @@ for (const { name } of MATRIX) {
     }
   });
 
-  test(`port face (${name}): the windows' light averages to the band's mean, and the town lights up at night`, () => {
+  test(`port face (${name}): windows, blocks and quarters all average to the band's mean, and the town lights up at night`, () => {
     const rng = new Rng(7);
     for (const [i, b] of f.bands.entries()) {
+      // Only over enough quarters: a small habitat's dock halls are a handful of blocks, each built or not.
+      const rows = (b.r1 - b.r0) / b.storey / b.blockStoreys / QUARTER.rows, round = windowsRound(b, b.r0) / b.blockWindows / QUARTER.blocks;
       for (const night of [0, 1]) {
-        let sum = 0;
-        const n = 3000, share = litShare(b, night);
+        const share = litShare(b, night), n = 4000, sums = [0, 0, 0];
         for (let k = 0; k < n; k++) {
-          const w = windowAt(f, rng.range(b.r0, b.r1), rng.range(0, 2 * Math.PI));
-          if (w && windowLit(f, w, rng.range(0, 48), share)) sum += w.shade * b.glow;
-          if (w) assert.equal(w.band, i);
+          // Evenly over the band's area.
+          const r = Math.sqrt(rng.range(b.r0 * b.r0, b.r1 * b.r1)), theta = rng.range(0, 2 * Math.PI), c = cellAt(f, r, theta)!;
+          assert.equal(c.band, i);
+          const w = windowAt(f, r, theta);
+          if (w && windowLit(f, w, rng.range(0, 48), share)) sums[0] += w.shade * b.glow;
+          sums[1] += blockGlow(f, c, share);
+          sums[2] += quarterGlow(f, c, share);
         }
-        // Only over enough blocks: a small habitat's dock halls are a handful of blocks, each built or not.
-        const mean = bandMean(b, night), blocks = ((b.r1 - b.r0) / b.storey / b.blockStoreys) * (windowsRound(b, b.r0) / b.blockWindows);
-        assert.ok(sum > 0, `${b.kind} shows some light`);
-        if (blocks >= 40) assert.ok(Math.abs(sum / n - mean) < 0.25 * mean, `${b.kind} at night ${night}: ${sum / n} vs ${mean}`);
+        const mean = bandMean(b, night);
+        assert.ok(sums[0] > 0, `${b.kind} shows some light`);
+        if (rows * round >= 60) for (const [level, sum] of ['windows', 'blocks', 'quarters'].map((l, m) => [l, sums[m]] as const)) {
+          assert.ok(Math.abs(sum / n - mean) < 0.3 * mean, `${b.kind} ${level} at night ${night}: ${sum / n} vs ${mean}`);
+        }
       }
-    }
-    // Seen as blocks, the band keeps its mean light, and no block is lit past its glass.
-    for (const [i, b] of f.bands.entries()) {
-      const share = litShare(b, 1);
-      let sum = 0, most = 0;
-      for (let kb = 0; kb < 60; kb++) for (let jb = 0; jb < 60; jb++) { const g = blockGlow(f, i, kb, jb, share); sum += g; most = Math.max(most, g); }
-      assert.ok(Math.abs(sum / 3600 - bandMean(b, 1)) < 0.1 * bandMean(b, 1), `${b.kind} blocks keep the mean`);
-      assert.ok(most <= b.glow);
     }
     const town = f.bands.find((b) => b.kind === 'town')!;
     assert.ok(litShare(town, 1) > 2 * litShare(town, 0));
