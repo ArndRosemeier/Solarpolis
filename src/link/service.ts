@@ -6,6 +6,9 @@
  */
 import type { Vec3 } from '@futuremagic/core';
 
+/** The key that opens the link (Arnd, 2026-10-23: N; Tab stays free for targeting), as `KeyboardEvent.code` and as written. */
+export const LINK_KEY = { code: 'KeyN', label: 'N' } as const;
+
 /** One system's part of the link: its offers here and now, and what it is doing for the player. */
 export interface LinkService {
   /** Stable id ('capsules'). */

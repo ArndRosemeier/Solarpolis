@@ -26,7 +26,7 @@ import { handrailOf } from '../gen/lifts';
 import { awayFrom, cruiseClear, flightAt, type Flight, type FlightState } from '../world/capFlight';
 import { alighting, boarding, mountPose, seatedPose, stepsSeconds, type MountPose, type MountStep } from '../world/mount';
 import { apparentAcceleration } from '../world/motion';
-import type { LinkChoice, LinkLine, LinkOffer, LinkService, LinkStatus } from '../link';
+import { LINK_KEY, type LinkChoice, type LinkLine, type LinkOffer, type LinkService, type LinkStatus } from '../link';
 import type { WorkerPool } from '../workers/pool';
 import { axesOf, builtGeometry, freeMesh, posedMesh, setPose, uploadStatic } from './geometry';
 import { BUILT, CAP_GLASS } from './materials';
@@ -299,7 +299,7 @@ export class CapsuleView {
         this.steps = null;
         this.doorWant = 0;
         this.phase = 'seated';
-        this.say({ from: MIND, text: 'Where would you like to go? Open your link (Tab) and choose.' });
+        this.say({ from: MIND, text: `Where would you like to go? Open your link (${LINK_KEY.label}) and choose.` });
       }
       return null;
     }
@@ -371,7 +371,7 @@ export class CapsuleView {
       case 'coming': return { from: MIND, title: 'Your capsule is on its way', detail: seconds(left), progress: f ? this.elapsed / f.seconds : 0, at: p?.at, mark: `your capsule · ${Math.ceil(left)} s`, cancel: away };
       case 'waiting': return { from: MIND, title: 'Your capsule is here', detail: 'Click it to get in.', at: p ? outOfPlace(p, this.layout.door.outside) : undefined, mark: 'your capsule · click to get in', cancel: away };
       case 'boarding': return { from: MIND, title: 'Getting in' };
-      case 'seated': return { from: MIND, title: 'Where to?', detail: 'Open your link (Tab) and choose a place.', cancel: () => this.getOut() };
+      case 'seated': return { from: MIND, title: 'Where to?', detail: `Open your link (${LINK_KEY.label}) and choose a place.`, cancel: () => this.getOut() };
       case 'planning': return { from: MIND, title: `Planning the way to ${this.destination?.title ?? 'there'}` };
       case 'riding': return {
         from: MIND, title: `To ${this.destination?.title ?? 'your stop'}`, detail: f && this.door > 0 ? 'Closing the door' : `${clock(left)} to go`,
