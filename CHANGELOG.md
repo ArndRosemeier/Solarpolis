@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.175 — The arrival names what stutters it
+
+- The debug menu now lists the flight's longest frames and what ran in them, so the stutters behind the arrival can be found and smoothed out.
+
 ## v0.174 — The arrival measures its own warm-up
 
 - The debug menu has a new arrival line. It shows how long the title took to appear, when the interior and your body were ready after Start, whether the curtain had to wait for the land, and whether the flight stuttered while the interior was built behind it.
