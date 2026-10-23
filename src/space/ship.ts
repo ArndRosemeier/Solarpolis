@@ -11,7 +11,8 @@
 import { Rng } from '@futuremagic/core';
 import { fitOut } from './shipDetail';
 
-export type Drive = 'torch' | 'sail';
+/** A torch, a laser sail, or thrusters alone (a port's tugs and drones: space/portCraft.ts). */
+export type Drive = 'torch' | 'sail' | 'thrusters';
 
 export interface ShipParams {
   drive: Drive;
