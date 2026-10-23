@@ -52,3 +52,17 @@ test('arrival timing: an interior that came after the ship says how late it was'
   now = 52000; t.mark('inside');
   assert.ok(t.arrivalLine().includes('interior 12.0 s late'));
 });
+
+test('arrival timing: the flight\'s longest frames and what ran in them, nothing from before Start or after the curtain', () => {
+  let now = 0;
+  const t = new ArrivalTiming(() => now), script = (name: string, duration: number) => ({ invoker: 'FrameRequestCallback', sourceURL: 'http://x/assets/index-abc.js', sourceFunctionName: name, sourceCharPosition: 1234, duration });
+  t.longFrame({ startTime: 500, duration: 900, scripts: [script('early', 800)] });
+  now = 1000; t.mark('start');
+  for (let k = 0; k < 20; k++) t.longFrame({ startTime: 2000 + k * 100, duration: 60 + k, scripts: [script('a', 10), script('b', 50), script('c', 5), script('d', 20)] });
+  now = 30000; t.mark('closed');
+  t.longFrame({ startTime: 31000, duration: 900, scripts: [] });
+  assert.equal(t.longFrames.length, 12);
+  assert.equal(t.longFrames[0].duration, 79);
+  assert.deepEqual(t.longFrames[0].scripts.map((s) => s.sourceFunctionName), ['b', 'd', 'a']);
+  assert.ok(t.stutterLine().startsWith('arrival\'s long frames: 2.9 s 79 ms [FrameRequestCallback b index-abc.js@1234 50 ms;'), t.stutterLine());
+});

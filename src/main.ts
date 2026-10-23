@@ -13,7 +13,7 @@ import { Ways } from './app/link/ways';
 import type { LinkChoice } from './link/service';
 import { SpeechBubbles } from './app/bubbles';
 import { ArrivalCard } from './app/arrivalCard';
-import { ArrivalTiming } from './app/arrivalTiming';
+import { ArrivalTiming, type LongFrame } from './app/arrivalTiming';
 /**
  * The page: the header with the version and What's new, the memory watchdog, the debug menu, and the current view:
  * the Blueprint Lab (design a habitat), Inside (walk in it) or Outside (the habitat in its orbit, with Earth, the Moon,
@@ -241,6 +241,10 @@ let starting: Promise<void> | null = null;
 const timing = new ArrivalTiming(() => performance.now());
 timing.watchShaders('inside', () => insideSlot.view?.shaderLog ?? null);
 timing.watchShaders('outside', () => outsideSlot.view?.shaderLog ?? null);
+// Chrome names the scripts that make a frame long (Long Animation Frames): which work stutters the flight.
+if (typeof PerformanceObserver !== 'undefined' && PerformanceObserver.supportedEntryTypes?.includes('long-animation-frame')) {
+  new PerformanceObserver((list) => { for (const e of list.getEntries()) timing.longFrame(e as unknown as LongFrame); }).observe({ type: 'long-animation-frame', buffered: true });
+}
 
 // The title: the Outside view flying its attract loop, with the card over it. It is where the page opens.
 const title = new TitleCard(() => void startArrival(), () => showTab('inside'));
@@ -368,6 +372,7 @@ debug.addInfo(() => memory.line());
 debug.addInfo(() => sound.hearingLine());
 debug.addInfo(() => debug.fps());
 debug.addInfo(() => timing.arrivalLine());
+debug.addInfo(() => timing.stutterLine());
 debug.add({ label: 'Copy the parameters as JSON', group: 'Habitat', run: () => { void navigator.clipboard?.writeText(JSON.stringify(lab.parameters, null, 2)); } });
 debug.add({ label: 'Log the parameters and the derived habitat', group: 'Habitat', run: () => console.log(lab.parameters, lab.habitat) });
 const view = (): InteriorView | null => insideSlot.view, outsideView = (): OutsideView | null => outsideSlot.view;
