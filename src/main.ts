@@ -38,6 +38,7 @@ import { soundButton } from './app/soundButton';
 import { BlueprintLab } from './lab/blueprintLab';
 import { GraphicsUnavailable } from '@futuremagic/stage';
 import { InteriorView } from './render/view';
+import { loadLog } from './render/loadLog';
 import { talksWithHands } from './render/people';
 import { speckMark } from './render/crowdShaders';
 import { OutsideView } from './render/outside';
@@ -241,6 +242,7 @@ let starting: Promise<void> | null = null;
 const timing = new ArrivalTiming(() => performance.now());
 timing.watchShaders('inside', () => insideSlot.view?.shaderLog ?? null);
 timing.watchShaders('outside', () => outsideSlot.view?.shaderLog ?? null);
+loadLog.note = (what) => timing.note(what);
 // Chrome names the scripts that make a frame long (Long Animation Frames): which work stutters the flight.
 if (typeof PerformanceObserver !== 'undefined' && PerformanceObserver.supportedEntryTypes?.includes('long-animation-frame')) {
   new PerformanceObserver((list) => { for (const e of list.getEntries()) timing.longFrame(e as unknown as LongFrame); }).observe({ type: 'long-animation-frame', buffered: true });
@@ -286,7 +288,7 @@ async function flyIn(v: OutsideView): Promise<void> {
     sound.arrival(score, elapsed);
     title.caption(captionAt(score, elapsed));
   };
-  starting = (starting ?? Promise.resolve()).then(() => insideSlot.show()).then(() => {
+  starting = (starting ?? Promise.resolve()).then(() => { timing.note('interior view …'); return insideSlot.show(); }).then(() => {
     const inside = insideSlot.view;
     if (!inside) return;
     timing.mark('inside');
@@ -373,6 +375,7 @@ debug.addInfo(() => sound.hearingLine());
 debug.addInfo(() => debug.fps());
 debug.addInfo(() => timing.arrivalLine());
 debug.addInfo(() => timing.stutterLine());
+debug.addInfo(() => timing.loadingLine());
 debug.add({ label: 'Copy the parameters as JSON', group: 'Habitat', run: () => { void navigator.clipboard?.writeText(JSON.stringify(lab.parameters, null, 2)); } });
 debug.add({ label: 'Log the parameters and the derived habitat', group: 'Habitat', run: () => console.log(lab.parameters, lab.habitat) });
 const view = (): InteriorView | null => insideSlot.view, outsideView = (): OutsideView | null => outsideSlot.view;

@@ -10,6 +10,7 @@ import { ThreeActor, type ActorMaterialKit, type PlayableClip } from '@actors/th
 import { paramsOf, type Look } from '../../gen/coat';
 import { animalEyeMaterial, furMaterial } from '../materials';
 import { freeMesh } from '../geometry';
+import { logged } from '../loadLog';
 import { actorKit, packFetch } from './pack';
 import { castAsWorn, standAt, type Stance } from './figure';
 import AnimalWorker from '@actors/animal/worker?worker';
@@ -37,7 +38,7 @@ export class AnimalPack {
   private constructor(readonly kind: string, readonly base: Animal, private readonly worker: Worker) {}
 
   static async load(name: string): Promise<AnimalPack> {
-    const base = await Animal.load(animalPack(name), packFetch), worker = new AnimalWorker();
+    const base = await logged(`${name} pack`, () => Animal.load(animalPack(name), packFetch)), worker = new AnimalWorker();
     await base.useWorker(worker);
     return new AnimalPack(base.extra.kind, base, worker);
   }

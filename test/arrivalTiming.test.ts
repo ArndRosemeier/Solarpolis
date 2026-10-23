@@ -66,3 +66,13 @@ test('arrival timing: the flight\'s longest frames and what ran in them, nothing
   assert.deepEqual(t.longFrames[0].scripts.map((s) => s.sourceFunctionName), ['b', 'd', 'a']);
   assert.ok(t.stutterLine().startsWith('arrival\'s long frames: 2.9 s 79 ms [FrameRequestCallback b index-abc.js@1234 50 ms;'), t.stutterLine());
 });
+
+test('arrival timing: what loaded when after Start', () => {
+  let now = 0;
+  const t = new ArrivalTiming(() => now);
+  t.note('before');
+  now = 1000; t.mark('start');
+  now = 3500; t.note('human pack …');
+  now = 9000; t.note('human pack ✓');
+  assert.equal(t.loadingLine(), 'arrival\'s loading: 2.5 human pack … · 8.0 human pack ✓');
+});
