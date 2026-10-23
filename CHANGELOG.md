@@ -2,6 +2,12 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.131 — The worlds beyond the habitat
+
+- The Outside view now contains all eight planets, the five dwarf planets, their catalogued moons, tilted ring systems and a sparse procedural asteroid background at real scale.
+- Open Solar system to find a world, observe it, accelerate the clock or return to the habitat.
+- A compact offline JPL ephemeris covers 3020–3080. Approximate moon phases and estimated sizes are identified in the catalogue; no extra habitats have been added.
+
 ## v0.130 — Furniture stays in the homes as you walk past them
 
 - Walking along a street below the land, rooms no longer fill with furniture as you come near and empty behind you: every home whose rooms are drawn keeps its furniture, and it arrives and leaves together with the rooms.
