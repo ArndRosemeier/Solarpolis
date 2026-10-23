@@ -20,7 +20,7 @@ import { PICK_HEIGHT, PICK_TURNS } from '../gen/handover';
 import type { Node } from 'three/webgpu';
 import type { StageKind } from '@futuremagic/stage';
 import { useNodeDqs } from '@actors/three/webgpu';
-import { REFERENCE } from '../blueprint';
+import { REFERENCE, type Understorey } from '../blueprint';
 import { SHADOW_HALF, sunShadow } from './lights';
 import { CLOSED_RAISE, UNDER_CROWNS } from '../gen/ecology';
 import { OPEN_SKY } from '../gen/horizon';
@@ -32,7 +32,7 @@ import { RISE_RANGE } from '../gen/tiles';
 import { filtered } from './textures';
 import { cloudMarch, cloudShade } from './cloudShaders';
 import { builtAlbedo, roofHorizons, stillWater, windowPane } from './builtShaders';
-import { hamletSky } from './hamletSkies';
+import { hamletSky, screenSurface } from './hamletSkies';
 import { FINISH } from '../gen/pavilion';
 import { LAMPLIGHT } from '../gen/underMesh';
 import { speckLook, standInHorizon, standInPose, unpack } from './crowdShaders';
@@ -723,13 +723,15 @@ export const below = {
   clock: uniform(0),
   tint: uniform(color(...LAMPLIGHT)),
   extinction: uniform(Math.log(4) / 150),
+  screen: uniform(new Vector3(REFERENCE.under.screen.width, REFERENCE.under.screen.height, REFERENCE.under.screen.joint)),
 };
 
 /** Load a habitat's Understorey into the shaders' uniforms. */
-export function setBelow(lamp: number, mist: number): void {
+export function setBelow(under: Understorey): void {
   below.day.value = 0;
-  below.lamp.value = lamp;
-  below.extinction.value = Math.log(4) / mist;
+  below.lamp.value = under.lamp;
+  below.extinction.value = Math.log(4) / under.mist;
+  below.screen.value.set(under.screen.width, under.screen.height, under.screen.joint);
 }
 
 /** A lamp's glowing face (finish `lamp`), and the lamp-lit mist at its thickest (the view's background below), in the lamps' floor light. */
@@ -775,7 +777,7 @@ export const VAULT = kind('vault', ['position', 'normal', 'color', 'uv', 'finish
     const look = normalize(toward).toVar(), index = finish.sub(FINISH.screen).toVar();
     If(finish.greaterThan(FINISH.screen - 0.5), () => {
       const sky = hamletSky(look, up, index, below.day.div(SCREEN_DAY), below.clock);
-      out.assign(sky.mul(below.lamp.mul(SCREEN_GLOW)));
+      out.assign(screenSurface(pane, sky.mul(below.lamp.mul(SCREEN_GLOW)), outside, below.screen));
     });
     return out;
   })();

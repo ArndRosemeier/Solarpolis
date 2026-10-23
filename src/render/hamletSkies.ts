@@ -1,7 +1,8 @@
 /**
  * The skies on the Understorey's ceilings (gen/skies.ts: which hamlet shows which). Each is drawn as one seen
  * infinitely far off: from the direction one looks alone, in the frame of the eye (up toward the axis, along it, and
- * across), so a sky stays put as one walks under it and reads as sky, not as a picture on the ceiling. Clouds, leaves
+ * across), so a sky stays put as one walks under it. The display's panel joints stay on the physical ceiling
+ * (`screenSurface`), making its depth visible beneath the sky. Clouds, leaves
  * and the sea's surface lie on a plane far overhead (`overhead`), so they foreshorten toward the horizon as real ones do.
  *
  * Colours are the sky's own at full day (about 1 for its brightest), before the screen's brightness (materials.ts,
@@ -11,10 +12,29 @@
 import { Fn, If, abs, clamp, cos, dot, exp, float, floor, hash, max, mix, mx_fractal_noise_float, mx_noise_float, mx_worley_noise_vec2, normalize, sin, smoothstep, vec2, vec3 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { glassSky } from './glassDeck';
+import { lineAt, shows } from './shaderMath';
 
 type F = Node<'float'>;
 type V2 = Node<'vec2'>;
 type V3 = Node<'vec3'>;
+
+/**
+ * The physical display over a ceiling's metre UVs: rectangular modules with dark joints and a little calibration
+ * variation. The sky can look infinitely distant, but these stay on the deck as the eye moves. Pixel-filtered
+ * joints and their mean at distance use the same seams as other built surfaces, so the grid cannot shimmer.
+ * `panel` holds width, height and joint width in metres (under.screen); `image` and `light` are already lit.
+ */
+export const screenSurface = Fn(([st, image, light, panel]: [V2, V3, V3, V3]) => {
+  const at = st.div(panel.xy), width = panel.z.div(panel.xy), r = shows(at);
+  const x = lineAt(at.x, width.x), y = lineAt(at.y, width.y);
+  const mean = width.x.add(width.y).sub(width.x.mul(width.y));
+  const joints = mix(mean, x.add(y).sub(x.mul(y)), r);
+  // Ceiling UVs are bay-local and non-negative; keep the hash positive at the shared edges too.
+  const cell = floor(max(at, vec2(0))), tint = hash(cell.x.add(cell.y.mul(1013)).add(1)).sub(0.5).mul(0.05).mul(r);
+  return mix(image.mul(tint.add(1)), light.mul(0.035), joints);
+}).setLayout({ name: 'screenSurface', type: 'vec3', inputs: [
+  { name: 'st', type: 'vec2' }, { name: 'image', type: 'vec3' }, { name: 'light', type: 'vec3' }, { name: 'panel', type: 'vec3' },
+] }) as unknown as (st: V2, image: V3, light: V3, panel: V3) => V3;
 
 /** The skies in the order drawn: must be the catalogue's (gen/skies.ts; a test checks). */
 export const SKY_DRAWN = ['open', 'aurora', 'moon', 'mars', 'canopy', 'deep', 'glass'] as const;

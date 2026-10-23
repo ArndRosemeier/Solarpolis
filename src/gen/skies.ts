@@ -3,7 +3,8 @@
  * 2026-10-22; Arnd chose "skies each hamlet chooses", 17:39). Between the ribs the deck's underside is screen, and
  * each hamlet shows its own sky there the way each district shapes its land: a work with authors, picked here per
  * hamlet from the catalogue by its district's style, seeded. A sky is drawn as one seen infinitely far off (by the
- * direction one looks, render/hamletSkies.ts), so it reads as sky and not as a lid 20 m up.
+ * direction one looks, render/hamletSkies.ts). The display's panel grid stays on the ceiling, making its physical
+ * depth clear even while the image reads as a distant sky.
  *
  * Skies are authored, walls are honest: the wellhead keeps its stone round the light well, the one real sky in a
  * hamlet, and the bays outside the hamlets (galleries, cisterns, the Dim) have no sky. The glass deck is in the

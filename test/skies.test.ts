@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MATRIX } from '../src/blueprint';
+import { MATRIX, derive, validate, withParams } from '../src/blueprint';
 import { SKIES, hamletSkiesOf, skyOverBay } from '../src/gen/skies';
 import { underOf } from '../src/gen/under';
 import { planOf } from '../src/gen/plan';
@@ -11,6 +11,20 @@ import { terrainOf } from './worlds';
 
 test('skies: the shader draws the catalogue in its order', () => {
   assert.deepEqual([...SKY_DRAWN], SKIES.map((s) => s.name));
+});
+
+test('skies: screen dimensions are valid across habitats; empty panels and oversized joints are rejected', () => {
+  for (const { params } of MATRIX) {
+    const check = (screen: typeof params.under.screen): boolean => validate(derive(withParams({ under: { ...params.under, screen } }, params)))
+      .some((f) => f.severity === 'invalid' && f.message.startsWith('ceiling screens'));
+    assert.equal(check(params.under.screen), false);
+    assert.equal(check({ width: 3, height: 2, joint: 0.03 }), false);
+    for (const screen of [
+      { ...params.under.screen, width: 0 }, { ...params.under.screen, height: -1 },
+      { ...params.under.screen, width: Infinity }, { ...params.under.screen, height: NaN },
+      { ...params.under.screen, joint: 0 }, { ...params.under.screen, joint: params.under.screen.height },
+    ]) assert.equal(check(screen), true);
+  }
 });
 
 for (const { name } of MATRIX) {

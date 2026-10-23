@@ -103,6 +103,9 @@ export function validate(h: Habitat): Finding[] {
   if (!(an.squirrels >= 0 && an.range > 0 && an.out >= 0 && an.out <= 1 && an.deer >= 0 && an.herd >= 1 && an.roam > 0))
     out.push({ id: 'life', severity: 'invalid', message: 'animals need squirrels ≥ 0 per hectare, a range > 0, a share of the day out between 0 and 1, deer ≥ 0 per km², herds of at least 1 and a roam > 0' });
   const u = p.under, us = u.stone;
+  if (!(Number.isFinite(u.screen.width) && Number.isFinite(u.screen.height) && u.screen.width > 0 && u.screen.height > 0
+    && u.screen.joint > 0 && u.screen.joint < Math.min(u.screen.width, u.screen.height) / 4))
+    out.push({ id: 'under', severity: 'invalid', message: 'ceiling screens need finite panel dimensions > 0 and joints > 0 narrower than a quarter of either side' });
   if (!(u.bay > 0 && u.bay < pl.entranceSpacing / 2 && us.density > 0 && us.strength > 0 && us.modulus > 0 && us.safetyFactor >= 1 && u.land >= 0 && u.spring > 0 && u.spring < 1
     && u.household.people > 0 && u.household.bays > 0 && u.halls >= 0 && Number.isInteger(u.lanes) && u.lanes >= 2 && u.cisterns >= 0 && u.cisterns <= 1
     && u.grade > 0 && u.grade < 1 && u.lamp > 0 && u.lamp <= 1 && u.mist > 0))

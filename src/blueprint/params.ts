@@ -239,6 +239,8 @@ export interface Understorey {
   lamp: number;
   /** The air below is moist and still: over this many metres it keeps only a quarter of the light through it (m). */
   mist: number;
+  /** Ceiling display modules: width, height and the dark joint between them (m). */
+  screen: { width: number; height: number; joint: number };
 }
 
 /**

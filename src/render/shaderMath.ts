@@ -21,9 +21,10 @@ export const shows = (x: Node<'float'> | Node<'vec2'> | Node<'vec3'>): Node<'flo
  * Lines where x crosses a whole number, `width` (share of a period) wide, box-filtered over the pixel: a line thinner
  * than a pixel shows as a fainter one, so its share of the area is `width` at every distance.
  */
-export const lineAt = (x: Node<'float'>, width: number): Node<'float'> => {
+export const lineAt = (x: Node<'float'>, width: Edge): Node<'float'> => {
   const fw = max(fwidth(x), 1e-6), f = fract(x), d = min(f, f.oneMinus());
-  return clamp(min(d.add(fw.mul(0.5)), width / 2).sub(max(d.sub(fw.mul(0.5)), -width / 2)).div(fw), 0, 1);
+  const half = (typeof width === 'number' ? float(width) : width).mul(0.5);
+  return clamp(min(d.add(fw.mul(0.5)), half).sub(max(d.sub(fw.mul(0.5)), half.negate())).div(fw), 0, 1);
 };
 
 /** A brightness factor `contrast` on lines covering `share` of the area, shown by `r`, its mean kept at 1. */

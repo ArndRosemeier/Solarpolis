@@ -477,7 +477,7 @@ export class InteriorView {
     setAir(densityFalloff(h), h.radius, seenMid(h), h.params.air.hazeDistance);
     setRockBeds(h.params.relief.terraceStep, h.radius);
     setSnow(snowFieldOf(h));
-    setBelow(h.params.under.lamp, h.params.under.mist);
+    setBelow(h.params.under);
     // The sunline: from the wild wall to the port wall along the axis.
     const tube = new CylinderGeometry(h.params.sunlineRadius, h.params.sunlineRadius, h.length, 24, 1, true);
     tube.deleteAttribute('uv'); // the kind's attributes are position and normal (docs/SHADERS.md)

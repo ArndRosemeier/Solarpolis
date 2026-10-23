@@ -106,6 +106,7 @@ Each row is a question you will have while coding, and the one place that answer
 
 | Question | The one way |
 |---|---|
+| How does a ceiling sky read as a physical display? | `screenSurface(st, image, light, panel)` (`render/hamletSkies.ts`), applied by VAULT to every screen finish, including the live view above. Its grid uses the ceiling's bay-local metre UVs, not the sky direction: dark joints and slight panel calibration differences stay on the deck while the image stays distant. Dimensions and joint width are `HabitatParams.under.screen`, loaded by `setBelow(under)` into `below.screen`; `lineAt` filters the joints and `shows` fades the grid to its mean before it could shimmer. No extra geometry, textures or material kinds. |
 | How do I get a renderer? | `createRenderer(canvas, { backends: 'webgpu', depth: 'reversed' })` from `@futuremagic/stage`, once per view (`view.ts`, `outside.ts`). |
 | How does a mesh get a material? | A kind from `materials.ts` (`GROUND`, `WATER`, `SUNLINE`, `BALL`, `BARK`, `LEAF`, `HULL`, `allKinds`; own attributes on warm-up stand-ins via `standInAttribute`); the mesh carries exactly the kind's attributes. |
 | How does a thing enter the scene? | `stage.add(obj)` (the Stage from `@futuremagic/stage`, made in `view.ts`). |

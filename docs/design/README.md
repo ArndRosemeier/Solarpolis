@@ -8,7 +8,7 @@
 
 | Topic | Decision |
 |---|---|
-| Setting | About 1000 years ahead. Post-scarcity; people and AIs live together, often indistinguishable. Basically everything technical has a mind; the habitat has one. |
+| Setting | About 1000 years ahead. Material abundance, with finite resources; people and AIs live together, often indistinguishable. Basically everything technical has a mind; the habitat has one. The wider setting's world bible was shared on 2026-10-23. |
 | Start | Inside an O'Neill cylinder in Earth orbit, about 200 years old. The cylinder is a building block of a much bigger setting. |
 | Player | A human with some common augmentations. No set objective yet: enjoy the sim. |
 | Surface | Park and nature reserve with only landmark buildings. No houses. |
@@ -23,3 +23,12 @@
 | Outside | Radiators are flat brims at the endcaps; the port hub is a despun spindle where ships dock; the title is a live docking flight into the Hub. |
 | Ships | Two modes: laser-pushed solar sails (lasers on the Moon and other bodies; cheapest, slowest) and fusion torch ships with continuous thrust (what citizens use). Habitats stay solar-only. |
 | Earth in 3026 | Much like today (the sea rose and fell back). Cities smaller and darker: targeted light, citizens who hardly need it. |
+
+## The sample habitat and life below (2026-10-23)
+
+- This is a sample habitat: a reusable blueprint for more targeted versions later, not one of the world bible's named polities. Its steward Mind is **A Little More Room Than Strictly Necessary**. Solarpolis remains the name of the whole setting and project.
+- Ceiling skies should read as screens: visible panel joints stay on the physical ceiling, including screens showing the real land above.
+- Bring the living layer to life in this order: neighbourhood routines between homes, halls and lifts; social activity in those places; then ambient details, sounds, maintenance and deliveries. These are the next design steps, not yet implemented.
+- Daily routines reflect chosen pursuits and relationships. The world bible describes abundance without ordinary economic compulsion; a workshop or shared kitchen is a place people choose to participate.
+- A separate agent is building a portable conversation engine. Integrate it later with resident identity, place, activity and social context; do not build a second conversation engine here.
+- Finished work must be pushed to `main` so Arnd can publish and see the results; do not leave completed changes only on a local branch (Arnd, 2026-10-23).

@@ -1078,7 +1078,7 @@ export function listSourceFiles(rootDir, opts = {}) {
 
   const display = (abs) => {
     const rel = path.relative(displayBase, abs);
-    return rel.startsWith('..') ? abs : rel;
+    return (rel.startsWith('..') ? abs : rel).split(path.sep).join('/');
   };
 
   walk(rootDir);
