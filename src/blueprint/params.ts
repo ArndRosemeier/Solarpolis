@@ -437,14 +437,16 @@ export interface Animals {
  *   surveyors  per hike point of the reserve, and at the Mountain's flight launch: they circle, map and measure;
  *   lifters    at the Gate, bringing loads down its face from the hub, and one per makers' commons, moving stone;
  *   gliders    per km of the floor's length: they ride the still, thin air near the axis;
- *   guardians  per km of the ring lake's shores, and at the flight launch: they hover, ready to catch a flyer or a swimmer.
+ *   guardians  per km of the ring lake's shores, and at the flight launch: they hover, ready to catch a flyer or a swimmer;
+ *   watchers   per place people go: the habitat Mind's eyes, small camera drones with one big lens, hovering a while over
+ *              the people there, then moving on (design "Nobody falls far": how the Mind sees a fall coming).
  *
  * And persons: residents who wear a drone's body (`persons`), out on the land as anyone is, in their parties and at
  * their places, at the height of the faces they talk to. Their bodies are their own designs (`bodies` of them), the
  * `person` role's kit. (Small tool drones, a tender's pruner or a lifter's grab, are part of their drone, never persons.)
  */
 /** The drones' roles, in the order the fleet and the designs list them (sim/air.ts, gen/drone.ts). */
-export const DRONE_ROLES = ['courier', 'tender', 'surveyor', 'lifter', 'glider', 'guardian', 'person'] as const;
+export const DRONE_ROLES = ['courier', 'tender', 'surveyor', 'lifter', 'glider', 'guardian', 'watcher', 'person'] as const;
 export type DroneRole = (typeof DRONE_ROLES)[number];
 
 export interface Drones {
@@ -454,6 +456,7 @@ export interface Drones {
   lifters: number;
   gliders: number;
   guardians: number;
+  watchers: number;
   /** How fast they cruise (m/s). */
   cruise: number;
   /** How high the couriers' lanes run over the ground (m), clear of the trees. */

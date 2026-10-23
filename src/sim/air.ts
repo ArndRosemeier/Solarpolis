@@ -1,13 +1,14 @@
 /**
- * The drones that work the land (design "Who is out on the land": couriers, tenders, surveyors, lifters, gliders and
- * guardians; how many: `HabitatParams.life.drones`), and where each is at any moment: a pure function of the habitat's
+ * The drones that work the land (design "Who is out on the land": couriers, tenders, surveyors, lifters, gliders,
+ * guardians and the Mind's watchers; how many: `HabitatParams.life.drones`), and where each is at any moment: a pure function of the habitat's
  * seed, its land and the clock. Nobody steers them; anyone can be worked out on their own.
  *
  * Every drone has a job at a place, made once per terrain (`fleetOf`), and its job says how it moves:
  *
  *   round    a courier: up from its pad beside its court, along the ways (the walk net) at the lane's height to a place
  *            near the court, down for a stop, back the same way, and a rest on the pad until the next round;
- *   roam     tenders over their orchard block or vine parcel, lifters at the makers' commons, guardians over the lake:
+ *   roam     tenders over their orchard block or vine parcel, lifters at the makers' commons, guardians over the lake,
+ *            watchers over the places people go:
  *            a while at work hovering low at one spot, then a short hop to the next;
  *   orbit    surveyors over the reserve and the Mountain, guardians off the flight launch: wide slow circles;
  *   shuttle  the Gate's lifters: up the Gate's face to near the hub and back down to its foot with a load;
@@ -79,6 +80,8 @@ export interface Flier {
 const CLIMB = 3;
 const WORK_HEIGHT = 3;
 const HOP_HEIGHT = 7;
+/** How high a watcher hangs over the people it watches (m over the ground): above their heads, below the trees. */
+const WATCH_HEIGHT = 6;
 /** A roamer's beat (s): at work at least this long at a spot, then the hop to the next (at least this long). */
 const BEAT = { work: 30, hop: 6 } as const;
 /** A courier's stop at the place it flew to (s). */
@@ -157,6 +160,10 @@ function makeFleet(t: Terrain): Job[] {
       add('guardian', { move: 'roam', theta: (TURN * (j + 0.5 * side)) / each, s, around: Math.min((TURN * R) / each / 4, 60), along: Math.min(lake.halfWidth * 0.2, 60), height: 12, speed: d.cruise / 2, court: -1 });
     }
   }
+  // Watchers, the Mind's eyes: over the places people go, a while over the people at one spot, then on to the next.
+  v.venues.forEach((x, k) => {
+    for (let j = howMany(d.watchers, 500 + k); j-- > 0;) add('watcher', { move: 'roam', theta: x.theta, s: x.s, around: x.spread, along: x.spread, height: WATCH_HEIGHT, speed: d.cruise / 2, court: -1 });
+  });
   if (launch) for (let j = 0; j < 2; j++) add('guardian', { move: 'orbit', theta: launch.theta, s: launch.s + launch.size * 2, around: launch.size * 2, along: launch.size, height: d.lane, speed: d.cruise / 4, court: -1 });
   return jobs;
 }

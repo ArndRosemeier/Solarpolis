@@ -173,7 +173,7 @@ export function cuesOf(e: Ecology, src: Source, t0: number, t1: number, gravity:
 
 /** The drones' roles, as they sound: the small couriers' shrouded fans, the lifters' big slow rotors, and so on. */
 const DRONE_HUM: Readonly<Record<DroneRole, string>> = {
-  courier: 'drone/courier', person: 'drone/courier', tender: 'drone/tender', lifter: 'drone/lifter', glider: 'drone/glider', surveyor: 'drone/high', guardian: 'drone/high',
+  courier: 'drone/courier', person: 'drone/courier', tender: 'drone/tender', lifter: 'drone/lifter', glider: 'drone/glider', surveyor: 'drone/high', guardian: 'drone/high', watcher: 'drone/courier',
 };
 
 /** A flock's sound for each bird's square root (a murmuration of 2500 at full strength). */

@@ -48,7 +48,7 @@ export const REFERENCE: HabitatParams = {
   // the parties are one person, a third two, a few up to six (so about three in ten people come alone); a court is a
   // stop of half an hour.
   life: { outings: 0.35, stay: 9000, pause: 1800, parties: [0.5, 0.33, 0.09, 0.05, 0.02, 0.01], regulars: 0.6, sunwalk: 0.03, night: 0.04, shells: 0.15, minds: 0.3, walk: 1.3, reach: 1500,
-    drones: { couriers: 1, tenders: 1, surveyors: 2, lifters: 6, gliders: 0.4, guardians: 0.2, cruise: 12, lane: 35, round: 1200, designs: 2, persons: 0.08, bodies: 6 },
+    drones: { couriers: 1, tenders: 1, surveyors: 2, lifters: 6, gliders: 0.4, guardians: 0.2, watchers: 0.15, cruise: 12, lane: 35, round: 1200, designs: 2, persons: 0.08, bodies: 6 },
     animals: { squirrels: 8, range: 25, out: 0.7, deer: 7, herd: 8, roam: 400 },
     birds: { woods: 4, territory: 30, larks: 0.4, owls: 4, swallows: 8, swifts: 40, starlings: 2500 },
     talk: { words: 15, dots: 40, parties: 4, read: 14, quiet: 30 },
