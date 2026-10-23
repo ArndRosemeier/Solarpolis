@@ -18,7 +18,7 @@ import { makeTerrain, type Terrain } from '../gen/terrain';
 import { EYE_HEIGHT, VIEW_FOV, Walker, type View } from '../world/walker';
 import { Flyer } from '../world/flyer';
 import { PhysicsWorld } from '../physics/world';
-import { gravityReading, type GravityReading } from '../world/motion';
+import { gravityReading, upAt, type GravityReading } from '../world/motion';
 import { arrivalTerraceOf, revealAt, REVEAL_SECONDS, type ArrivalReveal } from '../world/arrival';
 import { berthsOf } from '../gen/capsules';
 import type { ArrivalTerrace } from '../gen/arrivalTerrace';
@@ -59,6 +59,7 @@ import { AnimalView, DEER, SQUIRRELS } from './animals';
 import { BirdView } from './birds';
 import { CabinView } from './lift';
 import { CapsuleLink, CapsuleView, type Passenger } from './capsules';
+import { Guardians } from './guardians';
 import { GLASS, SKIES, skyOverBay } from '../gen/skies';
 import { GlassDeck, type GlassStage, type GlassWant } from './glassDeck';
 import { nearestExitCourt, type ExitCourt } from '../gen/exitCourt';
@@ -166,6 +167,12 @@ export class InteriorView {
   /** The capsules' part of the player's link (main.ts serves it), and the lines their Minds say through it. */
   readonly capsules: LinkService = new CapsuleLink(() => this.caps, () => (this.loop.running ? { feet: this.walker.feetAt(), below: this.below } : null));
   onLine: ((line: LinkLine) => void) | null = null;
+  /** The guardians who catch the player falling, and the ground's bag when none is near (render/guardians.ts). */
+  private guards: Guardians | null = null;
+  /** Their part of the link (main.ts serves it): nothing offered, a card while a catch has the player. */
+  readonly guarding: LinkService = { id: 'guardians', title: 'Guardians', offers: () => [], status: () => this.guards?.status() ?? null };
+  /** How far over the ground the next body stands up (m; the debug menu's falls), then 0 again. */
+  private standAbove = 0;
   /** The people up on the land around the player. */
   private people: PeopleView | null = null;
   /** Everyone up on the land beyond them, as specks. */
@@ -195,7 +202,7 @@ export class InteriorView {
   onArrival: ((progress: number, nearby: boolean) => void) | null = null;
   private readonly loop = new FrameLoop((dt) => this.frame(dt), (e) => {
     if (this.arrivalReveal && !e.ctrlKey && !e.altKey && !e.metaKey) { this.finishArrivalReveal(); return; }
-    if (e.code === 'KeyF' && !e.repeat && !this.cabin?.aboard && !this.caps?.carrying) this.toggleFlying();
+    if (e.code === 'KeyF' && !e.repeat && !this.cabin?.aboard && !this.caps?.carrying && !this.guards?.holding) this.toggleFlying();
     if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) this.jump = true; }
   });
   /** Travel speed multiplier from the debug menu. */
@@ -340,7 +347,7 @@ export class InteriorView {
 
   /** Bytes of geometry this view holds (memory watchdog). */
   bytes(): number {
-    return (this.tiles?.bytes() ?? 0) + (this.plants?.bytes() ?? 0) + (this.landmarks?.bytes() ?? 0) + (this.stair?.bytes() ?? 0) + (this.courts?.bytes() ?? 0) + (this.crossings?.bytes() ?? 0) + (this.halls?.bytes() ?? 0) + (this.harbours?.bytes() ?? 0) + (this.under?.bytes() ?? 0) + (this.cabin?.bytes() ?? 0) + (this.caps?.bytes() ?? 0) + (this.glass?.bytes() ?? 0) + (this.homes?.bytes() ?? 0);
+    return (this.tiles?.bytes() ?? 0) + (this.plants?.bytes() ?? 0) + (this.landmarks?.bytes() ?? 0) + (this.stair?.bytes() ?? 0) + (this.courts?.bytes() ?? 0) + (this.crossings?.bytes() ?? 0) + (this.halls?.bytes() ?? 0) + (this.harbours?.bytes() ?? 0) + (this.under?.bytes() ?? 0) + (this.cabin?.bytes() ?? 0) + (this.caps?.bytes() ?? 0) + (this.guards?.bytes() ?? 0) + (this.glass?.bytes() ?? 0) + (this.homes?.bytes() ?? 0);
   }
 
   /** Give memory back (memory watchdog): drop every cached tile and plant cell not on screen. */
@@ -406,7 +413,7 @@ export class InteriorView {
     const a = this.flyer ? fromWorld(this.habitat.profile, ...this.flyer.eye) : this.walker.at;
     const c = this.character, g = this.habitat.gravityAt(Math.hypot(...this.current().eye.slice(0, 2) as [number, number]));
     const where = this.below ? `below the land${this.skyLine(a.theta, a.s)}, ` : '', ride = this.cabin?.ride;
-    const mode = ride?.aboard ? `in a lift, ${ride.waits ? 'waiting for the floor below' : ride.to > ride.from ? 'going up' : 'going down'}` : this.caps?.carrying ? `in a capsule (${this.caps.phase})` : where + (this.flyer ? `flying ${this.flyer.clearance().toFixed(0)} m up`
+    const mode = ride?.aboard ? `in a lift, ${ride.waits ? 'waiting for the floor below' : ride.to > ride.from ? 'going up' : 'going down'}` : this.caps?.carrying ? `in a capsule (${this.caps.phase})` : this.guards?.holding ? `caught falling (${this.guards.phase})` : where + (this.flyer ? `flying ${this.flyer.clearance().toFixed(0)} m up`
       : !c ? 'on foot (waiting for the physics)' : `on foot, ${c.swimming ? 'swimming' : c.grounded ? 'standing' : 'in the air'}, gravity ${(g / 9.81).toFixed(2)} g`);
     return [
       this.stage.hudLine(),
@@ -430,6 +437,7 @@ export class InteriorView {
       this.birds?.info() ?? 'birds: none',
       this.boats?.info() ?? 'boats: none',
       this.caps?.info() ?? 'capsule: none',
+      this.guards?.info() ?? 'guardians: none',
       `θ ${(a.theta * 180 / Math.PI).toFixed(1)}°, s ${(a.s / 1000).toFixed(2)} of ${(this.habitat.profile.length / 1000).toFixed(2)} km, ground ${this.standOn(a.theta, a.s).toFixed(1)} m, ${mode}, eyes ×${this.exposure.toFixed(2)}`,
     ].join('\n');
   }
@@ -548,13 +556,14 @@ export class InteriorView {
   /** Give the walker a body once the physics has ground under it (at the start, and after landing). */
   private standUp(): void {
     const p = this.physics;
-    if (!p || this.flyer || this.character || this.cabin?.aboard || this.caps?.carrying) return;
+    if (!p || this.flyer || this.character || this.cabin?.aboard || this.caps?.carrying || this.guards?.holding) return;
     const { theta, s } = this.walker.at;
-    const feet = toWorld(this.habitat.profile, { theta, s, h: this.standOn(theta, s) + 0.05 });
+    const feet = toWorld(this.habitat.profile, { theta, s, h: this.standOn(theta, s) + 0.05 + this.standAbove });
     // Not on a patch of the other level (the land's, when below): ask for one of this one, which stands the body up.
     if (p.groundPatch && p.groundPatch.below !== this.below) { void this.groundFor(feet); return; }
     if (p.offPatch(feet, PATCH_EDGE)) return;
     this.character = p.addCharacter(feet, this.terrain.waterDepth);
+    this.standAbove = 0;
   }
 
   /** Step the physics and put the balls where it says. */
@@ -562,7 +571,9 @@ export class InteriorView {
     const p = this.physics;
     if (!p) return;
     // In a capsule the ground under the eye is not wanted on the way, only where it sets down (asked as it nears).
-    const landing = this.caps?.carrying ? this.caps.landingSoon(LANDING_GROUND) : null, wanted = landing ?? (this.caps?.carrying ? null : eye);
+    // Caught falling, likewise: the ground where the guardians set the body down, as they near it.
+    const held = !!this.guards?.holding, carried = !!this.caps?.carrying || held;
+    const landing = this.caps?.carrying ? this.caps.landingSoon(LANDING_GROUND) : held ? this.guards!.groundSoon(LANDING_GROUND) : null, wanted = landing ?? (carried ? null : eye);
     if (wanted && (p.needsGround(wanted) || (p.groundPatch && p.groundPatch.below !== this.below))) void this.groundFor(wanted);
     const c = this.character;
     const o = p.groundPatch?.origin;
@@ -624,6 +635,7 @@ export class InteriorView {
     if (this.under) { this.scene.remove(this.under.group); this.under.dispose(); }
     if (this.cabin) { this.scene.remove(this.cabin.group); this.cabin.dispose(); }
     this.caps?.dispose();
+    this.guards?.dispose();
     this.glass?.dispose();
     this.homes?.dispose();
     this.people?.dispose();
@@ -682,6 +694,8 @@ export class InteriorView {
     this.scene.add(this.cabin.group);
     this.caps = new CapsuleView(h, this.terrain, this.stage, this.pool, (line) => this.onLine?.(line));
     this.scene.add(this.caps.group);
+    this.guards = new Guardians(h, this.stage, this.pool, (line) => this.onLine?.(line));
+    this.scene.add(this.guards.group);
     this.glass = new GlassDeck(this.renderer, this.scene, this.camera);
     this.people = new PeopleView(h, this.terrain, this.stage, this.camera, (theta, s) => landmarkTopAt(this.terrain, theta, s));
     this.scene.add(this.people.group);
@@ -763,6 +777,7 @@ export class InteriorView {
     this.under?.follow(v.eye, rideFrom ? eyeInCabin(this.habitat, rideFrom, EYE_HEIGHT) : v.eye);
     this.cabin?.poseAt(v.eye);
     this.caps?.poseAt(v.eye);
+    this.guards?.poseBag(v.eye);
     this.exitClock += this.frameDt;
     if (this.onExit && (!this.below || this.exitClock >= 0.1)) {
       this.exitClock = 0;
@@ -777,7 +792,7 @@ export class InteriorView {
     // Screen fabrics' shared clock, once a frame before any figure is posed.
     screenTextures.update(this.frameDt);
     this.people?.follow(v.eye, this.time, this.frameDt, this.below, this.homes?.intent);
-    this.drones?.follow(v.eye, this.time, this.frameDt, this.people?.aloft, this.below);
+    this.drones?.follow(v.eye, this.time, this.frameDt, this.people?.aloft, this.below, this.below ? [] : this.guards?.fliers(v.eye));
     if (this.talk && this.people) this.talk.bubblesAt(this.people, v.eye, this.time, this.camera, this.canvas.clientWidth, this.canvas.clientHeight);
     this.onTalk?.(this.talk?.bubbles ?? []);
     this.onOverlay?.(this.frameDt, this.sight);
@@ -910,7 +925,8 @@ export class InteriorView {
     const f = this.figure, c = this.character, reveal = this.reveal();
     // Light and shade around the player (or under the flyer).
     const rider = this.caps?.passenger() ?? null;
-    const centre = reveal ? v3madd(reveal.feet, reveal.up, HUMAN.height / 2) : rider ? v3madd(rider.feet, rider.up, HUMAN.height / 2) : this.flyer || !c ? eye : v3madd(this.walker.feetAt(), c.up, HUMAN.height / 2);
+    const caught = this.guards?.holding ? this.guards.phase : null, feetUp = upAt(this.walker.feetAt()) ?? this.walker.view().up;
+    const centre = reveal ? v3madd(reveal.feet, reveal.up, HUMAN.height / 2) : rider ? v3madd(rider.feet, rider.up, HUMAN.height / 2) : caught ? v3madd(this.walker.feetAt(), feetUp, HUMAN.height / 2) : this.flyer || !c ? eye : v3madd(this.walker.feetAt(), c.up, HUMAN.height / 2);
     if (this.below) {
       shineBelow(centre, eye, this.habitat.params.under.lamp);
       below.clock.value = this.time;
@@ -921,7 +937,7 @@ export class InteriorView {
     if (!f) return;
     // The one rule for the body (the capsules' seat follows it too): on foot, or walking out on arrival, the body is
     // there and casts its shadow; the camera sees its head's parts only from behind (HEAD_LAYER).
-    f.object.visible = !!reveal || !!rider || (!this.flyer && !!c);
+    f.object.visible = !!reveal || !!rider || !!caught || (!this.flyer && !!c);
     const chase = reveal ? reveal.chase : this.chase;
     if (chase >= HEAD_CLEAR) this.camera.layers.enable(HEAD_LAYER); else this.camera.layers.disable(HEAD_LAYER);
     if (!f.object.visible) return;
@@ -936,6 +952,11 @@ export class InteriorView {
       speed = p.speed;
       move = p.posture === 'walk' && speed > 0.3 ? 'walk' : p.posture === 'sit' ? 'sit' : 'idle';
       if (p.posture === 'sitDown' || p.posture === 'standUp') anim = { move: 'idle', pose: { clip: p.posture === 'sitDown' ? 'sit down' : 'stand up', hold: Math.min(0.999, p.share) } };
+    } else if (caught) {
+      // Caught: falling until the bands (or the bag) have the body, hanging in them on the way, feet first to the ground.
+      const look = this.walker.view().look, ahead = v3madd(look, feetUp, -v3dot(look, feetUp));
+      feet = this.walker.feetAt(); up = feetUp; speed = 0; front = v3norm(ahead);
+      move = caught === 'lowering' || caught === 'released' ? 'idle' : 'fall';
     } else {
       const ch = c!, v = ch.velocity, flat = v3madd(v, ch.up, -v3dot(v, ch.up));
       feet = this.walker.feetAt(); up = ch.up; speed = Math.hypot(...flat);
@@ -1019,6 +1040,7 @@ export class InteriorView {
     if (this.cabin) this.cabin.ride = null;
     // Taken out of a capsule one is in, it leaves empty; one waiting or on its way stays for the player to come back to.
     if (this.caps?.carrying) this.caps.letGo();
+    this.guards?.cancel();
     this.flyer = null;
     this.physics?.removeCharacter();
     this.character = null;
@@ -1031,6 +1053,7 @@ export class InteriorView {
    * the flyer's: toward the axis, so the point should be off the axis itself.
    */
   floatAt(eye: Vec3, look: Vec3): void {
+    this.guards?.cancel();
     this.physics?.removeCharacter();
     this.character = null;
     const r = Math.hypot(eye[0], eye[1]), up: Vec3 = r > 0 ? [-eye[0] / r, -eye[1] / r, 0] : [1, 0, 0];
@@ -1045,6 +1068,7 @@ export class InteriorView {
       this.flyer = null;
       this.standUp();
     } else {
+      this.guards?.cancel();
       this.physics?.removeCharacter();
       this.character = null;
       this.flyer = new Flyer(this.habitat.profile, this.walker.view(), this.standOn);
@@ -1179,6 +1203,42 @@ export class InteriorView {
     this.standUp();
   }
 
+  /**
+   * Let the guardians watch the body on foot: a fall that would hurt is theirs from the moment it is foreseen (the
+   * body leaves the physics and goes as the catch plans it) until they set it down, where it stands up again.
+   */
+  private guardOn(dt: number): void {
+    const g = this.guards, c = this.character;
+    if (!g) return;
+    const onFoot = !!c && !this.flyer && !this.below && !this.cabin?.aboard && !this.caps?.carrying && !this.arrivalReveal;
+    g.watch(dt, onFoot ? { feet: c.feet(), v: c.velocity, grounded: c.grounded, swimming: c.swimming } : null);
+    if (g.takeStarted()) {
+      this.physics?.removeCharacter();
+      this.character = null;
+    }
+    const held = g.step(dt);
+    if (!held) return;
+    this.walker.follow(held.feet);
+    if (!held.released) return;
+    const look = this.walker.view().look, sd = held.released;
+    this.walker.land(sd.theta, sd.s, v3dot(look, sd.front) > -0.5 ? sd.front : look);
+    this.standUp();
+  }
+
+  /**
+   * Stand at (θ, s) `h` m over the profile, facing `heading`, and let go (the debug menu's falls): the guardians see the
+   * fall as any other. `late` m over the ground they catch it, going along from the start (the Long Drop); 0: at once.
+   */
+  dropFrom(at: { theta: number; s: number; h: number }, heading?: number, late = 0): void {
+    this.below = false;
+    this.stand(at.theta, at.s, heading);
+    this.physics?.removeCharacter();
+    this.character = null;
+    this.standAbove = Math.max(0, at.h - this.standOn(at.theta, at.s) - 0.05);
+    if (this.guards) this.guards.late = late;
+    this.standUp();
+  }
+
   /** Stand in front of a court's lift doors, facing them (debug menu): above at its portal, below at its cage. */
   toLiftDoors(court: number, below: boolean): void {
     const doors = below ? doorsBelow(this.terrain, court) : doorsAbove(this.terrain, court);
@@ -1239,8 +1299,8 @@ export class InteriorView {
     this.glide(dt);
     const { forward, right, up, fast } = moveKeys(this.loop.keys);
     const run = this.boost * (fast ? RUN : 1);
-    if (this.arrivalReveal || this.cabin?.aboard || this.caps?.carrying) {
-      // In a lift the keys wait for its doors; in a capsule, for its Mind to set one down.
+    if (this.arrivalReveal || this.cabin?.aboard || this.caps?.carrying || this.guards?.holding) {
+      // In a lift the keys wait for its doors; in a capsule, for its Mind to set one down; caught, for the ground.
     } else if (this.flyer) {
       this.flyer.boost = run;
       this.flyer.step({ forward, right, up }, dt);
@@ -1263,6 +1323,7 @@ export class InteriorView {
     this.rideOn(dt);
     this.capsuleOn(dt);
     this.simulate(dt, this.current().eye);
+    this.guardOn(dt);
     this.place();
     const guide = this.arrivalGuide, eye = this.current().eye;
     const went = this.lastEye && dt > 0 ? Math.hypot(eye[0] - this.lastEye[0], eye[1] - this.lastEye[1], eye[2] - this.lastEye[2]) / dt : 0;
@@ -1281,7 +1342,7 @@ export class InteriorView {
   /** The gravity the player feels now (`feltGravity`), smoothed so a stride's jitter does not show, for `onGravity`. */
   private weigh(dt: number): void {
     if (!this.onGravity || dt <= 0) return;
-    const c = this.character, view = this.current(), aboard = !!this.cabin?.aboard, inCapsule = this.caps?.feel() ?? null;
+    const c = this.character, view = this.current(), aboard = !!this.cabin?.aboard, inCapsule = this.caps?.feel() ?? null, caught = this.guards?.feel() ?? null;
     const onFoot = !!c && !this.flyer && !aboard && !inCapsule;
     const at = onFoot ? c.feet() : view.eye;
     // On foot the body's own velocity; flying or in a lift, how far the eye went this frame (a jump elsewhere is no speed).
@@ -1289,10 +1350,11 @@ export class InteriorView {
     let v: Vec3 = onFoot ? c.velocity : last ? v3scale([at[0] - last[0], at[1] - last[1], at[2] - last[2]], 1 / dt) : [0, 0, 0];
     if (Math.hypot(...v) > 2000) v = [0, 0, 0];
     this.lastAt = [...at];
-    const moving = inCapsule ? 'capsule' : aboard ? 'lift' : this.flyer ? 'fly' : !c ? 'foot' : c.swimming ? 'swim' : c.grounded ? 'foot' : 'air';
+    const moving = inCapsule ? 'capsule' : aboard ? 'lift' : this.flyer ? 'fly' : caught !== null ? 'air' : !c ? 'foot' : c.swimming ? 'swim' : c.grounded ? 'foot' : 'air';
     const read = gravityReading(this.habitat, at, v, view.look, view.up, moving), was = this.gravity;
     // In a capsule what one feels is the pod's own speeding up, slowing and turning as well as the spin's (world/capFlight.ts).
-    const now = inCapsule ? { ...read, felt: inCapsule.weight } : read;
+    // Caught, what the guardians' bands or the bag do to the body (nothing while it falls free).
+    const now = inCapsule ? { ...read, felt: inCapsule.weight } : caught !== null ? { ...read, felt: caught } : read;
     const k = was ? 1 - Math.exp(-dt / GRAVITY_SMOOTHING) : 1;
     this.gravity = !was ? now : { ...now, felt: was.felt + (now.felt - was.felt) * k, spinward: was.spinward + (now.spinward - was.spinward) * k };
     this.onGravity(this.gravity);

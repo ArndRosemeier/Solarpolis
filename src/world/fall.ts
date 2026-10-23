@@ -9,7 +9,7 @@
  * it), with steps that shrink as the ground nears; `harmful` says whether that landing would hurt (`Guard.harm`, the
  * speed across the ground, or all of it on a cliff, where nobody stops), and `fallAt` where the body is at any moment of the fall. Pure.
  */
-import { v3cross, v3dot, v3norm, v3sub } from '@futuremagic/core';
+import { v3cross, v3dot, v3madd, v3norm, v3sub } from '@futuremagic/core';
 import { fromWorld, toWorld, type Guard, type Habitat, type Vec3 } from '../blueprint';
 import { landmarkTopAt } from '../gen/landmarks';
 import type { Terrain } from '../gen/terrain';
@@ -74,11 +74,11 @@ export function fallOf(h: Habitat, footing: Footing, p: Vec3, v: Vec3, drag: num
     const a = apparentAcceleration(h, q, w), d = airDrag(h, q, w, drag);
     return [a[0] + d[0], a[1] + d[1], a[2] + d[2]];
   };
-  const step = (q: Vec3, w: Vec3, dt: number): { p: Vec3; v: Vec3 } => {
+  const rk4 = (q: Vec3, w: Vec3, dt: number): { p: Vec3; v: Vec3 } => {
     const a1 = acc(q, w);
-    const q2 = madd(q, w, dt / 2), w2 = madd(w, a1, dt / 2), a2 = acc(q2, w2);
-    const q3 = madd(q, w2, dt / 2), w3 = madd(w, a2, dt / 2), a3 = acc(q3, w3);
-    const q4 = madd(q, w3, dt), w4 = madd(w, a3, dt), a4 = acc(q4, w4);
+    const q2 = v3madd(q, w, dt / 2), w2 = v3madd(w, a1, dt / 2), a2 = acc(q2, w2);
+    const q3 = v3madd(q, w2, dt / 2), w3 = v3madd(w, a2, dt / 2), a3 = acc(q3, w3);
+    const q4 = v3madd(q, w3, dt), w4 = v3madd(w, a3, dt), a4 = acc(q4, w4);
     return {
       p: [0, 1, 2].map((i) => q[i] + (dt / 6) * (w[i] + 2 * w2[i] + 2 * w3[i] + w4[i])) as Vec3,
       v: [0, 1, 2].map((i) => w[i] + (dt / 6) * (a1[i] + 2 * a2[i] + 2 * a3[i] + a4[i])) as Vec3,
@@ -93,11 +93,11 @@ export function fallOf(h: Habitat, footing: Footing, p: Vec3, v: Vec3, drag: num
   while (t < horizon) {
     const speed = Math.hypot(w[0], w[1], w[2]);
     const dt = Math.min(STEP_MAX, Math.max(STEP_MIN, (STEP_SHARE * Math.max(0, here.gap)) / (speed + 1)));
-    const next = step(q, w, dt), there = gapAt(next.p);
+    const next = rk4(q, w, dt), there = gapAt(next.p);
     if (there.gap <= 0) {
       // The feet cross the footing in this step: cut it where the gap closes (linearly), then step that far exactly.
       const f = here.gap <= 0 ? 0 : Math.min(1, here.gap / (here.gap - there.gap));
-      const end = f > 0 ? step(q, w, dt * f) : { p: q, v: w }, at = gapAt(end.p);
+      const end = f > 0 ? rk4(q, w, dt * f) : { p: q, v: w }, at = gapAt(end.p);
       const normal = footingNormal(h, footing, at.theta, at.s, at.under.h), up = upAt(end.p);
       const cliff = !at.under.water && !!up && v3dot(normal, up) < Math.cos(CLIFF);
       const speed = cliff ? Math.hypot(end.v[0], end.v[1], end.v[2]) : Math.max(0, -v3dot(end.v, normal));
@@ -109,6 +109,12 @@ export function fallOf(h: Habitat, footing: Footing, p: Vec3, v: Vec3, drag: num
     path.push({ t, p: [...q], v: [...w] });
   }
   return { path, lands: null };
+}
+
+/** How far the feet at `p` are over what they would land on (m; below it, negative). */
+export function gapOf(h: Habitat, footing: Footing, p: Vec3): number {
+  const at = fromWorld(h.profile, p[0], p[1], p[2]);
+  return at.h - footing(at.theta, at.s, at.h).h;
 }
 
 /** Whether a fall's landing would hurt: faster across the ground than `guard.harm` (into water, `guard.water` times it). */
@@ -142,13 +148,12 @@ export function hermite(a: FallPoint, b: FallPoint, t: number): FallPoint {
 /** The normal of the footing at (θ, s) where it stands at `top` (world, unit, away from the ground): across `NORMAL_SPAN` each way. */
 export function footingNormal(h: Habitat, footing: Footing, theta: number, s: number, top: number): Vec3 {
   const r = Math.max(1, h.profile.at(s).r), dTheta = NORMAL_SPAN / r;
-  const at = (th: number, ss: number): Vec3 => toWorld(h.profile, { theta: th, s: ss, h: footing(th, ss, top + NORMAL_SPAN).h });
+  const point = (th: number, ss: number): Vec3 => toWorld(h.profile, { theta: th, s: ss, h: footing(th, ss, top + NORMAL_SPAN).h });
   const ds = Math.min(NORMAL_SPAN, Math.max(0.01, (h.profile.length - s) / 2), Math.max(0.01, s / 2));
-  const a = at(theta - dTheta, s), b = at(theta + dTheta, s), c = at(theta, s - ds), d = at(theta, s + ds);
+  const a = point(theta - dTheta, s), b = point(theta + dTheta, s), c = point(theta, s - ds), d = point(theta, s + ds);
   const n = v3norm(v3cross(v3sub(b, a), v3sub(d, c)));
   // Away from the ground: the side the profile's own normal points to.
   const out = v3sub(toWorld(h.profile, { theta, s, h: top + 1 }), toWorld(h.profile, { theta, s, h: top }));
   return v3dot(n, out) < 0 ? [-n[0], -n[1], -n[2]] : n;
 }
 
-const madd = (a: Vec3, b: Vec3, k: number): Vec3 => [a[0] + b[0] * k, a[1] + b[1] * k, a[2] + b[2] * k];

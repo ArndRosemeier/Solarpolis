@@ -12,12 +12,16 @@ import { toWorld, wrapAngle, type Habitat, type Vec3 } from '../blueprint';
 import { overFloor } from '../gen/capsules';
 import type { Footing } from './fall';
 
-/** A guardian's post: where it perches (world), its (θ, s), and how far the ground falls away beside it (m). */
+/**
+ * A guardian's post: where it perches (world), its (θ, s), how far the ground falls away beside it (m), and which way
+ * it falls (radians along the ground: 0 toward +s, π/2 toward +θ).
+ */
 export interface Post {
   p: Vec3;
   theta: number;
   s: number;
   drop: number;
+  toward: number;
 }
 
 /** Seeded spots tried per cell; directions looked down from each. */
@@ -61,20 +65,20 @@ export function postOf(h: Habitat, footing: Footing, i: number, j: number, n: nu
     // What would hurt here: a fall from this high, at the gravity here, lands at the harmful speed.
     const hurts = Math.min(DEEP, (harm * harm) / (2 * Math.max(1e-3, h.gravityAt(r))));
     const rad = Math.max(1, h.profile.at(s).r);
-    let drop = 0;
+    let drop = 0, toward = 0;
     for (let d = 0; d < DIRECTIONS; d++) {
       const a = (2 * Math.PI * d) / DIRECTIONS;
-      if (down(h, footing, theta, s, a, EDGE, rad, r) < STEEP * EDGE) continue;
-      const far = down(h, footing, theta, s, a, OUT, rad, r);
-      if (far >= hurts) drop = Math.max(drop, far);
+      if (dropAt(h, footing, theta, s, a, EDGE, rad, r) < STEEP * EDGE) continue;
+      const far = dropAt(h, footing, theta, s, a, OUT, rad, r);
+      if (far >= hurts && far > drop) { drop = far; toward = a; }
     }
-    if (drop > 0 && (!best || drop > best.drop)) best = { p: toWorld(h.profile, { theta, s, h: top + PERCH }), theta, s, drop };
+    if (drop > 0 && (!best || drop > best.drop)) best = { p: toWorld(h.profile, { theta, s, h: top + PERCH }), theta, s, drop, toward };
   }
   return best;
 }
 
 /** How far the footing lies down the spin's gravity (radially out) at `d` m from (θ, s) in direction `a` (0: along +s). */
-function down(h: Habitat, footing: Footing, theta: number, s: number, a: number, d: number, rad: number, r: number): number {
+function dropAt(h: Habitat, footing: Footing, theta: number, s: number, a: number, d: number, rad: number, r: number): number {
   const ss = Math.min(h.profile.length, Math.max(0, s + d * Math.cos(a))), th = theta + (d * Math.sin(a)) / rad;
   const q = toWorld(h.profile, { theta: th, s: ss, h: footing(th, ss, Infinity).h });
   return Math.hypot(q[0], q[1]) - r;

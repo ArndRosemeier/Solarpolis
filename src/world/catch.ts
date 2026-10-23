@@ -18,10 +18,10 @@
  * Everything is in the habitat's turning frame (world axes); the guardians' thrust holds them against the spin's
  * gravity and the Coriolis force (`apparentAcceleration`). Pure.
  */
-import { smoothstep, v3cross, v3dot, v3norm } from '@futuremagic/core';
+import { smoothstep, v3cross, v3dot, v3madd, v3norm } from '@futuremagic/core';
 import { apart, fromWorld, toWorld, wrapAngle, type Guard, type Habitat, type Vec3 } from '../blueprint';
 import type { Terrain } from '../gen/terrain';
-import { fallAt, fallOf, footingNormal, footingOf, harmful, hermite, type Fall, type FallPoint, type Footing } from './fall';
+import { fallAt, fallOf, footingNormal, footingOf, gapOf, harmful, hermite, type Fall, type FallPoint, type Footing } from './fall';
 import { apparentAcceleration, spinwardAt, upAt } from './motion';
 import { postsNear, type Post } from './posts';
 
@@ -167,35 +167,53 @@ export function catchFor(terrain: Terrain, p: Vec3, v: Vec3, drag: number, optio
 export function planCatch(h: Habitat, footing: Footing, fall: Fall, posts: readonly Post[], options: CatchOptions): CatchPlan {
   const guard = h.params.life.guard, start = fall.path[0], end = fall.lands ? fall.lands.t : fall.path[fall.path.length - 1].t;
   const floorG = h.gravityAt(h.radius);
-  const gapOf = (p: Vec3): number => { const at = fromWorld(h.profile, p[0], p[1], p[2]); return at.h - footing(at.theta, at.s, at.h).h; };
   // When the body first comes within `late` m of what it would land on (late catches wait for it).
   let lateAt = 0;
   if (options.late > 0) {
     lateAt = end;
-    for (const q of fall.path) if (gapOf(q.p) <= options.late) { lateAt = q.t; break; }
+    for (const q of fall.path) if (gapOf(h, footing, q.p) <= options.late) { lateAt = q.t; break; }
   }
   const besideStart = (k: number): Post => {
-    const p = madd(start.p, acrossAt(start), sideOf(k) * ESCORT), at = fromWorld(h.profile, p[0], p[1], p[2]);
-    return { p, theta: at.theta, s: at.s, drop: 0 };
+    const p = v3madd(start.p, acrossAt(start), sideOf(k) * ESCORT), at = fromWorld(h.profile, p[0], p[1], p[2]);
+    return { p, theta: at.theta, s: at.s, drop: 0, toward: 0 };
   };
   const chosen = options.late > 0 ? Array.from({ length: guard.hands }, (_, k) => besideStart(k)) : posts.slice(0, guard.hands);
   while (chosen.length > 0 && chosen.length < guard.hands) chosen.push(chosen[chosen.length - 1]);
   const launch = Math.min(REACTION, end);
   let best: { join: number; meet: number; brake: number; targets: FallPoint[]; across: Vec3 } | null = null;
-  if (chosen.length > 0) for (const q of fall.path) {
-    if (q.t < launch + SHORTEST || q.t + CLOSE >= end) continue;
-    const across = acrossAt(q);
-    const targets = chosen.map((_, k) => ({ t: q.t, p: madd(q.p, across, sideOf(k) * ESCORT), v: q.v }));
-    if (!chosen.every((post: Post, k: number) => reaches(h, guard, { t: launch, p: post.p, v: [0, 0, 0] }, targets[k]))) continue;
-    const meet = Math.max(q.t + CLOSE, lateAt);
-    if (meet >= end) continue;
-    const m = fallAt(fall, meet), speed = Math.hypot(...m.v), gentle = gentleBrake(h, guard, m.p);
+  // The gentle brake from the body's moment at `meet`, if it stops clear of the ground (and a body's height more).
+  const brakeFits = (meet: number): number | null => {
+    const m = fallAt(fall, meet), speed = Math.hypot(...m.v), gentle = stopBrake(h, guard, m.p, m.v);
     const room = speed > 1e-3 ? rayRoom(h, footing, m.p, v3norm(m.v), (speed * speed) / (2 * Math.min(gentle, 0.5 * floorG)) + 10) - MARGIN : Infinity;
-    if (room > 0 && (speed * speed) / (2 * room) <= gentle) { best = { join: q.t, meet, brake: gentle, targets, across }; break; }
+    return room > 0 && (speed * speed) / (2 * room) <= gentle ? gentle : null;
+  };
+  // Where the guardians join the body at moment q (beside it, the escort's distance out), if all of them reach it in time.
+  const joining = (q: FallPoint): { targets: FallPoint[]; across: Vec3 } | null => {
+    if (q.t < launch + SHORTEST || q.t + CLOSE >= end) return null;
+    const across = acrossAt(q), targets = chosen.map((_, k) => ({ t: q.t, p: v3madd(q.p, across, sideOf(k) * ESCORT), v: q.v }));
+    return chosen.every((post: Post, k: number) => reaches(h, guard, { t: launch, p: post.p, v: [0, 0, 0] }, targets[k])) ? { targets, across } : null;
+  };
+  if (chosen.length > 0 && options.late > 0) {
+    // Late: they join as soon as they can and go along; they take hold at the latest moment that still brakes gently
+    // before the body is `late` m over the ground.
+    let meet = -1, brake = 0;
+    for (let k = fall.path.length - 1; k >= 0 && meet < 0; k--) {
+      const q = fall.path[k], b = q.t + CLOSE <= lateAt && q.t >= launch + SHORTEST ? brakeFits(q.t + CLOSE) : null;
+      if (b !== null) { meet = q.t + CLOSE; brake = b; }
+    }
+    if (meet > 0) for (const q of fall.path) {
+      if (q.t + CLOSE > meet) break;
+      const j = joining(q);
+      if (j) { best = { join: q.t, meet, brake, ...j }; break; }
+    }
+  } else if (chosen.length > 0) for (const q of fall.path) {
+    // The earliest catch that fits.
+    const j = joining(q), brake = j ? brakeFits(q.t + CLOSE) : null;
+    if (j && brake !== null) { best = { join: q.t, meet: q.t + CLOSE, brake, ...j }; break; }
   }
   if (!best) return bagCatch(h, footing, fall, options);
   const m = fallAt(fall, best.meet), speed = Math.hypot(...m.v), dir = speed > 1e-3 ? v3norm(m.v) : [0, 0, 0] as Vec3;
-  const stopIn = speed > 1e-3 ? speed / best.brake : 0, rest = madd(m.p, dir, (speed * stopIn) / 2), stop = best.meet + stopIn;
+  const stopIn = speed > 1e-3 ? speed / best.brake : 0, rest = v3madd(m.p, dir, (speed * stopIn) / 2), stop = best.meet + stopIn;
   const feltG = (best.brake + h.gravityAt(Math.hypot(rest[0], rest[1]))) / floorG;
   const homeAt = (options.home && standable(h, footing, options.home.theta, options.home.s) ? options.home : null)
     ?? standingNear(h, footing, options.home ? toWorld(h.profile, { ...options.home, h: 0 }) : rest)
@@ -203,7 +221,7 @@ export function planCatch(h: Habitat, footing: Footing, fall: Fall, posts: reado
   const setDown = setDownAt(h, footing, homeAt.theta, homeAt.s, rest);
   const { way, times } = carryWay(h, footing, rest, setDown, guard.carry, stop + HOVER);
   const done = times[times.length - 1] + LET_GO;
-  const homeFlight = Math.max(...chosen.map((post) => apart(post.p, madd(setDown.feet, upAt(setDown.feet) ?? [0, 0, 0], GRIP_UP)))) / (guard.speed * HOMEWARD);
+  const homeFlight = Math.max(...chosen.map((post) => apart(post.p, v3madd(setDown.feet, upAt(setDown.feet) ?? [0, 0, 0], GRIP_UP)))) / (guard.speed * HOMEWARD);
   return {
     fall, launch, join: best.join, meet: best.meet, stop, rest, brakeDir: dir, brake: best.brake, felt: feltG,
     guardians: chosen.map((post, k) => ({ post, side: sideOf(k), join: best!.targets[k] })),
@@ -219,15 +237,14 @@ export function planCatch(h: Habitat, footing: Footing, fall: Fall, posts: reado
  */
 function bagCatch(h: Habitat, footing: Footing, fall: Fall, options: CatchOptions): CatchPlan {
   const guard = h.params.life.guard, floorG = h.gravityAt(h.radius), lands = fall.lands ?? fall.path[fall.path.length - 1];
-  const gapOf = (p: Vec3): number => { const at = fromWorld(h.profile, p[0], p[1], p[2]); return at.h - footing(at.theta, at.s, at.h).h; };
   const vLand = Math.hypot(...lands.v), cushion = Math.max(0.5 * floorG, guard.cushion * floorG - h.gravityAt(Math.hypot(lands.p[0], lands.p[1])));
   const height = Math.min(guard.bag, Math.max(BAG_LEAST, (vLand * vLand) / (2 * cushion) + BAG_REST));
   let touch = lands.t;
-  for (const q of fall.path) if (gapOf(q.p) <= height) { touch = q.t; break; }
+  for (const q of fall.path) if (gapOf(h, footing, q.p) <= height) { touch = q.t; break; }
   const m = fallAt(fall, touch), speed = Math.hypot(...m.v), dir = speed > 1e-3 ? v3norm(m.v) : [0, 0, 0] as Vec3;
   // Straight on along its way into the bag, to rest lying on it, squashed to BAG_REST over the ground.
   const sink = Math.max(0.3, rayRoom(h, footing, m.p, dir, height * 3) - BAG_REST), brake = speed > 1e-3 ? Math.max(cushion, (speed * speed) / (2 * sink)) : cushion;
-  const stopIn = speed > 1e-3 ? speed / brake : 0, rest = madd(m.p, dir, (speed * stopIn) / 2), stop = touch + stopIn;
+  const stopIn = speed > 1e-3 ? speed / brake : 0, rest = v3madd(m.p, dir, (speed * stopIn) / 2), stop = touch + stopIn;
   const at = fromWorld(h.profile, rest[0], rest[1], rest[2]), ground = footing(at.theta, at.s, at.h).h;
   const site = toWorld(h.profile, { theta: at.theta, s: at.s, h: ground }), up = upAt(site) ?? [1, 0, 0];
   const burst = Math.max(Math.min(REACTION, touch - 0.1), touch - BAG_BURST - height / BAG_RISE), full = Math.max(burst + 0.1, touch - 0.05);
@@ -280,7 +297,7 @@ function bodyAt(plan: CatchPlan, t: number): { phase: CatchPhase; feet: Vec3; v:
   }
   if (t < plan.stop) {
     const m = fallAt(plan.fall, plan.meet), speed = Math.hypot(...m.v), tau = t - plan.meet;
-    return { phase: 'holding', feet: madd(m.p, plan.brakeDir, speed * tau - (plan.brake * tau * tau) / 2), v: madd([0, 0, 0], plan.brakeDir, speed - plan.brake * tau) };
+    return { phase: 'holding', feet: v3madd(m.p, plan.brakeDir, speed * tau - (plan.brake * tau * tau) / 2), v: v3madd([0, 0, 0], plan.brakeDir, speed - plan.brake * tau) };
   }
   const way = plan.way, times = plan.wayTimes, last = times.length - 1;
   if (t < times[0]) return { phase: 'holding', feet: [...plan.rest], v: [0, 0, 0] };
@@ -302,13 +319,13 @@ function wayVelocity(plan: CatchPlan, k: number): Vec3 {
 
 /** One guardian: on its post, flying to the body, beside it closing in, holding it, flying home. */
 function guardianAt(plan: CatchPlan, g: GuardianPlan, t: number, body: { feet: Vec3; v: Vec3 }, up: Vec3): { at: Vec3; v: Vec3 } {
-  const grip = (feet: Vec3, u: Vec3): Vec3 => madd(madd(feet, plan.across, g.side * GRIP_SIDE), u, GRIP_UP);
+  const grip = (feet: Vec3, u: Vec3): Vec3 => v3madd(v3madd(feet, plan.across, g.side * GRIP_SIDE), u, GRIP_UP);
   if (t <= plan.launch) return { at: [...g.post.p], v: [0, 0, 0] };
   if (t < plan.join) { const q = hermite({ t: plan.launch, p: g.post.p, v: [0, 0, 0] }, g.join, t); return { at: q.p, v: q.v }; }
   if (t < plan.meet) {
     // Beside the body, easing in from the escort's distance to the grip.
-    const k = smoothstep(plan.join, plan.meet, t), out = ESCORT + (GRIP_SIDE - ESCORT) * k;
-    return { at: madd(madd(body.feet, plan.across, g.side * out), up, GRIP_UP * k), v: body.v };
+    const k = smoothstep(Math.max(plan.join, plan.meet - CLOSE), plan.meet, t), out = ESCORT + (GRIP_SIDE - ESCORT) * k;
+    return { at: v3madd(v3madd(body.feet, plan.across, g.side * out), up, GRIP_UP * k), v: body.v };
   }
   if (t < plan.end) return { at: grip(body.feet, up), v: body.v };
   const from = grip(plan.setDown.feet, upAt(plan.setDown.feet) ?? up);
@@ -337,6 +354,19 @@ function reaches(h: Habitat, guard: Guard, from: FallPoint, to: FallPoint): bool
   return true;
 }
 
+/**
+ * The gentlest stop of a body at `p` going at `v` (m/s²): what `brake` floor gravities, felt, leave beyond the spin's
+ * weight where it comes to rest (heaviest there, being furthest out), found by going there and back a few times.
+ */
+function stopBrake(h: Habitat, guard: Guard, p: Vec3, v: Vec3): number {
+  const speed = Math.hypot(v[0], v[1], v[2]);
+  let a = gentleBrake(h, guard, p);
+  if (speed < 1e-3) return a;
+  const dir = v3norm(v);
+  for (let k = 0; k < 4; k++) a = Math.min(a, gentleBrake(h, guard, v3madd(p, dir, (speed * speed) / (2 * a))));
+  return a;
+}
+
 /** The gentlest stop's deceleration at `p` (m/s²): what `brake` floor gravities, felt, leave beyond the spin's weight there. */
 function gentleBrake(h: Habitat, guard: Guard, p: Vec3): number {
   const g0 = h.gravityAt(h.radius);
@@ -345,7 +375,7 @@ function gentleBrake(h: Habitat, guard: Guard, p: Vec3): number {
 
 /** How far (m) from `p` along `dir` the body (its height) is clear of what stands below, up to `most`. */
 function rayRoom(h: Habitat, footing: Footing, p: Vec3, dir: Vec3, most: number): number {
-  const under = (d: number): boolean => { const q = madd(p, dir, d), at = fromWorld(h.profile, q[0], q[1], q[2]); return at.h - footing(at.theta, at.s, at.h).h < 0; };
+  const under = (d: number): boolean => gapOf(h, footing, v3madd(p, dir, d)) < 0;
   for (let d = RAY_STEP; d <= most; d += RAY_STEP) {
     if (!under(d)) continue;
     // Halve the last step down to a few centimetres.
@@ -388,7 +418,7 @@ export function standingNear(h: Habitat, footing: Footing, p: Vec3): { theta: nu
 /** Where at (θ, s) the body is set down, facing back toward where it was held (along the ground). */
 function setDownAt(h: Habitat, footing: Footing, theta: number, s: number, from: Vec3): SetDown {
   const feet = toWorld(h.profile, { theta, s, h: footing(theta, s, Infinity).h }), up = upAt(feet) ?? [1, 0, 0];
-  const toward = [0, 1, 2].map((i) => from[i] - feet[i]) as Vec3, flat = madd(toward, up, -v3dot(toward, up));
+  const toward = [0, 1, 2].map((i) => from[i] - feet[i]) as Vec3, flat = v3madd(toward, up, -v3dot(toward, up));
   const front = Math.hypot(...flat) > 1e-3 ? v3norm(flat) : (spinwardAt(feet) ?? [0, 1, 0]);
   return { theta, s, feet, front };
 }
@@ -422,4 +452,3 @@ function carryWay(h: Habitat, footing: Footing, rest: Vec3, to: SetDown, pace: n
 }
 
 const sideOf = (k: number): number => (k % 2 === 0 ? 1 : -1) * (1 + Math.floor(k / 2));
-const madd = (a: Vec3, b: Vec3, k: number): Vec3 => [a[0] + b[0] * k, a[1] + b[1] * k, a[2] + b[2] * k];
