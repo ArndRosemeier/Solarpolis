@@ -379,6 +379,24 @@
     5.335
    ]
   },
+  "call/swallow": {
+   "kind": "call",
+   "files": [
+    "call/swallow.mp3"
+   ],
+   "seconds": [
+    4.105
+   ]
+  },
+  "call/swift": {
+   "kind": "call",
+   "files": [
+    "call/swift.mp3"
+   ],
+   "seconds": [
+    8.855
+   ]
+  },
   "call/thrush": {
    "kind": "call",
    "files": [
@@ -464,6 +482,24 @@
    "kind": "loop",
    "files": [
     "drone/tender.mp3"
+   ],
+   "seconds": [
+    8
+   ]
+  },
+  "flock/starlings": {
+   "kind": "loop",
+   "files": [
+    "flock/starlings.mp3"
+   ],
+   "seconds": [
+    8
+   ]
+  },
+  "flock/wings": {
+   "kind": "loop",
+   "files": [
+    "flock/wings.mp3"
    ],
    "seconds": [
     8
