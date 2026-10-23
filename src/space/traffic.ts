@@ -131,7 +131,8 @@ export function visitsAt(h: Habitat, habitatId: string, worldSeed: number, p: Tr
   return out;
 }
 
-const smooth = (x: number): number => smoothstep(0, 1, Math.min(1, Math.max(0, x)));
+/** 0 to 1 eased over x from 0 to 1, held beyond. */
+export const smooth = (x: number): number => smoothstep(0, 1, Math.min(1, Math.max(0, x)));
 
 /**
  * Where a visit's ship is at clock time t (null outside the visit). Its attitude is one pitch angle θ about the side

@@ -576,6 +576,10 @@
     "reason": "Independent resource/view lifecycle owner. The ship delegates hull geometry and transforms to ShipMeshes/setPose; its room pools, atlas and visitor state must be accounted for and released by their own owner."
   },
   {
+    "key": "same name: solarpolis/render/birds.ts#follow + solarpolis/render/traffic.ts#follow",
+    "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the ships' and port craft's view (render/traffic.ts) does its own work in each."
+  },
+  {
     "key": "same name: solarpolis/render/fliers.ts#follow + solarpolis/render/hullDetail.ts#follow",
     "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
   },
@@ -648,7 +652,7 @@
     "reason": "The views' own interface (bytes, info, dispose), which InteriorView and the memory watchdog call on each of them; GlassDeck (render/glassDeck.ts) is one more such view, holding the glass deck's atlas."
   },
   {
-    "key": "same name: solarpolis/render/glassDeck.ts#info + solarpolis/render/traffic.ts#info",
+    "key": "same name: solarpolis/render/capsules.ts#info + solarpolis/render/traffic.ts#info",
     "reason": "The views' own interface (bytes, info, dispose), which InteriorView and the memory watchdog call on each of them; GlassDeck (render/glassDeck.ts) is one more such view, holding the glass deck's atlas."
   },
   {
@@ -697,10 +701,6 @@
   },
   {
     "key": "same name: solarpolis/render/homes.ts#info + solarpolis/render/specks.ts#info",
-    "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; each view does its own work in each."
-  },
-  {
-    "key": "same name: solarpolis/render/homes.ts#info + solarpolis/render/traffic.ts#info",
     "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; each view does its own work in each."
   },
   {
@@ -890,10 +890,6 @@
   {
     "key": "same name: solarpolis/render/landmarks.ts#follow + solarpolis/render/tiled.ts#follow",
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/landmarks.ts#follow + solarpolis/render/traffic.ts#follow",
-    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
   },
   {
     "key": "same name: solarpolis/render/landmarks.ts#shed + solarpolis/render/streamed.ts#shed",
@@ -1196,10 +1192,6 @@
     "reason": "info() is a view's lines for the one debug menu (CLAUDE.md rule 14); each reports its own state."
   },
   {
-    "key": "same name: solarpolis/render/terrain.ts#info + solarpolis/render/traffic.ts#info",
-    "reason": "Each view's own line for the debug menu's info block (debug.addInfo); the bodies say different things (tiles and memory budget vs ships by phase)."
-  },
-  {
     "key": "same name: solarpolis/render/terrain.ts#job + solarpolis/render/tiled.ts#job",
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
@@ -1230,10 +1222,6 @@
   {
     "key": "same name: solarpolis/render/tiled.ts#follow + solarpolis/render/traffic.ts#follow",
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
-  },
-  {
-    "key": "same name: solarpolis/render/tiled.ts#info + solarpolis/render/traffic.ts#info",
-    "reason": "info() is a view's lines for the one debug menu (CLAUDE.md rule 14); each reports its own state."
   },
   {
     "key": "same name: solarpolis/render/tiled.ts#shed + solarpolis/talk/conversations.ts#shed",
