@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.176 — The arrival lists what it loads
+
+- The debug menu lists what loads during the arrival and when (the interior's warm-up and build, the people and animal packs, your body), to plan the flight as the loading screen.
+
 ## v0.175 — The arrival names what stutters it
 
 - The debug menu now lists the flight's longest frames and what ran in them, so the stutters behind the arrival can be found and smoothed out.
