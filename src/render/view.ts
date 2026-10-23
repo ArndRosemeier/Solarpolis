@@ -20,6 +20,7 @@ import { Flyer } from '../world/flyer';
 import { PhysicsWorld } from '../physics/world';
 import { gravityReading, type GravityReading } from '../world/motion';
 import { arrivalTerraceOf, revealAt, REVEAL_SECONDS, type ArrivalReveal } from '../world/arrival';
+import { berthsOf } from '../gen/capsules';
 import type { ArrivalTerrace } from '../gen/arrivalTerrace';
 import { HUMAN, type Character } from '../physics/character';
 import { Figure, castAsWorn, type AnimState, type MoveState } from './actors/figure';
@@ -968,10 +969,14 @@ export class InteriorView {
     this.chase = 0;
     this.floatAt(first.eye, first.look);
     this.arrivalGuide = terrace;
+    // A capsule already waits on the arrival's berth (Arnd, 2026-10-23), built before the curtain lifts.
+    const berth = berthsOf(this.habitat)[0];
+    const parked = berth && this.caps ? this.caps.parkAt(berth) : Promise.resolve(false);
     await new Promise<void>((ready) => {
       this.arrivalReveal = { terrace, elapsed: -1, ready, done: null };
       this.place();
     });
+    await parked;
     return true;
   }
 
