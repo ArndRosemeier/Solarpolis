@@ -744,17 +744,20 @@ export function outsideKinds(): readonly Kind[] {
  * Built things: the landmarks (gen/landmarks.ts; the pavilion, gen/pavilion.ts). Vertex albedo with its finish's
  * pattern in metres over it (builtShaders.ts: `uv` the surface's own coordinates, `finish` what it is made of), lit by
  * the sunline as far as the mesh's round roof lets it in (`userData.roof`: outer radius, eaves' height, oculus radius
- * and height, in the mesh's own frame; none if absent). They cast shadows.
+ * and height, in the mesh's own frame; none if absent). They cast shadows. A lamp's glass (finish `lamp`) shines with
+ * its own light, its colour `LANTERN` times sunlit white paper's, day and night.
  */
 export const BUILT = kind('built', ['position', 'normal', 'color', 'uv', 'finish'], { cast: true, receive: false }, () => {
   const m = new MeshBasicNodeMaterial();
   const roof = uniform(new Vector4()).onObjectUpdate(({ object }) => (object?.userData.roof as Vector4 | undefined) ?? NO_ROOF);
   const h = roofHorizons(positionLocal, roof), n = normalize(normalWorld);
   const lit = sunlit(h.past, n, 0, float(1), true, true).add(sunlit(h.back, n, 0, float(1), true, true)).add(sunlit(h.oculus, n, 0, float(1), true, true));
-  const albedo = builtAlbedo(vertexColor().rgb, uv(), attribute<'float'>('finish', 'float'));
-  m.colorNode = throughAir(albedo.mul(lit));
+  const finish = attribute<'float'>('finish', 'float'), albedo = builtAlbedo(vertexColor().rgb, uv(), finish);
+  m.colorNode = throughAir(select(abs(finish.sub(FINISH.lamp)).lessThan(0.5), albedo.mul(LANTERN), albedo.mul(lit)));
   return m;
 });
+/** A lantern's glass, as bright as this many times sunlit white paper: it reads lit at midday, a point of warmth at night. */
+const LANTERN = 1.4;
 const NO_ROOF = new Vector4(0, 0, 0, 0);
 
 /**

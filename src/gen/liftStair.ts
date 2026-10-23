@@ -25,6 +25,7 @@ import { toWorld, type Habitat, type Vec3 } from '../blueprint';
 import { landformOf, planOf, siteOf } from './plan';
 import { kept } from './kept';
 import { standThrough } from './standing';
+import { layThreshold, type Threshold } from './threshold';
 
 /** The face the stair climbs, in plan (z, w) and height e above the floor. */
 export interface Ramp {
@@ -49,15 +50,20 @@ export interface Ramp {
   plan(p: Vec3): { z: number; w: number; e: number };
 }
 
-/** A level platform: a forecourt at the foot, a turn between two legs, a rest on a straight run, the top terrace. */
+/**
+ * A level platform: a forecourt at the foot, a turn between two legs, a rest on a straight run, the top terrace, a bay
+ * of one of the Threshold's galleries beside it (gen/threshold.ts).
+ */
 export interface StairPlatform {
-  kind: 'forecourt' | 'turn' | 'rest' | 'top';
+  kind: 'forecourt' | 'turn' | 'rest' | 'top' | 'gallery';
   z0: number;
   z1: number;
   w0: number;
   w1: number;
   /** Its floor's height above the floor of the habitat (m). */
   e: number;
+  /** A gallery's bay: its gallery (0 the upper) and its place along it (from the gallery's −w end). */
+  bay?: { tier: number; index: number };
 }
 
 /** One end of a leg: where its middle line meets the platform's face, and that face's direction in plan. */
@@ -94,9 +100,18 @@ export interface LiftStair {
   width: number;
   parapet: number;
   clearance: number;
-  /** Platforms from the foot up; leg i climbs from platform i to platform i + 1. */
+  /**
+   * Platforms from the foot up to the top terrace, leg i climbing from platform i to platform i + 1; then the
+   * Threshold's galleries' bays and the flights between them (`threshold`), so everything that draws, stands on or
+   * keeps clear of the stair does so of the Threshold too.
+   */
   platforms: StairPlatform[];
   legs: StairLeg[];
+  /** The top terrace, where the newcomer arrives, and the stair's last leg, which climbs onto it. */
+  top: StairPlatform;
+  topLeg: StairLeg;
+  /** The Threshold's galleries beside the top terrace, or null where the ramp has no room for them. */
+  threshold: Threshold | null;
 }
 
 /** A step's riser at 1 g and its tread, as shares of the handrail's height (15 cm and 36 cm for 1.1 m). */
@@ -300,11 +315,40 @@ function layStair(h: Habitat): LiftStair | null {
   }
   // Too narrow a ramp for the face's steepness: no stair at walking pitch fits on it.
   if (legs.some((l) => l.tread < TREAD_MIN * hr || l.riser <= 0)) return null;
-  return { kind: 'lift-stair', handrail: hr, width, parapet: PARAPET * hr, clearance, platforms, legs };
+  const top = platforms[platforms.length - 1], topLeg = legs[legs.length - 1];
+  const climb: LiftStair = { kind: 'lift-stair', handrail: hr, width, parapet: PARAPET * hr, clearance, platforms, legs, top, topLeg, threshold: null };
+  // The Threshold beside the top terrace, where nothing else of the stair's climb stands.
+  const others: LiftStair = { ...climb, platforms: platforms.slice(0, -1) };
+  const threshold = layThreshold({
+    ramp, handrail: hr, width, parapet: climb.parapet, clearance, top, arrives: topLeg.from.w,
+    riserAt: (e) => riserAt(hr, gravity(e)), rest, berthClear: BERTH_CLEAR * hr,
+    free: (z0, z1, w0, w1) => {
+      const n = Math.max(1, Math.ceil((z1 - z0) / hr)), m = Math.max(1, Math.ceil((w1 - w0) / hr));
+      for (let i = 0; i <= n; i++) for (let j = 0; j <= m; j++) {
+        const p: PlanPoint = [z0 + ((z1 - z0) * i) / n, w0 + ((w1 - w0) * j) / m];
+        if (stairTopAt(others, p, climb.parapet) !== null) return false;
+      }
+      return true;
+    },
+  });
+  if (!threshold) return climb;
+  return {
+    ...climb, threshold,
+    platforms: [...platforms, ...threshold.galleries.flatMap((g) => g.bays)],
+    legs: [...legs, ...threshold.flights],
+  };
 }
 
+/** The capsule berth's clear radius (handrails): a capsule (about 3.4 × 2.2 m) and room to step round it. */
+export const BERTH_CLEAR = 2.75;
+
 /** A platform's middle across the ramp. */
-const middleOf = (p: StairPlatform): number => (p.w0 + p.w1) / 2;
+const middleOf = (p: StairPlatform): number => centreOf(p)[1];
+
+/** The middle of a rectangle in plan (a platform, a gallery). */
+export function centreOf(q: { z0: number; z1: number; w0: number; w1: number }): PlanPoint {
+  return [(q.z0 + q.z1) / 2, (q.w0 + q.w1) / 2];
+}
 
 /**
  * Where a leg from platform a to platform b starts and ends. Straight up: from a's uphill edge to b's downhill edge.
@@ -472,8 +516,7 @@ export function stairTopAt(st: LiftStair, p: PlanPoint, margin = 0): number | nu
   const legs = index ? index.legs[bin] : legShapesOf(st);
   for (const q of platforms) {
     if (p[0] < q.z0 - margin || p[0] > q.z1 + margin || p[1] < q.w0 - margin || p[1] > q.w1 + margin) continue;
-    const rim = p[0] < q.z0 + st.parapet || p[0] > q.z1 - st.parapet || p[1] < q.w0 + st.parapet || p[1] > q.w1 - st.parapet;
-    higher(q.e + (rim && margin === 0 ? st.handrail : 0));
+    higher(q.e + (margin === 0 && onParapet(st, q, p) ? st.handrail : 0));
   }
   for (const s of legs) {
     const [a, l] = intoLeg(s, p), half = s.leg.width / 2;
@@ -488,6 +531,74 @@ export function stairTopAt(st: LiftStair, p: PlanPoint, margin = 0): number | nu
     higher(s.steps[lo].top);
   }
   return best;
+}
+
+/** A platform's edges: its downhill and uphill ends (along w) and its sides (along z). */
+export type PlatformEdge = 'z0' | 'z1' | 'w0' | 'w1';
+
+/**
+ * Where a platform's edges stand open, without a parapet: intervals along each edge (w along an end, z along a side)
+ * where a leg meets it, where a leg's side runs along it, and where another platform as high or higher stands against
+ * it (a gallery's bays, a gallery against the wall of the one above).
+ */
+export function openingsOf(st: LiftStair, q: StairPlatform): Record<PlatformEdge, [number, number][]> {
+  const made = openings(st);
+  let out = made.get(q);
+  if (!out) { out = openEdges(st, q); made.set(q, out); }
+  return out;
+}
+
+const openings = kept((_st: LiftStair) => new Map<StairPlatform, Record<PlatformEdge, [number, number][]>>());
+
+function openEdges(st: LiftStair, q: StairPlatform): Record<PlatformEdge, [number, number][]> {
+  const out: Record<PlatformEdge, [number, number][]> = { z0: [], z1: [], w0: [], w1: [] };
+  const eps = 1e-6, near = (a: number, b: number): boolean => Math.abs(a - b) < eps;
+  /** Opens [a, b] of an edge, where it overlaps the edge's span by more than nothing. */
+  const open = (key: PlatformEdge, a: number, b: number): void => {
+    const [lo, hi] = key === 'z0' || key === 'z1' ? [q.w0, q.w1] : [q.z0, q.z1], x = Math.max(lo, Math.min(a, b)), y = Math.min(hi, Math.max(a, b));
+    if (y - x > eps) out[key].push([x, y]);
+  };
+  for (const s of legShapesOf(st)) {
+    const half = s.leg.width / 2;
+    for (const [end, a] of [[s.leg.from, 0], [s.leg.to, s.run]] as const) {
+      // On the line of one of its edges (`open` keeps what of the leg's end lies along the edge itself).
+      const onIt = end.alongZ ? near(end.w, q.w0) || near(end.w, q.w1) : near(end.z, q.z0) || near(end.z, q.z1);
+      if (!onIt) continue;
+      // Where the leg's two sides cross the face, on the coordinate along it.
+      const k = end.alongZ ? 1 : 0, key: PlatformEdge = end.alongZ ? (near(end.w, q.w0) ? 'w0' : 'w1') : near(end.z, q.z0) ? 'z0' : 'z1';
+      const xs = [-1, 1].map((sd) => {
+        const c = Math.abs(s.dir[k]) > 1e-9 ? a - (s.left[k] * sd * half) / s.dir[k] : a;
+        return onLeg(s, c, sd * half)[1 - k];
+      });
+      open(key, Math.min(...xs), Math.max(...xs));
+    }
+    // A leg straight along the axis whose side runs along one of the platform's sides.
+    if (Math.abs(s.dir[1]) < eps) {
+      const za = Math.min(s.leg.from.z, s.leg.to.z), zb = Math.max(s.leg.from.z, s.leg.to.z);
+      for (const sd of [-1, 1]) {
+        const w = s.origin[1] + sd * half;
+        if (near(w, q.w0)) open('w0', za, zb);
+        if (near(w, q.w1)) open('w1', za, zb);
+      }
+    }
+  }
+  for (const r of st.platforms) {
+    if (r === q || r.e < q.e - eps) continue;
+    if (near(r.z1, q.z0)) open('z0', r.w0, r.w1);
+    if (near(r.z0, q.z1)) open('z1', r.w0, r.w1);
+    if (near(r.w1, q.w0)) open('w0', r.z0, r.z1);
+    if (near(r.w0, q.w1)) open('w1', r.z0, r.z1);
+  }
+  return out;
+}
+
+/** Whether a plan point on a platform is on its parapet: within the parapet's thickness of an edge not open there. */
+function onParapet(st: LiftStair, q: StairPlatform, p: PlanPoint): boolean {
+  const t = st.parapet, near: [PlatformEdge, boolean, number][] = [
+    ['z0', p[0] < q.z0 + t, p[1]], ['z1', p[0] > q.z1 - t, p[1]], ['w0', p[1] < q.w0 + t, p[0]], ['w1', p[1] > q.w1 - t, p[0]],
+  ];
+  for (const [key, close, x] of near) if (close && !openingsOf(st, q)[key].some(([a, b]) => x >= a && x <= b)) return true;
+  return false;
 }
 
 /**
@@ -526,7 +637,7 @@ const reachesOf = kept((st: LiftStair) => {
 const boundsOf = kept((h: Habitat) => {
   const st = liftStairOf(h)!, ramp = rampOf(h);
   const tall = Math.max(...st.platforms.map((q) => q.e - ramp.groundAt(q.z0)), ...legShapesOf(st).map((s) => Math.max(s.leg.e0, s.leg.e1) - ramp.groundAt(Math.min(s.leg.from.z, s.leg.to.z)))) + st.handrail;
-  return { s0: ramp.sOf(st.platforms[0].z0), s1: ramp.sOf(st.platforms[st.platforms.length - 1].z1), tall };
+  return { s0: ramp.sOf(st.platforms[0].z0), s1: ramp.sOf(Math.max(...st.platforms.map((q) => q.z1))), tall };
 });
 
 /** Whether plants keep off a point (θ, s) of the land: under the stair, or within `margin` (m) of it. */

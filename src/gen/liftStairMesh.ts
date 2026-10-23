@@ -21,7 +21,7 @@ import { v3cross, v3norm, v3sub, type Vec3 } from '@futuremagic/core';
 import { fromWorld, type Habitat } from '../blueprint';
 import { Shape, intoPlace, placeAt, type MappedArrays, type Place, type RGB } from './shapes';
 import { wantedCells, type Grid, type GridEye, type TileKey, type WantedTile } from './detailTree';
-import { legShapesOf, lineAt, liftStairOf, onLeg, rampOf, type LegShape, type LiftStair, type PlanPoint, type Ramp, type StairPlatform } from './liftStair';
+import { centreOf, legShapesOf, lineAt, liftStairOf, onLeg, openingsOf, rampOf, type LegShape, type LiftStair, type PlanPoint, type Ramp, type StairPlatform } from './liftStair';
 import { FINISH } from './pavilion';
 import { kept } from './kept';
 import { arrivalTerraceOf, DOOR_BACK, DOOR_HALF } from './arrivalTerrace';
@@ -29,11 +29,21 @@ import { arrivalTerraceOf, DOOR_BACK, DOOR_HALF } from './arrivalTerrace';
 /** What a builder makes: a tile's detail, the physics' solid parts, or only a count of what a tile holds. */
 export type StairDetail = 'far' | 'mid' | 'near' | 'solid' | 'count';
 
-/** Linear albedo: the walls' stone, the treads' and floors' paler paving, bronze, the lamps' glass. */
+/** Linear albedo: the walls' stone, the treads' and floors' paler paving, bronze, the lamps' glass (lit: it glows). */
 const STONE: RGB = [0.5, 0.47, 0.42];
 const PAVING: RGB = [0.58, 0.55, 0.5];
 const BRONZE: RGB = [0.22, 0.15, 0.08];
-const GLASS: RGB = [0.8, 0.78, 0.7];
+const GLASS: RGB = [1, 0.8, 0.55];
+/** The Threshold's warmer stone, its top terrace's paving, its galleries' timber decks, the inlays' polished bronze. */
+const WARM: RGB = [0.48, 0.39, 0.3];
+const WARM_PAVING: RGB = [0.44, 0.36, 0.28];
+const DECK: RGB = [0.25, 0.16, 0.09];
+/** Where the Threshold's front walls are dressed: a pilaster every so many handrails up, a string course (handrails). */
+const COURSE = 6;
+const INLAY: RGB = [0.65, 0.4, 0.12];
+const INLAY_BRIGHT: RGB = [0.8, 0.55, 0.2];
+/** Where the stair crosses these shares of the floor's gravity, a bronze line runs across its tread. */
+export const GRAVITY_MARKS = [0.5, 0.2, 0.1, 0.05] as const;
 
 /** How far every wall reaches under the ground (handrails). */
 const BURY = 2;
@@ -44,6 +54,9 @@ const FINEST = 2;
 /** Tiles larger than this many handrails show the far form; larger than `NEAR`, single steps; smaller, everything. */
 const FAR = 100;
 const NEAR = 20;
+/** The top terrace's facade across its back, and the port door's height (handrails). */
+const FACADE = 5.5;
+const DOOR_HIGH = 2.9;
 /** Lamps: their post's height and radius, the lantern's half size (handrails). */
 const LAMP = 2.2;
 const POST = 0.06;
@@ -67,7 +80,7 @@ export const stairGridOf: (h: Habitat) => StairGrid | null = kept((h: Habitat) =
   const st = liftStairOf(h);
   if (!st) return null;
   const ramp = rampOf(h), c = CELL * st.handrail, half = ramp.halfWidth;
-  const sBase = ramp.sOf(st.platforms[0].z0), sTop = ramp.sOf(st.platforms[st.platforms.length - 1].z1);
+  const sBase = ramp.sOf(st.platforms[0].z0), sTop = ramp.sOf(Math.max(...st.platforms.map((q) => q.z1)));
   return { nU: Math.ceil((2 * half) / c), nV: Math.ceil((sTop - sBase) / c) + 1, wrap: false, edgeU: c, edgeV: c, root: ROOT, finest: FINEST, sBase, half };
 });
 
@@ -182,7 +195,7 @@ class StairBuilder {
     const st = this.st, pad = st.width;
     const away = (z0: number, z1: number, w0: number, w1: number): boolean => !!box && (z1 + pad < box[0] || z0 - pad > box[1] || w1 + pad < box[2] || w0 - pad > box[3]);
     const count = this.detail === 'count';
-    for (const q of st.platforms) if (!away(q.z0, q.z1, q.w0, q.w1) && mine([(q.z0 + q.z1) / 2, (q.w0 + q.w1) / 2])) { if (!count) this.platform(q); this.parts.platforms++; }
+    for (const q of st.platforms) if (!away(q.z0, q.z1, q.w0, q.w1) && mine(centreOf(q))) { if (!count) this.platform(q); this.parts.platforms++; }
     for (const s of legShapesOf(st)) {
       const l = s.leg;
       if (away(Math.min(l.from.z, l.to.z), Math.max(l.from.z, l.to.z), Math.min(l.from.w, l.to.w), Math.max(l.from.w, l.to.w))) continue;
@@ -227,18 +240,21 @@ class StairBuilder {
   }
 
   /** A level or sloping top over a plan polygon of 3 or 4 corners, counter-clockwise from above, at heights `e`. */
-  private top(corners: readonly PlanPoint[], e: readonly number[], col: RGB = PAVING): void {
+  private top(corners: readonly PlanPoint[], e: readonly number[], col: RGB = PAVING, finish: number = FINISH.stone): void {
     const c = corners.map((p, i): Vec3 => [p[0], p[1], e[i]]);
-    if (c.length === 4) this.face(c[0], c[1], c[2], c[3], col, FINISH.stone);
-    else this.face(c[0], c[1], c[2], c[2], col, FINISH.stone);
+    if (c.length === 4) this.face(c[0], c[1], c[2], c[3], col, finish);
+    else this.face(c[0], c[1], c[2], c[2], col, finish);
   }
 
-  /** A block on a plan polygon (counter-clockwise from above) from `bottom` to `top` at each corner: its top and walls. */
-  private block(corners: readonly PlanPoint[], bottom: readonly number[], top: readonly number[], col: RGB = STONE, walls = corners.map(() => true)): void {
-    this.top(corners, top, col);
+  /**
+   * A block on a plan polygon (counter-clockwise from above) from `bottom` to `top` at each corner: its top (`col`,
+   * `finish`) and walls (`sides`).
+   */
+  private block(corners: readonly PlanPoint[], bottom: readonly number[], top: readonly number[], col: RGB = STONE, walls = corners.map(() => true), sides: RGB = STONE, finish: number = FINISH.stone): void {
+    this.top(corners, top, col, finish);
     for (let i = 0; i < corners.length; i++) {
       const j = (i + 1) % corners.length;
-      if (walls[i]) this.wall(corners[i], corners[j], [bottom[i], bottom[j]], [top[i], top[j]], STONE);
+      if (walls[i]) this.wall(corners[i], corners[j], [bottom[i], bottom[j]], [top[i], top[j]], sides);
     }
   }
 
@@ -251,20 +267,25 @@ class StairBuilder {
     this.shape.finish = FINISH.bronze;
     this.shape.prism(base, ax, ay, up, POST * hr, LAMP * hr, this.detail === 'near' ? 8 : 4, BRONZE);
     const top = (k: number): Vec3 => [base[0] + up[0] * k * hr, base[1] + up[1] * k * hr, base[2] + up[2] * k * hr];
-    this.shape.finish = FINISH.ceramic;
+    this.shape.finish = FINISH.lamp;
     this.shape.block(top(LAMP + LANTERN), ax, ay, up, [LANTERN * hr, LANTERN * hr, LANTERN * hr], GLASS);
     this.shape.finish = FINISH.bronze;
     this.shape.block(top(LAMP + 2 * LANTERN + 0.03), ax, ay, up, [LANTERN * hr * 1.3, LANTERN * hr * 1.3, 0.03 * hr], BRONZE);
   }
 
-  /** A platform: its floor and the walls under it down into the slope, its parapets where no leg meets it, lamps. */
+  /**
+   * A platform: its floor and the walls under it down into the slope, its parapets where it stands open, lamps. The top
+   * terrace and the Threshold's galleries (gen/threshold.ts) are of warmer stone, the galleries decked in timber.
+   */
   private platform(q: StairPlatform): void {
     const ground = (z: number): number => this.ramp.groundAt(z) - this.bury;
     const corners: PlanPoint[] = [[q.z0, q.w0], [q.z1, q.w0], [q.z1, q.w1], [q.z0, q.w1]];
-    this.block(corners, corners.map((c) => ground(c[0])), corners.map(() => q.e), q.kind === 'top' ? [0.1, 0.13, 0.14] : PAVING);
+    const threshold = q.kind === 'top' || q.kind === 'gallery', stone = threshold ? WARM : STONE;
+    const floor = q.kind === 'gallery' ? DECK : q.kind === 'top' ? WARM_PAVING : PAVING;
+    this.block(corners, corners.map((c) => ground(c[0])), corners.map(() => q.e), floor, undefined, stone, q.kind === 'gallery' ? FINISH.timber : FINISH.stone);
     const p = this.st.parapet, hr = this.hr;
-    // The parapets along each edge, less the openings where legs meet it.
-    const open = this.openings(q);
+    // The parapets along each edge, less where it stands open (gen/liftStair.ts, `openingsOf`).
+    const open = openingsOf(this.st, q);
     const edges: { from: PlanPoint; to: PlanPoint; inward: PlanPoint; key: 'z0' | 'z1' | 'w0' | 'w1' }[] = [
       { from: [q.z0, q.w1], to: [q.z0, q.w0], inward: [1, 0], key: 'z0' },
       { from: [q.z1, q.w0], to: [q.z1, q.w1], inward: [-1, 0], key: 'z1' },
@@ -281,113 +302,195 @@ class StairBuilder {
         const outer = [edgePoint(a, 0), edgePoint(b, 0)], inner = [edgePoint(b, p), edgePoint(a, p)];
         let poly: PlanPoint[] = [outer[0], outer[1], inner[0], inner[1]];
         if (area(poly) < 0) poly = poly.reverse();
-        this.parapet(poly, q.e, q.e + hr);
+        this.parapet(poly, q.e, q.e + hr, stone);
       }
     }
-    // Lamps at the corners of its downhill edge, and its uphill edge on the larger ones.
-    const inset = p + hr * 0.4;
-    for (const z of [q.z0 + inset, ...(q.z1 - q.z0 > this.st.width * 1.5 ? [q.z1 - inset] : [])]) for (const w of [q.w0 + inset, q.w1 - inset]) this.lamp([z, w], q.e);
+    if (threshold && this.detail !== 'solid') this.dressFront(q, stone);
+    const berth = this.berthHere(q);
+    if (q.bay) this.bay(q, q.bay, berth);
+    else {
+      // Lamps at the corners of its downhill edge, and its uphill edge on the larger ones.
+      const inset = p + hr * 0.4;
+      for (const z of [q.z0 + inset, ...(q.z1 - q.z0 > this.st.width * 1.5 ? [q.z1 - inset] : [])]) for (const w of [q.w0 + inset, q.w1 - inset]) this.lamp([z, w], q.e);
+    }
     if (q.kind === 'top') this.arrivalPorch(q);
+    if (berth && this.detail !== 'solid') this.berthRing(q, berth);
   }
 
-  /** A sheltered threshold frames the reveal; the open half and bronze inlay lead to the real stair opening. */
+  /**
+   * The Threshold's front walls stand tens of metres down the face to the ground: string courses run across them every
+   * `COURSE` handrails down from the floor, and on the galleries a pilaster rises at every lantern, so one reads their
+   * height and their rhythm from across the habitat.
+   */
+  private dressFront(q: StairPlatform, col: RGB): void {
+    const hr = this.hr, foot = this.ramp.groundAt(q.z0), out = hr * 0.18;
+    const band = (z: number, w0: number, w1: number, lo: number, hi: number): void => {
+      const c: PlanPoint[] = [[z - out, w0], [z, w0], [z, w1], [z - out, w1]];
+      this.solidBlock(c, c.map(() => lo), c.map(() => hi), col, FINISH.stone);
+    };
+    for (let e = q.e - COURSE * hr; e > foot; e -= COURSE * hr) band(q.z0, q.w0, q.w1, e - hr * 0.22, e);
+    if (!q.bay) return;
+    const every = Math.max(1, Math.round(this.st.width / (q.w1 - q.w0)));
+    if (q.bay.index % every !== 0) return;
+    const half = hr * 0.3, c: PlanPoint[] = [[q.z0 - out * 2, q.w0 - half], [q.z0, q.w0 - half], [q.z0, q.w0 + half], [q.z0 - out * 2, q.w0 + half]];
+    this.solidBlock(c, c.map(() => foot - this.bury), c.map(() => q.e - hr * 0.3), col, FINISH.stone);
+  }
+
+  /** The capsule berth's middle in plan and its clear radius, if it is on this platform (gen/arrivalTerrace.ts). */
+  private berthHere(q: StairPlatform): { at: PlanPoint; clear: number } | null {
+    const b = arrivalTerraceOf(this.ramp.habitat)?.berth;
+    if (!b) return null;
+    const c = this.ramp.plan(b.at);
+    return Math.abs(c.e - q.e) < 1e-6 && c.z >= q.z0 && c.z <= q.z1 && c.w >= q.w0 && c.w <= q.w1 ? { at: [c.z, c.w], clear: b.clear } : null;
+  }
+
+  /**
+   * A bay of a gallery: a lantern on its front parapet every leg's width or so along the gallery, a timber bench against
+   * its back between them (not at the foot of a flight, nor round the berth), and on the upper gallery its stretch of
+   * the spin arrow: a bronze line along the gallery, its head at the spinward end.
+   */
+  private bay(q: StairPlatform, bay: { tier: number; index: number }, berth: { at: PlanPoint; clear: number } | null): void {
+    const hr = this.hr, p = this.st.parapet, W = this.st.width, length = q.w1 - q.w0, mid = centreOf(q)[1];
+    const every = Math.max(1, Math.round(W / length)), notch = q.z1 - q.z0 < (this.st.threshold?.galleries[bay.tier].z1 ?? q.z1) - q.z0 - 1e-6;
+    const clearOf = (at: PlanPoint, r: number): boolean => !berth || Math.hypot(at[0] - berth.at[0], at[1] - berth.at[1]) > berth.clear + r;
+    const lamp: PlanPoint = [q.z0 + p + hr * 0.4, mid];
+    if (bay.index % every === 0 && clearOf(lamp, hr * 0.3)) this.lamp(lamp, q.e);
+    const open = openingsOf(this.st, q).z1.length > 0, back = q.z1 - (open ? 0 : p) - hr * 0.08;
+    if (bay.index % every === Math.floor(every / 2) && !notch && clearOf([back, mid], length / 2)) this.bench(q, back, mid, length * 0.8);
+    if (bay.tier !== 0 || this.detail === 'solid' || this.detail === 'far') return;
+    // The spin arrow: along the upper gallery a third of the way in from its front, spinward (+w).
+    const g = this.st.threshold!.galleries[0], z = g.z0 + (g.z1 - g.z0) * 0.3, tip = g.w1 - W * 0.5, tail = g.w0 + W * 0.5;
+    const a = Math.max(tail, q.w0), b = Math.min(tip - hr * 0.9, q.w1);
+    if (b > a) this.band(q, [z, a], [z, b], hr * 0.07, INLAY);
+    if (tip >= q.w0 && tip <= q.w1) this.chevron(q, [z, tip], [0, 1], hr * 1.4, hr * 0.12, true);
+  }
+
+  /** A timber bench along w, its back against a platform's back edge at `back`: a seat on two stone feet, a backrest. */
+  private bench(q: StairPlatform, back: number, mid: number, length: number): void {
+    if (this.detail === 'far') return;
+    const hr = this.hr, deep = hr * 0.42, w0 = mid - length / 2, w1 = mid + length / 2;
+    const slat = (z0: number, z1: number, a: number, b: number, lo: number, hi: number, col: RGB, finish: number): void => this.boxOn(q, [z0, z1, a, b], lo, hi, col, finish);
+    slat(back - deep, back, w0, w1, hr * 0.36, hr * 0.42, DECK, FINISH.timber);
+    for (const w of [w0 + hr * 0.15, w1 - hr * 0.25]) slat(back - deep * 0.85, back - deep * 0.15, w, w + hr * 0.1, 0, hr * 0.36, WARM, FINISH.stone);
+    if (this.detail === 'near') slat(back - hr * 0.06, back, w0, w1, hr * 0.42, hr * 0.85, DECK, FINISH.timber);
+  }
+
+  /** A box on a platform's floor over a plan rectangle (z0, z1, w0, w1), from `lo` to `hi` above it. */
+  private boxOn(q: StairPlatform, [z0, z1, w0, w1]: [number, number, number, number], lo: number, hi: number, col: RGB, finish: number): void {
+    this.solidBlock([[z0, w0], [z1, w0], [z1, w1], [z0, w1]], [lo, lo, lo, lo].map((e) => q.e + e), [hi, hi, hi, hi].map((e) => q.e + e), col, finish, lo === 0);
+  }
+
+  /** Where a plan point on a platform's floor is: the floor is a pair of flat triangles, not a curved constant-e surface. */
+  private floorAt(q: StairPlatform, [z, w]: PlanPoint): number {
+    const A = this.ramp.world(q.z0, q.w0, q.e), C = this.ramp.world(q.z1, q.w1, q.e);
+    const B = (z - q.z0) / (q.z1 - q.z0) >= (w - q.w0) / (q.w1 - q.w0)
+      ? this.ramp.world(q.z1, q.w0, q.e) : this.ramp.world(q.z0, q.w1, q.e);
+    const n = v3cross(v3sub(B, A), v3sub(C, A)), at = this.ramp.world(z, w, q.e);
+    const up = v3sub(this.ramp.world(z, w, q.e + 1), at);
+    return q.e + n.reduce((v, x, k) => v + x * (A[k] - at[k]), 0) / n.reduce((v, x, k) => v + x * up[k], 0);
+  }
+
+  /** A bronze inlay on a platform's floor: a band `half` wide each side of the line a → b, let in flush. */
+  private band(q: StairPlatform, a: PlanPoint, b: PlanPoint, half: number, col: RGB): void {
+    const dz = b[0] - a[0], dw = b[1] - a[1], len = Math.hypot(dz, dw), hr = this.hr;
+    if (len < 1e-6) return;
+    const z = dz / len, w = dw / len;
+    const poly: PlanPoint[] = [[a[0] + w * half, a[1] - z * half], [b[0] + w * half, b[1] - z * half], [b[0] - w * half, b[1] + z * half], [a[0] - w * half, a[1] + z * half]];
+    if (area(poly) < 0) poly.reverse();
+    this.solidBlock(poly, poly.map((x) => this.floorAt(q, x) + hr * 0.015), poly.map((x) => this.floorAt(q, x) + hr * 0.025), col, FINISH.bronze);
+  }
+
+  /** A bronze chevron on a platform's floor pointing along `dir` (unit, plan) with its tip at `tip`; `head` fills it. */
+  private chevron(q: StairPlatform, tip: PlanPoint, [z, w]: PlanPoint, size: number, thick: number, head = false): void {
+    const hr = this.hr;
+    for (const sign of [-1, 1]) {
+      const tail: PlanPoint = [tip[0] - z * size + w * sign * size * 0.78, tip[1] - w * size - z * sign * size * 0.78];
+      const poly: PlanPoint[] = [tip, tail, [tail[0] - z * thick, tail[1] - w * thick], [tip[0] - z * thick, tip[1] - w * thick]];
+      if (area(poly) < 0) poly.reverse();
+      this.solidBlock(poly, poly.map((x) => this.floorAt(q, x) + hr * 0.027), poly.map((x) => this.floorAt(q, x) + hr * 0.03), head ? INLAY : INLAY_BRIGHT, FINISH.bronze);
+    }
+    if (!head) return;
+    // A filled head: the triangle between the chevron's arms.
+    const back: PlanPoint = [tip[0] - z * size, tip[1] - w * size], l: PlanPoint = [back[0] + w * size * 0.7, back[1] - z * size * 0.7], r: PlanPoint = [back[0] - w * size * 0.7, back[1] + z * size * 0.7];
+    const tri: PlanPoint[] = area([tip, l, r]) > 0 ? [tip, l, r] : [tip, r, l];
+    this.top(tri, tri.map((x) => this.floorAt(q, x) + hr * 0.02), INLAY, FINISH.bronze);
+  }
+
+  /** The capsule berth: a bronze ring let into the floor where a capsule waits. */
+  private berthRing(q: StairPlatform, berth: { at: PlanPoint; clear: number }): void {
+    const hr = this.hr, [cz, cw] = berth.at, ring = berth.clear * 0.8, band = hr * 0.06, n = 32;
+    for (let k = 0; k < n; k++) {
+      const a0 = (2 * Math.PI * k) / n, a1 = (2 * Math.PI * (k + 0.7)) / n;
+      const onRing = (a: number, r: number): PlanPoint => [cz + Math.cos(a) * r, cw + Math.sin(a) * r];
+      let poly: PlanPoint[] = [onRing(a0, ring - band), onRing(a1, ring - band), onRing(a1, ring + band), onRing(a0, ring + band)];
+      if (area(poly) < 0) poly = poly.reverse();
+      this.solidBlock(poly, poly.map((x) => this.floorAt(q, x) + hr * 0.015), poly.map((x) => this.floorAt(q, x) + hr * 0.025), INLAY, FINISH.bronze);
+    }
+  }
+
+  /**
+   * The porch over the top terrace's back half: a canopy on posts and seats along its sides, and the port passage's
+   * door set in a portal of dressed stone on a facade across the back, warm light through the fanlight over it. The
+   * bronze inlay leads from the door to the overlook and on to the stair's opening.
+   */
   private arrivalPorch(q: StairPlatform): void {
     const terrace = arrivalTerraceOf(this.ramp.habitat);
     if (!terrace) return;
-    const hr = this.hr, depth = q.z1 - q.z0, middle = (q.w0 + q.w1) / 2;
-    const back = q.z1 - hr * DOOR_BACK, front = q.z1 - depth * 0.52, side = this.st.parapet + hr * 0.18;
-    const box = (z0: number, z1: number, w0: number, w1: number, lo: number, hi: number, col: RGB, finish: number = FINISH.stone): void => {
-      this.solidBlock([[z0, w0], [z1, w0], [z1, w1], [z0, w1]], [lo, lo, lo, lo].map((e) => q.e + e), [hi, hi, hi, hi].map((e) => q.e + e), col, finish);
-    };
-    // Pale canopy and bronze ribs, held by posts outside the clear walking strip.
-    for (const z of [front, back]) for (const w of [q.w0 + side, q.w1 - side]) box(z - hr * 0.13, z + hr * 0.13, w - hr * 0.13, w + hr * 0.13, 0, hr * 3.5, STONE);
-    box(front - hr * 0.25, back + hr * 0.25, q.w0 + this.st.parapet, q.w1 - this.st.parapet, hr * 3.5, hr * 3.7, PAVING);
-    for (const z of [front, (front + back) / 2, back]) box(z - hr * 0.045, z + hr * 0.045, q.w0 + side, q.w1 - side, hr * 3.38, hr * 3.5, BRONZE, FINISH.bronze);
+    const hr = this.hr, depth = q.z1 - q.z0, middle = centreOf(q)[1], p = this.st.parapet;
+    const back = q.z1 - hr * DOOR_BACK, front = q.z1 - depth * 0.52, side = p + hr * 0.18;
+    const piece = (z0: number, z1: number, w0: number, w1: number, lo: number, hi: number, col: RGB, finish: number = FINISH.stone): void => this.boxOn(q, [z0, z1, w0, w1], lo, hi, col, finish);
+    // The facade across the back, standing a little proud of the parapet there, and the portal: jambs, a lintel with a
+    // bronze band, a cornice over it.
+    piece(q.z1 - p - hr * 0.02, q.z1, q.w0, q.w1, 0, hr * FACADE, WARM);
+    const jamb = hr * 0.32, inner0 = q.w0 + side + hr * 0.13, inner1 = q.w1 - side - hr * 0.13;
+    for (const [a, b] of [[inner0 - jamb, inner0], [inner1, inner1 + jamb]]) piece(back - hr * 0.3, q.z1 - p, a, b, 0, hr * 4.3, WARM_PAVING);
+    piece(back - hr * 0.34, q.z1 - p, inner0 - jamb, inner1 + jamb, hr * 3.6, hr * 4.3, WARM_PAVING);
+    piece(back - hr * 0.36, back - hr * 0.33, inner0, inner1, hr * 3.85, hr * 3.98, BRONZE, FINISH.bronze);
+    piece(back - hr * 0.44, q.z1 - p, inner0 - jamb * 1.3, inner1 + jamb * 1.3, hr * 4.3, hr * 4.48, WARM);
+    // Pale canopy and bronze ribs, held by posts at its front outside the clear walking strip (the portal holds its back).
+    for (const w of [q.w0 + side, q.w1 - side]) piece(front - hr * 0.13, front + hr * 0.13, w - hr * 0.13, w + hr * 0.13, 0, hr * 3.5, STONE);
+    piece(front - hr * 0.25, back - hr * 0.3, q.w0 + p, q.w1 - p, hr * 3.5, hr * 3.7, PAVING);
+    for (const z of [front, (front + back) / 2]) piece(z - hr * 0.045, z + hr * 0.045, q.w0 + side, q.w1 - side, hr * 3.38, hr * 3.5, BRONZE, FINISH.bronze);
     // The passage's closed pressure door stays behind the passenger. The cinematic cut covers the transfer here.
-    box(back - hr * DOOR_HALF, back + hr * DOOR_HALF, q.w0 + side, q.w1 - side, 0, hr * 3.4, [0.19, 0.26, 0.25], FINISH.panel);
-    box(back - hr * (DOOR_HALF + 0.015), back - hr * DOOR_HALF, middle - hr * 0.025, middle + hr * 0.025, 0, hr * 3.1, BRONZE, FINISH.bronze);
+    piece(back - hr * DOOR_HALF, back + hr * DOOR_HALF, inner0, inner1, 0, hr * DOOR_HIGH, [0.19, 0.26, 0.25], FINISH.panel);
+    piece(back - hr * (DOOR_HALF + 0.015), back - hr * DOOR_HALF, middle - hr * 0.025, middle + hr * 0.025, 0, hr * (DOOR_HIGH - 0.3), BRONZE, FINISH.bronze);
+    // The fanlight: the passage's warm light through glass over the door, in bronze glazing bars.
+    piece(back - hr * 0.02, back + hr * DOOR_HALF, inner0, inner1, hr * (DOOR_HIGH + 0.04), hr * 3.6, GLASS, FINISH.lamp);
+    for (let k = 1; k < 4; k++) {
+      const w = inner0 + ((inner1 - inner0) * k) / 4;
+      piece(back - hr * 0.05, back - hr * 0.02, w - hr * 0.025, w + hr * 0.025, hr * DOOR_HIGH, hr * 3.6, BRONZE, FINISH.bronze);
+    }
+    piece(back - hr * 0.05, back - hr * 0.02, inner0, inner1, hr * DOOR_HIGH, hr * (DOOR_HIGH + 0.04), BRONZE, FINISH.bronze);
     // Seats along the sheltered sides leave the centre free even on narrow habitats.
     for (const w of [q.w0 + side + hr * 0.35, q.w1 - side - hr * 0.35]) {
-      box(front + hr * 0.6, back - hr * 0.8, w - hr * 0.22, w + hr * 0.22, 0, hr * 0.43, BRONZE, FINISH.timber);
+      piece(front + hr * 0.6, back - hr * 0.8, w - hr * 0.22, w + hr * 0.22, 0, hr * 0.43, BRONZE, FINISH.timber);
     }
     if (this.detail === 'solid') return;
-    // The paving is a pair of flat triangles, not a curved constant-e surface.
-    const floor = ([z, w]: PlanPoint): number => {
-      const A = this.ramp.world(q.z0, q.w0, q.e), C = this.ramp.world(q.z1, q.w1, q.e);
-      const B = (z - q.z0) / (q.z1 - q.z0) >= (w - q.w0) / (q.w1 - q.w0)
-        ? this.ramp.world(q.z1, q.w0, q.e) : this.ramp.world(q.z0, q.w1, q.e);
-      const n = v3cross(v3sub(B, A), v3sub(C, A)), at = this.ramp.world(z, w, q.e);
-      const up = v3sub(this.ramp.world(z, w, q.e + 1), at);
-      return q.e + n.reduce((v, x, k) => v + x * (A[k] - at[k]), 0) / n.reduce((v, x, k) => v + x * up[k], 0);
-    };
     const points = [terrace.start, terrace.finish, terrace.exit];
     for (let k = 0; k + 1 < points.length; k++) {
       const a = points[k], b = points[k + 1], dz = b[0] - a[0], dw = b[1] - a[1], len = Math.hypot(dz, dw);
       if (len < hr * 0.2) continue;
-      const z = dz / len, w = dw / len, radius = hr * 0.14;
-      const stripe: PlanPoint[] = [[a[0] + w * radius, a[1] - z * radius], [b[0] + w * radius, b[1] - z * radius], [b[0] - w * radius, b[1] + z * radius], [a[0] - w * radius, a[1] + z * radius]];
-      if (area(stripe) < 0) stripe.reverse();
-      this.solidBlock(stripe, stripe.map((p) => floor(p) + hr * 0.015), stripe.map((p) => floor(p) + hr * 0.025), [0.65, 0.4, 0.12], FINISH.bronze);
-      for (let d = hr; d < len - hr * 0.5; d += hr * 2) {
-        const tip: PlanPoint = [a[0] + z * d, a[1] + w * d];
-        for (const sign of [-1, 1]) {
-          const tail: PlanPoint = [tip[0] - z * hr * 0.45 + w * sign * hr * 0.35, tip[1] - w * hr * 0.45 - z * sign * hr * 0.35];
-          const poly: PlanPoint[] = [tip, tail, [tail[0] - z * hr * 0.09, tail[1] - w * hr * 0.09], [tip[0] - z * hr * 0.09, tip[1] - w * hr * 0.09]];
-          if (area(poly) < 0) poly.reverse();
-          this.solidBlock(poly, poly.map((p) => floor(p) + hr * 0.027), poly.map((p) => floor(p) + hr * 0.03), [0.8, 0.55, 0.2], FINISH.bronze);
-        }
-      }
-    }
-    // The capsule berth (gen/arrivalTerrace.ts): a bronze ring let into the paving where a capsule waits.
-    const berth = terrace.berth;
-    if (!berth) return;
-    const c = this.ramp.plan(berth.at), ring = berth.clear * 0.8, band = hr * 0.06, n = 32;
-    for (let k = 0; k < n; k++) {
-      const a0 = (2 * Math.PI * k) / n, a1 = (2 * Math.PI * (k + 0.7)) / n;
-      const onRing = (a: number, r: number): PlanPoint => [c.z + Math.cos(a) * r, c.w + Math.sin(a) * r];
-      let poly: PlanPoint[] = [onRing(a0, ring - band), onRing(a1, ring - band), onRing(a1, ring + band), onRing(a0, ring + band)];
-      if (area(poly) < 0) poly = poly.reverse();
-      this.solidBlock(poly, poly.map((p) => floor(p) + hr * 0.015), poly.map((p) => floor(p) + hr * 0.025), [0.65, 0.4, 0.12], FINISH.bronze);
+      this.band(q, a, b, hr * 0.14, INLAY);
+      for (let d = hr; d < len - hr * 0.5; d += hr * 2) this.chevron(q, [a[0] + (dz / len) * d, a[1] + (dw / len) * d], [dz / len, dw / len], hr * 0.45, hr * 0.09);
     }
   }
 
   /** A parapet block on a plan polygon (counter-clockwise from above), from a floor at `e` to `top`, and its coping. */
-  private parapet(poly: readonly PlanPoint[], e: number | readonly number[], top: number | readonly number[]): void {
+  private parapet(poly: readonly PlanPoint[], e: number | readonly number[], top: number | readonly number[], col: RGB = STONE): void {
     const bottoms = typeof e === 'number' ? poly.map(() => e) : e, tops = typeof top === 'number' ? poly.map(() => top) : top;
-    this.block(poly, bottoms, tops, STONE);
-    if (this.detail === 'near') this.coping(poly, tops);
+    this.block(poly, bottoms, tops, col, undefined, col);
+    if (this.detail === 'near') this.coping(poly, tops, col);
   }
 
   /** A coping stone over a parapet's top: a little wider than it, and a little higher. */
-  private coping(poly: readonly PlanPoint[], tops: readonly number[]): void {
+  private coping(poly: readonly PlanPoint[], tops: readonly number[], col: RGB = STONE): void {
     const hr = this.hr, grow = hr * 0.04, rise = hr * 0.08;
     // Each corner out along both its edges' normals.
     const out = poly.map((p, i): PlanPoint => {
       const n1 = outward(poly[(i + poly.length - 1) % poly.length], p), n2 = outward(p, poly[(i + 1) % poly.length]);
       return [p[0] + (n1[0] + n2[0]) * grow, p[1] + (n1[1] + n2[1]) * grow];
     });
-    this.block(out, tops.map((t) => t - rise * 0.5), tops.map((t) => t + rise), STONE);
-  }
-
-  /** Where legs meet a platform's edges: intervals along each edge (z along a side, w along an end) left open. */
-  private openings(q: StairPlatform): Record<'z0' | 'z1' | 'w0' | 'w1', [number, number][]> {
-    const out: Record<'z0' | 'z1' | 'w0' | 'w1', [number, number][]> = { z0: [], z1: [], w0: [], w1: [] };
-    const eps = 1e-6;
-    for (const s of legShapesOf(this.st)) {
-      const half = s.leg.width / 2;
-      for (const [end, a] of [[s.leg.from, 0], [s.leg.to, s.run]] as const) {
-        const onIt = end.alongZ ? Math.abs(end.w - q.w0) < eps || Math.abs(end.w - q.w1) < eps : Math.abs(end.z - q.z0) < eps || Math.abs(end.z - q.z1) < eps;
-        if (!onIt || end.z < q.z0 - eps || end.z > q.z1 + eps || end.w < q.w0 - eps || end.w > q.w1 + eps) continue;
-        // Where the leg's two sides cross the face, on the coordinate along it.
-        const k = end.alongZ ? 1 : 0, key = end.alongZ ? (Math.abs(end.w - q.w0) < eps ? 'w0' : 'w1') : Math.abs(end.z - q.z0) < eps ? 'z0' : 'z1';
-        const xs = [-1, 1].map((sd) => {
-          const c = Math.abs(s.dir[k]) > 1e-9 ? a - (s.left[k] * sd * half) / s.dir[k] : a;
-          return onLeg(s, c, sd * half)[1 - k];
-        });
-        out[key].push([Math.min(...xs), Math.max(...xs)]);
-      }
-    }
-    return out;
+    this.block(out, tops.map((t) => t - rise * 0.5), tops.map((t) => t + rise), col, undefined, col);
   }
 
   /** An apron: its level triangle, and the wall and parapet along its long edge. */
@@ -420,11 +523,14 @@ class StairBuilder {
     this.solidBlock(bar, top.map((e) => e - drop - t), top.map((e) => e - drop + t), BRONZE, FINISH.bronze);
   }
 
-  /** A closed block of four plan corners (counter-clockwise from above), bottom and all: a bar, a nosing. */
-  private solidBlock(corners: readonly PlanPoint[], bottom: readonly number[], top: readonly number[], col: RGB, finish: number): void {
+  /**
+   * A closed block of four plan corners (counter-clockwise from above), bottom and all: a bar, a nosing. One standing
+   * on the floor (`resting`) leaves out the bottom no one sees.
+   */
+  private solidBlock(corners: readonly PlanPoint[], bottom: readonly number[], top: readonly number[], col: RGB, finish: number, resting = false): void {
     const c = (i: number, e: readonly number[]): Vec3 => [corners[i][0], corners[i][1], e[i]];
     this.face(c(0, top), c(1, top), c(2, top), c(3, top), col, finish);
-    this.face(c(0, bottom), c(3, bottom), c(2, bottom), c(1, bottom), col, finish);
+    if (!resting) this.face(c(0, bottom), c(3, bottom), c(2, bottom), c(1, bottom), col, finish);
     for (let i = 0; i < 4; i++) {
       const j = (i + 1) % 4;
       this.face(c(i, bottom), c(j, bottom), c(j, top), c(i, top), col, finish);
@@ -456,6 +562,7 @@ class StairBuilder {
         this.top([in0, out0, out1, in1], [st.top, st.top, st.top, st.top]);
         this.wall(in1, in0, [st.top - 2 * r, st.top - 2 * r], [st.top, st.top], PAVING);
         if (this.detail === 'near') this.nosing(s, st.a0, st.top);
+        if (this.marks(k > 0 ? steps[k - 1].top : s.leg.e0, st.top)) this.gravityLine(s, st.a0 + s.leg.tread / 2, st.top);
         if (st.landing) for (const sd of [-1, 1]) this.lamp(onLeg(s, (st.a0 + st.a1) / 2 + s.leg.tread / 2, sd * (half - p - hr * 0.3)), st.top);
       }
     } else {
@@ -476,6 +583,19 @@ class StairBuilder {
       if (ahead) this.wall(l, rr, [this.foot(l), this.foot(rr)], [e, e]);
       else this.wall(rr, l, [this.foot(rr), this.foot(l)], [e, e]);
     }
+  }
+
+  /** Whether climbing from height e0 to e1 passes one of the gravity marks (`GRAVITY_MARKS`). */
+  private marks(e0: number, e1: number): boolean {
+    const R = this.ramp.habitat.radius, g0 = (R - e0) / R, g1 = (R - e1) / R;
+    return GRAVITY_MARKS.some((m) => g0 > m && g1 <= m);
+  }
+
+  /** A bronze line across a leg's tread at `a` along it, where the stair passes a gravity mark. */
+  private gravityLine(s: LegShape, a: number, top: number): void {
+    const half = s.leg.width / 2 - this.st.parapet, hr = this.hr, d = hr * 0.05;
+    const c = [onLeg(s, a - d, -half), onLeg(s, a + d, -half), onLeg(s, a + d, half), onLeg(s, a - d, half)];
+    this.solidBlock(area(c) > 0 ? c : c.reverse(), c.map(() => top + hr * 0.005), c.map(() => top + hr * 0.015), INLAY_BRIGHT, FINISH.bronze);
   }
 
   /** A bronze nosing along a step's front edge: a strip just proud of the tread and the riser. */

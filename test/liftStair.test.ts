@@ -4,11 +4,10 @@ import { MATRIX, fromWorld, toWorld } from '../src/blueprint';
 import { legShapesOf, liftStairOf, onLeg, rampOf, riserAt, stairKeepsClear, stairStandAt, stairTopAt } from '../src/gen/liftStair';
 import { buildStairSolid, buildStairTile, stairGridOf, stairPartsIn, stairTilesFor, type StairParts } from '../src/gen/liftStairMesh';
 import { childrenOf, coverOf, rootTiles, tileId } from '../src/gen/detailTree';
-import { FINISH } from '../src/gen/pavilion';
-import { outOfPlace } from '../src/gen/shapes';
 import { siteOf, planOf } from '../src/gen/plan';
 
 import { habitatOf } from './worlds';
+import { stairFacesOut } from './meshChecks';
 
 for (const { name, params } of MATRIX) {
   test(`lift stair (${name}): climbs the ramp from the floor to near the hub, every floor over the ground, steps of human size`, () => {
@@ -17,10 +16,13 @@ for (const { name, params } of MATRIX) {
     if (!st) return;
     assert.ok(siteOf(planOf(h), 'lift-stair'), 'on the plan\'s site');
     const ramp = rampOf(h), hr = st.handrail, R = h.radius;
-    assert.equal(st.legs.length, st.platforms.length - 1);
+    // The climb: platforms up to the top terrace, a leg between each two; the Threshold's galleries and flights after.
+    const climb = st.platforms.indexOf(st.top);
+    assert.equal(st.legs.indexOf(st.topLeg), climb - 1);
+    assert.equal(st.platforms.length - climb - 1, st.threshold ? st.threshold.galleries.reduce((n, g) => n + g.bays.length, 0) : 0);
     // From the floor's end to within a few hub radii of the axis.
     assert.ok(Math.abs(st.platforms[0].z1 - ramp.zOf(h.profile.floorEnd)) < 1e-6, 'starts at the floor\'s end');
-    const top = st.platforms[st.platforms.length - 1];
+    const top = st.top;
     assert.equal(top.kind, 'top');
     assert.ok(R - top.e < Math.max(R * 0.1, h.profile.at(h.profile.length).r * 4), `ends ${(R - top.e).toFixed(0)} m from the axis`);
     for (const q of st.platforms) {
@@ -28,7 +30,7 @@ for (const { name, params } of MATRIX) {
       assert.ok(Math.abs(q.w0) <= ramp.halfWidth && Math.abs(q.w1) <= ramp.halfWidth, `platform within the ramp: ${q.w0} … ${q.w1}`);
       for (const z of [q.z0, q.z1]) assert.ok(q.e >= ramp.groundAt(z) + st.clearance - 1e-6, `${q.kind} at ${z.toFixed(0)}: floor ${q.e.toFixed(2)} over ground ${ramp.groundAt(z).toFixed(2)}`);
     }
-    for (const [i, l] of st.legs.entries()) {
+    for (const [i, l] of st.legs.slice(0, climb).entries()) {
       assert.equal(l.e0, st.platforms[i].e);
       assert.equal(l.e1, st.platforms[i + 1].e);
       assert.ok(l.riser > 0 && l.riser <= riserAt(hr, 0) + 1e-9, `leg ${i}: riser ${l.riser}`);
@@ -69,19 +71,7 @@ for (const { name, params } of MATRIX) {
     const fine = wanted.filter((w) => w.key.level === g.finest).map((w) => buildStairTile(h, w.key)).find((t) => t.parts.steps > 0);
     assert.ok(fine, 'the finest tiles under the eye hold steps');
     for (const t of [busy, fine]) {
-      const m = t.mesh, inside = (p: number[]): boolean => {
-        const q = ramp.plan(outOfPlace(t.origin, p as [number, number, number])), top = stairTopAt(st, [q.z, q.w]);
-        return top !== null && q.e < top - 1e-4 && q.e > ramp.groundAt(q.z) - 2 * st.handrail + 1e-3;
-      };
-      let judged = 0, wrong = 0;
-      for (let i = 0; i < m.index.length; i += 3) {
-        const v = [m.index[i], m.index[i + 1], m.index[i + 2]];
-        if (m.finishes[v[0]] === FINISH.bronze) continue; // thin parts poke into the stone
-        const c = [0, 1, 2].map((a) => (m.positions[v[0] * 3 + a] + m.positions[v[1] * 3 + a] + m.positions[v[2] * 3 + a]) / 3);
-        const n = [0, 1, 2].map((a) => m.normals[v[0] * 3 + a]);
-        const out = inside(c.map((x, a) => x + n[a] * 0.01)), inn = inside(c.map((x, a) => x - n[a] * 0.01));
-        if (out !== inn) { judged++; if (out) wrong++; }
-      }
+      const { judged, wrong } = stairFacesOut(h, st, t);
       assert.ok(judged > 50, `judged ${judged}`);
       assert.equal(wrong, 0, `${wrong} of ${judged} faces look into the stair (tile ${tileId(t.key)})`);
     }

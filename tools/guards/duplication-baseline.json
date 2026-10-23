@@ -176,10 +176,6 @@
     "reason": "Passenger camera, local ship movement and world steering expose separate turn interfaces; only the yaw/pitch clamp idiom overlaps, with different coordinate conventions."
   },
   {
-    "key": "same name: solarpolis/gen/courts.ts#box + solarpolis/gen/liftStairMesh.ts#box",
-    "reason": "Local wrapper maps an arrival porch block through the curved ramp frame; courts use their own portal frame."
-  },
-  {
     "key": "same name: solarpolis/gen/crossings.ts#at + solarpolis/gen/grownHall.ts#at",
     "reason": "The members of a SiteKind (gen/siteTiles.ts): each kind of thing at sites on the floor (courts, crossings, grown halls) says its frame, build, at and top under the seam's own names; siteParts does everything else once."
   },
@@ -2078,6 +2074,10 @@
   {
     "key": "same name: solarpolis/render/capsules.ts#step + solarpolis/space/vesselPassenger.ts#step",
     "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
+  },
+  {
+    "key": "idiom: [.eye .profile] in solarpolis/render/animals.ts + solarpolis/render/birds.ts + solarpolis/render/homes.ts",
+    "reason": "Each view reads the eye's place on the profile (fromWorld(h.profile, eye)) for its own culling; the finder only surfaced it when new files changed its word weights (PR threshold touched none of them)."
   },
   {
     "key": "same name: solarpolis/render/birds.ts#dispose + solarpolis/render/traffic.ts#dispose",
