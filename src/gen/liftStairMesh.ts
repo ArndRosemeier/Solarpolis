@@ -24,7 +24,8 @@ import { wantedCells, type Grid, type GridEye, type TileKey, type WantedTile } f
 import { centreOf, legShapesOf, lineAt, liftStairOf, onLeg, openingsOf, rampOf, type LegShape, type LiftStair, type PlanPoint, type Ramp, type StairPlatform } from './liftStair';
 import { FINISH } from './pavilion';
 import { kept } from './kept';
-import { arrivalTerraceOf, DOOR_BACK, DOOR_HALF } from './arrivalTerrace';
+import { arrivalTerraceOf, DOOR_HALF, PORCH, porchOf } from './arrivalTerrace';
+import { WELCOME, welcomeSignOf } from './welcomeSign';
 
 /** What a builder makes: a tile's detail, the physics' solid parts, or only a count of what a tile holds. */
 export type StairDetail = 'far' | 'mid' | 'near' | 'solid' | 'count';
@@ -437,8 +438,8 @@ class StairBuilder {
   private arrivalPorch(q: StairPlatform): void {
     const terrace = arrivalTerraceOf(this.ramp.habitat);
     if (!terrace) return;
-    const hr = this.hr, depth = q.z1 - q.z0, middle = centreOf(q)[1], p = this.st.parapet;
-    const back = q.z1 - hr * DOOR_BACK, front = q.z1 - depth * 0.52, side = p + hr * 0.18;
+    const hr = this.hr, middle = centreOf(q)[1], p = this.st.parapet;
+    const { back, front, side, posts } = porchOf(q, hr, p);
     const piece = (z0: number, z1: number, w0: number, w1: number, lo: number, hi: number, col: RGB, finish: number = FINISH.stone): void => this.boxOn(q, [z0, z1, w0, w1], lo, hi, col, finish);
     // The facade across the back, standing a little proud of the parapet there, and the portal: jambs, a lintel with a
     // bronze band, a cornice over it.
@@ -449,9 +450,17 @@ class StairBuilder {
     piece(back - hr * 0.36, back - hr * 0.33, inner0, inner1, hr * 3.85, hr * 3.98, BRONZE, FINISH.bronze);
     piece(back - hr * 0.44, q.z1 - p, inner0 - jamb * 1.3, inner1 + jamb * 1.3, hr * 4.3, hr * 4.48, WARM);
     // Pale canopy and bronze ribs, held by posts at its front outside the clear walking strip (the portal holds its back).
-    for (const w of [q.w0 + side, q.w1 - side]) piece(front - hr * 0.13, front + hr * 0.13, w - hr * 0.13, w + hr * 0.13, 0, hr * 3.5, STONE);
-    piece(front - hr * 0.25, back - hr * 0.3, q.w0 + p, q.w1 - p, hr * 3.5, hr * 3.7, PAVING);
-    for (const z of [front, (front + back) / 2]) piece(z - hr * 0.045, z + hr * 0.045, q.w0 + side, q.w1 - side, hr * 3.38, hr * 3.5, BRONZE, FINISH.bronze);
+    const post = hr * PORCH.post, rib = hr * PORCH.ribHalf;
+    for (const w of posts) piece(front - post, front + post, w - post, w + post, 0, hr * PORCH.canopy, STONE);
+    piece(front - hr * 0.25, back - hr * 0.3, q.w0 + p, q.w1 - p, hr * PORCH.canopy, hr * 3.7, PAVING);
+    for (const z of [front, (front + back) / 2]) piece(z - rib, z + rib, posts[0], posts[1], hr * PORCH.rib, hr * PORCH.canopy, BRONZE, FINISH.bronze);
+    // The notice to newcomers hanging from the front rib, facing the door (gen/welcomeSign.ts): a dark bronze case; its
+    // lettered glass is the NOTICE kind's (render/notice.ts).
+    const sign = welcomeSignOf(this.ramp.habitat);
+    if (sign) {
+      const f = sign.plan, rim = hr * WELCOME.rim;
+      piece(f.z - hr * WELCOME.deep, f.z, f.w0 - rim, f.w1 + rim, f.e0 - q.e - rim, hr * PORCH.rib, BRONZE, FINISH.bronze);
+    }
     // The passage's closed pressure door stays behind the passenger. The cinematic cut covers the transfer here.
     piece(back - hr * DOOR_HALF, back + hr * DOOR_HALF, inner0, inner1, 0, hr * DOOR_HIGH, [0.19, 0.26, 0.25], FINISH.panel);
     piece(back - hr * (DOOR_HALF + 0.015), back - hr * DOOR_HALF, middle - hr * 0.025, middle + hr * 0.025, 0, hr * (DOOR_HIGH - 0.3), BRONZE, FINISH.bronze);

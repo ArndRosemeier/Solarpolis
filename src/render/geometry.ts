@@ -2,7 +2,7 @@
  * The one way to turn arrays into an indexed mesh geometry. Every kind's meshes are indexed (the index is part of the
  * shader's cache key, @futuremagic/stage), and each attribute is named as its kind lists it (materials.ts).
  */
-import { BufferAttribute, BufferGeometry, InstancedBufferGeometry, InterleavedBufferAttribute, Matrix4, Mesh, type InstancedInterleavedBuffer, type Material } from 'three/webgpu';
+import { BufferAttribute, BufferGeometry, type DataTexture, InstancedBufferGeometry, InterleavedBufferAttribute, Matrix4, Mesh, type InstancedInterleavedBuffer, type Material } from 'three/webgpu';
 import type { Stage } from '@futuremagic/stage';
 import type { Vec3 } from '@futuremagic/core';
 import type { Mat3 } from '../space';
@@ -121,6 +121,9 @@ export function freeMesh(mesh: Mesh, owned: Owned = 'all'): void {
   mesh.dispose();
 }
 
+/** What the renderer has put on the GPU (its own bookkeeping, `info.memoryMap`, three r186), if it keeps it. */
+const uploadedOf = (renderer: Stage['renderer']): WeakMap<object, unknown> | undefined => (renderer.info as unknown as { memoryMap?: WeakMap<object, unknown> }).memoryMap;
+
 /**
  * Let go of the arrays of a mesh's geometry the GPU already holds its own copy of (the renderer uploads an attribute the
  * first time it draws or compiles the mesh, and never reads the array again unless the attribute changes). Only for
@@ -132,7 +135,7 @@ export function freeMesh(mesh: Mesh, owned: Owned = 'all'): void {
  * interleaved buffer is booked under the first of its attributes uploaded); if that is not there, nothing is let go.
  */
 export function dropUploaded(mesh: Mesh, renderer: Stage['renderer'], keep: readonly string[] = []): number {
-  const uploaded = (renderer.info as unknown as { memoryMap?: WeakMap<object, unknown> }).memoryMap;
+  const uploaded = uploadedOf(renderer);
   if (!uploaded) return 0;
   const g = mesh.geometry, named = Object.entries(g.attributes).filter(([name]) => !keep.includes(name)).map(([, a]) => a);
   let bytes = 0;
@@ -150,6 +153,18 @@ export function dropUploaded(mesh: Mesh, renderer: Stage['renderer'], keep: read
     a.array = new Typed(0);
   }
   return bytes;
+}
+
+/**
+ * Let go of a data texture's pixels once the GPU has them (`dropUploaded`'s way for a texture drawn once and never
+ * changed): three uploads a texture the first time a drawn or compiled shader binds it and reads its data again only
+ * when its version changes. Returns the bytes let go, or 0 while it is not uploaded yet (call again a frame later).
+ */
+export function dropUploadedTexture(t: DataTexture, renderer: Stage['renderer']): number {
+  const uploaded = uploadedOf(renderer), data = t.image.data;
+  if (!uploaded?.has(t) || !data?.length) return 0;
+  t.image.data = new (data.constructor as new (n: number) => typeof data)(0);
+  return data.byteLength;
 }
 
 /**
