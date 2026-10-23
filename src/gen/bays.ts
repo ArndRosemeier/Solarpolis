@@ -49,3 +49,16 @@ export const baysOf: (h: Habitat) => Bays = kept((h: Habitat): Bays => {
     },
   };
 });
+
+/**
+ * The bays round the one a point of the floor lies over, out to `reach` bays each way (rows past the floor's ends left
+ * out), with their offsets: the one way to look round a point below. None beyond the floor.
+ */
+export function* baysNear(b: Bays, theta: number, s: number, reach: number): Generator<{ i: number; j: number; di: number; dj: number }> {
+  const at = b.bayAt(theta, s);
+  if (!at) return;
+  for (let di = -reach; di <= reach; di++) for (let dj = -reach; dj <= reach; dj++) {
+    const j = at.j + dj;
+    if (j >= 0 && j < b.along) yield { i: at.i + di, j, di, dj };
+  }
+}

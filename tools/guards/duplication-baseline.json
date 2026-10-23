@@ -1234,5 +1234,13 @@
   {
     "key": "same name: solarpolis/render/animals.ts#heard + solarpolis/render/people.ts#heard",
     "reason": "Each view hands what it holds to the one sound seam (sim/sources.ts `Source`): the animals from their placed moments, the drones from their fliers, the people from their beats. The loops differ by what each view keeps; what a source sounds like is decided once, in sim/sources.ts."
+  },
+  {
+    "key": "idiom: [.heightAt .s .theta] in solarpolis/gen/planted.ts + solarpolis/gen/scatter.ts + solarpolis/sim/sounds.ts",
+    "reason": "Each is a call of the one seam for the ground's height (`terrain.heightAt(theta, s)`) at a point its caller holds; there is nothing left to fold."
+  },
+  {
+    "key": "idiom: [.levelAt .s .theta] in solarpolis/gen/lifts.ts + solarpolis/gen/underMesh.ts + solarpolis/sim/rooms.ts",
+    "reason": "Each is a call of the one seam for the Understorey's levels (`levelsOf(t).levelAt(theta, s)`) at a point its caller holds; there is nothing left to fold."
   }
 ]
