@@ -45,7 +45,7 @@ export const HUB_LIGHT = 0.3;
  * race on either side of the seal, the sleeve's carrying a broken ring of lights that turns with it (`TURNING_LIGHTS`
  * of them), the still side's a whole one, so the turn is seen against it.
  */
-export const BORE_HALL = { pitch: 2, deep: 0.07, wide: 0.05, glow: 14, rail: 0.13, race: 0.3, chevron: { glow: 6, wide: 0.14, long: 0.12, thick: 0.035 } } as const;
+export const BORE_HALL = { pitch: 2, deep: 0.07, wide: 0.05, glow: 14, rail: 0.13, race: 0.3, chevron: { glow: 6, wide: 0.3, long: 0.24, thick: 0.07 } } as const;
 const HOOP: RGB = [1, 0.84, 0.62];
 const CHEVRON: RGB = [1, 0.56, 0.16];
 export const TURNING_LIGHTS = 24;
@@ -107,13 +107,13 @@ export function boreShapes(h: Habitat): BoreGeometry {
       walls.band(z + w, r * 0.994, z + w, inner, 1, 0, frame);
       lamps.band(z + w, inner, z - w, inner, 0, -1, hoop);
     }
-    // The guide rails between the strips, on stand-offs a row apart, each with a brass handhold beside it.
+    // The guide rails between the strips, on stand-offs two rows apart, each with a brass handhold beside it.
     const zAxis: Vec3 = [0, 0, 1], railR = r * (1 - H.rail), t = r * 0.018;
     for (let s = 0; s < BORE_LAMPS; s++) {
       const a = ((s + 0.5) / BORE_LAMPS) * 2 * Math.PI, side: Vec3 = [-Math.sin(a), Math.cos(a), 0], inn = inward(a);
       const mid = wallPoint(a, (lo + hi) / 2, railR);
       walls.block(mid, zAxis, side, inn, [(hi - lo) / 2 - r * 0.02, t, t], RAIL);
-      for (let j = 0; j < rows; j++) {
+      for (let j = 0; j < rows; j += 2) {
         const z = rel(z0 + (j + 0.5) * dz), foot = (r * 0.99 - railR) / 2;
         // The stand-off, from the wall in to the rail (open where it meets the wall).
         walls.block(wallPoint(a, z, railR + foot), zAxis, side, inn, [t * 0.8, t * 0.8, foot], RAIL, true);
