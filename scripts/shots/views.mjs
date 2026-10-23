@@ -268,6 +268,13 @@ export const views = {
     { wheel: -1500 }, { wait: 1500 }, { look: [200, 60] }, { wait: 1000 }, { shot: 'eyes' }, { wheel: 600 },
     capsulePhase('alighting', 240000), { shot: 'landing' }, capsulePhase('parked', 30000), { wait: 1500 }, { shot: 'out' }, { run: logPeople }, heap('capsule'),
   ] },
+  // The capsule waiting on the arrival's berth (render/view.ts prepareArrival → CapsuleView.parkAt): after the arrival,
+  // stood beside its door (-near), wheeled out (-far), then from the eyes looking at it (-eyes).
+  'arrival-capsule': { query: 'view=inside', about: 'the capsule that waits on the arrival berth: after the arrival, beside its door (-near), wheeled out (-far), from the eyes (-eyes); logs the capsule line', settle: 6000, steps: [
+    { debug: 'Arrival: reveal the port terrace' }, { wait: 5000 }, { key: 'KeyW', hold: 300 }, { wait: 3000 }, capsulePhase('parked', 30000),
+    { debug: 'Capsule: walk up to it' }, { wait: 6000 }, { wheel: 100 }, { wait: 1500 }, { shot: 'near' }, { wheel: 600 }, { wait: 1500 }, { shot: 'far' },
+    { wheel: -1500 }, { wait: 1500 }, { shot: 'eyes' }, { run: logPeople },
+  ] },
   boats: { query: 'view=inside', about: 'the boats, four hours into the day: riding beside the nearest skiff, foiling trimaran and glass-roofed catamaran in turn (each under sail if one is out; -2 four seconds on), then off the beam of the nearest boat under sail (-sailing), then the great lake from off its end (-lake); a heap snapshot at the end; logs the boats line', settle: 6000, steps: [
     memoryDetails, { debug: 'Two hours later' }, { debug: 'Two hours later' }, { wait: 4000 },
     ...['skiff', 'foiler', 'cruiser'].flatMap((name) => [{ debug: 'Ride beside a boat: skiff → foiler → cruiser → off' }, { wait: 12000 }, { shot: name }, { wait: 4000 }, { shot: `${name}-2` }]),

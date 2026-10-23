@@ -769,7 +769,9 @@ const NO_ROOF = new Vector4(0, 0, 0, 0);
 export const CAP_GLASS = kind('capsule glass', ['position', 'normal', 'color', 'uv', 'finish'], { cast: false, receive: false }, () => {
   const m = new MeshBasicNodeMaterial({ side: DoubleSide, transparent: true, depthWrite: false, premultipliedAlpha: true, forceSinglePass: true });
   const veil = attribute<'float'>('finish', 'float');
-  const ray = normalize(positionWorld.sub(cameraPosition)), n = normalize(normalWorld).mul(faceDirection);
+  // normalWorld already faces the eye on either side (three negates it on back faces): turned again, the far side and
+  // everything seen from inside became a full mirror, milky white.
+  const ray = normalize(positionWorld.sub(cameraPosition)), n = normalize(normalWorld);
   const facing = clamp(dot(n, ray.negate()), 0, 1), mirror = float(0.04).add(float(0.96).mul(pow(float(1).sub(facing), 5)));
   const scattered = vertexColor().rgb.mul(sunlit(vec2(OPEN_SKY, OPEN_SKY), n, 0, float(1), true, true)).mul(veil);
   const reflected = air.haze.mul(air.skyLight.mul(light.mean).add(0.35)).add(tubeLight(tubeGlint(worldPosition(), ray, n))).mul(mirror);
