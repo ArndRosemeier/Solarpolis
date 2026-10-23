@@ -757,7 +757,7 @@ export const BUILT = kind('built', ['position', 'normal', 'color', 'uv', 'finish
   return m;
 });
 /** A lantern's glass, as bright as this many times sunlit white paper: it reads lit at midday, a point of warmth at night. */
-const LANTERN = 2.5;
+const LANTERN = 1.4;
 const NO_ROOF = new Vector4(0, 0, 0, 0);
 
 /**

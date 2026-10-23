@@ -35,9 +35,11 @@ const PAVING: RGB = [0.58, 0.55, 0.5];
 const BRONZE: RGB = [0.22, 0.15, 0.08];
 const GLASS: RGB = [1, 0.8, 0.55];
 /** The Threshold's warmer stone, its top terrace's paving, its galleries' timber decks, the inlays' polished bronze. */
-const WARM: RGB = [0.56, 0.46, 0.36];
-const WARM_PAVING: RGB = [0.62, 0.52, 0.41];
-const DECK: RGB = [0.34, 0.22, 0.13];
+const WARM: RGB = [0.48, 0.39, 0.3];
+const WARM_PAVING: RGB = [0.44, 0.36, 0.28];
+const DECK: RGB = [0.25, 0.16, 0.09];
+/** Where the Threshold's front walls are dressed: a pilaster every so many handrails up, a string course (handrails). */
+const COURSE = 6;
 const INLAY: RGB = [0.65, 0.4, 0.12];
 const INLAY_BRIGHT: RGB = [0.8, 0.55, 0.2];
 /** Where the stair crosses these shares of the floor's gravity, a bronze line runs across its tread. */
@@ -303,6 +305,7 @@ class StairBuilder {
         this.parapet(poly, q.e, q.e + hr, stone);
       }
     }
+    if (threshold && this.detail !== 'solid') this.dressFront(q, stone);
     const berth = this.berthHere(q);
     if (q.bay) this.bay(q, q.bay, berth);
     else {
@@ -312,6 +315,25 @@ class StairBuilder {
     }
     if (q.kind === 'top') this.arrivalPorch(q);
     if (berth && this.detail !== 'solid') this.berthRing(q, berth);
+  }
+
+  /**
+   * The Threshold's front walls stand tens of metres down the face to the ground: string courses run across them every
+   * `COURSE` handrails down from the floor, and on the galleries a pilaster rises at every lantern, so one reads their
+   * height and their rhythm from across the habitat.
+   */
+  private dressFront(q: StairPlatform, col: RGB): void {
+    const hr = this.hr, foot = this.ramp.groundAt(q.z0), out = hr * 0.18;
+    const band = (z: number, w0: number, w1: number, lo: number, hi: number): void => {
+      const c: PlanPoint[] = [[z - out, w0], [z, w0], [z, w1], [z - out, w1]];
+      this.solidBlock(c, c.map(() => lo), c.map(() => hi), col, FINISH.stone);
+    };
+    for (let e = q.e - COURSE * hr; e > foot; e -= COURSE * hr) band(q.z0, q.w0, q.w1, e - hr * 0.22, e);
+    if (!q.bay) return;
+    const every = Math.max(1, Math.round(this.st.width / (q.w1 - q.w0)));
+    if (q.bay.index % every !== 0) return;
+    const half = hr * 0.3, c: PlanPoint[] = [[q.z0 - out * 2, q.w0 - half], [q.z0, q.w0 - half], [q.z0, q.w0 + half], [q.z0 - out * 2, q.w0 + half]];
+    this.solidBlock(c, c.map(() => foot - this.bury), c.map(() => q.e - hr * 0.3), col, FINISH.stone);
   }
 
   /** The capsule berth's middle in plan and its clear radius, if it is on this platform (gen/arrivalTerrace.ts). */
