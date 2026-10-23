@@ -2,6 +2,11 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.159 — Tugs and inspection drones at the port
+
+- Every berth arm has its own orange harbour tug, parked in a cradle on the dock spindle. When a ship comes in, its tug flies out to hold station beside it and comes in with it, then goes home. It sees the ship out again when it leaves.
+- While a ship is berthed, small inspection drones come out of the collar and work slowly round its crew section, their lamp eyes bright against the hull.
+
 ## v0.158 — Ships worth riding
 
 - Every ship at the port, and the one you arrive on, is now fitted out: plated hulls with seams, decks of windows lit warm from inside, a panoramic lounge under the nose, and its own livery colour.
