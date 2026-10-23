@@ -2,6 +2,13 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.136 — The Understorey can be heard
+
+- Every room echoes as big as it really is: a long stone echo in the pillar forest and the cisterns, shorter in the halls, short at home, a little in the entrance courts. The echo is worked out from each room's size, so a bigger habitat's halls sound bigger.
+- The Understorey has its own sounds: the Dim's quiet and its drips, water in the cisterns, far machines under the reserve, and each hall at its work: kitchens, baths, workshops, the minds' calm halls. Stages play music.
+- At a wellhead the court above comes down muffled through the light well.
+- A lift hums as it rides, your ears close for a moment as the pressure changes, and each hamlet's lift chimes its own note when the doors open.
+
 ## v0.135 — The things around you can be heard
 
 - People are heard by what they do, never by voice: their footsteps, the clink of a picnic, a ball landing in someone's hands, a saw or a mallet at the makers' commons, a rustle as someone sits down.
