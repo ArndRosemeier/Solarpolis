@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.173 — The umbilical
+
+- Once the seal holds after docking, a ribbed umbilical hose reels out from under the berth's collar and runs to a port on the ship's nose, where its yellow connector head sits on the hull. Before a ship leaves, it reels back in as the collar's lights turn amber.
+
 ## v0.172 — The bore is a hall, not a pipe
 
 - The tube you float through after docking now has hoops of warm light every two radii, each throwing a pool of light on the walls, so the hall reads in rhythm as you drift down it.
