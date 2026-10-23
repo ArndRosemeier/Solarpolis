@@ -5,7 +5,7 @@ import { v3add, v3cross, v3dot, v3scale, v3sub } from '@futuremagic/core';
 import { MATRIX } from '../src/blueprint';
 import {
   CLAMPS, CLAMP_CLUNKS, DOCK, LIGHT_COLOUR, RELEASE, SEALED, SIGNALS, approachOf, arrival, arrivalScore, berthDockOf, chooseStart, clampPose,
-  closedSwing, deriveShip, dockAt, dockLightsAt, reachAt, shipShape, type Visit,
+  UMBILICAL, closedSwing, deriveShip, dockAt, dockLightsAt, reachAt, shipShape, umbilicalPath, type Visit,
 } from '../src/space';
 import { habitatOf, spaceOf } from './worlds';
 
@@ -50,7 +50,7 @@ for (const { name } of MATRIX) {
     const h = habitatOf(name), ship = deriveShip(17, h.exterior.spindle.arms.length), a = approachOf(h, ship), out = a.final + a.turn;
     const v: Visit = { id: 'x', arm: 1, ship, from: 0, docked: 5000, undocked: 9000, to: 14000 };
     const closed = closedSwing(h, shipShape(ship));
-    assert.deepEqual(dockAt(h, null, closed, 0), { swing: [DOCK.open, DOCK.open, DOCK.open, DOCK.open], signal: 'idle', flood: false });
+    assert.deepEqual(dockAt(h, null, closed, 0), { swing: [DOCK.open, DOCK.open, DOCK.open, DOCK.open], signal: 'idle', flood: false, umbilical: 0 });
     assert.equal(dockAt(h, v, closed, v.docked - out - 1).signal, 'idle');
     const coming = dockAt(h, v, closed, v.docked - 10);
     assert.ok(coming.signal === 'approach' && coming.flood && coming.swing.every((s) => s === DOCK.open));
@@ -78,20 +78,41 @@ for (const { name } of MATRIX) {
     }
   });
 
+  test(`dock (${name}): the umbilical reels out to the ship's port once sealed, clear of the collar and the hull, and in before it leaves`, () => {
+    const h = habitatOf(name), b = berthDockOf(h, 2), w = b.width, berth = h.exterior.spindle.arms.length;
+    for (let s = 1; s <= 3; s++) {
+      const shape = shipShape(deriveShip(s * 104729, berth)), L = shape.params.length, path = umbilicalPath(b, shape, 64);
+      for (const p of path) {
+        const d = v3dot(p, b.radial), rho = Math.hypot(...v3sub(p, v3scale(b.radial, d)));
+        if (d > -DOCK.deep * w && d < 0) assert.ok(rho > DOCK.ring * w, `${name}: through the collar at ${d.toFixed(2)}`);
+        if (d >= 0) assert.ok(rho >= reachAt(shape, L - d) + UMBILICAL.radius * w * 0.9, `${name}: into the hull at ${d.toFixed(2)} m`);
+      }
+      // It ends on the hull at the port.
+      const e = path[path.length - 1], d = v3dot(e, b.radial), rho = Math.hypot(...v3sub(e, v3scale(b.radial, d)));
+      assert.ok(rho - reachAt(shape, L - d) < UMBILICAL.radius * w * 2, 'on the port');
+      // A share of the run is its first stretch.
+      assert.deepEqual(umbilicalPath(b, shape, 2, 0)[0], path[0]);
+    }
+    const ship = deriveShip(17, berth), v: Visit = { id: 'x', arm: 2, ship, from: 0, docked: 5000, undocked: 9000, to: 14000 }, closed = 0;
+    assert.equal(dockAt(h, v, closed, v.docked + SEALED).umbilical, 0, 'not before the seal holds');
+    assert.equal(dockAt(h, v, closed, v.docked + UMBILICAL.from + UMBILICAL.takes).umbilical, 1);
+    assert.equal(dockAt(h, v, closed, v.undocked - RELEASE).umbilical, 0, 'reeled in as the lights turn amber');
+  });
+
   test(`dock (${name}): the collar's ring and floodlights, seen from in front and from behind`, () => {
     const h = habitatOf(name), b = berthDockOf(h, 0), w = b.width;
     const ahead = v3add(b.collar, v3scale(b.radial, 40 * w)), behind = v3sub(b.collar, v3scale(b.radial, 20 * w));
     const swing = new Array<number>(CLAMPS).fill(DOCK.open);
-    assert.deepEqual(dockLightsAt(b, { swing, signal: 'idle', flood: false }, ahead), []);
-    const coming = dockLightsAt(b, { swing, signal: 'approach', flood: true }, ahead);
+    assert.deepEqual(dockLightsAt(b, { swing, signal: 'idle', flood: false, umbilical: 0 }, ahead), []);
+    const coming = dockLightsAt(b, { swing, signal: 'approach', flood: true, umbilical: 0 }, ahead);
     assert.equal(coming.length, SIGNALS.lights + CLAMPS);
     assert.ok(coming.slice(0, SIGNALS.lights).every((l) => l.colour === LIGHT_COLOUR.amber && l.blink.period > 0));
     // The floods, looked into, outshine everything else at the port.
     assert.ok(coming.slice(SIGNALS.lights).every((l) => l.candela > 50 * SIGNALS.candela));
-    const latched = dockLightsAt(b, { swing, signal: 'latched', flood: true }, ahead);
+    const latched = dockLightsAt(b, { swing, signal: 'latched', flood: true, umbilical: 0 }, ahead);
     assert.ok(latched.slice(0, SIGNALS.lights).every((l) => l.colour === LIGHT_COLOUR.green && l.blink.period === 0));
     // From behind the collar, down the arm: no floods, and the ring only dimly from round its rim.
-    const back = dockLightsAt(b, { swing, signal: 'latched', flood: true }, behind);
+    const back = dockLightsAt(b, { swing, signal: 'latched', flood: true, umbilical: 0 }, behind);
     assert.ok(back.every((l) => l.candela < SIGNALS.candela * 0.3));
   });
 }
