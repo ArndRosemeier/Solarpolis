@@ -47,7 +47,8 @@ const LAMP: RGB = [1, 0.92, 0.78];
 const RAIL: RGB = [0.36, 0.24, 0.14];
 
 /** The handrail lifts are sized by (a habitat without landmarks has no courts, and so no lifts). */
-const handrailOf = (h: Habitat): number => h.params.landmarks?.handrail ?? 1;
+/** A habitat's handrail (m): its human scale, what lifts and capsules are sized by. */
+export const handrailOf = (h: Habitat): number => h.params.landmarks?.handrail ?? 1;
 
 /** A court's portal doors, above on its paving (null for a court without a lift). */
 export function doorsAbove(t: Terrain, court: number): LiftDoors | null {
