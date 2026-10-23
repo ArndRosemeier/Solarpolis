@@ -88,7 +88,7 @@ export class TrafficView {
   private addMeshes(id: string, d: Drawn): void {
     d.adding = true;
     const m = new ShipMeshes(d.shape, `${this.placed.id} ship ${id}`);
-    void m.addTo(this.stage).then(() => {
+    void m.addTo(this.stage, true).then(() => {
       // Gone while its shaders were being built: give it straight back.
       if (this.ships.get(id) !== d) { m.removeFrom(this.stage); return; }
       d.meshes = m;
@@ -113,6 +113,13 @@ export class TrafficView {
       best = Math.min(best, Math.hypot(along, across));
     }
     return best;
+  }
+
+  /** The bytes its ships' meshes hold on the GPU. */
+  shipBytes(): number {
+    let n = 0;
+    for (const d of this.ships.values()) n += d.meshes?.bytes ?? 0;
+    return n;
   }
 
   info(): string {

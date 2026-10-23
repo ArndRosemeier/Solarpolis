@@ -960,6 +960,10 @@
     "reason": "Everything that can give memory back does so through a shed() method the memory watchdog calls (CLAUDE.md rule 12); each sheds its own buffers."
   },
   {
+    "key": "same name: solarpolis/render/outside.ts#bytes + solarpolis/render/view.ts#bytes",
+    "reason": "Independent memory owners report their own retained buffers through the shared memory-watchdog interface; the Outside and Inside views sum different resource sets."
+  },
+  {
     "key": "same name: solarpolis/render/outside.ts#bytes + solarpolis/render/people.ts#bytes",
     "reason": "Independent memory owners report their own retained buffers through the shared memory-watchdog interface; these sum different resource sets."
   },

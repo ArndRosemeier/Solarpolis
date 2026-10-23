@@ -1,26 +1,15 @@
 /**
- * A ship from its shape (space/ship.ts) as meshes in the ship frame (+x to the nose, the exhaust along −x): the body
- * (HARDWARE, an albedo per part) and, for a torch, the exhaust plume (FLAME, its glow set per mesh by
- * `userData.flame`). `ShipMeshes` is the one way a ship enters the scene: the title's and every ship of the traffic.
+ * A ship from its shape (space/ship.ts, fitted out by space/shipDetail.ts) as meshes in the ship frame (+x to the nose,
+ * the exhaust along −x): the body (HARDWARE, an albedo per part), its lit windows and lights (LAMP) and, for a torch,
+ * the exhaust plume (FLAME, its glow set per mesh by `userData.flame`). `ShipMeshes` is the one way a ship enters the scene: the title's and every ship of the traffic.
  */
 import { Mesh, Vector4, type BufferGeometry, type Material } from 'three/webgpu';
 import type { Stage } from '@futuremagic/stage';
-import { v3cross, v3norm, type Vec3 } from '@futuremagic/core';
-import type { Mat3, ShipRole, ShipShape } from '../space';
-import { ShapeBuilder, freeMesh, setPose, type RGB } from './geometry';
-import { FLAME, HARDWARE } from './materials';
+import { v3add, v3cross, v3len, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
+import { ROLE_ALBEDO, type Mat3, type ShipShape } from '../space';
+import { ShapeBuilder, dropUploaded, freeMesh, setPose } from './geometry';
+import { FLAME, HARDWARE, LAMP } from './materials';
 import { FLAME_GLOW, type FlameUniforms } from './hullShaders';
-
-const ALBEDO: Record<ShipRole, RGB> = {
-  hull: [0.6, 0.6, 0.62],
-  crew: [0.72, 0.71, 0.68],
-  tank: [0.5, 0.48, 0.44],
-  radiator: [0.06, 0.06, 0.065],
-  drive: [0.3, 0.29, 0.28],
-  truss: [0.35, 0.35, 0.36],
-  cargo: [0.62, 0.6, 0.55],
-  sail: [0.78, 0.78, 0.8],
-};
 
 /** The builder works around z; the ship's axis is x. (x, y, z) of the ship is (z, x, y) of the builder. */
 export function shipAxisShape(b: Pick<ShapeBuilder, 'pos' | 'nrm'>): void {
@@ -32,31 +21,65 @@ export function shipAxisShape(b: Pick<ShapeBuilder, 'pos' | 'nrm'>): void {
   }
 }
 
-export function shipGeometry(s: ShipShape): { body: BufferGeometry; plume: BufferGeometry | null } {
-  const b = new ShapeBuilder(32, true);
+/** Ship (x, y, z) as the builder's (y, z, x): the builder works around its z, the ship around its x. */
+const toBuilder = (v: readonly number[]): Vec3 => [v[1], v[2], v[0]];
+
+/** Segments round the ship's widest section; a narrower one has fewer (by the root of its share), at least ROUND_LEAST. */
+const AROUND = 32;
+const ROUND_LEAST = 8;
+/** A round part's steps over the angles a0 … a1, for its radius r on a ship `beam` wide. */
+function stepsOf(r: number, beam: number, a0 = 0, a1 = 2 * Math.PI): number {
+  const around = Math.min(AROUND, Math.max(ROUND_LEAST, Math.ceil(AROUND * Math.sqrt((2 * r) / beam))));
+  return Math.max(1, Math.ceil((around * (a1 - a0)) / (2 * Math.PI) - 1e-9));
+}
+
+/**
+ * A ship's geometry: its body (HARDWARE, an albedo per part), what of it gives off its own light (LAMP: windows and the
+ * collar's target lights, the colour its luminance), and a torch's plume.
+ */
+export function shipGeometry(s: ShipShape): { body: BufferGeometry; lamps: BufferGeometry | null; plume: BufferGeometry | null } {
+  const body = new ShapeBuilder(AROUND, true), lamps = new ShapeBuilder(AROUND, true);
   for (const p of s.parts) {
-    const c = s.colours?.[p.role] ?? ALBEDO[p.role];
+    const b = p.role === 'window' ? lamps : body, c = p.colour ?? s.colours?.[p.role] ?? ROLE_ALBEDO[p.role];
+    const base = b.pos.length;
     if (p.shape === 'box') {
-      // Ship (x, y, z) to builder (y, z, x).
-      b.box([p.center[1], p.center[2], p.center[0]], [p.half[1], p.half[2], p.half[0]], c);
-    } else if (p.shape === 'cone') {
-      const nz = p.r0 - p.r1, nr = p.to - p.from, l = Math.hypot(nz, nr);
-      b.band(p.from, p.r0, p.to, p.r1, nz / l, nr / l, c);
-      b.band(p.from, 0, p.from, p.r0, -1, 0, c);
-    } else {
-      const base = b.pos.length;
-      b.band(p.from, p.radius, p.to, p.radius, 0, 1, c);
-      b.band(p.to, p.radius, p.to, 0, 1, 0, c);
-      b.band(p.from, 0, p.from, p.radius, -1, 0, c);
-      if (p.offset) for (let k = base; k < b.pos.length; k += 3) { b.pos[k] += p.offset[0]; b.pos[k + 1] += p.offset[1]; }
+      // Turned about the ship's axis: its own y from +y toward +z.
+      const t = p.turn ?? 0, ct = Math.cos(t), st = Math.sin(t);
+      b.block(toBuilder(p.center), toBuilder([1, 0, 0]), toBuilder([0, ct, st]), toBuilder([0, -st, ct]), p.half, c);
+      continue;
     }
+    if (p.shape === 'strut') {
+      const ex = v3norm(v3sub(p.b, p.a)), ref: Vec3 = Math.abs(ex[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0];
+      const ey = v3norm(v3cross(ref, ex)), ez = v3cross(ex, ey), mid = v3scale(v3add(p.a, p.b), 0.5);
+      b.block(toBuilder(mid), toBuilder(ex), toBuilder(ey), toBuilder(ez), [v3len(v3sub(p.b, p.a)) / 2, p.width / 2, p.width / 2], c);
+      continue;
+    }
+    const B = s.params.beam, all = 2 * Math.PI;
+    if (p.shape === 'cone') {
+      const nz = p.r0 - p.r1, nr = p.to - p.from, l = Math.hypot(nz, nr), n = stepsOf(Math.max(p.r0, p.r1), B);
+      b.arc(p.from, p.r0, p.to, p.r1, nz / l, nr / l, 0, all, n, c);
+      b.arc(p.from, 0, p.from, p.r0, -1, 0, 0, all, n, c);
+    } else if (p.shape === 'shell') {
+      // Its front faces (x, r) along (r0 − r1, to − from).
+      const nz = p.r0 - p.r1, nr = p.to - p.from, l = Math.hypot(nz, nr), [a0, a1] = p.arc ?? [0, all];
+      b.arc(p.from, p.r0, p.to, p.r1, nz / l, nr / l, a0, a1, stepsOf(Math.max(p.r0, p.r1), B, a0, a1), c);
+    } else {
+      const n = stepsOf(p.radius, B);
+      b.arc(p.from, p.radius, p.to, p.radius, 0, 1, 0, all, n, c);
+      b.arc(p.to, p.radius, p.to, 0, 1, 0, 0, all, n, c);
+      b.arc(p.from, 0, p.from, p.radius, -1, 0, 0, all, n, c);
+    }
+    if (p.offset) for (let k = base; k < b.pos.length; k += 3) { b.pos[k] += p.offset[0]; b.pos[k + 1] += p.offset[1]; }
   }
-  shipAxisShape(b);
-  if (s.plumeLength <= 0) return { body: b.build(), plume: null };
-  const plume = new ShapeBuilder(32, false);
+  // The round parts were built around the builder's z: turn them (and the boxes, built in its axes) onto the ship's.
+  shipAxisShape(body);
+  shipAxisShape(lamps);
+  const lit = lamps.pos.length > 0 ? lamps.build() : null;
+  if (s.plumeLength <= 0) return { body: body.build(), lamps: lit, plume: null };
+  const plume = new ShapeBuilder(AROUND, false);
   plume.band(0, s.nozzle, -s.plumeLength, s.plumeRadius, 0, 1);
   shipAxisShape(plume);
-  return { body: b.build(), plume: plume.build() };
+  return { body: body.build(), lamps: lit, plume: plume.build() };
 }
 
 /** The body's albedo as the exposure meter sees it: the pale crew section and tanks outweigh the dark radiators. */
@@ -87,9 +110,10 @@ export function shipAxes(forward: Vec3, up: Vec3): Mat3 {
   return [x[0], y[0], z[0], x[1], y[1], z[1], x[2], y[2], z[2]];
 }
 
-/** A ship's meshes: its body and, for a torch, its plume. */
+/** A ship's meshes: its body, its lit windows (if it has any) and, for a torch, its plume. */
 export class ShipMeshes {
   readonly body: Mesh;
+  readonly lamps: Mesh | null;
   readonly plume: Mesh | null;
   private readonly flame: FlameUniforms;
 
@@ -98,17 +122,27 @@ export class ShipMeshes {
     this.flame = { flame: new Vector4(shape.plumeLength, 0, shape.nozzle, 0) };
     this.body = new Mesh(g.body, bodyMaterial);
     this.body.name = name;
+    this.lamps = g.lamps ? new Mesh(g.lamps, LAMP.material) : null;
+    if (this.lamps) this.lamps.name = `${name} windows`;
     this.plume = g.plume ? new Mesh(g.plume, FLAME.material) : null;
     if (this.plume) { this.plume.name = `${name} plume`; this.plume.userData.flame = this.flame; }
     for (const m of this.meshes) { m.matrixAutoUpdate = false; m.frustumCulled = false; }
+    this.bytes = this.meshes.reduce((n, m) => n + Object.values(m.geometry.attributes).reduce((k, a) => k + a.array.byteLength, 0) + (m.geometry.index?.array.byteLength ?? 0), 0);
   }
 
-  get meshes(): Mesh[] { return this.plume ? [this.body, this.plume] : [this.body]; }
+  get meshes(): Mesh[] { return [this.body, this.lamps, this.plume].filter((m): m is Mesh => m !== null); }
 
-  /** Into the scene, hidden until posed (the Stage still builds their shaders under its cap). */
-  async addTo(stage: Stage): Promise<void> {
+  /** The bytes its geometry holds on the GPU (and on the CPU too, until `addTo` lets go of them). */
+  readonly bytes: number;
+
+  /**
+   * Into the scene, hidden until posed (the Stage still builds their shaders under its cap). With `drop`, the CPU copy
+   * of its geometry goes once the GPU holds it (`dropUploaded`): for a ship whose geometry nothing reads again.
+   */
+  async addTo(stage: Stage, drop = false): Promise<void> {
     for (const m of this.meshes) m.visible = false;
     await Promise.all(this.meshes.map((m) => stage.add(m)));
+    if (drop) for (const m of this.meshes) dropUploaded(m, stage.renderer);
   }
 
   removeFrom(stage: Stage): void {
@@ -120,6 +154,7 @@ export class ShipMeshes {
     for (const m of this.meshes) setPose(m, axes, at);
     this.flame.flame.y = throttle;
     this.body.visible = true;
+    if (this.lamps) this.lamps.visible = true;
     if (this.plume) this.plume.visible = throttle > 0;
   }
 
