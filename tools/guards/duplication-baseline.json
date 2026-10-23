@@ -652,10 +652,6 @@
     "reason": "The views' own interface (bytes, info, dispose), which InteriorView and the memory watchdog call on each of them; GlassDeck (render/glassDeck.ts) is one more such view, holding the glass deck's atlas."
   },
   {
-    "key": "same name: solarpolis/render/capsules.ts#info + solarpolis/render/traffic.ts#info",
-    "reason": "The views' own interface (bytes, info, dispose), which InteriorView and the memory watchdog call on each of them; GlassDeck (render/glassDeck.ts) is one more such view, holding the glass deck's atlas."
-  },
-  {
     "key": "same name: solarpolis/render/homes.ts#bytes + solarpolis/render/specks.ts#bytes",
     "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; each view does its own work in each."
   },
