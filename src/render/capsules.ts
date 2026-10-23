@@ -187,6 +187,14 @@ export class CapsuleView {
     if (this.phase === 'waiting' || this.phase === 'parked') { this.phase = 'parked'; this.wait = LINGER; }
   }
 
+  /** A spot on the ground a few steps out from the waiting pod's door (world), or null when none is waiting. */
+  besideDoor(steps = 3): Vec3 | null {
+    const p = this.podAt();
+    if (!p || (this.phase !== 'waiting' && this.phase !== 'parked')) return null;
+    const out = this.layout.door.outside;
+    return outOfPlace(p, [out[0], out[1] - steps * handrailOf(this.habitat), 0]);
+  }
+
   /** Get in, from where the player's feet are (world): the body walks round to the door. False when too far or not here. */
   board(feet: Vec3): boolean {
     const p = this.podAt();
@@ -236,7 +244,7 @@ export class CapsuleView {
     this.alight();
   }
 
-  /** The player was taken away (a jump elsewhere): the pod, empty, goes. */
+  /** The player was taken out of it (a jump elsewhere while aboard): the pod, empty, goes. */
   letGo(): void {
     if (this.phase === 'idle') return;
     this.ask();
@@ -360,7 +368,7 @@ export class CapsuleView {
     const f = this.flight, d = this.destination;
     const ride = f && (this.phase === 'coming' || this.phase === 'riding' || this.phase === 'leaving')
       ? `, ${(f.length / 1000).toFixed(2)} km in ${f.seconds.toFixed(0)} s, ${this.elapsed.toFixed(0)} s gone, nearest the axis ${(f.nearest).toFixed(0)} m, at most ${(f.heaviest / 9.81).toFixed(2)} g` : '';
-    return `capsule: ${this.phase}${d ? ` to ${d.title}` : ''}${ride}${this.drawn ? '' : ' (not built yet)'}`;
+    return `capsule: ${this.phase}${d ? ` to ${d.title}` : ''}${ride}${this.drawn ? `, ${(this.bytes() / 1e6).toFixed(2)} MB` : ' (not built yet)'}`;
   }
 
   dispose(): void {

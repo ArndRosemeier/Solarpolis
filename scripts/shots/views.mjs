@@ -69,6 +69,22 @@ async function logPeople(page) {
     for (const e of run) if (e.kind === 'node-sync') console.warn(`drawn uncompiled: "${e.what}" (${e.ms.toFixed(0)} ms)`);
   });
 }
+/**
+ * Wait until the debug menu's capsule line says `phase` (render/capsules.ts `info`), reading it every 2 s for at most
+ * `ms`; logs the line it ends on as a console warning (report.json).
+ */
+const capsulePhase = (phase, ms = 120000) => ({ run: async (page) => {
+  let line = '(no capsule line)';
+  for (let waited = 0; waited <= ms; waited += 2000) {
+    await page.keyboard.press('Control+Shift+F12');
+    const text = await page.locator('.dbg-panel .dbg-info').innerText({ timeout: 3000 }).catch(() => '');
+    await page.locator('.dbg-panel .dbg-close').click().catch(() => {});
+    line = text.split('\n').find((l) => l.startsWith('capsule')) ?? line;
+    if (line.startsWith(`capsule: ${phase}`)) break;
+    await page.waitForTimeout(2000);
+  }
+  await page.evaluate((l) => console.warn(l), line);
+} });
 /** Walk ahead (W) for `steps` stretches of `ms`, a picture after each (`-w1`, `-w2`, ...), then log the plant LOD line. */
 const walk = (steps, ms) => [...Array.from({ length: steps }, (_, i) => [{ key: 'KeyW', hold: ms }, { shot: `w${i + 1}` }]).flat(), { run: logPlantLod }];
 /** Press keys and keep them down across the next steps (running while a picture is taken), and let them go. */
@@ -244,12 +260,13 @@ export const views = {
   // The capsules (gen/capsules.ts, world/capFlight.ts, render/capsules.ts): one called to here comes in and sets down,
   // the body walks round to its door and sits, the ride to the nearest court climbs, crosses and sets down, and the body
   // gets out. Times are generous: the line logged after each picture says the phase it was in.
-  capsule: { query: 'view=inside', about: 'a capsule called to here coming in (-coming), set down with its door open (-waiting), the body walking round to it and getting in (-boarding, -seated), the ride to the nearest court from behind (-climb, -cruise) and from the seat (-eyes), coming down (-landing), stepping out (-out); logs the capsule line after each; a heap snapshot', settle: 6000, steps: [
-    { wheel: 600 }, { debug: 'Capsule: call one here' }, { wait: 15000 }, { shot: 'coming' }, { run: logPeople }, { wait: 30000 }, { shot: 'waiting' }, { run: logPeople },
-    { debug: 'Capsule: get in' }, { wait: 3000 }, { shot: 'boarding' }, { wait: 8000 }, { shot: 'seated' }, { run: logPeople },
-    { debug: 'Capsule: ride to the nearest court' }, { wait: 12000 }, { shot: 'climb' }, { run: logPeople }, { wait: 14000 }, { shot: 'cruise' },
-    { wheel: -1500 }, { wait: 1500 }, { look: [200, 60] }, { wait: 1000 }, { shot: 'eyes' }, { wheel: 600 }, { run: logPeople },
-    { wait: 40000 }, { shot: 'landing' }, { run: logPeople }, { debug: 'Capsule: get out' }, { wait: 6000 }, { shot: 'out' }, { run: logPeople }, heap('capsule'),
+  capsule: { query: 'view=inside', about: 'a capsule called to here coming in (-coming), set down with its door open (-waiting), the body walking round to it and getting in (-boarding, -seated), the ride to the nearest court from behind (-climb, -cruise) and from the seat (-eyes), set down at the court, the door opening (-landing), stepped out (-out); waits on each phase and logs the capsule line (its MB) at each; a heap snapshot', settle: 6000, steps: [
+    memoryDetails, { wheel: 600 }, { debug: 'Capsule: call one here' }, { wait: 15000 }, { shot: 'coming' }, capsulePhase('waiting'), { wait: 2000 }, { shot: 'waiting-far' },
+    { debug: 'Capsule: walk up to it' }, { wait: 6000 }, { shot: 'waiting' },
+    { debug: 'Capsule: get in' }, { wait: 3000 }, { shot: 'boarding' }, capsulePhase('seated', 30000), { wait: 1500 }, { shot: 'seated' },
+    { debug: 'Capsule: ride to the nearest court' }, capsulePhase('riding', 30000), { wait: 10000 }, { shot: 'climb' }, { wait: 14000 }, { shot: 'cruise' },
+    { wheel: -1500 }, { wait: 1500 }, { look: [200, 60] }, { wait: 1000 }, { shot: 'eyes' }, { wheel: 600 },
+    capsulePhase('alighting', 240000), { shot: 'landing' }, capsulePhase('parked', 30000), { wait: 1500 }, { shot: 'out' }, { run: logPeople }, heap('capsule'),
   ] },
   boats: { query: 'view=inside', about: 'the boats, four hours into the day: riding beside the nearest skiff, foiling trimaran and glass-roofed catamaran in turn (each under sail if one is out; -2 four seconds on), then off the beam of the nearest boat under sail (-sailing), then the great lake from off its end (-lake); a heap snapshot at the end; logs the boats line', settle: 6000, steps: [
     memoryDetails, { debug: 'Two hours later' }, { debug: 'Two hours later' }, { wait: 4000 },

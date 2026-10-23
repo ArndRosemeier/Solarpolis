@@ -1012,7 +1012,8 @@ export class InteriorView {
 
   private stand(theta: number, s: number, heading?: number): void {
     if (this.cabin) this.cabin.ride = null;
-    this.caps?.letGo();
+    // Taken out of a capsule one is in, it leaves empty; one waiting or on its way stays for the player to come back to.
+    if (this.caps?.carrying) this.caps.letGo();
     this.flyer = null;
     this.physics?.removeCharacter();
     this.character = null;
@@ -1132,6 +1133,11 @@ export class InteriorView {
     this.camera.updateMatrixWorld();
     const d = new Vector3((2 * x) / (this.canvas.clientWidth || 1) - 1, 1 - (2 * y) / (this.canvas.clientHeight || 1), 0.5).unproject(this.camera).normalize();
     return caps.hit(this.current().eye, [d.x, d.y, d.z], CAPSULE_SEEN);
+  }
+
+  /** A spot `steps` handrails out from the waiting capsule's door step (world), or null: the debug menu stands the player there. */
+  besideCapsule(steps = 3): Vec3 | null {
+    return this.caps?.besideDoor(steps) ?? null;
   }
 
   /** Get into the waiting capsule: the body walks round to its door from where it stands (too far, the capsule says so). */
