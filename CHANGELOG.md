@@ -2,6 +2,12 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.155 — Residents dress in the Commonwear of 3026
+
+- Most people now wear the clothes of their own time from the new Actors wardrobe: the everyday wrap with transit trousers, the aurora mantle with a halo, or the living canvas. The rest still like an older cut.
+- Accessories (conversation cuffs, keepsake belts, habitat gaiters, mantles, halos) are mixed per person, so no two outfits are quite alike.
+- Screen fabrics glow in each wearer's own colour and their aurora slowly moves; people farther off keep the same colours.
+
 ## v0.154 — The port lights up as you come in
 
 - The habitat's outline now blinks with red obstruction lights all round its radiator rims, flashing together.
