@@ -38,6 +38,7 @@ import { humanCatalog } from './actors/pack';
 import { Residents, type Dress } from './actors/residents';
 import { drawSpecks, ownSpecks, pxPerMetre, roomForSpecks, type OwnSpecks } from './specks';
 import { ActivityProps, type PropPerson } from './activityProps';
+import { personNamed, type Nameable } from '../link';
 import { tossAt, TOSS } from '../sim/props';
 import { HEARD_WITHIN, type Source, type Tool } from '../sim/sources';
 import HumanWorker from '@actors/human/worker?worker';
@@ -478,6 +479,18 @@ export class PeopleView {
       const p = one.person;
       if (!one.placed || p.moving || p.act !== 'talk' || p.size < 2) continue;
       out.push({ person: p, resident: one.resident, feet: one.resident.body === 'drone' ? null : one.feet, up: one.up, height: one.dress?.height ?? MEAN_HEIGHT, deck: one.deck });
+    }
+  }
+
+  /**
+   * Everyone placed here on foot, as the neural link names them (names on hover, src/link/names.ts): a ball round their
+   * body and what they choose to show. Drone bodies are the drones' view's.
+   */
+  nameables(out: Nameable[]): void {
+    for (const one of this.people.values()) {
+      if (!one.placed || one.resident.body === 'drone') continue;
+      const tall = one.dress?.height ?? MEAN_HEIGHT, f = one.feet, u = one.up;
+      out.push({ key: `person-${one.resident.id}`, at: [f[0] + u[0] * tall * 0.5, f[1] + u[1] * tall * 0.5, f[2] + u[2] * tall * 0.5], radius: tall * 0.3, ...personNamed(this.habitat, one.resident.id) });
     }
   }
 

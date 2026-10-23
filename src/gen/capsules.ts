@@ -17,7 +17,7 @@ import { keptClear, landmarkTopAt, landmarksOf } from './landmarks';
 import { centreOf, liftStairOf, rampOf } from './liftStair';
 import { handrailOf } from './lifts';
 import { FINISH } from './pavilion';
-import { COURT, entrancesOf, planOf, siteOf } from './plan';
+import { COURT, entrancesOf, planOf, siteOf, type Plan, type Site } from './plan';
 import { Shape, floorAt, type Place, type RGB } from './shapes';
 import { kept } from './kept';
 import type { Terrain } from './terrain';
@@ -332,10 +332,24 @@ export interface CapDestination {
   around: number;
 }
 
-/** How each district style's commons are named in the list of destinations. */
-const STYLE_NAMES: Readonly<Record<string, string>> = {
+/** How each district style's commons are named (the capsules' destinations, the link's names on hover). */
+export const STYLE_NAMES: Readonly<Record<string, string>> = {
   orchard: 'orchards', water: 'water gardens', stone: 'stone works', grove: 'groves', herd: 'pastures', play: 'playing fields', makers: "makers' commons", 'let-go': 'let-go land',
 };
+
+/** How a site's district's commons are named ('orchards'), or null for a site in none. */
+export function styleWords(plan: Plan, site: Site): string | null {
+  const style = plan.districts[site.district]?.style;
+  return style ? STYLE_NAMES[style] ?? style : null;
+}
+
+/** How far an entrance court reaches from its middle: its pit and the clear ring round it (m; gen/terrain.ts digs them). */
+export function courtReach(t: Terrain, site: Site): number {
+  return (t.courtAt(site.theta, site.s)?.court.radius ?? site.size) + COURT.clear * handrailOf(t.habitat);
+}
+
+/** How each kind of sailing water is named. */
+export const WATER_NAMES = { ring: 'ring lake', great: 'great lake', mere: 'lake' } as const;
 
 /**
  * The places of a habitat one can ride a capsule to (made once a terrain is; the capsule sets down on open ground near
@@ -363,12 +377,11 @@ export function capDestinations(t: Terrain): CapDestination[] {
   const grove = siteOf(plan, 'founders-grove');
   if (grove) list('grove', "Founders' grove", 'Landmarks', grove.theta, grove.s);
   entrancesOf(plan).forEach((site, i) => {
-    const style = plan.districts[site.district]?.style;
+    const style = styleWords(plan, site);
     // Beyond its pit and the clear ring round it (gen/terrain.ts digs them).
-    const pit = t.courtAt(site.theta, site.s)?.court.radius ?? site.size;
-    list(`court-${i}`, `Court ${i + 1}${style ? `, ${STYLE_NAMES[style] ?? style}` : ''}`, 'Courts', site.theta, site.s, pit + COURT.clear * hr + 0.5 * hr);
+    list(`court-${i}`, `Court ${i + 1}${style ? `, ${style}` : ''}`, 'Courts', site.theta, site.s, courtReach(t, site) + 0.5 * hr);
   });
-  const fleet = fleetOf(h), kinds = { ring: 'ring lake', great: 'great lake', mere: 'lake' } as const;
+  const fleet = fleetOf(h), kinds = WATER_NAMES;
   fleet.harbours.forEach((hb, i) => {
     const shore = floorAt(h, hb.frame, -(HARBOUR.landing + 3) * hb.handrail, 0), basin = fleet.basins[hb.basin];
     list(`harbour-${i}`, `Harbour ${i + 1}, ${basin ? kinds[basin.kind] : 'water'}`, 'Harbours', shore.theta, shore.s);

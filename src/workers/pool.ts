@@ -2,7 +2,7 @@
  * The one worker pool (guarded: nothing else creates a worker). Generation runs here, off the main thread: a job is
  * a message to `gen.worker.ts`, and its answer comes back with its buffers transferred, not copied.
  *
- * Jobs are handed out in the order asked, to whichever worker is free. A job can be dropped while it waits (the view
+ * Jobs are handed out in the order asked (one asked `soon` goes first), to whichever worker is free. A job can be dropped while it waits (the view
  * moved on and no longer needs it).
  */
 import type { GenRequest, GenAnswer } from './gen.worker';
@@ -34,9 +34,11 @@ export class WorkerPool {
   /** Jobs waiting for a worker. */
   get queued(): number { return this.queue.length; }
 
-  job(request: GenRequest): Promise<GenAnswer> {
+  /** Ask for a job; `soon`: before every job waiting (something the player is waiting on now, like a name on hover). */
+  job(request: GenRequest, soon = false): Promise<GenAnswer> {
     return new Promise((resolve, reject) => {
-      this.queue.push({ id: this.next++, request, resolve, reject });
+      const p = { id: this.next++, request, resolve, reject };
+      if (soon) this.queue.unshift(p); else this.queue.push(p);
       this.pump();
     });
   }
