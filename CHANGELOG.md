@@ -2,6 +2,16 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.124 — Legs stay visible through sheer stockings
+
+- Sheer stockings and fishnets now keep the skin underneath. Residents wearing them no longer have transparent, speckled legs.
+
+## v0.123 — Balls, workshop tools, and waterfalls with depth
+
+- Catch partners share a visible ball, with throws timed to its flight.
+- People sawing or chopping wood now hold tools and have timber on a workbench or chopping block.
+- Steep waterfalls have thick streams and moving spray, so the water has depth when seen from the side.
+
 ## v0.122 — Neighbours downstairs, and a way back up
 
 - Residents now walk from lived-in homes to shared halls and lift approaches, pause and return. They keep their existing identities, bodies and looks.
