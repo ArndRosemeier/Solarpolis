@@ -21,6 +21,7 @@ import { landmarksOf } from '../gen/landmarks';
 import type { Terrain } from '../gen/terrain';
 import { BIRD_KINDS } from '../gen/birds';
 import { chorusAt, lightAt, songsIn, LIGHT_LAG, type Nest } from './birds';
+import { flockCallsIn, type Flock } from './flocks';
 import { crownsOf } from './fauna';
 import { floorGap } from './walks';
 import type { Source } from './sources';
@@ -41,7 +42,7 @@ export type Bed = (typeof BEDS)[number];
 export const STEP_SURFACES = ['grass', 'litter', 'gravel', 'stone', 'timber', 'snow', 'water', 'floor'] as const;
 export type StepSurface = (typeof STEP_SURFACES)[number];
 
-/** The single calls (files `call/<name>`): the woods' birds, the meadow's lark, the owl at night. */
+/** The single calls (files `call/<name>`): the woods' birds, the meadow's lark, the owl at night, the swallows and swifts. */
 export const CALLS = BIRD_KINDS;
 export type CallKind = (typeof CALLS)[number];
 
@@ -80,8 +81,9 @@ export interface Hearing {
   sources: Source[];
   /** Riding a lift: whose (its court), how far along the ride (0 … 1), and whether it moves yet. */
   lift: { court: number; share: number; moving: boolean } | null;
-  /** The birds round the listener (the view's; their songs are the calls). */
+  /** The birds round the listener (the view's; their songs are the calls), and the flocks (swallows' and swifts' calls). */
   birds: readonly Nest[];
+  flocks: readonly Flock[];
 }
 
 export interface Soundscape {
@@ -277,13 +279,15 @@ export const CALLS_REACH = 150;
 /**
  * The single calls that start between clock times t0 and t1 round a listener: the songs of the birds near it
  * (`nests`, those the view keeps; sim/birds.ts `songsIn`), each from the bird's head as it sings on its post or in
- * the air. The same birds and times always give the same calls, whoever asks.
+ * the air, and the calls of the flocks' swallows and swifts flying near (`flocks`; sim/flocks.ts `flockCallsIn`). The
+ * same birds and times always give the same calls, whoever asks.
  */
-export function callsIn(e: Ecology, nests: readonly Nest[], t0: number, t1: number, l: Listener): Call[] {
+export function callsIn(e: Ecology, nests: readonly Nest[], t0: number, t1: number, l: Listener, flocks: readonly Flock[] = []): Call[] {
   const out: Call[] = [];
   if (l.below || t1 <= t0) return out;
   const t = e.terrain, r = Math.max(1, t.habitat.profile.at(l.s).r);
   for (const n of nests) if (floorGap(r, l.theta, l.s, n.theta, n.s) <= CALLS_REACH) out.push(...songsIn(t, n, t0, t1));
+  if (flocks.length) out.push(...flockCallsIn(t, flocks, t0, t1, toWorld(t.habitat.profile, l), CALLS_REACH));
   return out.sort(byTime);
 }
 

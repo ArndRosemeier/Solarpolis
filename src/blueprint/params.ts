@@ -324,6 +324,16 @@ export interface Birds {
   larks: number;
   /** Tawny owls per km² of woods. */
   owls: number;
+  /**
+   * The birds of the air, each flock a pure function of the seed and the clock too: barn swallows nesting under each
+   * arch and timber bridge (how many to a bridge), hawking low over the river and the meadows round it; swifts nesting
+   * in the walls of the Lift Stair (how many), feeding high over the floor by day, screaming round the stair at dusk
+   * and sleeping on the wing near the axis; starlings roosting in the woods by each lake (how many to a roost), out
+   * feeding in parties by day and gathering over the water at dusk in a murmuration before they drop in to roost.
+   */
+  swallows: number;
+  swifts: number;
+  starlings: number;
 }
 
 /**
