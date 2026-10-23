@@ -37,6 +37,8 @@ export interface BodyState {
   radius: number;
 }
 
+export interface FurnitureBody { centre: Vec3; size: Vec3; rotation: [number, number, number, number] }
+
 /** A ball's drag area over its mass (m²/kg): Cd · π r² over its mass at `density` (kg/m³). */
 export function ballDrag(radius: number, density: number): number {
   return (BALL_DRAG * Math.PI * radius * radius) / (density * (4 / 3) * Math.PI * radius ** 3);
@@ -55,6 +57,7 @@ export class PhysicsWorld {
   private next = 1;
   private carry = 0;
   private character: Character | null = null;
+  private furniture: RAPIER_NS.Collider[] = [];
 
   private constructor(private readonly R: Rapier, private habitat: Habitat) {
     this.world = new R.World({ x: 0, y: 0, z: 0 });
@@ -88,6 +91,10 @@ export class PhysicsWorld {
       const t = body.translation();
       body.setTranslation({ x: t.x + shift[0], y: t.y + shift[1], z: t.z + shift[2] }, true);
     }
+    for (const collider of this.furniture) {
+      const t = collider.translation();
+      collider.setTranslation({ x: t.x + shift[0], y: t.y + shift[1], z: t.z + shift[2] });
+    }
     this.origin = [...patch.origin];
     this.patch = patch;
     this.ground = this.world.createCollider(this.R.ColliderDesc.trimesh(patch.positions, patch.index, this.R.TriMeshFlags.FIX_INTERNAL_EDGES).setFriction(0.8).setRestitution(0.3));
@@ -97,6 +104,18 @@ export class PhysicsWorld {
 
   /** Trunk pieces in the bubble (debug menu). */
   get trunkCount(): number { return this.trunks?.numColliders() ?? 0; }
+
+  /** The current room's moving fittings; world coordinates, resized with the actual rendered surfaces. */
+  setFurniture(parts: readonly FurnitureBody[]): void {
+    while (this.furniture.length > parts.length) this.world.removeCollider(this.furniture.pop()!, false);
+    while (this.furniture.length < parts.length) this.furniture.push(this.world.createCollider(this.R.ColliderDesc.cuboid(0.5, 0.5, 0.5).setFriction(0.8)));
+    parts.forEach((p, i) => {
+      const c = this.furniture[i], q = p.rotation;
+      c.setHalfExtents({ x: p.size[0] / 2, y: p.size[1] / 2, z: p.size[2] / 2 });
+      c.setTranslation({ x: p.centre[0] - this.origin[0], y: p.centre[1] - this.origin[1], z: p.centre[2] - this.origin[2] });
+      c.setRotation({ x: q[0], y: q[1], z: q[2], w: q[3] });
+    });
+  }
 
   /** Stand the patch's trunks (capsules relative to its origin, gen/trunks.ts) in the bubble, in place of the last patch's. */
   private standTrunks(pieces: Float32Array): void {

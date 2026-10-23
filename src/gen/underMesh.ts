@@ -26,7 +26,7 @@ import { fromWorld, toWorld, wrapAngle, type Habitat } from '../blueprint';
 import { kept, keptEach } from './kept';
 import { wantedCells, type Grid, type TileKey, type WantedTile } from './detailTree';
 import { FINISH } from './pavilion';
-import { Shape, bendInto, outOfPlace, placeAt, type FloorFrame, type MappedArrays, type Place, type RGB } from './shapes';
+import { Shape, bendInto, inFloorFrame, outOfPlace, placeAt, type FloorFrame, type MappedArrays, type Place, type RGB } from './shapes';
 import type { Terrain } from './terrain';
 import { levelsOf, type Levels, type UnderLevels } from './underLevels';
 import { courtLayoutOf, lightWellOf } from './courts';
@@ -549,7 +549,7 @@ function baysOf(u: Under, key: TileKey): { i: number; j: number }[] {
 }
 
 /** The frame a bay is built in: its first corner on the profile, x along the axis, y around. */
-const bayFrame = (u: Under, i: number, j: number): FloorFrame => ({ theta: i * u.dTheta, s: u.s0 + j * u.bay, height: 0, heading: 0 });
+export const bayFrame = (u: Under, i: number, j: number): FloorFrame => ({ theta: i * u.dTheta, s: u.s0 + j * u.bay, height: 0, heading: 0 });
 
 /** The tile of the Understorey at a key, at the detail for its size (or `detail`, to compare the levels). */
 export function buildUnderTile(t: Terrain, key: TileKey, detail: UnderDetail = underDetailOf(key)): UnderTile {
@@ -725,3 +725,12 @@ export function underSolid(t: Terrain, origin: Vec3, size: number): { positions:
 
 /** Where something standing below at (θ, s) rests: the Understorey's floor there (height over the profile). */
 export const underFloorAt = (t: Terrain, theta: number, s: number): number => levelsOf(t).levelAt(theta, s).floor;
+
+/** Spawn/land on a home's plinth when inside its footprint, rather than under its floor slab. */
+export function underStandAt(t: Terrain, theta: number, s: number): number {
+  const floor = underFloorAt(t, theta, s), u = underOf(t.habitat), bay = u.bayAt(theta, s);
+  if (!bay || u.useAt(bay.i, bay.j) !== 'home') return floor;
+  const [x, y] = inFloorFrame(t.habitat, bayFrame(u, bay.i, bay.j), theta, s);
+  const house = underHousesIn(t, bay.i, bay.j).houses.find(({ body: b }) => x > b.x0 && x < b.x1 && y > b.y0 && y < b.y1);
+  return house ? Math.max(floor, house.base) : floor;
+}

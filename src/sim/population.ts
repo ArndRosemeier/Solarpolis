@@ -63,6 +63,10 @@ export interface Resident {
 export interface Person {
   /** In the living layer; the same resident and body as on the land. */
   below?: boolean;
+  /** The inhabited room floor, when inside a home. */
+  interiorFloor?: number;
+  /** A shared domestic gathering, independent of each resident's persistent rendering key. */
+  gathering?: number;
   resident: number;
   theta: number;
   s: number;
@@ -632,9 +636,9 @@ const TURN_TALK = 4;
  * Who in someone's party is speaking at clock time t (their `member`), or −1 for a party of one: turns of 4 to 8 s,
  * passed round at the toss of the party's own coin, so everyone in it agrees. Pure.
  */
-export function talkerAt(p: Pick<Person, 'court' | 'outing' | 'member' | 'size'>, t: number): number {
+export function talkerAt(p: Pick<Person, 'court' | 'outing' | 'member' | 'size' | 'gathering'>, t: number): number {
   if (p.size < 2) return -1;
-  const party = personKey({ court: p.court, outing: p.outing - p.member }) | 0;
+  const party = p.gathering ?? (personKey({ court: p.court, outing: p.outing - p.member }) | 0);
   // Turns in steps of TURN_TALK s; a step continues the last turn half the time, so turns run from one step to many.
   const step = Math.floor(t / TURN_TALK);
   let k = step;

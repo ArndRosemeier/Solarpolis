@@ -40,8 +40,8 @@
     "reason": "Profile radius with a singularity guard is the same coordinate conversion idiom in water geometry and moving agents, not duplicated behaviour."
   },
   {
-    "key": "idiom: [.bayAt .s .theta] in solarpolis/gen/lifts.ts + solarpolis/main.ts + solarpolis/render/view.ts",
-    "reason": "All three callers use the shared Bays.bayAt seam: lift lookup, debug placement and the current view. Their surrounding behavior differs; no duplicate coordinate conversion."
+    "key": "idiom: [.bayAt .s .theta] in solarpolis/gen/lifts.ts + solarpolis/main.ts + solarpolis/render/homes.ts + solarpolis/render/view.ts",
+    "reason": "All callers use the shared underOf bay lookup; the same coordinate fields are not a duplicate algorithm."
   },
   {
     "key": "idiom: [.cache .clear] in solarpolis/render/hullDetail.ts + solarpolis/render/plants.ts + solarpolis/render/terrain.ts + solarpolis/render/tiled.ts",
@@ -102,6 +102,10 @@
   {
     "key": "idiom: [.start Promise] in solarpolis/render/animals.ts + solarpolis/render/fliers.ts + solarpolis/render/people.ts",
     "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; each view does its own work in each."
+  },
+  {
+    "key": "idiom: [.x0 .x1 .y0] in solarpolis/gen/hallMesh.ts + solarpolis/gen/homeInterior.ts + solarpolis/gen/homes.ts",
+    "reason": "Rectangle extents shared by independent house layout, hall construction and interior fitting plans."
   },
   {
     "key": "idiom: [Map WeakMap] in solarpolis/gen/kept.ts + solarpolis/sim/neighbourhood.ts + solarpolis/sim/population.ts",
@@ -212,6 +216,10 @@
     "reason": "The Actors figure and animator are ported from Dunfinity with their method names, which follow Actors' own Character API (load, update, stop, dispose); the plan moves the animator into Actors, and keeping the names keeps that swap a drop-in."
   },
   {
+    "key": "same name: solarpolis/physics/world.ts#dispose + solarpolis/render/homes.ts#dispose",
+    "reason": "Independent owner lifecycle and byte reporting; adaptive furnishings own their bounded instance pool and nearby layout state."
+  },
+  {
     "key": "same name: solarpolis/physics/world.ts#dispose + solarpolis/render/hullDetail.ts#dispose",
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
@@ -258,6 +266,10 @@
   {
     "key": "same name: solarpolis/render/activityProps.ts#dispose + solarpolis/render/fliers.ts#dispose",
     "reason": "ActivityProps owns its small mesh pool; standard prepare, dispose and bytes lifecycle methods operate on different resources. Disposal uses the shared freeMesh seam."
+  },
+  {
+    "key": "same name: solarpolis/render/activityProps.ts#dispose + solarpolis/render/homes.ts#dispose",
+    "reason": "Independent owner lifecycle and byte reporting; adaptive furnishings own their bounded instance pool and nearby layout state."
   },
   {
     "key": "same name: solarpolis/render/activityProps.ts#dispose + solarpolis/render/landmarks.ts#dispose",
@@ -342,6 +354,10 @@
   {
     "key": "same name: solarpolis/render/actors/animator.ts#load + solarpolis/render/terrain.ts#load",
     "reason": "The Actors figure and animator are ported from Dunfinity with their method names, which follow Actors' own Character API (load, update, stop, dispose); the plan moves the animator into Actors, and keeping the names keeps that swap a drop-in."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/figure.ts#dispose + solarpolis/render/homes.ts#dispose",
+    "reason": "Independent owner lifecycle and byte reporting; adaptive furnishings own their bounded instance pool and nearby layout state."
   },
   {
     "key": "same name: solarpolis/render/actors/figure.ts#dispose + solarpolis/render/hullDetail.ts#dispose",
@@ -452,6 +468,10 @@
     "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
   },
   {
+    "key": "same name: solarpolis/render/fliers.ts#dispose + solarpolis/render/homes.ts#dispose",
+    "reason": "Independent owner lifecycle and byte reporting; adaptive furnishings own their bounded instance pool and nearby layout state."
+  },
+  {
     "key": "same name: solarpolis/render/fliers.ts#dispose + solarpolis/render/hullDetail.ts#dispose",
     "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
   },
@@ -526,6 +546,42 @@
   {
     "key": "same name: solarpolis/render/glassDeck.ts#info + solarpolis/render/traffic.ts#info",
     "reason": "The views' own interface (bytes, info, dispose), which InteriorView and the memory watchdog call on each of them; GlassDeck (render/glassDeck.ts) is one more such view, holding the glass deck's atlas."
+  },
+  {
+    "key": "same name: solarpolis/render/homes.ts#bytes + solarpolis/render/plants.ts#bytes",
+    "reason": "Independent owner lifecycle and byte reporting; adaptive furnishings own their bounded instance pool and nearby layout state."
+  },
+  {
+    "key": "same name: solarpolis/render/homes.ts#bytes + solarpolis/render/terrain.ts#bytes",
+    "reason": "Independent owner lifecycle and byte reporting; adaptive furnishings own their bounded instance pool and nearby layout state."
+  },
+  {
+    "key": "same name: solarpolis/render/homes.ts#dispose + solarpolis/render/hullDetail.ts#dispose",
+    "reason": "Independent owner lifecycle and byte reporting; adaptive furnishings own their bounded instance pool and nearby layout state."
+  },
+  {
+    "key": "same name: solarpolis/render/homes.ts#dispose + solarpolis/render/landmarks.ts#dispose",
+    "reason": "Independent owner lifecycle and byte reporting; adaptive furnishings own their bounded instance pool and nearby layout state."
+  },
+  {
+    "key": "same name: solarpolis/render/homes.ts#dispose + solarpolis/render/necklace.ts#dispose",
+    "reason": "Independent owner lifecycle and byte reporting; adaptive furnishings own their bounded instance pool and nearby layout state."
+  },
+  {
+    "key": "same name: solarpolis/render/homes.ts#dispose + solarpolis/render/specks.ts#dispose",
+    "reason": "Independent owner lifecycle and byte reporting; adaptive furnishings own their bounded instance pool and nearby layout state."
+  },
+  {
+    "key": "same name: solarpolis/render/homes.ts#dispose + solarpolis/render/tiled.ts#dispose",
+    "reason": "Independent owner lifecycle and byte reporting; adaptive furnishings own their bounded instance pool and nearby layout state."
+  },
+  {
+    "key": "same name: solarpolis/render/homes.ts#dispose + solarpolis/render/traffic.ts#dispose",
+    "reason": "Independent owner lifecycle and byte reporting; adaptive furnishings own their bounded instance pool and nearby layout state."
+  },
+  {
+    "key": "same name: solarpolis/render/homes.ts#shed + solarpolis/render/landmarks.ts#shed",
+    "reason": "Independent owner lifecycle and byte reporting; adaptive furnishings own their bounded instance pool and nearby layout state."
   },
   {
     "key": "same name: solarpolis/render/hullDetail.ts#bytes + solarpolis/render/lift.ts#bytes",
@@ -674,10 +730,6 @@
   {
     "key": "same name: solarpolis/render/landmarks.ts#follow + solarpolis/render/necklace.ts#follow",
     "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
-  },
-  {
-    "key": "same name: solarpolis/render/landmarks.ts#follow + solarpolis/render/people.ts#follow",
-    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
   },
   {
     "key": "same name: solarpolis/render/landmarks.ts#follow + solarpolis/render/plants.ts#follow",
@@ -938,6 +990,10 @@
   {
     "key": "same name: solarpolis/render/tiled.ts#info + solarpolis/render/traffic.ts#info",
     "reason": "info() is a view's lines for the one debug menu (CLAUDE.md rule 14); each reports its own state."
+  },
+  {
+    "key": "same name: solarpolis/sim/neighbourhood.ts#placeOf + solarpolis/sim/population.ts#placeOf",
+    "reason": "Different schedules: neighbourhood home-to-hall paths and indoor activity versus surface outing destinations."
   },
   {
     "key": "same name: solarpolis/space/flyer.ts#speed + solarpolis/world/flyer.ts#speed",

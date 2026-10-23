@@ -25,13 +25,13 @@ for (const { name } of MATRIX) {
       assert.equal(residentOf(h, p.resident).home, m.court);
       assert.equal(personKey(p), personKey(neighbourAt(t, clock, p)!));
       const foot = footingOf(t, p, null, 1.7);
-      if (residentOf(h, p.resident).body !== 'drone') assert.equal(foot.h, underFloorAt(t, p.theta, p.s));
+      if (residentOf(h, p.resident).body !== 'drone') assert.equal(foot.h, p.interiorFloor ?? underFloorAt(t, p.theta, p.s));
       assert.equal(foot.swim, false);
       const bay = u.bayAt(p.theta, p.s)!, centre = u.centreOf(bay.i, bay.j);
       assert.notEqual(u.useAt(bay.i, bay.j), 'cistern');
       const x = p.s - centre.s + u.bay / 2, y = Math.atan2(Math.sin(p.theta - centre.theta), Math.cos(p.theta - centre.theta)) * h.radius + u.dTheta * h.radius / 2;
       const gap = underPlinth(h) + WALK * h.params.landmarks!.handrail;
-      assert.ok(Math.min(x, u.bay - x, y, u.dTheta * h.radius - y) < gap, 'outside the buildings');
+      if (p.interiorFloor === undefined) assert.ok(Math.min(x, u.bay - x, y, u.dTheta * h.radius - y) < gap || u.useAt(bay.i, bay.j) === 'home', 'street or a home approach');
       assert.ok(Math.hypot(Math.min(x, u.bay - x), Math.min(y, u.dTheta * h.radius - y)) > underPlinth(h), 'clear of pillars');
       const next = neighbourAt(t, clock + 0.1, p);
       if (p.moving && next?.moving) {
@@ -40,6 +40,12 @@ for (const { name } of MATRIX) {
       }
     }
     assert.ok(neighbourhoodBytes(t) < 8 * 1024 * 1024);
+    const roomMate = found.find((p) => p.interiorFloor !== undefined && !p.moving && p.member === 1);
+    if (roomMate) {
+      const departure = clock + h.params.life.stay - roomMate.since;
+      const before = neighbourAt(t, departure - 0.01, roomMate)!, after = neighbourAt(t, departure + 0.01, roomMate)!;
+      assert.ok(Math.hypot((after.theta - before.theta) * h.radius, after.s - before.s) < 0.06, 'a second household member walks from their own place instead of snapping to the shared route');
+    }
     shedNeighbourhoods(t);
     assert.equal(neighbourhoodBytes(t), 0);
     if (name === 'small') assert.deepEqual(neighboursAt(t, clock, near), found, 'eviction changes no identities or places');

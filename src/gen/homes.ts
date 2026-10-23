@@ -133,3 +133,6 @@ export function doorToward(u: ReturnType<typeof underOf>, m: Hamlet, i: number):
   const d = ((m.i - i) % u.around + u.around + u.around / 2) % u.around - u.around / 2;
   return d < 0 ? -1 : 1;
 }
+
+/** Shared facade rhythm; the interior passage stays exactly behind the exterior door. */
+export const HOME_RHYTHM = 2.6;

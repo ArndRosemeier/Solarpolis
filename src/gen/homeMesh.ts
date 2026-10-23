@@ -14,7 +14,8 @@
 import { Rng } from '@futuremagic/core';
 import { FINISH } from './pavilion';
 import { shade, type RGB, type Shape } from './shapes';
-import { YARD_WALL, type Build, type House } from './homes';
+import { HOME_RHYTHM, YARD_WALL, type Build, type House } from './homes';
+import { homeInteriorShape } from './homeInterior';
 import { WALL, blockShape, sidesOf, upright, wallRun, type Block, type BuildDetail, type LevelsAt, type Opening } from './building';
 
 /** Each build's colour (linear albedo) and finish; plaster comes in the district's washes. */
@@ -44,7 +45,7 @@ const LIT = 0.7;
 /** Sizes in handrails. */
 const H = {
   /** Window rhythm along a wall, a window's width and height, its sill over the storey's floor. */
-  rhythm: 2.6, window: 1.1, windowHigh: 2.2, sill: 0.9,
+  rhythm: HOME_RHYTHM, window: 1.1, windowHigh: 2.2, sill: 0.9,
   /** The door's width and height. */
   door: 1.2, doorHigh: 2.5,
   /** The yard's gate, the gate's piers and how much higher than the wall they stand, how deep they go in. */
@@ -64,7 +65,7 @@ function blockOf(house: House, hr: number): Block {
         const c = (s.length * (m + 0.5)) / n;
         if (side === doorSide && k === 0 && m === door) {
           const dw = Math.min(H.door * hr, 0.8 * s.length / n);
-          out.push({ u0: c - dw / 2, u1: c + dw / 2, z0: f, z1: f + Math.min(H.doorHigh * hr, house.storey - 0.5 * hr), col: DOOR, finish: FINISH.timber, door: true });
+          out.push({ u0: c - dw / 2, u1: c + dw / 2, z0: f, z1: f + Math.min(H.doorHigh * hr, house.storey - 0.5 * hr), col: DOOR, finish: FINISH.timber, door: true, open: true });
           continue;
         }
         const lit = house.lived && rng.chance(LIT);
@@ -76,7 +77,7 @@ function blockOf(house: House, hr: number): Block {
     }
     return out;
   });
-  return { body: house.body, base: house.base, storeys: house.storeys, storey: house.storey, col, finish, openings };
+  return { body: house.body, base: house.base, storeys: house.storeys, storey: house.storey, col, finish, openings, enterable: true };
 }
 
 /** Its yard's walls round the plot, the gate (`gate`, along x) in the wall on the door's side. */
@@ -101,6 +102,7 @@ function yardWalls(sh: Shape, house: House, hr: number, levelsAt: LevelsAt, col:
 export function houseShape(sh: Shape, house: House, levelsAt: LevelsAt, hr: number, detail: BuildDetail): void {
   const before = sh.finish, block = blockOf(house, hr);
   blockShape(sh, block, levelsAt, hr, detail);
+  homeInteriorShape(sh, house, hr, detail);
   // The yard's walls, the gate in line with the door.
   const door = block.openings[house.door < 0 ? 0 : 1].find((o) => o.door), b = house.body;
   sh.finish = block.finish;
@@ -110,5 +112,5 @@ export function houseShape(sh: Shape, house: House, levelsAt: LevelsAt, hr: numb
 
 /** One house's solid parts into a bay's shape (its frame), for the physics: the house and its plinth, the yard's walls, the steps. */
 export function houseSolid(sh: Shape, house: House, levelsAt: LevelsAt, hr: number): void {
-  houseShape(sh, house, levelsAt, hr, 'far');
+  houseShape(sh, house, levelsAt, hr, 'mid');
 }

@@ -184,3 +184,11 @@ button { font: inherit; color: inherit; }
 .inside.revealing .gm, .inside.revealing .inside-hint { visibility: hidden; }
 
 .arrival-card:not(.arrived) { padding: 24px; background: linear-gradient(90deg, #07191ddd, #07191d88 70%, transparent); border-radius: 4px; }
+
+.home-controls { position: absolute; left: 20px; bottom: 64px; z-index: 7; max-width: calc(100% - 40px); padding: 14px 18px; background: #0d2429ed; border: 1px solid #75959466; border-radius: 12px; color: #e5ece7; backdrop-filter: blur(10px); }
+.home-controls[hidden] { display: none; }
+.home-eyebrow { font-size: 10px; letter-spacing: .18em; color: #9ecfc4; }
+.home-status { font-size: 12px; margin: 6px 0 12px; }
+.home-choices { display: flex; flex-wrap: wrap; gap: 5px; }
+.home-choices button { border: 1px solid #73989066; background: #122e34; color: #cbdfd8; border-radius: 6px; padding: 7px 10px; cursor: pointer; }
+.home-choices button.on { background: #c4dcd1; color: #102e2d; }

@@ -1,3 +1,5 @@
+import { atHomeActivity } from '../sim/neighbourhood';
+import type { HomeMode } from '../gen/homeInterior';
 /**
  * The people up on the land around the player (design "Who is out on the land"; who and where: src/sim). Three levels:
  *
@@ -221,7 +223,7 @@ export class PeopleView {
   }
 
   /** Bring the people up to clock time t (s) around the eye (world), drawn relative to it. `dt`: the frame's (s). */
-  follow(eye: Vec3, t: number, dt: number, below = false): void {
+  follow(eye: Vec3, t: number, dt: number, below = false, intent: { seed: number; mode: HomeMode } | null = null): void {
     if (below !== this.below) {
       for (const key of this.people.keys()) this.letGo(key);
       this.below = below;
@@ -246,8 +248,9 @@ export class PeopleView {
       const d = fresh ? 0 : dist(one.feet, eye);
       const due = fresh || one.figure || d < EVERY_FRAME || (d < HALF_FRAMES ? (k + this.frameNo) % 2 === 0 : (k + this.frameNo) % FAR_SHARE === 0);
       if (due) {
-        const p = this.below ? neighbourAt(this.terrain, t, one.person) : whereIs(h, t, one.person, this.terrain);
+        let p = this.below ? neighbourAt(this.terrain, t, one.person) : whereIs(h, t, one.person, this.terrain);
         if (!p) { gone.push(key); continue; }
+        if (intent && p.gathering === intent.seed && !p.moving) p = atHomeActivity(p, intent.mode);
         const still = !fresh && !p.moving && !one.person.moving && p.theta === one.person.theta && p.s === one.person.s && p.activity === one.person.activity && p.posture === one.person.posture;
         one.person = p;
         if (fresh) timed(() => this.stand(one)); else if (!still) this.stand(one);
@@ -545,7 +548,7 @@ function animOf(p: Person, who: Resident, t: number): AnimState {
 
 /** Whether a pair standing and talking both talk with their hands (half of such pairs; the party's choice, so both make it). */
 export function talksWithHands(p: Person): boolean {
-  return p.act === 'talk' && p.size === 2 && p.posture === POSE.upright && hashToFloat(hash3i(p.court, 43, p.outing - p.member, 0)) < PAIR_TALKS;
+  return !p.below && p.act === 'talk' && p.size === 2 && p.posture === POSE.upright && hashToFloat(hash3i(p.court, 43, p.outing - p.member, 0)) < PAIR_TALKS;
 }
 
 /**

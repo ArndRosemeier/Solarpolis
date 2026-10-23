@@ -35,7 +35,7 @@ export interface Footing {
  * `height` theirs (a swimmer's feet hang that far under the surface; a drone body's own height).
  */
 export function footingOf(terrain: Terrain, p: Person, deck: number | null, height: number): Footing {
-  const surface = p.below ? underFloorAt(terrain, p.theta, p.s) : terrain.standAt(p.theta, p.s), still = p.moving ? POSE.upright : p.posture;
+  const surface = p.below ? p.interiorFloor ?? underFloorAt(terrain, p.theta, p.s) : terrain.standAt(p.theta, p.s), still = p.moving ? POSE.upright : p.posture;
   if (residentOf(terrain.habitat, p.resident).body === 'drone') {
     const under = deck !== null && deck > surface ? deck : surface;
     return { h: under + AT_EYES[still] * MEAN_HEIGHT - height / 2, pose: POSE.upright, swim: false };

@@ -786,6 +786,19 @@ export const VAULT = kind('vault', ['position', 'normal', 'color', 'uv', 'finish
     If(window, () => out.assign(windowPane(pane, room, outside)));
     const water = abs(finish.sub(FINISH.water)).lessThan(0.5), still = vertexColor().rgb.mul(outside).toVar(), clock = below.clock.toVar();
     If(water, () => out.assign(stillWater(pane, still, outside, clock)));
+      // Domestic displays remain attached to the wall: a quiet landscape, visible panel seams and fine status lines.
+      If(abs(finish.sub(FINISH.domestic)).lessThan(0.5), () => {
+        const ridge = sin(pane.x.mul(0.47)).mul(0.23).add(sin(pane.x.mul(1.1).add(clock.mul(0.002))).mul(0.08));
+        const height = fract(pane.y.div(below.screen.y.mul(3.66)));
+        const horizon = smoothstep(ridge.add(0.32), ridge.add(0.34), height);
+        const farRidge = sin(pane.x.mul(0.21).add(2)).mul(0.14).add(0.45);
+        const skyColour = mix(vertexColor().rgb.mul(1.1), vertexColor().rgb.mul(0.6), height);
+        const hills = mix(vertexColor().rgb.mul(0.22), vertexColor().rgb.mul(0.55), smoothstep(farRidge, farRidge.add(0.02), height));
+        const landscape = mix(hills, skyColour, horizon);
+        const status = float(1).sub(smoothstep(0.006, 0.014, abs(height.sub(0.12))));
+        const display = landscape.add(vec3(0.08, 0.2, 0.17).mul(status)).mul(below.lamp).mul(2.2);
+        out.assign(screenSurface(pane, display, outside, below.screen.mul(vec3(1, 1, 0.25))));
+      });
     // A hamlet's sky (only there: the skies are the heaviest part of the kind); its arguments set before the branch
     // (hamletSkies.ts `skyFunction` says why).
     const look = normalize(toward).toVar(), index = finish.sub(FINISH.screen).toVar();

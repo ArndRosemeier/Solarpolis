@@ -1,3 +1,6 @@
+import { HomeControls } from './app/homeControls';
+import { homePlan } from './gen/homeInterior';
+import { underHousesIn, bayFrame } from './gen/underMesh';
 import { neighboursAt } from './sim/neighbourhood';
 import { ExitMarker } from './app/exitMarker';
 import { ArrivalCard } from './app/arrivalCard';
@@ -131,6 +134,9 @@ const insideSlot = new ViewSlot('Hold the right mouse button to look around · W
   const exits = new ExitMarker();
   insideSlot.box.append(exits.box);
   v.onExit = (exit, eye, forward, up) => exits.showExit(exit, eye, forward, up);
+  const room = new HomeControls((mode) => v.arrangeHome(mode));
+  insideSlot.box.append(room.root);
+  v.onRoom = (state) => room.updateRoom(state);
   const welcome = new ArrivalCard(h, () => v.finishArrivalReveal());
   insideSlot.box.append(welcome.root);
   v.onArrival = (progress, nearby) => {
@@ -1001,3 +1007,37 @@ const frame = (t: number): void => {
   requestAnimationFrame(frame);
 };
 requestAnimationFrame(frame);
+
+/** The same home for entry, room and stair verification. */
+function visitAdaptiveHome(where: 'inside' | 'door' | 'stairs'): void {
+  const h = lab.habitat, v = view(), t = v?.ecology?.terrain;
+  if (!h || !v || !t) return;
+  const u = underOf(h), hr = h.params.landmarks?.handrail ?? 1;
+  for (const m of hamletsNear(h, v.walker.at.theta, v.walker.at.s).slice(0, 8)) for (const { i, j } of baysOfHamlet(u, m, 8)) {
+    if (u.useAt(i, j) !== 'home') continue;
+    const house = underHousesIn(t, i, j).houses.find((x) => x.lived && x.storeys > 1);
+    if (!house) continue;
+    const p = homePlan(house, hr), st = p.stair;
+    const at = floorAt(h, bayFrame(u, i, j), where === 'stairs' ? (st.x0 + st.x1) / 2 : p.doorX,
+      where === 'stairs' ? st.y0 - hr * 0.3 : p.doorY - house.door * hr * (where === 'door' ? -0.7 : 1.5));
+    v.goBelow(at.theta, at.s, where === 'stairs' ? -Math.PI / 2 : house.door * Math.PI / 2);
+    if (where !== 'door') v.walker.follow(toWorld(h.profile, { ...at, h: house.base + 0.02 * hr }));
+    v.walker.pitch = where === 'stairs' ? 0.3 : -0.08;
+    return;
+  }
+}
+debug.add({ label: 'Below: inside an adaptive home', group: 'Go', run: () => visitAdaptiveHome('inside') });
+debug.add({ label: 'Below: at an adaptive home doorway', group: 'Go', run: () => visitAdaptiveHome('door') });
+debug.add({ label: 'Below: at an adaptive home stair', group: 'Go', run: () => visitAdaptiveHome('stairs') });
+debug.add({ label: 'Below: beside residents at home', group: 'Go', run: () => {
+  const h = lab.habitat, v = view(), t = v?.ecology?.terrain;
+  if (!h || !v || !t) return;
+  for (const m of hamletsNear(h, v.walker.at.theta, v.walker.at.s).slice(0, 8)) {
+    const p = neighboursAt(t, v.time, { ...m.site, radius: m.edge * h.params.under.bay }).find((x) => x.interiorFloor !== undefined && !x.moving);
+    if (!p) continue;
+    v.goBelow(p.theta, p.s + 2.5, Math.PI);
+    v.walker.follow(toWorld(h.profile, { theta: p.theta, s: p.s + 2.5, h: p.interiorFloor! }));
+    v.walker.pitch = -0.08;
+    return;
+  }
+} });

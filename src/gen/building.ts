@@ -52,6 +52,8 @@ export interface Opening {
   col: RGB;
   finish: number;
   door: boolean;
+  /** An unobstructed passage, with no leaf across it. */
+  open?: boolean;
 }
 
 /** One of a block's four walls: its start, the way it runs, the way it faces, its length. */
@@ -87,6 +89,7 @@ export interface Block {
   col: RGB;
   finish: number;
   openings: readonly (readonly Opening[])[];
+  enterable?: boolean;
 }
 
 /** A point on a side: `u` along it, `out` out from it, at height z. */
@@ -108,6 +111,7 @@ function patch(sh: Shape, s: Side, u0: number, u1: number, z0: number, z1: numbe
  * and bars in the VAULT kind), a door by its plane, as the timber it is.
  */
 function pane(sh: Shape, s: Side, o: Opening, out: number): void {
+  if (o.open) return;
   sh.finish = o.finish;
   if (o.door) { patch(sh, s, o.u0, o.u1, o.z0, o.z1, out, o.col); return; }
   const n: Vec3 = [s.n[0], s.n[1], 0];
@@ -194,7 +198,7 @@ export function blockShape(sh: Shape, block: Block, levelsAt: LevelsAt, hr: numb
   sides.forEach((s, k) => {
     const open = block.openings[k];
     sh.finish = block.finish;
-    if (detail === 'far') {
+    if (detail === 'far' && !block.enterable) {
       patch(sh, s, 0, s.length, base, crown, 0, block.col);
       for (const o of open) pane(sh, s, o, H.proud * hr);
     } else {

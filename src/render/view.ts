@@ -1,3 +1,5 @@
+import { HomesView, type RoomState } from './homes';
+import type { HomeMode } from '../gen/homeInterior';
 /**
  * The view from inside: the one renderer (WebGPU only), the Stage, the terrain tiles and the sunline, seen by a walker
  * on the ground or a flyer in the air. Everything is drawn relative to the eye (`toView`): the camera sits at the origin
@@ -38,7 +40,7 @@ import { cloudClearings, cloudSpan, cloudsAt } from '../world/clouds';
 import { setCloudClearings, setCloudSpan, setCloudState } from './cloudShaders';
 import { LandmarkView } from './landmarks';
 import { TiledView, courtSource, crossingSource, hallSource, stairSource, underSource } from './tiled';
-import { underFloorAt, underHousesIn } from '../gen/underMesh';
+import { underStandAt, underHousesIn } from '../gen/underMesh';
 import { hallAt } from '../gen/halls';
 import { landmarkTopAt, landmarksOf } from '../gen/landmarks';
 import { speckBands } from '../gen/standIn';
@@ -187,10 +189,14 @@ export class InteriorView {
    * height above the profile). The walker, the flyer and the camera keep to it.
    */
   private readonly standOn = (theta: number, s: number): number => {
-    if (this.below) return underFloorAt(this.terrain, theta, s);
+    if (this.below) return underStandAt(this.terrain, theta, s);
     const g = this.terrain.standAt(theta, s), top = landmarkTopAt(this.terrain, theta, s);
     return top !== null && top > g ? top : g;
   };
+
+  private homes: HomesView | null = null;
+  onRoom: ((state: RoomState | null) => void) | null = null;
+  arrangeHome(mode: HomeMode | null): void { this.homes?.choose(mode); }
 
   private constructor(private habitat: Habitat) {
     // Start in the morning: a quarter of the way through the daylight hours.
@@ -256,7 +262,7 @@ export class InteriorView {
 
   /** Bytes of geometry this view holds (memory watchdog). */
   bytes(): number {
-    return (this.tiles?.bytes() ?? 0) + (this.plants?.bytes() ?? 0) + (this.landmarks?.bytes() ?? 0) + (this.stair?.bytes() ?? 0) + (this.courts?.bytes() ?? 0) + (this.crossings?.bytes() ?? 0) + (this.halls?.bytes() ?? 0) + (this.under?.bytes() ?? 0) + (this.cabin?.bytes() ?? 0) + (this.glass?.bytes() ?? 0);
+    return (this.tiles?.bytes() ?? 0) + (this.plants?.bytes() ?? 0) + (this.landmarks?.bytes() ?? 0) + (this.stair?.bytes() ?? 0) + (this.courts?.bytes() ?? 0) + (this.crossings?.bytes() ?? 0) + (this.halls?.bytes() ?? 0) + (this.under?.bytes() ?? 0) + (this.cabin?.bytes() ?? 0) + (this.glass?.bytes() ?? 0) + (this.homes?.bytes() ?? 0);
   }
 
   /** Give memory back (memory watchdog): drop every cached tile and plant cell not on screen. */
@@ -270,6 +276,7 @@ export class InteriorView {
     this.halls?.shed();
     this.under?.shed();
     this.people?.shed();
+    this.homes?.shed();
     this.glass?.dropAtlas();
   }
 
@@ -475,6 +482,7 @@ export class InteriorView {
     if (this.under) { this.scene.remove(this.under.group); this.under.dispose(); }
     if (this.cabin) { this.scene.remove(this.cabin.group); this.cabin.dispose(); }
     this.glass?.dispose();
+    this.homes?.dispose();
     this.people?.dispose();
     this.specks?.dispose();
     this.drones?.dispose();
@@ -519,6 +527,8 @@ export class InteriorView {
     this.scene.add(this.halls.group);
     this.under = new TiledView(underSource(this.terrain), h, this.stage, this.pool);
     this.scene.add(this.under.group);
+    this.homes = new HomesView(this.terrain, this.stage);
+    this.scene.add(this.homes.group);
     this.cabin = new CabinView(this.terrain, this.stage);
     this.scene.add(this.cabin.group);
     this.glass = new GlassDeck(this.renderer, this.scene, this.camera);
@@ -602,7 +612,10 @@ export class InteriorView {
     }
     this.showLand(!this.below);
     below.people.value = this.below ? 1 : 0;
-    this.people?.follow(v.eye, this.time, this.frameDt, this.below);
+    const room = this.homes?.update(v.eye, this.time, this.frameDt, this.below) ?? null;
+    this.onRoom?.(room);
+    this.physics?.setFurniture(this.homes?.bodies ?? []);
+    this.people?.follow(v.eye, this.time, this.frameDt, this.below, this.homes?.intent);
     this.drones?.follow(v.eye, this.time, this.frameDt, this.people?.aloft, this.below);
     this.specks?.follow(this.time, this.frameDt, [...(this.people?.near ?? []), ...(this.drones?.near ?? [])], this.measured);
     for (const a of this.animals) a.follow(v.eye, this.time, this.frameDt);
