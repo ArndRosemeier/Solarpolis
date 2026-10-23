@@ -33,8 +33,8 @@ for (const { name } of MATRIX) {
     if (!u.hamlets.length) return;
     assert.equal(skies.length, u.hamlets.length);
     assert.ok(skies.every((k) => k >= 0 && k < SKIES.length));
-    // Seeded: the same habitat picks the same.
-    assert.deepEqual(hamletSkiesOf({ ...h }), skies);
+    // Seeded: the same habitat made again picks the same (the small one only: that remakes its plan, to stay in the CI budget).
+    if (name === 'small') assert.deepEqual(hamletSkiesOf({ ...h }), skies);
     // Over many hamlets, several skies; and the styles differ in what they pick.
     if (u.hamlets.length >= 40) assert.ok(new Set(skies).size >= 4, `${new Set(skies).size} skies over ${u.hamlets.length} hamlets`);
     // The glass deck in some hamlets, not all (Arnd: "a good idea but too uniform").

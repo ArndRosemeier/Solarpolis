@@ -35,6 +35,8 @@ import { densNear, type Den } from '../sim/fauna';
 import { herdsNear, type Herd } from '../sim/herds';
 import { coatsOf, type CoatAsk, type Coats } from '../gen/coat';
 import { birdBody, type BirdBody, type BirdKind } from '../gen/birds';
+import { boatDesign, type BoatDesign, type BoatKind } from '../gen/boat';
+import { planDay, type Outing } from '../sim/sailing';
 import { nestsNear, type Nest } from '../sim/birds';
 import { flocksNear, type Flock } from '../sim/flocks';
 import type { VoyageRequest } from './voyage';
@@ -74,7 +76,11 @@ export type GenRequest =
   /** The flocks whose birds may come within `radius` m of (θ, s) (sim/flocks.ts). */
   | { kind: 'flocks'; params: HabitatParams; theta: number; s: number; radius: number }
   /** A bird species' body at both levels (gen/birds.ts). */
-  | { kind: 'bird'; bird: BirdKind };
+  | { kind: 'bird'; bird: BirdKind }
+  /** A boat design, both levels and its wake (gen/boat.ts). */
+  | { kind: 'boat'; boat: BoatKind }
+  /** Every boat's sailing on a day, planned ahead (sim/sailing.ts `planDay`). */
+  | { kind: 'sailing'; params: HabitatParams; day: number };
 export type GenAnswer =
   | { kind: 'voyage'; plan: VoyagePlan }
   | { kind: 'tile'; tile: TileMesh }
@@ -98,6 +104,8 @@ export type GenAnswer =
   | { kind: 'birds'; nests: Nest[] }
   | { kind: 'flocks'; flocks: Flock[] }
   | { kind: 'bird'; body: BirdBody }
+  | { kind: 'boat'; design: BoatDesign }
+  | { kind: 'sailing'; day: number; outings: (Outing | null)[] }
   | { error: string };
 
 /** Every typed array's buffer in an answer, to transfer rather than copy. */
@@ -127,6 +135,14 @@ function terrainFor(params: HabitatParams): { terrain: Terrain; ecology: Ecology
     cached = { json, terrain, ecology, layout: makeLayout(terrain), plants: plantsOf(ecology) };
   }
   return cached;
+}
+
+/** The habitat alone, for jobs that need no terrain (the sailing: its plan and wind are kept per habitat). */
+let derived: { json: string; habitat: Habitat } | null = null;
+function habitatFor(params: HabitatParams): Habitat {
+  const json = JSON.stringify(params);
+  if (derived?.json !== json) derived = { json, habitat: derive(params) };
+  return derived.habitat;
 }
 
 self.onmessage = async (e: MessageEvent<GenRequest>) => {
@@ -171,6 +187,14 @@ self.onmessage = async (e: MessageEvent<GenRequest>) => {
     }
     if (req.kind === 'bird') {
       post({ kind: 'bird', body: birdBody(req.bird) });
+      return;
+    }
+    if (req.kind === 'boat') {
+      post({ kind: 'boat', design: boatDesign(req.boat) });
+      return;
+    }
+    if (req.kind === 'sailing') {
+      post({ kind: 'sailing', day: req.day, outings: planDay(habitatFor(req.params), req.day) });
       return;
     }
     if (req.kind === 'coats') {

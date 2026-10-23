@@ -48,6 +48,7 @@ import { snowFieldOf } from '../gen/snow';
 import { PeopleView } from './people';
 import { SpeckView, type Measured } from './specks';
 import { FlierView } from './fliers';
+import { BoatView } from './boats';
 import { TalkView, type Bubble } from './talk';
 import { AnimalView, DEER, SQUIRRELS } from './animals';
 import { BirdView } from './birds';
@@ -151,6 +152,8 @@ export class InteriorView {
   animals: AnimalView[] = [];
   /** Its birds (their songs are the calls heard). */
   birds: BirdView | null = null;
+  /** The boats on its water. */
+  boats: BoatView | null = null;
   /** In the air, or null on foot. */
   private flyer: Flyer | null = null;
   private arrivalReveal: { terrace: ArrivalTerrace; elapsed: number; ready: (() => void) | null; done: (() => void) | null } | null = null;
@@ -278,6 +281,11 @@ export class InteriorView {
     return this.birds?.bytes() ?? 0;
   }
 
+  /** Bytes the boats hold: their designs on the GPU, their instances (memory watchdog). */
+  boatBytes(): number {
+    return this.boats?.bytes() ?? 0;
+  }
+
   /** Bytes the animals hold: their figures, coats and specks (memory watchdog). */
   animalBytes(): number {
     return this.animals.reduce((n, a) => n + a.bytes(), 0);
@@ -371,6 +379,7 @@ export class InteriorView {
       this.talk?.info() ?? 'talk: none',
       ...(this.animals.length ? this.animals.map((a) => a.info()) : ['animals: none']),
       this.birds?.info() ?? 'birds: none',
+      this.boats?.info() ?? 'boats: none',
       `θ ${(a.theta * 180 / Math.PI).toFixed(1)}°, s ${(a.s / 1000).toFixed(2)} of ${(this.habitat.profile.length / 1000).toFixed(2)} km, ground ${this.standOn(a.theta, a.s).toFixed(1)} m, ${mode}, eyes ×${this.exposure.toFixed(2)}`,
     ].join('\n');
   }
@@ -570,6 +579,8 @@ export class InteriorView {
     this.animals = [];
     this.birds?.dispose();
     this.birds = null;
+    this.boats?.dispose();
+    this.boats = null;
     if (this.sunline) { this.stage.remove(this.sunline); freeMesh(this.sunline); }
     if (this.clouds) { this.stage.remove(this.clouds); [...this.clouds.children].forEach((m, i) => freeMesh(m as Mesh, i === 0 ? 'all' : 'none')); }
     const h = this.habitat;
@@ -626,6 +637,8 @@ export class InteriorView {
     for (const a of this.animals) this.scene.add(a.group);
     this.birds = new BirdView(h, this.terrain, this.stage, this.camera, this.pool);
     this.scene.add(this.birds.group);
+    this.boats = new BoatView(h, this.terrain, this.stage, this.camera, this.pool);
+    this.scene.add(this.boats.group);
     this.place();
     // While loading, nothing draws, but the compile cap still counts frames (one new shader per frame): keep its
     // frames ticking, or a second build here (a shadow pass's own shader) would wait for a frame that never comes.
@@ -708,6 +721,7 @@ export class InteriorView {
     this.specks?.follow(this.time, this.frameDt, [...(this.people?.near ?? []), ...(this.drones?.near ?? [])], this.measured);
     for (const a of this.animals) a.follow(v.eye, this.time, this.frameDt);
     this.birds?.follow(v.eye, this.time, this.frameDt, this.below);
+    this.boats?.follow(v.eye, this.time, this.frameDt, this.below);
   }
 
   /**
@@ -715,7 +729,7 @@ export class InteriorView {
    * the frame (and the shadow map), and the background is the mist's.
    */
   private showLand(on: boolean): void {
-    for (const g of [this.tiles?.group, this.plants?.group, this.landmarks?.group, this.stair?.group, this.courts?.group, this.crossings?.group, this.halls?.group, this.specks?.group, this.sunline, this.clouds, this.birds?.group, ...this.animals.map((a) => a.group)]) if (g) g.visible = on;
+    for (const g of [this.tiles?.group, this.plants?.group, this.landmarks?.group, this.stair?.group, this.courts?.group, this.crossings?.group, this.halls?.group, this.specks?.group, this.sunline, this.clouds, this.birds?.group, this.boats?.group, ...this.animals.map((a) => a.group)]) if (g) g.visible = on;
   }
 
   /** Where the eye is now (world). */
@@ -1142,7 +1156,7 @@ export class InteriorView {
       for (const g of [this.people?.group, this.drones?.group]) if (g) g.visible = !at;
       if (at) {
         // The land and its specks, not the figures: their shadow shaders are built only as they come near on the land.
-        for (const g of [this.people?.group, this.drones?.group, this.birds?.group, ...this.animals.map((a) => a.group)]) if (g) g.visible = false;
+        for (const g of [this.people?.group, this.drones?.group, this.birds?.group, this.boats?.group, ...this.animals.map((a) => a.group)]) if (g) g.visible = false;
         shineOn(this.habitat, this.terrain, this.emission, emissionMean(this.emission), air.skyLight.value, this.norm, at, this.posedAt);
         this.landExposure = view.exposure.value as number;
         view.exposure.value = 1;
