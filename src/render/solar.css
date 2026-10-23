@@ -1,0 +1,9 @@
+.solar-controls { position:absolute; top:18px; left:18px; z-index:8; width:min(310px, calc(100% - 36px)); box-sizing:border-box; color:#e4efee; background:rgba(9,26,30,.94); border:1px solid #527375; border-radius:12px; padding:12px 15px; font:13px/1.5 system-ui,sans-serif; box-shadow:0 8px 28px #0005; }
+.solar-controls summary { cursor:pointer; font-weight:650; letter-spacing:.05em; color:#ecd09a; }
+.solar-controls p { margin:10px 0; }
+.solar-controls select,.solar-controls input { width:100%; min-height:36px; box-sizing:border-box; margin:4px 0; border:1px solid #527375; border-radius:5px; background:#142f34; color:#e4efee; padding:7px; }
+.solar-controls option { background:#142f34; }
+.solar-actions { display:flex; gap:7px; margin:9px 0; }
+.solar-actions button { flex:1; cursor:pointer; border:1px solid #6b9393; border-radius:5px; padding:8px 5px; color:#e4efee; background:#1f4448; }
+.solar-actions button:first-child { background:#c7d9ce; color:#102c30; }
+.solar-controls .solar-information,.solar-controls .solar-status { font-size:11px; color:#afc4c4; }

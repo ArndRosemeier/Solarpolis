@@ -8,6 +8,7 @@
  */
 import { v3add, v3cross, v3dot, v3len, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
 import { fluxOfMagnitude, type SkyView } from '../space';
+import { AU } from '../space/constants';
 import { fromWorld, type Habitat } from '../blueprint';
 import { hazeAlong } from '../world/air';
 import { emissionMean, rawIrradiance } from '../world/sunline';
@@ -44,6 +45,7 @@ export interface Meterable {
    * them, relative to full sunlight.
    */
   room?: { luminance: number; light: number } | null;
+  celestial?: { center: Vec3; radius: number; albedo: number; light: number }[];
 }
 
 /** What a ray along unit d sees: its luminance, and the light falling where it lands (0 for open sky). */
@@ -63,7 +65,9 @@ function rayMeter(m: Meterable, d: Vec3): { luminance: number; light: number } {
   if (m.room) return m.room;
   const s = m.sky;
   const a = v3len(v3cross(d, s.sunDir));
-  const glare = v3dot(d, s.sunDir) > 0 ? GLARE / (a * a + s.sunRadius ** 2) * Math.exp(-a / GLARE_REACH) * s.sunlight : 0;
+  const solarSin = Math.sin(s.sunRadius), irradiance = (AU / s.sunDistance) ** 2;
+  const facing = v3dot(d, s.sunDir) > 0;
+  const glare = facing ? GLARE / (a * a + solarSin ** 2) * Math.exp(-a / GLARE_REACH) * s.sunlight * irradiance : 0;
   let near = Infinity, hit: { n: Vec3; albedo: number } | null = null;
   for (const c of m.hulls) {
     const h = hitCylinder(c, d);
@@ -73,10 +77,20 @@ function rayMeter(m: Meterable, d: Vec3): { luminance: number; light: number } {
     const sun = Math.max(0, v3dot(hit.n, s.sunDir)) * s.sunlight;
     return { luminance: hit.albedo * (sun + m.earthshine) + glare, light: lit(sun, s.sunlight) + m.earthshine };
   }
+  for (const body of m.celestial ?? []) {
+    const n = sphereNormal(d, body.center, body.radius);
+    if (!n) continue;
+    const sun = Math.max(0, v3dot(n, s.sunDir)) * body.light;
+    return { luminance: body.albedo * sun + glare, light: sun > 0 ? body.light : 0 };
+  }
   const earth = sphereNormal(d, s.earth.center, s.earth.radius);
   if (earth) { const sun = Math.max(0, v3dot(earth, s.sunDir)) * s.sunlight; return { luminance: 0.3 * sun + 1e-5 + glare, light: lit(sun, s.sunlight) }; }
   const moon = sphereNormal(d, s.moon.center, s.moon.radius);
   if (moon) { const sun = Math.max(0, v3dot(moon, s.sunDir)) * s.sunlight; return { luminance: 0.12 * sun + glare, light: lit(sun, s.sunlight) }; }
+  if (facing && a < solarSin) {
+    const mu = Math.sqrt(Math.max(0, 1 - (a / solarSin) ** 2));
+    return { luminance: (1 - .6 * (1 - mu)) / (solarSin ** 2 * .8) * irradiance * s.sunlight + glare, light: 0 };
+  }
   return { luminance: glare, light: 0 };
 }
 

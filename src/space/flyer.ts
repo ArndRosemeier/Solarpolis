@@ -6,13 +6,14 @@
  * Positions are float64 in one frame (the view uses the home habitat's orbit frame), up is that frame's +z. Pure.
  */
 import { v3add, v3len, v3scale, type Vec3 } from '@futuremagic/core';
+import { AU } from './constants';
 
 /** Speed as a share of the clearance, per second, and the slowest speed (m/s). */
 export const SPEED_PER_CLEARANCE = 0.8;
 export const MIN_SPEED = 2;
 /** How close the eye may come to a surface (m), and how far it may go from the frame's origin (m). */
 export const MIN_CLEARANCE = 1;
-export const MAX_RANGE = 5e7;
+export const MAX_RANGE = 200 * AU;
 /** Shift: this much faster. */
 export const FAST = 5;
 

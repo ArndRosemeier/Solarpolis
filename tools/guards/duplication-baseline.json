@@ -20,6 +20,10 @@
     "reason": "The leaf atlas (ported from Scale's getLeafAtlas) draws each cell with its own little leaf recipe: the twig cells share drawTwigCell and differ only in their numbers (shape, size, colour). That data reads best one recipe per cell, as in Scale."
   },
   {
+    "key": "idiom: [.Array .from] in solarpolis/gen/shapes.ts + solarpolis/render/plants.ts + solarpolis/render/solar.ts",
+    "reason": "Independent fixed-size geometry, plant and solar-population allocation; Array.from is syntax, not shared generation logic."
+  },
+  {
     "key": "idiom: [.add .mul .sub] in solarpolis/render/crowdShaders.ts + solarpolis/render/hamletSkies.ts + solarpolis/render/hullShaders.ts",
     "reason": "TSL arithmetic (add, mul, sub on nodes) is how every shader writes a formula; the formulas are each shader's own (a hamlet sky's halo, a crowd's pose, the hull's panels)."
   },
@@ -60,12 +64,36 @@
     "reason": "Each view makes its own meshes from its own kind's material and says whether they cast shadows; the shared part (a mesh drawn anywhere) is drawnAnywhere in geometry.ts."
   },
   {
+    "key": "idiom: [.createElement document] in solarpolis/render/outside.ts + solarpolis/render/solarControls.ts + solarpolis/render/view.ts",
+    "reason": "Renderers own canvases and the solar observer owns its DOM controls; their element creation constructs different elements, not duplicated behaviour."
+  },
+  {
+    "key": "idiom: [.exposure .mul] in solarpolis/render/celestialShaders.ts + solarpolis/render/hullShaders.ts + solarpolis/render/materials.ts",
+    "reason": "Each radiance formula multiplies by the existing shared exposure uniform; the lighting calculations and colour inputs differ."
+  },
+  {
+    "key": "idiom: [.frustumCulled Promise] in solarpolis/render/necklace.ts + solarpolis/render/solar.ts + solarpolis/render/traffic.ts",
+    "reason": "Independent renderer owners disable bounds for camera-relative meshes and prepare them through the existing Stage seam."
+  },
+  {
     "key": "idiom: [.group .name] in solarpolis/render/animals.ts + solarpolis/render/fliers.ts + solarpolis/render/landmarks.ts + solarpolis/render/lift.ts + solarpolis/render/specks.ts",
     "reason": "Each view names its scene group for the debug menu and the shader monitor's labels: one assignment."
   },
   {
     "key": "idiom: [.habitat .job .params .pool] in solarpolis/render/landmarks.ts + solarpolis/render/specks.ts + solarpolis/render/view.ts",
     "reason": "pool.job({ kind, params: habitat.params, ... }) is the one way to ask the worker pool for a job (workers/pool.ts); each view asks for its own kind of job."
+  },
+  {
+    "key": "idiom: [.level .pow Math] in solarpolis/gen/detailTree.ts + solarpolis/gen/liftStairMesh.ts + solarpolis/gen/siteTiles.ts",
+    "reason": "Existing detail-tree clients calculate their own level dimensions with powers of two; the shared tree already owns selection and handover."
+  },
+  {
+    "key": "idiom: [.level .pow Math] in solarpolis/gen/detailTree.ts + solarpolis/gen/liftStairMesh.ts + solarpolis/gen/siteTiles.ts + solarpolis/gen/underMesh.ts",
+    "reason": "Existing detail-tree clients calculate their own level dimensions with powers of two; the shared tree already owns selection and handover."
+  },
+  {
+    "key": "idiom: [.level .pow Math] in solarpolis/gen/hullDetail.ts + solarpolis/gen/liftStairMesh.ts + solarpolis/gen/underMesh.ts",
+    "reason": "Existing detail-tree clients calculate their own level dimensions with powers of two; the shared tree already owns selection and handover."
   },
   {
     "key": "idiom: [.litAt .s .terrain .theta] in solarpolis/render/animals.ts + solarpolis/render/fliers.ts + solarpolis/render/people.ts",
@@ -98,6 +126,14 @@
   {
     "key": "idiom: [.object .prepare .stage] in solarpolis/render/animals.ts + solarpolis/render/people.ts + solarpolis/render/view.ts",
     "reason": "The views that draw creatures (people, drones, squirrels) name the same things the same way (stage, camera, screen, specks, each one's horizon and litAt, a start promise, a group): their shared steps are seams (ownSpecks, roomForSpecks, drawSpecks, pxPerMetre in render/specks.ts; FigureLoads in render/actors/slots.ts; standAt in render/actors/figure.ts); what is left is each view's own."
+  },
+  {
+    "key": "idiom: [.setLayout] in solarpolis/render/builtShaders.ts + solarpolis/render/hamletSkies.ts + solarpolis/render/hullShaders.ts",
+    "reason": "Independent TSL function layouts describe different shader formulas; explicit layouts are required by the shader policy."
+  },
+  {
+    "key": "idiom: [.smoothGrid] in solarpolis/gen/building.ts + solarpolis/gen/hallMesh.ts + solarpolis/gen/underMesh.ts",
+    "reason": "Existing building, hall and understorey generators call the same smoothGrid seam for different geometry."
   },
   {
     "key": "idiom: [.start Promise] in solarpolis/render/animals.ts + solarpolis/render/fliers.ts + solarpolis/render/people.ts",
@@ -328,6 +364,10 @@
     "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; each view does its own work in each."
   },
   {
+    "key": "same name: solarpolis/render/actors/animal.ts#dispose + solarpolis/render/solar.ts#dispose",
+    "reason": "Independent view/model lifecycle owners: these methods account for, prepare, update or release their own resources through the existing Stage and geometry seams; no common resource ownership can be extracted."
+  },
+  {
     "key": "same name: solarpolis/render/actors/animal.ts#dispose + solarpolis/render/terrain.ts#dispose",
     "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; each view does its own work in each."
   },
@@ -416,6 +456,10 @@
     "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; the squirrels' view (render/animals.ts) and an animal's figure (render/actors/animal.ts) do their own work in each."
   },
   {
+    "key": "same name: solarpolis/render/animals.ts#dispose + solarpolis/render/solar.ts#dispose",
+    "reason": "Independent view/model lifecycle owners: these methods account for, prepare, update or release their own resources through the existing Stage and geometry seams; no common resource ownership can be extracted."
+  },
+  {
     "key": "same name: solarpolis/render/animals.ts#dispose + solarpolis/render/specks.ts#dispose",
     "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; the squirrels' view (render/animals.ts) and an animal's figure (render/actors/animal.ts) do their own work in each."
   },
@@ -468,6 +512,10 @@
     "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; the squirrels' view (render/animals.ts) and an animal's figure (render/actors/animal.ts) do their own work in each."
   },
   {
+    "key": "same name: solarpolis/render/animals.ts#start + solarpolis/render/solar.ts#start",
+    "reason": "Independent view/model lifecycle owners: these methods account for, prepare, update or release their own resources through the existing Stage and geometry seams; no common resource ownership can be extracted."
+  },
+  {
     "key": "same name: solarpolis/render/fliers.ts#bytes + solarpolis/render/people.ts#bytes",
     "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
   },
@@ -516,6 +564,10 @@
     "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
   },
   {
+    "key": "same name: solarpolis/render/fliers.ts#follow + solarpolis/render/solar.ts#follow",
+    "reason": "Independent view/model lifecycle owners: these methods account for, prepare, update or release their own resources through the existing Stage and geometry seams; no common resource ownership can be extracted."
+  },
+  {
     "key": "same name: solarpolis/render/fliers.ts#follow + solarpolis/render/terrain.ts#follow",
     "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
   },
@@ -536,12 +588,20 @@
     "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; each view does its own work in each."
   },
   {
+    "key": "same name: solarpolis/render/glassDeck.ts#bytes + solarpolis/render/outside.ts#bytes",
+    "reason": "Independent view/model lifecycle owners: these methods account for, prepare, update or release their own resources through the existing Stage and geometry seams; no common resource ownership can be extracted."
+  },
+  {
     "key": "same name: solarpolis/render/glassDeck.ts#bytes + solarpolis/render/people.ts#bytes",
     "reason": "The views' own interface (bytes, info, dispose), which InteriorView and the memory watchdog call on each of them; GlassDeck (render/glassDeck.ts) is one more such view, holding the glass deck's atlas."
   },
   {
     "key": "same name: solarpolis/render/glassDeck.ts#bytes + solarpolis/render/specks.ts#bytes",
     "reason": "The views' own interface (bytes, info, dispose), which InteriorView and the memory watchdog call on each of them; GlassDeck (render/glassDeck.ts) is one more such view, holding the glass deck's atlas."
+  },
+  {
+    "key": "same name: solarpolis/render/glassDeck.ts#bytes + solarpolis/space/solarSystem.ts#bytes",
+    "reason": "Independent view/model lifecycle owners: these methods account for, prepare, update or release their own resources through the existing Stage and geometry seams; no common resource ownership can be extracted."
   },
   {
     "key": "same name: solarpolis/render/glassDeck.ts#dispose + solarpolis/render/lift.ts#dispose",
@@ -566,6 +626,10 @@
   {
     "key": "same name: solarpolis/render/homes.ts#bytes + solarpolis/render/specks.ts#bytes",
     "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; each view does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/render/homes.ts#bytes + solarpolis/space/solarSystem.ts#bytes",
+    "reason": "Independent resource owners report their own retained allocations to the memory watchdog; no shared allocation to extract."
   },
   {
     "key": "same name: solarpolis/render/homes.ts#dispose + solarpolis/render/hullDetail.ts#dispose",
@@ -744,6 +808,14 @@
     "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
   },
   {
+    "key": "same name: solarpolis/render/landmarks.ts#bytes + solarpolis/render/solar.ts#bytes",
+    "reason": "Independent view/model lifecycle owners: these methods account for, prepare, update or release their own resources through the existing Stage and geometry seams; no common resource ownership can be extracted."
+  },
+  {
+    "key": "same name: solarpolis/render/landmarks.ts#bytes + solarpolis/space/solarSystem.ts#bytes",
+    "reason": "Independent view/model lifecycle owners: these methods account for, prepare, update or release their own resources through the existing Stage and geometry seams; no common resource ownership can be extracted."
+  },
+  {
     "key": "same name: solarpolis/render/landmarks.ts#dispose + solarpolis/render/people.ts#dispose",
     "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
   },
@@ -824,8 +896,8 @@
     "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
   },
   {
-    "key": "same name: solarpolis/render/outside.ts#create + solarpolis/render/view.ts#create",
-    "reason": "Both 3D views implement the page's view interface (PageView in main.ts: create, setHabitat, setRunning, bytes, shed, info, skip); their shared machinery is in render/surface.ts."
+    "key": "same name: solarpolis/render/outside.ts#bytes + solarpolis/render/solar.ts#bytes",
+    "reason": "Independent view/model lifecycle owners: these methods account for, prepare, update or release their own resources through the existing Stage and geometry seams; no common resource ownership can be extracted."
   },
   {
     "key": "same name: solarpolis/render/outside.ts#frame + solarpolis/render/view.ts#frame",
@@ -840,12 +912,12 @@
     "reason": "Both 3D views implement the page's view interface (PageView in main.ts: create, setHabitat, setRunning, bytes, shed, info, skip); their shared machinery is in render/surface.ts."
   },
   {
-    "key": "same name: solarpolis/render/outside.ts#shed + solarpolis/render/people.ts#shed",
-    "reason": "Views implement the memory watchdog shed interface; each releases its own unrelated resources through their owning seams."
-  },
-  {
     "key": "same name: solarpolis/render/outside.ts#skip + solarpolis/render/view.ts#skip",
     "reason": "Both 3D views implement the page's view interface (PageView in main.ts: create, setHabitat, setRunning, bytes, shed, info, skip); their shared machinery is in render/surface.ts."
+  },
+  {
+    "key": "same name: solarpolis/render/outside.ts#toggleFlying + solarpolis/render/view.ts#toggleFlying",
+    "reason": "Independent view/model lifecycle owners: these methods account for, prepare, update or release their own resources through the existing Stage and geometry seams; no common resource ownership can be extracted."
   },
   {
     "key": "same name: solarpolis/render/people.ts#bytes + solarpolis/render/specks.ts#bytes",
@@ -886,6 +958,10 @@
   {
     "key": "same name: solarpolis/render/people.ts#shed + solarpolis/render/tiled.ts#shed",
     "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
+  },
+  {
+    "key": "same name: solarpolis/render/people.ts#start + solarpolis/render/solar.ts#start",
+    "reason": "Independent view/model lifecycle owners: these methods account for, prepare, update or release their own resources through the existing Stage and geometry seams; no common resource ownership can be extracted."
   },
   {
     "key": "same name: solarpolis/render/plants.ts#bytes + solarpolis/render/terrain.ts#bytes",
@@ -946,6 +1022,14 @@
   {
     "key": "same name: solarpolis/render/plants.ts#shed + solarpolis/render/tiled.ts#shed",
     "reason": "Everything that can give memory back does so through a shed() method the memory watchdog calls (CLAUDE.md rule 12); each sheds its own buffers."
+  },
+  {
+    "key": "same name: solarpolis/render/solar.ts#bytes + solarpolis/space/solarSystem.ts#bytes",
+    "reason": "Independent view/model lifecycle owners: these methods account for, prepare, update or release their own resources through the existing Stage and geometry seams; no common resource ownership can be extracted."
+  },
+  {
+    "key": "same name: solarpolis/render/specks.ts#bytes + solarpolis/space/solarSystem.ts#bytes",
+    "reason": "Independent view/model lifecycle owners: these methods account for, prepare, update or release their own resources through the existing Stage and geometry seams; no common resource ownership can be extracted."
   },
   {
     "key": "same name: solarpolis/render/streamed.ts#bytes + solarpolis/render/terrain.ts#bytes",

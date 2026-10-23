@@ -55,18 +55,19 @@ export function skyFrom(space: Space, frame: string, eye: Vec3, t: number): SkyV
     sunDir, sunRadius, sunDistance,
     earth: { center: earthC, radius: EARTH.radius, axes: f.relative('earth.fixed', frame, t).axes },
     moon: { center: moonC, radius: MOON.radius, axes: moonAxes },
-    sunlight: sunlightFrom(sun, earthC, moonC),
+    sunlight: sunlightFrom(sun, earthC, moonC, space.system ? space.system.bodies.filter(b => b.kind === 'planet' && b.id !== 'earth').map(b => ({ center: v3sub(f.position([0, 0, 0], b.id, frame, t), eye), radius: b.radius })) : []),
   };
 }
 
 /** Share of the Sun's disc not hidden by Earth or the Moon, from their centres relative to a point (any axes, m). */
-export function sunlightFrom(sun: Vec3, earth: Vec3, moon: Vec3): number {
+export function sunlightFrom(sun: Vec3, earth: Vec3, moon: Vec3, others: { center: Vec3; radius: number }[] = []): number {
   const sunDistance = v3len(sun), sunDir = v3scale(sun, 1 / sunDistance);
   const sunRadius = Math.asin(SUN.radius / sunDistance);
   let hidden = 0;
-  for (const [c, r] of [[earth, EARTH.radius], [moon, MOON.radius]] as const) {
+  for (const [c, r] of [[earth, EARTH.radius], [moon, MOON.radius], ...others.map(b => [b.center, b.radius] as const)] as const) {
     const dist = v3len(c);
     if (dist < r) return 0;
+    if (dist > sunDistance) continue;
     hidden += circleOverlap(sunRadius, Math.asin(r / dist), angle(sunDir, v3scale(c, 1 / dist)));
   }
   return Math.max(0, 1 - hidden / (Math.PI * sunRadius * sunRadius));

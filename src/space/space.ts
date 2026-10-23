@@ -23,6 +23,7 @@ import { necklace, type NecklaceParams, type Placement } from './necklace';
 import { apply, IDENTITY, mul, rotX, rotZ, type Mat3 } from './pose';
 import { jdAt } from './time';
 import type { TrafficParams } from './traffic';
+import type { SolarSystem } from './solarSystem';
 
 export interface SpaceParams {
   /** Julian date at clock time 0. */
@@ -49,6 +50,7 @@ export interface Space {
   readonly frames: FrameTree;
   readonly habitats: PlacedHabitat[];
   readonly home: PlacedHabitat;
+  readonly system?: SolarSystem;
   /** Julian date at clock time t. */
   jd(t: number): number;
 }
@@ -80,12 +82,16 @@ function placeHabitat(frames: FrameTree, p: Placement, epochJd: number): PlacedH
   return { ...p, habitat, orbitFrame, bodyFrame, spindleFrame, spinAt };
 }
 
-export function makeSpace(params: SpaceParams): Space {
+export function makeSpace(params: SpaceParams, system?: SolarSystem): Space {
   const jd = (t: number): number => jdAt(params.epochJd, t);
   const frames = new FrameTree('sun');
-  frames.add({ id: 'earth', parent: 'sun', pose: (t) => ({ origin: earthAt(jd(t)), axes: IDENTITY }) });
+  frames.add({ id: 'earth', parent: 'sun', pose: (t) => ({ origin: system ? system.position('earth', jd(t)) : earthAt(jd(t)), axes: IDENTITY }) });
   frames.add({ id: 'earth.fixed', parent: 'earth', pose: (t) => ({ origin: [0, 0, 0], axes: earthAxesAt(jd(t)) }) });
-  frames.add({ id: 'moon', parent: 'earth', pose: (t) => ({ origin: moonFromEarthAt(jd(t)), axes: IDENTITY }) });
+  frames.add({ id: 'moon', parent: 'earth', pose: (t) => ({ origin: system ? system.moonOffset('moon', jd(t)) : moonFromEarthAt(jd(t)), axes: IDENTITY }) });
+  if (system) for (const body of system.bodies) {
+    if (['sun', 'earth', 'moon'].includes(body.id)) continue;
+    frames.add({ id: body.id, parent: body.parent, pose: t => ({ origin: body.kind === 'moon' ? system.moonOffset(body.id, jd(t)) : system.position(body.id, jd(t)), axes: IDENTITY }) });
+  }
   const habitats = necklace(params.home, params.necklace, params.seed).map((p) => placeHabitat(frames, p, params.epochJd));
-  return { params, frames, habitats, home: habitats[0], jd };
+  return { params, frames, habitats, home: habitats[0], system, jd };
 }

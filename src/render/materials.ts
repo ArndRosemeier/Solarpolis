@@ -27,6 +27,7 @@ import { OPEN_SKY } from '../gen/horizon';
 import { EMISSION_SAMPLES, SUNLINE_STEPS } from '../world/sunline';
 import { HAZE_STEPS } from '../world/air';
 import { skyDome, starColor, starVertex } from './skyShaders';
+import { celestialColor, celestialRing } from './celestialShaders';
 import { cellHash, floorShare, floorSurface, rockFromAfar, snowOver, woodsFromAfar } from './groundShaders';
 import { RISE_RANGE } from '../gen/tiles';
 import { filtered } from './textures';
@@ -366,6 +367,20 @@ export const STARS = kind('stars', ['position', 'color', 'corner'], { cast: fals
   return m;
 });
 
+export const CELESTIAL = kind('celestial body', ['position', 'normal'], { cast: false, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial();
+  m.colorNode = celestialColor();
+  return m;
+});
+
+export const PLANET_RING = kind('planetary ring', ['position'], { cast: false, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial({ side: DoubleSide, transparent: true, depthWrite: false, forceSinglePass: true });
+  const ring = celestialRing();
+  m.colorNode = ring.colour;
+  m.opacityNode = ring.opacity;
+  return m;
+});
+
 /**
  * A habitat from outside (hullShaders.ts): the drum's solar skin, its panel patchwork drawn per pixel from the mesh's
  * `userData.skin`, hidden where the near tiles cover it (`skinShown`). Position, normal.
@@ -692,7 +707,7 @@ export const isPlantInstance = (attribute: string): boolean => attribute === 'pl
 
 /** The kinds of the view outside, for its Stage's warm-up (windows will add them to the interior's). */
 export function outsideKinds(): readonly Kind[] {
-  return [SKY, STARS, SKIN, SKIN_DETAIL, RADIATOR, HARDWARE, FLAME, BORE, LAMP];
+  return [SKY, STARS, CELESTIAL, PLANET_RING, SKIN, SKIN_DETAIL, RADIATOR, HARDWARE, FLAME, BORE, LAMP];
 }
 
 /**

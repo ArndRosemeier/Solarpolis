@@ -13,7 +13,7 @@
  */
 import { Color, Mesh, PerspectiveCamera, Scene, SphereGeometry, Texture, type WebGPURenderer } from 'three/webgpu';
 import { Stage, createRenderer } from '@futuremagic/stage';
-import { Rng, deriveSeed, v3add, v3dot, v3len, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
+import { Rng, deriveSeed, v3add, v3dot, v3len, v3scale, v3sub, v3norm, type Vec3 } from '@futuremagic/core';
 import type { Habitat } from '../blueprint';
 import { DAY, EARTH, MOON, REFERENCE_SPACE, SpaceFlyer, arrival, attractLoop, calendarOf, chooseStart, decodeStars, guestShip, julianDay, makeSpace, shipShape, skyFrom, type Arrival, type ArrivalFrame, type Cinema, type CinemaFrame, type Mat3, type ShipShape, type Space, type SkyView } from '../space';
 import { SKY, STARS, outsideKinds, standInAttribute } from './materials';
@@ -26,6 +26,13 @@ import { SHIP_ALBEDO, ShipMeshes, shipAxes } from './ship';
 import { BORE_ALBEDO } from './bore';
 import { BORE_LIGHT } from './hullShaders';
 import { FrameLoop, dragToLook, draw, fitCanvas, moveKeys } from './surface';
+import { SolarSystem, type EphemerisPack } from '../space/solarSystem';
+import type { MoonRecord, SmallRecord } from '../space/solarData';
+import { AU, SUN } from '../space/constants';
+import { apply, transpose } from '../space/pose';
+import { SolarView } from './solar';
+import { SolarControls } from './solarControls';
+import { polePlane } from '../space/orbits';
 
 /**
  * Clock seconds per real second by default: real time (Arnd, 2026-10-21). A faster clock spins the habitat fast
@@ -81,9 +88,13 @@ export class OutsideView {
   private dayDetail: 'full' | 'reduced' = 'full';
   private nightMap: Texture | null = null;
   private moonMap: Texture | null = null;
+  private solar!: SolarView;
+  private solarControls!: SolarControls;
+  private observer: { id: string; yaw: number; pitch: number; distance: number } | null = null;
+  private controlClock = 0;
 
-  private constructor(private habitat: Habitat) {
-    this.space = makeSpace({ ...REFERENCE_SPACE, home: habitat.params });
+  private constructor(private habitat: Habitat, private system: SolarSystem) {
+    this.space = makeSpace({ ...REFERENCE_SPACE, home: habitat.params }, system);
     this.shipShape = shipShape(guestShip(this.space, this.space.home));
     // An afternoon over Europe in March: Earth three-quarters lit behind the habitat.
     this.time = (julianDay(3026, 3, 1 + 14.5 / 24) - this.space.params.epochJd) * DAY;
@@ -95,7 +106,13 @@ export class OutsideView {
 
   /** Make the view: throws `GraphicsUnavailable` where the browser has no WebGPU (the caller shows why). */
   static async create(habitat: Habitat): Promise<OutsideView> {
-    const v = new OutsideView(habitat);
+    const load = async <T>(name: string): Promise<T> => {
+      const response = await fetch(`${base}space/${name}.json`);
+      if (!response.ok) throw new Error(`Could not load the solar system (${name})`);
+      return response.json() as Promise<T>;
+    };
+    const [ephemeris, moons, small] = await Promise.all([load<EphemerisPack>('ephemeris'), load<MoonRecord[]>('moons'), load<SmallRecord[]>('small-bodies')]);
+    const v = new OutsideView(habitat, new SolarSystem(ephemeris, moons, small));
     v.renderer = (await createRenderer(v.canvas, { backends: 'webgpu', depth: 'reversed' })).renderer;
     v.stage = new Stage(v.renderer, v.scene, v.camera, { kinds: outsideKinds, attribute: standInAttribute });
     await v.stage.warmUp();
@@ -106,20 +123,24 @@ export class OutsideView {
     v.dome.name = 'sky';
     v.dome.renderOrder = -1;
     v.dome.frustumCulled = false;
-    await Promise.all([v.stage.add(v.dome), v.buildNecklace(), v.loadMaps('full'), v.loadStars()]);
+    v.solar = new SolarView(v.stage, v.system, DOME * .7, v.space.params.seed);
+    await Promise.all([v.stage.add(v.dome), v.buildNecklace(), v.loadMaps('full'), v.loadStars(), v.solar.start()]);
+    outside.bodiesInDome.value = 0;
+    v.solarControls = new SolarControls(v.system, id => v.observe(id), () => { v.observer = null; v.flyer = null; v.frameHabitat(); }, n => { v.timeScale = n; });
     v.bindControls();
     return v;
   }
 
   /** Bytes this view holds (memory watchdog): the surface maps with their mipmaps, the star field, the skin's detail tiles. */
   bytes(): number {
-    return this.textureBytes + this.starBytes + (this.necklace?.detailBytes() ?? 0);
+    return this.textureBytes + this.starBytes + (this.necklace?.detailBytes() ?? 0) + (this.solar?.bytes() ?? 0);
   }
 
   /** Give memory back (memory watchdog): Earth's day map drops to half resolution, detail tiles out of sight go. */
   shed(): void {
     if (this.dayDetail === 'full') void this.loadMaps('reduced');
     this.necklace?.shed();
+    this.solar?.shed();
   }
 
   private async loadMaps(detail: 'full' | 'reduced'): Promise<void> {
@@ -180,7 +201,7 @@ export class OutsideView {
   async setHabitat(h: Habitat): Promise<void> {
     if (h === this.habitat) return;
     this.habitat = h;
-    this.space = makeSpace({ ...REFERENCE_SPACE, home: h.params });
+    this.space = makeSpace({ ...REFERENCE_SPACE, home: h.params }, this.system);
     this.shipShape = shipShape(guestShip(this.space, this.space.home));
     // The title's ship was made for the last habitat's berths: made again when the title next plays.
     this.ship?.removeFrom(this.stage);
@@ -218,6 +239,24 @@ export class OutsideView {
   /** Move the clock on by `seconds` (debug menu). */
   skip(seconds: number): void {
     this.time += seconds;
+    this.limitClock();
+  }
+
+  private limitClock(): void {
+    const p = this.system.ephemeris, before = this.time;
+    this.time = Math.max((p.start - this.space.params.epochJd) * DAY, Math.min((p.stop - this.space.params.epochJd) * DAY - 1, this.time));
+    if (before !== this.time) this.timeScale = 0;
+  }
+
+  /** Observer jump only; physical worlds stay at their actual positions and sizes. */
+  observe(id: string): void {
+    const body = this.system.byId.get(id);
+    if (!body) return;
+    this.stopAttract(); this.flyer = null;
+    const jd = this.space.jd(this.time), sun = v3norm(v3scale(this.system.position(id, jd), -1));
+    const local = apply(transpose(polePlane(...body.pole)), sun);
+    this.observer = { id, yaw: Math.atan2(local[1], local[0]) + .35, pitch: .35, distance: Math.max(body.radius * 4.5, body.rings && body.rings.opacity > .1 ? body.rings.outer * 3 : 0) };
+    this.exposure = 1;
   }
 
   /** Jump to the next time Earth's shadow falls on the habitat, within a year; false if there is none. */
@@ -225,6 +264,7 @@ export class OutsideView {
     const f = this.space.home.orbitFrame;
     for (let k = 1; k < 365 * 24 * 12; k++) {
       const t = this.time + k * 300;
+      if (this.space.jd(t) >= this.system.ephemeris.stop) return false;
       if (skyFrom(this.space, f, [0, 0, 0], t).sunlight < 0.5) { this.time = t - 1800; return true; }
     }
     return false;
@@ -235,6 +275,13 @@ export class OutsideView {
     const shot = this.shot;
     if (shot) return { eye: shot.eye, target: shot.target };
     if (this.flyer) return { eye: this.flyer.eye, target: v3add(this.flyer.eye, this.flyer.look()) };
+    if (this.observer) {
+      const o = this.observer, frame = this.space.home.orbitFrame;
+      const target = this.space.frames.position([0, 0, 0], o.id, frame, this.time), cp = Math.cos(o.pitch);
+      const local: Vec3 = [cp * Math.cos(o.yaw) * o.distance, cp * Math.sin(o.yaw) * o.distance, Math.sin(o.pitch) * o.distance];
+      const offset = this.space.frames.direction(apply(polePlane(...this.system.byId.get(o.id)!.pole), local), 'sun', frame, this.time);
+      return { eye: v3add(target, offset), target };
+    }
     const cp = Math.cos(this.pitch);
     const eye: Vec3 = v3scale([cp * Math.cos(this.yaw), cp * Math.sin(this.yaw), Math.sin(this.pitch)], this.distance);
     const c = this.lookOffset(this.look);
@@ -254,7 +301,9 @@ export class OutsideView {
   private clearance(p: Vec3): number {
     const s = this.sky, ring = this.necklace?.distanceToHabitats(p) ?? Infinity;
     if (!s) return ring;
-    return Math.min(ring, v3len(v3sub(p, s.earth.center)) - EARTH.radius, v3len(v3sub(p, s.moon.center)) - MOON.radius);
+    let distance = Math.min(ring, v3len(v3sub(p, s.earth.center)) - EARTH.radius, v3len(v3sub(p, s.moon.center)) - MOON.radius, v3len(v3sub(p, v3scale(s.sunDir, s.sunDistance))) - SUN.radius);
+    for (const body of this.solar?.seen ?? []) distance = Math.min(distance, v3len(v3sub(p, body.center)) - body.body.radius);
+    return distance;
   }
 
   /** Start flying from where the orbit camera is, looking the same way; or go back to orbiting the habitat. */
@@ -262,6 +311,7 @@ export class OutsideView {
     if (this.flyer) { this.flyer = null; this.look = 'habitat'; return; }
     const { eye, target } = this.eyeAndTarget();
     this.flyer = new SpaceFlyer(eye, v3sub(target, eye));
+    this.observer = null;
   }
 
   /** Everything relative to the eye at the clock's time: uniforms, the hull's pose, the stars' turn. */
@@ -274,6 +324,7 @@ export class OutsideView {
     outside.sunDir.value.set(...sky.sunDir);
     outside.sunRadius.value = sky.sunRadius;
     outside.sunlight.value = sky.sunlight;
+    outside.irradiance.value = (AU / sky.sunDistance) ** 2;
     outside.earthDir.value.set(...v3scale(sky.earth.center, 1 / eD));
     outside.earthSin.value = sky.earth.radius / eD;
     toBody(outside.earthAxes.value, sky.earth.axes);
@@ -286,13 +337,14 @@ export class OutsideView {
     outside.earthshine.value = 0.3 * (omega / Math.PI) * phase;
     const ratio = this.renderer?.getPixelRatio() ?? 1, px = (this.canvas.clientHeight || 720) * ratio;
     this.necklace?.follow(eye, t, sky, px / ((this.camera.fov * Math.PI) / 180));
+    this.solar?.follow(sp, eye, t, px / ((this.camera.fov * Math.PI) / 180));
     if (this.stars) setPose(this.stars, sp.frames.relative('sun', f, t).axes, [0, 0, 0]);
     this.camera.position.set(0, 0, 0);
     const shot = this.shot;
     this.camera.up.set(...(shot?.up ?? [0, 0, 1]));
     const look = v3sub(target, eye);
     this.camera.lookAt(look[0], look[1], look[2]);
-    this.camera.fov = shot ? shot.fov : this.look === 'habitat' || this.flyer ? 45 : this.zoom;
+    this.camera.fov = shot ? shot.fov : this.look === 'habitat' || this.flyer || this.observer ? 45 : this.zoom;
     this.placeShip(eye, shot?.ship ?? null);
     // Close to a surface the near plane comes in with it; reversed depth keeps the far side precise.
     this.camera.near = Math.max(0.05, Math.min(10, this.clearance([0, 0, 0]) * 0.25));
@@ -368,6 +420,7 @@ export class OutsideView {
     // The pointer stays free (Arnd, 2026-10-21): the right button held swings the camera around the habitat.
     dragToLook(this.canvas, (dx, dy) => {
       if (this.flyer) { this.flyer.turn(-dx * 0.004, -dy * 0.004); return; }
+      if (this.observer) { this.observer.yaw -= dx * .005; this.observer.pitch = Math.max(-1.5, Math.min(1.5, this.observer.pitch + dy * .005)); return; }
       this.yaw -= dx * 0.005;
       this.pitch = Math.max(-1.5, Math.min(1.5, this.pitch + dy * 0.005));
     });
@@ -375,6 +428,11 @@ export class OutsideView {
       e.preventDefault();
       const k = Math.exp(e.deltaY * 0.001);
       if (this.flyer) return;
+      if (this.observer) {
+        const body = this.system.byId.get(this.observer.id)!;
+        this.observer.distance = Math.max(body.radius * 2.5, Math.min(100 * AU, this.observer.distance * k));
+        return;
+      }
       if (this.look === 'habitat') this.distance = Math.max(this.habitat.exterior.radius * 1.5, Math.min(2e7, this.distance * k));
       else this.zoom = Math.max(0.2, Math.min(60, this.zoom * k));
     }, { passive: false });
@@ -387,6 +445,7 @@ export class OutsideView {
     const keys: Record<string, Look> = { Digit1: 'habitat', Digit2: 'earth', Digit3: 'moon', Digit4: 'neighbour' };
     const next = keys[e.code];
     if (!next) return;
+    this.observer = null;
     if (this.flyer) {
       const c = this.lookOffset(next);
       if (c) this.flyer.lookAlong(c);
@@ -400,6 +459,7 @@ export class OutsideView {
 
   /** Start or stop drawing (the page shows one view at a time). */
   setRunning(on: boolean): void {
+    if (this.solarControls && this.canvas.parentElement && !this.solarControls.element.parentElement) this.canvas.parentElement.append(this.solarControls.element);
     this.loop.set(on);
   }
 
@@ -419,6 +479,7 @@ export class OutsideView {
     }
     const before = this.time;
     this.time += dt * speed;
+    this.limitClock();
     if (this.arriving) {
       // The arrival sets the clock itself: it jumps forward at each cut (and at Start).
       const a = this.arriving, first = a.elapsed === 0;
@@ -441,6 +502,12 @@ export class OutsideView {
     }
     outside.clouds.value.z = outside.clouds.value.z - (dt * speed / DAY) * 0.05;
     this.place();
+    this.controlClock += dt;
+    if (this.controlClock >= .25) {
+      this.controlClock = 0;
+      this.solarControls.element.hidden = this.attracting;
+      this.solarControls.update(dateOf(this.space.jd(this.time)), this.observer?.id ?? null, this.sky?.sunDistance ?? AU);
+    }
     // A cut is a new camera: it meters afresh instead of adapting from the last shot.
     this.meterAndAdapt(cut ? Infinity : dt);
     const ratio = this.renderer.getPixelRatio(), px = (this.canvas.clientHeight || 720) * ratio;
@@ -473,7 +540,8 @@ export class OutsideView {
     }
     // Inside the spindle's bore every ray lands on its walls, in the light of its lamps.
     const room = this.necklace?.insideBore() ? { luminance: BORE_ALBEDO * BORE_LIGHT, light: BORE_LIGHT } : null;
-    const metered: Meterable = { sky: this.sky, hulls, earthshine: outside.earthshine.value, room };
+    const celestial = this.solar.seen.filter(s => s.body.radius / s.distance > .0003).sort((a, b) => a.distance - b.distance).map(s => ({ center: s.center, radius: s.body.radius, albedo: s.body.albedo, light: s.light }));
+    const metered: Meterable = { sky: this.sky, hulls, earthshine: outside.earthshine.value, room, celestial };
     this.exposure = adapt(this.exposure, exposureFor(metered, rays, this.nightEyes ? DARKEST.nightEyes : DARKEST.plain), dt);
     outside.exposure.value = this.exposure;
   }

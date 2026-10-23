@@ -214,6 +214,16 @@ export const views = {
   ] },
   'far-meadow-up': { query: 'view=inside', about: 'standing in a meadow, looking up at the far side', settle: 6000, steps: [{ debug: 'Into the nearest meadow' }, { wait: 5000 }, { look: [0, -260] }, { wait: 3000 }] },
   outside: { query: 'view=outside', about: 'the home habitat from outside', default: true },
+  'solar-system': { query: 'view=outside', about: 'Real-scale planetary observer: inner worlds, rings, major moons and the outer system', settle: 6000, steps: [
+    { run: async page => { await page.locator('.solar-controls summary').click(); } },
+    ...['sun', 'mercury', 'venus', 'earth', 'moon', 'mars', 'moon-401', 'jupiter', 'saturn', 'moon-606', 'uranus', 'neptune', 'moon-801', 'pluto', 'moon-901', 'haumea', 'makemake', 'eris'].flatMap(id => [
+      { run: async page => { await page.getByLabel('Celestial body', { exact: true }).selectOption(id); await page.getByRole('button', { name: 'Observe', exact: true }).click(); } },
+      { wait: 4500 }, { shot: id },
+    ]),
+    { run: async page => { await page.getByLabel('Outside clock speed').selectOption('86400'); } }, { wait: 2000 },
+    { run: async page => { await page.getByLabel('Outside clock speed').selectOption('0'); await page.getByRole('button', { name: 'Return to habitat', exact: true }).click(); } },
+    { wait: 4000 }, { shot: 'home' }, heap('solar-system')
+  ] },
   'outside-earth': { query: 'view=outside', about: 'looking at Earth (key 2)', steps: [{ key: 'Digit2' }, { wait: 3000 }] },
   'outside-moon': { query: 'view=outside', about: 'looking at the Moon (key 3)', steps: [{ key: 'Digit3' }, { wait: 3000 }] },
   'outside-neighbour': { query: 'view=outside', about: 'the nearest neighbour in the Necklace (key 4)', steps: [{ key: 'Digit4' }, { wait: 3000 }] },

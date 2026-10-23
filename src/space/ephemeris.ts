@@ -16,15 +16,9 @@ import { v3scale, v3sub, v3add, type Vec3 } from '@futuremagic/core';
 import { AU, EARTH, JD_J2000, MOON } from './constants';
 import { centuries } from './time';
 import { mul, rotX, rotZ, type Mat3 } from './pose';
+import { eccentricAnomaly } from './orbits';
 
 const D = Math.PI / 180;
-
-/** Solve Kepler's equation E − e sin E = M (radians). */
-function eccentricAnomaly(M: number, e: number): number {
-  let E = M + e * Math.sin(M);
-  for (let i = 0; i < 8; i++) E -= (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
-  return E;
-}
 
 /** Inclination and ascending node of Earth's orbit on the J2000 ecliptic (radians). */
 function orbitPlaneAt(T: number): { I: number; Omega: number } {

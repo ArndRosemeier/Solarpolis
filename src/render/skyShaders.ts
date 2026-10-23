@@ -30,6 +30,8 @@ export const outside = {
   sunDir: uniform(new Vector3(1, 0, 0)),
   sunRadius: uniform(0.00465),
   sunlight: uniform(1),
+  irradiance: uniform(1),
+  bodiesInDome: uniform(1),
   /** Earth and Moon: unit direction to the centre, sine of the angular radius, and scene → body axes. */
   earthDir: uniform(new Vector3(0, -1, 0)),
   earthSin: uniform(0.15),
@@ -65,7 +67,7 @@ export const skyMaps = {
 };
 
 /** Equirectangular lookup (longitude 0 in the middle) on a unit-sphere normal in the body's own axes, without the mip seam where longitude wraps. */
-function sphereMap(map: typeof skyMaps.earthDay, n: Node<'vec3'>): Node<'vec4'> {
+export function sphereMap(map: typeof skyMaps.earthDay, n: Node<'vec3'>): Node<'vec4'> {
   const u = atan(n.y, n.x).div(2 * Math.PI).add(0.5);
   // The maps are not flipped: v = 0 is the top row, the north pole.
   const v = float(0.5).sub(asin(clamp(n.z, -1, 1)).div(Math.PI));
@@ -94,7 +96,7 @@ function farSphere(d: Node<'vec3'>, c: Node<'vec3'>, s: Node<'float'>): { hit: N
 }
 
 /** Earth seen from outside: day map, seeded clouds, ocean glint, the thin blue limb and the dim city lights. */
-function earthColor(d: Node<'vec3'>, e: ReturnType<typeof farSphere>): Node<'vec3'> {
+export function earthColor(d: Node<'vec3'>, e: ReturnType<typeof farSphere>, illumination: Node<'float'> = outside.sunlight): Node<'vec3'> {
   const nE = outside.earthAxes.mul(e.n);
   const mu0 = dot(e.n, outside.sunDir), mu = max(dot(e.n, d.negate()), 0);
   const day = sphereMap(skyMaps.earthDay, nE).rgb;
@@ -108,7 +110,7 @@ function earthColor(d: Node<'vec3'>, e: ReturnType<typeof farSphere>): Node<'vec
   const cloud = smoothstep(-0.1, 0.45, cover).mul(0.85);
   const ocean = smoothstep(0.004, 0.02, day.b.sub(max(day.r, day.g)));
   const surface = mix(day, vec3(0.82, 0.84, 0.88), cloud);
-  const lit = max(mu0, 0).mul(outside.sunlight);
+  const lit = max(mu0, 0).mul(illumination);
   // Sun glint on open water.
   const half = normalize(outside.sunDir.sub(d));
   const glint = pow(max(dot(e.n, half), 0), 900).mul(ocean).mul(float(1).sub(cloud)).mul(lit).mul(0.6);
@@ -120,11 +122,11 @@ function earthColor(d: Node<'vec3'>, e: ReturnType<typeof farSphere>): Node<'vec
 }
 
 /** The Moon: its albedo map (mean albedo 0.12), lit Lommel-Seeliger, so the full Moon looks flat as it does. */
-function moonColor(d: Node<'vec3'>, m: ReturnType<typeof farSphere>): Node<'vec3'> {
+export function moonColor(d: Node<'vec3'>, m: ReturnType<typeof farSphere>, illumination: Node<'float'> = outside.sunlight): Node<'vec3'> {
   const nM = outside.moonAxes.mul(m.n);
   const mu0 = max(dot(m.n, outside.sunDir), 0), mu = max(dot(m.n, d.negate()), 1e-3);
   const albedo = sphereMap(skyMaps.moon, nM).rgb.mul(0.36);
-  return albedo.mul(mu0.mul(2).div(mu0.add(mu))).mul(outside.sunlight).add(albedo.mul(2e-4));
+  return albedo.mul(mu0.mul(2).div(mu0.add(mu))).mul(illumination).add(albedo.mul(2e-4));
 }
 
 /** Radiance of the sky in direction d (unit, scene axes): Earth over the Moon over the Sun, plus the eye's glare. */
@@ -132,7 +134,7 @@ export function skyRadiance(d: Node<'vec3'>): Node<'vec3'> {
   const e = farSphere(d, outside.earthDir, outside.earthSin);
   const m = farSphere(d, outside.moonDir, outside.moonSin);
   // The Sun's disc with limb darkening, its mean radiance π / Ω (white paper in sunlight is 1).
-  const th = outside.sunRadius;
+  const th = outside.sunRadius.sin();
   const sa = cross(d, outside.sunDir), a2 = dot(sa, sa), facing = dot(d, outside.sunDir).greaterThan(0);
   const muS = sqrt(max(float(1).sub(a2.div(th.mul(th))), 0));
   const disc = select(facing.and(a2.lessThan(th.mul(th))), float(1).div(th.mul(th).mul(0.8)).mul(float(1).sub(muS.oneMinus().mul(0.6))), float(0));
@@ -146,7 +148,8 @@ export function skyRadiance(d: Node<'vec3'>): Node<'vec3'> {
   const through = vec3(1, 0.42, 0.15).mul(pow(max(dot(d, outside.sunDir), 0), 40).mul(1.5));
   const sky = vec3(1, 0.97, 0.92).mul(disc.mul(outside.sunlight)).add(scattered.add(through).mul(limb).mul(0.25));
   const behind = select(m.hit, moonColor(d, m), sky);
-  return select(e.hit, earthColor(d, e), behind).add(vec3(1, 0.95, 0.88).mul(glare));
+  const dome = select(outside.bodiesInDome.greaterThan(.5), select(e.hit, earthColor(d, e), behind), sky);
+  return dome.add(vec3(1, 0.95, 0.88).mul(glare)).mul(outside.irradiance);
 }
 
 /**
@@ -219,7 +222,9 @@ export function starColor(): Node<'vec3'> {
     const cr = cross(dir, c);
     return select(dot(dir, c).greaterThan(0).and(dot(cr, cr).lessThan(s.mul(s))), float(0), float(1));
   };
-  const seen = varying(covered(outside.earthDir, outside.earthSin).mul(covered(outside.moonDir, outside.moonSin)));
+  // The full solar-system renderer writes real body depths; its foreground moon points must not be masked by a background planet.
+  // Keep this arithmetic: a nested select inside a varying loses the false branch in the WebGPU node builder.
+  const seen = varying(mix(float(1), covered(outside.earthDir, outside.earthSin).mul(covered(outside.moonDir, outside.moonSin)), outside.bodiesInDome));
   // The pixel's offset from the star (px).
   const px = corner.mul(reach), r = length(px);
   const core = exp(dot(px, px).div(-2 * STAR_SIGMA * STAR_SIGMA));
