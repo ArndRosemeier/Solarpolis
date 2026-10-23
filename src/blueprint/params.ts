@@ -298,6 +298,33 @@ export interface Life {
   sailing: Sailing;
   /** The transport capsules anyone calls through the neural link (world/capFlight.ts, gen/capsules.ts). */
   caps: Caps;
+  /** How nobody is hurt by a fall: the Mind foresees it, the guardians catch it (world/fall.ts, world/catch.ts). */
+  guard: Guard;
+}
+
+/**
+ * How the habitat keeps anyone from being hurt by a fall (design "Nobody falls far", Arnd 2026-10-23: no security
+ * against deep falls is unrealistic in such a future). The land keeps its cliffs open; its Mind foresees every fall
+ * from the same forces the physics uses, and a fall that would land faster than `harm` m/s into the ground (across it;
+ * `water` times that into water) is caught by the guardians posted along the drops, one per `posts` m: `hands` of them
+ * fly to meet the body (at most `speed` m/s, their fans pushing at most `thrust` m/s² beyond holding them up), fall
+ * with it, take hold, slow it by at most `brake` floor gravities as felt, and carry it back to stand at `carry` m/s.
+ * The Long Drop is caught late: `late` (a share of the radius) over the ground. Where no guardian is close enough to
+ * catch a fall gently, the last resort (Arnd, 2026-10-23: "an airbag, out of the ground"): the ground under where it
+ * lands bursts a bag up to `bag` m tall, which stops the body at about `cushion` floor gravities as felt.
+ */
+export interface Guard {
+  harm: number;
+  water: number;
+  brake: number;
+  speed: number;
+  thrust: number;
+  carry: number;
+  posts: number;
+  hands: number;
+  late: number;
+  bag: number;
+  cushion: number;
 }
 
 /**

@@ -20,10 +20,6 @@
     "reason": "The leaf atlas (ported from Scale's getLeafAtlas) draws each cell with its own little leaf recipe: the twig cells share drawTwigCell and differ only in their numbers (shape, size, colour). That data reads best one recipe per cell, as in Scale."
   },
   {
-    "key": "idiom: [.profile .s .theta] in solarpolis/gen/capsules.ts + solarpolis/gen/shapes.ts + solarpolis/gen/underMesh.ts + solarpolis/main.ts + solarpolis/render/birds.ts + solarpolis/render/lights.ts + solarpolis/render/talk.ts + solarpolis/render/view.ts + solarpolis/sim/flocks.ts + solarpolis/sim/sounds.ts + solarpolis/world/clouds.ts + solarpolis/world/flyer.ts",
-    "reason": "Reading a point's (theta, s) and the habitat's profile together is how every interior layer places things; it crossed the finder's rarity bar only because a new file (gen/portFace.ts) changed the file count, with no new copy."
-  },
-  {
     "key": "idiom: [.acos .max .min Math] in solarpolis/render/solar.ts + solarpolis/space/voyage.ts + solarpolis/world/flyer.ts",
     "reason": "Clamping a dot product to the acos domain is a local floating-point safety idiom in unrelated geometry and attitude calculations."
   },
@@ -582,14 +578,6 @@
   {
     "key": "same name: solarpolis/render/birds.ts#follow + solarpolis/render/traffic.ts#follow",
     "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the ships' and port craft's view (render/traffic.ts) does its own work in each."
-  },
-  {
-    "key": "same name: solarpolis/render/fliers.ts#follow + solarpolis/render/hullDetail.ts#follow",
-    "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
-  },
-  {
-    "key": "same name: solarpolis/render/fliers.ts#follow + solarpolis/render/necklace.ts#follow",
-    "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
   },
   {
     "key": "same name: solarpolis/render/fliers.ts#follow + solarpolis/render/people.ts#follow",
@@ -1460,10 +1448,6 @@
     "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
   },
   {
-    "key": "idiom: [.at .max .profile .r .s Math] in solarpolis/gen/water.ts + solarpolis/sim/air.ts + solarpolis/sim/birds.ts + solarpolis/sim/fauna.ts + solarpolis/sim/flocks.ts + solarpolis/sim/herds.ts + solarpolis/sim/population.ts + solarpolis/sim/sounds.ts",
-    "reason": "Profile radius with a singularity guard is the same coordinate conversion idiom in water geometry and moving agents, not duplicated behaviour. The soundscape (sim/sounds.ts) samples the crowns round the listener with it too. The birds (sim/birds.ts, render/birds.ts, render/birdShaders.ts) joined the group with the same plain idiom. The flocks (sim/flocks.ts) joined with the same plain idiom."
-  },
-  {
     "key": "idiom: [.at .max .profile .r .s Math] in solarpolis/gen/water.ts + solarpolis/sim/flocks.ts + solarpolis/sim/herds.ts + solarpolis/sim/population.ts",
     "reason": "Profile radius with a singularity guard is the same coordinate conversion idiom in water geometry and moving agents, not duplicated behaviour. The flocks (sim/flocks.ts) joined with the same plain idiom."
   },
@@ -1625,10 +1609,6 @@
   },
   {
     "key": "same name: solarpolis/render/boats.ts#dispose + solarpolis/render/vessel.ts#dispose",
-    "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
-  },
-  {
-    "key": "same name: solarpolis/render/boats.ts#follow + solarpolis/render/fliers.ts#follow",
     "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
   },
   {
@@ -1948,10 +1928,6 @@
     "reason": "TSL shader node chains (`.add(…).mul(…)`) are how every kind's shader is written in three's node language; this cluster only crossed the idiom finder's information floor because more files raised its weights (neural link files, 2026-10-23), not by a new copy."
   },
   {
-    "key": "idiom: [.at .max .profile .r Math] in solarpolis/gen/capsules.ts + solarpolis/sim/flocks.ts + solarpolis/sim/population.ts",
-    "reason": "Reading the profile's radius at a point (profile.at(s).r, kept off zero) to turn metres around into an angle: one property read, as every floor system does."
-  },
-  {
     "key": "idiom: [.at .max .r .s Math] in solarpolis/gen/capsules.ts + solarpolis/sim/birds.ts + solarpolis/sim/flocks.ts + solarpolis/sim/specks.ts + solarpolis/world/capFlight.ts",
     "reason": "The radius at a point of the profile, kept off zero, to turn metres round the axis into an angle: a coordinate conversion each module does in its own expression, not shared behaviour."
   },
@@ -1962,10 +1938,6 @@
   {
     "key": "idiom: [.distance .sort] in solarpolis/app/voyageComputer.ts + solarpolis/render/outside.ts + solarpolis/render/talk.ts",
     "reason": "Sorting candidates by their own distance field: a one-line sort over different lists (voyage destinations, bodies outside, speakers)."
-  },
-  {
-    "key": "idiom: [.habitat .job .params .pool] in solarpolis/render/boats.ts + solarpolis/render/capsules.ts + solarpolis/render/landmarks.ts + solarpolis/render/specks.ts + solarpolis/render/view.ts",
-    "reason": "pool.job({ kind, params: habitat.params, ... }) is the one way to ask the worker pool for a job (workers/pool.ts); each view asks for its own kind of job."
   },
   {
     "key": "idiom: [.habitat .life .params] in solarpolis/render/capsules.ts + solarpolis/sim/air.ts + solarpolis/sim/herds.ts + solarpolis/world/capFlight.ts",
@@ -2064,10 +2036,6 @@
     "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
   },
   {
-    "key": "idiom: [.eye .profile] in solarpolis/render/animals.ts + solarpolis/render/birds.ts + solarpolis/render/homes.ts",
-    "reason": "Each view reads the eye's place on the profile (fromWorld(h.profile, eye)) for its own culling; the finder only surfaced it when new files changed its word weights (PR threshold touched none of them)."
-  },
-  {
     "key": "same name: solarpolis/render/birds.ts#dispose + solarpolis/render/traffic.ts#dispose",
     "reason": "Views' dispose methods give back what they drew through the one way (freeMesh, stage.remove) and clear their own maps; the bodies differ in what each holds."
   },
@@ -2076,7 +2044,135 @@
     "reason": "Plain sets of ids (clips loaded, garment kinds, places visited), each a line; nothing shared to fold."
   },
   {
-    "key": "idiom: [.eye .profile] in solarpolis/render/animals.ts + solarpolis/render/birds.ts + solarpolis/render/homes.ts",
-    "reason": "Each view asks where the eye is on the habitat's profile (fromWorld(habitat.profile, ...eye)) for its own range test; the call is the seam already."
+    "key": "idiom: [.at .max .profile .r .s Math] in solarpolis/gen/water.ts + solarpolis/main.ts + solarpolis/sim/air.ts + solarpolis/sim/birds.ts + solarpolis/sim/fauna.ts + solarpolis/sim/flocks.ts + solarpolis/sim/herds.ts + solarpolis/sim/population.ts + solarpolis/sim/sounds.ts + solarpolis/world/catch.ts",
+    "reason": "Profile radius with a singularity guard is the same coordinate conversion idiom in water geometry and moving agents, not duplicated behaviour. The soundscape (sim/sounds.ts) samples the crowns round the listener with it too. The birds (sim/birds.ts, render/birds.ts, render/birdShaders.ts) joined the group with the same plain idiom. The flocks (sim/flocks.ts) joined with the same plain idiom."
+  },
+  {
+    "key": "idiom: [.castShadow .frustumCulled .name] in solarpolis/render/guardians.ts + solarpolis/render/homes.ts + solarpolis/render/view.ts",
+    "reason": "Setting up a new mesh's name, culling and shadow, three lines in each view that makes one (the guardians' bag, the homes' furniture, the view's cloud layer): each its own mesh."
+  },
+  {
+    "key": "idiom: [.d .sort] in solarpolis/sim/birds.ts + solarpolis/sim/sailing.ts + solarpolis/world/posts.ts",
+    "reason": "Sorting found things by their distance (nests near a point, sailing marks, guardians' posts): one comparator line each."
+  },
+  {
+    "key": "idiom: [.disposed .prepare .stage] in solarpolis/render/activityProps.ts + solarpolis/render/guardians.ts + solarpolis/render/homes.ts",
+    "reason": "A mesh compiled by the Stage, then dropped if the view was disposed meanwhile: the one safe order for an async prepare, two lines in each view."
+  },
+  {
+    "key": "idiom: [.gravityAt .hypot Math] in solarpolis/physics/character.ts + solarpolis/render/guardians.ts + solarpolis/world/catch.ts",
+    "reason": "The spin's gravity at a point's distance from the axis (habitat.gravityAt(hypot(x, y))): the blueprint's own call, read where each needs it."
+  },
+  {
+    "key": "idiom: [.habitat .job .params .pool] in solarpolis/render/boats.ts + solarpolis/render/capsules.ts + solarpolis/render/guardians.ts + solarpolis/render/landmarks.ts + solarpolis/render/specks.ts + solarpolis/render/view.ts",
+    "reason": "pool.job({ kind, params: habitat.params, ... }) is the one way to ask the worker pool for a job (workers/pool.ts); each view asks for its own kind of job."
+  },
+  {
+    "key": "idiom: [.profile .s .theta] in solarpolis/gen/capsules.ts + solarpolis/gen/shapes.ts + solarpolis/gen/underMesh.ts + solarpolis/main.ts + solarpolis/render/birds.ts + solarpolis/render/lights.ts + solarpolis/render/talk.ts + solarpolis/render/view.ts + solarpolis/sim/flocks.ts + solarpolis/sim/sounds.ts + solarpolis/world/catch.ts + solarpolis/world/clouds.ts + solarpolis/world/flyer.ts",
+    "reason": "Reading a point's (theta, s) and the habitat's profile together is how every interior layer places things; it crossed the finder's rarity bar only because a new file (gen/portFace.ts) changed the file count, with no new copy."
+  },
+  {
+    "key": "same name: solarpolis/physics/world.ts#dispose + solarpolis/render/guardians.ts#dispose",
+    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
+  },
+  {
+    "key": "same name: solarpolis/render/activityProps.ts#dispose + solarpolis/render/guardians.ts#dispose",
+    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/figure.ts#dispose + solarpolis/render/guardians.ts#dispose",
+    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
+  },
+  {
+    "key": "same name: solarpolis/render/animals.ts#info + solarpolis/render/guardians.ts#info",
+    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
+  },
+  {
+    "key": "same name: solarpolis/render/capsules.ts#dispose + solarpolis/render/guardians.ts#dispose",
+    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
+  },
+  {
+    "key": "same name: solarpolis/render/capsules.ts#feel + solarpolis/render/guardians.ts#feel",
+    "reason": "A link service's status card and a carrier's felt gravity (capsules, guardians): the same small API the view and the link read, each its own object's."
+  },
+  {
+    "key": "same name: solarpolis/render/capsules.ts#info + solarpolis/render/guardians.ts#info",
+    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
+  },
+  {
+    "key": "same name: solarpolis/render/capsules.ts#status + solarpolis/render/guardians.ts#status",
+    "reason": "A link service's status card and a carrier's felt gravity (capsules, guardians): the same small API the view and the link read, each its own object's."
+  },
+  {
+    "key": "same name: solarpolis/render/capsules.ts#status + solarpolis/render/view.ts#status",
+    "reason": "A link service's status card and a carrier's felt gravity (capsules, guardians): the same small API the view and the link read, each its own object's."
+  },
+  {
+    "key": "same name: solarpolis/render/fliers.ts#dispose + solarpolis/render/guardians.ts#dispose",
+    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
+  },
+  {
+    "key": "same name: solarpolis/render/guardians.ts#bytes + solarpolis/render/talk.ts#bytes",
+    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
+  },
+  {
+    "key": "same name: solarpolis/render/guardians.ts#dispose + solarpolis/render/homes.ts#dispose",
+    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
+  },
+  {
+    "key": "same name: solarpolis/render/guardians.ts#dispose + solarpolis/render/hullDetail.ts#dispose",
+    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
+  },
+  {
+    "key": "same name: solarpolis/render/guardians.ts#dispose + solarpolis/render/landmarks.ts#dispose",
+    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
+  },
+  {
+    "key": "same name: solarpolis/render/guardians.ts#dispose + solarpolis/render/necklace.ts#dispose",
+    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
+  },
+  {
+    "key": "same name: solarpolis/render/guardians.ts#dispose + solarpolis/render/specks.ts#dispose",
+    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
+  },
+  {
+    "key": "same name: solarpolis/render/guardians.ts#dispose + solarpolis/render/tiled.ts#dispose",
+    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
+  },
+  {
+    "key": "same name: solarpolis/render/guardians.ts#dispose + solarpolis/render/traffic.ts#dispose",
+    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
+  },
+  {
+    "key": "same name: solarpolis/render/guardians.ts#dispose + solarpolis/render/vessel.ts#dispose",
+    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
+  },
+  {
+    "key": "same name: solarpolis/render/guardians.ts#info + solarpolis/render/homes.ts#info",
+    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
+  },
+  {
+    "key": "same name: solarpolis/render/guardians.ts#info + solarpolis/render/landmarks.ts#info",
+    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
+  },
+  {
+    "key": "same name: solarpolis/render/guardians.ts#info + solarpolis/render/outside.ts#info",
+    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
+  },
+  {
+    "key": "same name: solarpolis/render/guardians.ts#info + solarpolis/render/traffic.ts#info",
+    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
+  },
+  {
+    "key": "same name: solarpolis/render/guardians.ts#step + solarpolis/render/lift.ts#step",
+    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
+  },
+  {
+    "key": "same name: solarpolis/render/guardians.ts#step + solarpolis/render/vesselVisit.ts#step",
+    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
+  },
+  {
+    "key": "same name: solarpolis/render/guardians.ts#step + solarpolis/world/flyer.ts#step",
+    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
   }
 ]

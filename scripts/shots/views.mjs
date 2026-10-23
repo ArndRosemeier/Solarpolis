@@ -56,7 +56,7 @@ async function logPeople(page) {
   await page.keyboard.press('Control+Shift+F12');
   const text = await page.locator('.dbg-panel .dbg-info').innerText({ timeout: 3000 }).catch(() => '');
   await page.locator('.dbg-panel .dbg-close').click().catch(() => {});
-  const lines = text.split('\n').filter((l) => l.startsWith('people') || l.startsWith('capsule') || l.startsWith('understorey') || l.startsWith('home furniture') || l.startsWith('θ') || l.startsWith('specks') || l.startsWith('drones') || l.startsWith('talk') || l.startsWith('animals') || l.startsWith('squirrels') || l.startsWith('deer') || l.startsWith('birds') || l.startsWith('shaders') || l.startsWith('memory') || l.includes('MB') || l.includes('fps'));
+  const lines = text.split('\n').filter((l) => l.startsWith('people') || l.startsWith('capsule') || l.startsWith('catch') || l.startsWith('understorey') || l.startsWith('home furniture') || l.startsWith('θ') || l.startsWith('specks') || l.startsWith('drones') || l.startsWith('talk') || l.startsWith('animals') || l.startsWith('squirrels') || l.startsWith('deer') || l.startsWith('birds') || l.startsWith('shaders') || l.startsWith('memory') || l.includes('MB') || l.includes('fps'));
   await page.evaluate((ls) => { for (const l of ls) console.warn(l); }, lines.length ? lines : ['(no people line)']);
   // Builds after the warm-up that started sooner than twice the last one's time after it (the cap, docs/SHADERS.md):
   // which, and how (a node-sync one was drawn uncompiled).
@@ -257,6 +257,16 @@ export const views = {
   ] },
   // The boats (gen/boat.ts, render/boats.ts): four hours into the day, riding beside each design in turn (under sail if
   // one is out), twice a few seconds apart; then beside the nearest boat under sail from further off, and the great lake.
+  // Falls (world/fall.ts, world/catch.ts, render/guardians.ts): the guardians catch a fall that would hurt, the ground's
+  // bag one no guardian reaches. From behind (the wheel), so the body, the guardians and the bag are in the frame.
+  catch: { query: 'view=inside', about: 'falls caught, seen from behind: a 50 m drop with no guardian near (the bag bursting out, -bag50; the body let down, -bag50-down), an 8 m drop onto the bag (-bag8), the brink of the nearest drop (-brink) and a step off it (-brink-falling, -brink-caught, -brink-carried, -brink-set-down); the Long Drop a minute in (-long), and caught near the ground (-long-caught); logs the catch line at each; a heap snapshot', settle: 6000, steps: [
+    memoryDetails, { wheel: 600 },
+    { debug: 'Fall: drop from 50 m here' }, { wait: 2600 }, { shot: 'bag50' }, { wait: 2500 }, { shot: 'bag50-down' }, { wait: 6000 },
+    { debug: 'Fall: drop from 8 m here (the bag)' }, { wait: 1200 }, { shot: 'bag8' }, { wait: 6000 },
+    { debug: 'Fall: walk to the brink of the nearest drop (step off it yourself)' }, { wait: 6000 }, { look: [0, 120] }, { wait: 1000 }, { shot: 'brink' }, { look: [0, -120] },
+    { key: 'KeyW', hold: 1500 }, { wait: 300 }, { shot: 'brink-falling' }, { wait: 2500 }, { shot: 'brink-caught' }, { wait: 4000 }, { shot: 'brink-carried' }, { wait: 12000 }, { shot: 'brink-set-down' },
+    { debug: 'Fall: the Long Drop, step out at capsule height over the floor' }, { wait: 60000 }, { shot: 'long' }, { wait: 85000 }, { shot: 'long-caught' },
+    heap('catch')] },
   // The capsules (gen/capsules.ts, world/capFlight.ts, render/capsules.ts): one called to here comes in and sets down,
   // the body walks round to its door and sits, the ride to the nearest court climbs, crosses and sets down, and the body
   // gets out. Times are generous: the line logged after each picture says the phase it was in.

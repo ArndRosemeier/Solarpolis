@@ -3,7 +3,7 @@
  * The generation worker: builds what the pool asks for from the habitat's parameters. Everything it makes is a pure
  * function of those parameters, so any worker gives the same answer.
  */
-import { derive, type Habitat, type HabitatParams } from '../blueprint';
+import { derive, type Habitat, type HabitatParams, type Vec3 } from '../blueprint';
 import { makeTerrain, type Terrain } from '../gen/terrain';
 import { makeEcology, type Ecology } from '../gen/ecology';
 import { buildPatch, type GroundPatch } from '../gen/patch';
@@ -41,6 +41,7 @@ import type { VoyagePlan } from '../space/voyage';
 import { buildCapsule, type CapPad } from '../gen/capsules';
 import { landingNear } from '../gen/capLanding';
 import { planFlight, type Flight, type FlightEnds } from '../world/capFlight';
+import { catchFor, type CatchOptions, type CatchPlan } from '../world/catch';
 
 /** The built things that stream in tiles. */
 export type TiledPart = 'stair' | 'under' | keyof typeof SITE_PARTS;
@@ -86,7 +87,9 @@ export type GenRequest =
   /** Where a capsule can set down near (θ, s): within `reach` m, no nearer than `least`, else the nearest stop within `orStop` (gen/capLanding.ts `landingNear`). */
   | { kind: 'capPad'; params: HabitatParams; theta: number; s: number; reach: number; least: number; orStop?: number }
   /** A capsule's flight between two ends (world/capFlight.ts `planFlight`). */
-  | { kind: 'capFlight'; params: HabitatParams; ends: FlightEnds };
+  | { kind: 'capFlight'; params: HabitatParams; ends: FlightEnds }
+  /** A fall foreseen from the feet at `p` moving at `v`, and its catch if it would hurt (world/catch.ts `catchFor`). */
+  | { kind: 'catch'; params: HabitatParams; p: Vec3; v: Vec3; drag: number; options: CatchOptions };
 export type GenAnswer =
   | { kind: 'voyage'; plan: VoyagePlan }
   | { kind: 'tile'; tile: TileMesh }
@@ -115,6 +118,7 @@ export type GenAnswer =
   | { kind: 'capsule'; body: MappedArrays; glass: MappedArrays; doorBody: MappedArrays; doorGlass: MappedArrays }
   | { kind: 'capPad'; pad: CapPad | null }
   | { kind: 'capFlight'; flight: Flight }
+  | { kind: 'catch'; plan: CatchPlan | null }
   | { error: string };
 
 /** Every typed array's buffer in an answer, to transfer rather than copy. */
@@ -245,6 +249,10 @@ self.onmessage = async (e: MessageEvent<GenRequest>) => {
     }
     if (req.kind === 'capFlight') {
       post({ kind: 'capFlight', flight: planFlight(terrain, req.ends) });
+      return;
+    }
+    if (req.kind === 'catch') {
+      post({ kind: 'catch', plan: catchFor(terrain, req.p, req.v, req.drag, req.options) });
       return;
     }
     if (req.kind === 'squirrels') {
