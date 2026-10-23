@@ -18,7 +18,7 @@
  * is `lampFlux` and falls off with the square of the distance. Pure.
  */
 import type { Vec3 } from '@futuremagic/core';
-import { berthArmAt, exteriorDistance, type Exterior, type Habitat } from '../blueprint';
+import { berthArmAt, exteriorDistance, toLuminance1, type Exterior, type Habitat } from '../blueprint';
 import { partSpan, type ShipShape } from './ship';
 
 /** The Sun's illuminance at 1 AU (lux): the unit a light's flux is given in. */
@@ -43,18 +43,13 @@ export interface HullLight {
   blink: Blink;
 }
 
-const luminance1 = (c: Vec3): Vec3 => {
-  const y = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
-  return [c[0] / y, c[1] / y, c[2] / y];
-};
-
 /** Aviation's colours, as lamps show them. */
 export const LIGHT_COLOUR = {
-  red: luminance1([1, 0.06, 0.03]),
-  green: luminance1([0.1, 1, 0.45]),
-  white: luminance1([1, 0.97, 0.92]),
-  strobe: luminance1([0.92, 0.95, 1]),
-  amber: luminance1([1, 0.62, 0.22]),
+  red: toLuminance1([1, 0.06, 0.03]),
+  green: toLuminance1([0.1, 1, 0.45]),
+  white: toLuminance1([1, 0.97, 0.92]),
+  strobe: toLuminance1([0.92, 0.95, 1]),
+  amber: toLuminance1([1, 0.62, 0.22]),
 } as const;
 
 /**

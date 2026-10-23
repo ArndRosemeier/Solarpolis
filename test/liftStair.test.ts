@@ -97,4 +97,21 @@ for (const { name, params } of MATRIX) {
     assert.ok(solid && solid.index.length > 30, 'treads and walls near it for the physics');
     assert.ok(solid.positions.every((x) => Math.abs(x) < 300), 'relative to the point');
   });
+
+  test(`lift stair (${name}): the physics stands on every floor, the Threshold's galleries high over the ramp too`, () => {
+    const h = habitatOf(name, params), st = liftStairOf(h);
+    if (!st) return;
+    // A patch takes the parts near where one stands (within a bay's size here): measured at their floors, not at the
+    // ground far below them.
+    const ramp = rampOf(h), reach = 20 * st.handrail, galleries = st.threshold?.galleries ?? [];
+    // The top terrace, a bay of each gallery, the lowest platform (on the ground), and the capsule berth.
+    const floors: [string, number, number, number][] = [st.top, st.platforms[0], ...galleries.map((g) => g.bays[g.bays.length >> 1])]
+      .map((q) => [`${q.kind} ${q.bay ? q.bay.tier : ''}`, (q.z0 + q.z1) / 2, (q.w0 + q.w1) / 2, q.e]);
+    const berth = st.threshold?.berth;
+    if (berth) floors.push(['berth', ...berth.at, berth.e]);
+    for (const [what, z, w, e] of floors) {
+      const solid = buildStairSolid(h, ramp.world(z, w, e), reach);
+      assert.ok(solid && solid.index.length > 0, `${what} at ${(e - ramp.groundAt(z)).toFixed(0)} m over the ground has a floor`);
+    }
+  });
 }

@@ -58,10 +58,12 @@ export function hullGeometry(h: Habitat): HullGeometry {
   rad.band(x.wildFace, 0, x.wildFace, Ro, -1, 0);
   rad.band(x.portFace, Ro, x.portFace, h.params.hubRadius, 1, 0);
   for (const b of x.brims) {
-    // A flat ring in the endcap's plane, both faces radiating, with its rim.
+    // A flat ring in the endcap's plane, both faces radiating, with its rim. Each face's front is the side its normal
+    // points to: the material draws both sides and turns the normal round on the back, so a face wound the other way
+    // would be lit as the side facing away.
     const z0 = b.z - b.thickness / 2, z1 = b.z + b.thickness / 2;
-    rad.band(z0, b.tip, z0, b.inner, -1, 0);
-    rad.band(z1, b.inner, z1, b.tip, 1, 0);
+    rad.band(z0, b.inner, z0, b.tip, -1, 0);
+    rad.band(z1, b.tip, z1, b.inner, 1, 0);
     rad.band(z0, b.tip, z1, b.tip, 0, 1);
   }
 

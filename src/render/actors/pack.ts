@@ -9,8 +9,6 @@ import { Character, buildCatalog, defaultConfig, type CharacterCatalog, type Cha
 import { Human } from '@actors/human';
 import { IRIS_PRESETS, type ActorMaterialKit } from '@actors/three';
 import { nodeMaterials } from '@actors/three/webgpu';
-import type { MeshStandardMaterial } from 'three/webgpu';
-import { isScreen, plainCloth, screenFabrics } from './screens';
 
 /** The human pack's manifest. */
 export const HUMAN_PACK = `${import.meta.env?.BASE_URL ?? "/"}actors/human/manifest.json`;
@@ -51,18 +49,7 @@ export function humanCatalog(): Promise<{ catalog: CharacterCatalog; base: Chara
   return catalog;
 }
 
-/**
- * Actors' shared WebGPU graphs, with its screen garments made as plain cloth and lit as screens of our own
- * (`screenFabrics`, screens.ts: they share a few aurora textures instead of one each).
- */
-export const actorKit: ActorMaterialKit = {
-  ...nodeMaterials,
-  mesh(data, actor) {
-    if (!isScreen(data)) return nodeMaterials.mesh(data, actor);
-    const material = nodeMaterials.mesh(plainCloth(data), actor);
-    screenFabrics.adopt(material as MeshStandardMaterial);
-    return material;
-  },
-};
+/** Actors' shared WebGPU graphs (its screen garments share `screenTextures`, screens.ts, through each figure). */
+export const actorKit: ActorMaterialKit = nodeMaterials;
 
 export { Character };

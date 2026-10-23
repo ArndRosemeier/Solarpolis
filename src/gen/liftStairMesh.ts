@@ -163,12 +163,13 @@ export function buildStairSolid(h: Habitat, origin: Vec3, reach: number): { posi
   const st = liftStairOf(h);
   if (!st) return null;
   const ramp = rampOf(h);
-  const near = (p: PlanPoint): boolean => {
-    const q = ramp.world(p[0], p[1], ramp.groundAt(p[0]));
+  // Measured at the part's own floor: the Threshold's galleries stand far above the ramp's ground under them.
+  const inReach = (p: PlanPoint, e: number): boolean => {
+    const q = ramp.world(p[0], p[1], e);
     return Math.hypot(q[0] - origin[0], q[1] - origin[1], q[2] - origin[2]) < reach;
   };
   const b = new StairBuilder(st, ramp, (p) => v3sub(p, origin), 'solid');
-  b.lay(near);
+  b.lay(inReach);
   if (!b.shape.idx.length) return null;
   return b.shape.solid();
 }
@@ -188,25 +189,25 @@ class StairBuilder {
   readonly parts: StairParts = { platforms: 0, aprons: 0, steps: 0 };
 
   /**
-   * Build the parts whose middles `mine` takes; `box` (z0, z1, w0, w1 in plan), when given, holds every such middle, so
+   * Build the parts whose middles (in plan, with their floor's height) `mine` takes; `box` (z0, z1, w0, w1 in plan), when given, holds every such middle, so
    * legs and platforms wholly outside it are passed over.
    */
-  lay(mine: (p: PlanPoint) => boolean, box?: [number, number, number, number]): void {
+  lay(mine: (p: PlanPoint, e: number) => boolean, box?: [number, number, number, number]): void {
     const st = this.st, pad = st.width;
     const away = (z0: number, z1: number, w0: number, w1: number): boolean => !!box && (z1 + pad < box[0] || z0 - pad > box[1] || w1 + pad < box[2] || w0 - pad > box[3]);
     const count = this.detail === 'count';
-    for (const q of st.platforms) if (!away(q.z0, q.z1, q.w0, q.w1) && mine(centreOf(q))) { if (!count) this.platform(q); this.parts.platforms++; }
+    for (const q of st.platforms) if (!away(q.z0, q.z1, q.w0, q.w1) && mine(centreOf(q), q.e)) { if (!count) this.platform(q); this.parts.platforms++; }
     for (const s of legShapesOf(st)) {
       const l = s.leg;
       if (away(Math.min(l.from.z, l.to.z), Math.max(l.from.z, l.to.z), Math.min(l.from.w, l.to.w), Math.max(l.from.w, l.to.w))) continue;
       for (const ap of s.aprons) {
         const c = ap.corners, mid: PlanPoint = [(c[0][0] + c[1][0] + c[2][0]) / 3, (c[0][1] + c[1][1] + c[2][1]) / 3];
-        if (mine(mid)) { if (!count) this.apron(s, ap); this.parts.aprons++; }
+        if (mine(mid, ap.e)) { if (!count) this.apron(s, ap); this.parts.aprons++; }
       }
       // Runs of consecutive steps this tile owns.
       let first = -1;
       for (let k = 0; k <= s.steps.length; k++) {
-        const own = k < s.steps.length && mine(onLeg(s, (s.steps[k].a0 + s.steps[k].a1) / 2, 0));
+        const own = k < s.steps.length && mine(onLeg(s, (s.steps[k].a0 + s.steps[k].a1) / 2, 0), s.steps[k].top);
         if (own && first < 0) first = k;
         if (!own && first >= 0) { if (!count) this.run(s, first, k - 1); this.parts.steps += k - first; first = -1; }
       }
