@@ -21,6 +21,7 @@ import type { Terrain } from '../gen/terrain';
 import { horizonAt, OPEN_SKY } from '../gen/horizon';
 import { BODY_WIDTH, POSE, SPECK_STRIDE, writeSpeck } from '../gen/standIn';
 import type { Coats } from '../gen/coat';
+import { HEARD_WITHIN, type Source } from '../sim/sources';
 import { deerAt, densBytes, herdReady, herdsBytes, prepareHerd, squirrelAt, type Den, type Herd } from '../sim';
 import type { WorkerPool } from '../workers/pool';
 import { freeMesh } from './geometry';
@@ -356,6 +357,17 @@ export class AnimalView<H extends Home = Home> {
     return best && { feet: best.feet, up: best.up, front: best.front, height: this.heightOf(best) };
   }
 
+  /** The animals near the eye that can be heard (sim/sources.ts): where each is, how fast it goes, what it is doing. */
+  heard(eye: Vec3, t: number, out: Source[]): void {
+    const kind = this.kind.name === 'deer' ? 'deer' : 'squirrel', reach = HEARD_WITHIN[kind];
+    for (const [id, one] of this.ones) {
+      const now = one.now;
+      if (!now || away(one.feet, eye) > reach) continue;
+      const at = fromWorld(this.habitat.profile, ...one.feet);
+      out.push({ key: hashKey(id), kind, theta: at.theta, s: at.s, h: at.h, at: one.feet, speed: now.speed, doing: now.doing, began: t - now.since });
+    }
+  }
+
   /** Bytes held: the figures, the coats, the specks' instances, the animals' state (memory watchdog). */
   bytes(): number {
     let n = (this.specks?.data.byteLength ?? 0) + this.ones.size * 300 + this.kind.bytes([...this.homes.values()].map((x) => x.home));
@@ -383,4 +395,11 @@ export class AnimalView<H extends Home = Home> {
     this.pack = null;
     this.group.removeFromParent();
   }
+}
+
+/** A number for an animal's `home:index` key, the same every time (a source's key seeds its sounds). */
+function hashKey(id: string): number {
+  let k = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) k = Math.imul(k ^ id.charCodeAt(i), 0x01000193);
+  return k >>> 0;
 }

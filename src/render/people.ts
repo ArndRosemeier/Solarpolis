@@ -39,6 +39,7 @@ import { Residents, type Dress } from './actors/residents';
 import { drawSpecks, ownSpecks, pxPerMetre, roomForSpecks, type OwnSpecks } from './specks';
 import { ActivityProps, type PropPerson } from './activityProps';
 import { tossAt, TOSS } from '../sim/props';
+import { HEARD_WITHIN, type Source, type Tool } from '../sim/sources';
 import HumanWorker from '@actors/human/worker?worker';
 
 /** People are placed out to here (m), each by their exact whereabouts; beyond, the far specks draw them. */
@@ -456,6 +457,24 @@ export class PeopleView {
     return this.residents;
   }
 
+  /**
+   * Those near the eye who can be heard (sim/sources.ts) at clock time t: where they stand, how fast they go, what they
+   * do and with which tool (the one their figure holds), on the side of the deck the listener is (`below`). People in
+   * drone bodies are heard with the drones.
+   */
+  heard(eye: Vec3, t: number, below: boolean, out: Source[]): void {
+    for (const one of this.people.values()) {
+      if (!one.placed || one.resident.body === 'drone' || !!one.person.below !== below) continue;
+      const kind = one.resident.body === 'shell' ? 'shell' : 'person';
+      if (dist(one.feet, eye) > HEARD_WITHIN[kind]) continue;
+      const p = one.person, at = fromWorld(this.habitat.profile, ...one.feet);
+      out.push({
+        key: personKey(p), kind, theta: at.theta, s: at.s, h: at.h, at: one.feet, below: !!p.below, speed: p.moving ? p.speed : 0,
+        doing: p.act, began: t - p.since, member: p.member, size: p.size, moved: p.posture !== p.from, tool: p.act === 'work' ? toolOf(p, one.resident, t) : undefined,
+      });
+    }
+  }
+
   /** Bytes held: the stand-ins' instances, the residents' measures, the figures and the population's caches (memory watchdog). */
   bytes(): number {
     let n = this.props.bytes() + this.data.byteLength + (this.specks?.data.byteLength ?? 0) * 1.25 + (this.residents?.heldBytes() ?? 0) + this.people.size * 400 + lifeBytes(this.habitat, this.terrain) + neighbourhoodBytes(this.terrain);
@@ -544,6 +563,11 @@ function animOf(p: Person, who: Resident, t: number): AnimState {
     default:
       return held;
   }
+}
+
+/** The tool in someone's hands at work: the saw at a bench, else the mallet (chopping, or tapping a chisel kneeling). */
+function toolOf(p: Person, who: Resident, t: number): Tool {
+  return animOf(p, who, t).pose?.clip === CMU.saw.clip ? 'saw' : 'mallet';
 }
 
 /** Whether a pair standing and talking both talk with their hands (half of such pairs; the party's choice, so both make it). */

@@ -25,6 +25,7 @@ import type { Terrain } from '../gen/terrain';
 import { horizonAt, OPEN_SKY } from '../gen/horizon';
 import { BODY_WIDTH, POSE, SPECK_STRIDE, packColor, writeSpeck } from '../gen/standIn';
 import { designBytes, designsOf, type DesignMesh, type DroneDesign } from '../gen/drone';
+import { HEARD_WITHIN, type Source } from '../sim/sources';
 import { ROLES, airBytes, fleetOf, flierAt, footingOf, talkerAt, type Flier } from '../sim';
 import type { WorkerPool } from '../workers/pool';
 import { DRONE, DRONE_VEIL, FLIER_LAYOUT, layInstances } from './materials';
@@ -282,6 +283,15 @@ export class FlierView {
 
   private letGo(d: Drawn): void {
     for (const l of d.levels) { freeMesh(l.body); freeMesh(l.veil); }
+  }
+
+  /** The drones near the eye that can be heard (sim/sources.ts): where each is, how it flies, its role. */
+  heard(eye: Vec3, out: Source[]): void {
+    for (const one of this.ones) {
+      const f = one.flier;
+      if (!f || away(one.low, eye) > HEARD_WITHIN.drone) continue;
+      out.push({ key: f.id, kind: 'drone', theta: f.theta, s: f.s, h: f.h, at: one.low, speed: f.speed, doing: f.doing, began: 0, role: f.role });
+    }
   }
 
   /** Bytes held: the designs on the GPU, the instances and the drones' state on the CPU, the fleet (memory watchdog). */
