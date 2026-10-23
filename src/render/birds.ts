@@ -21,7 +21,7 @@ import { hashToFloat, smoothstep, v3madd } from '@futuremagic/core';
 import { fromWorld, toView, toWorld, type Habitat, type Vec3, apart as away } from '../blueprint';
 import type { Terrain } from '../gen/terrain';
 import { horizonAt, OPEN_SKY } from '../gen/horizon';
-import { BODY_WIDTH, POSE, SPECK_STRIDE, writeSpeck } from '../gen/standIn';
+import { BODY_FILL, BODY_WIDTH, POSE, SPECK_STRIDE, writeSpeck } from '../gen/standIn';
 import { BIRD_KINDS, BIRDS, bodyBytes, packedLooks, type BirdBody, type BirdKind, type BirdMesh, type PackedLook } from '../gen/birds';
 import { birdAt, flockNoise, flocksBytes, memberAt, memberOf, memberWhere, murmurAt, nestsBytes, roostAt, upOf, type BirdDoing, type BirdNow, type Flock, type FlockKind, type Nest } from '../sim';
 import type { WorkerPool } from '../workers/pool';
@@ -33,6 +33,9 @@ import { drawnAnywhere, dropUploaded, freeMesh, instancedOf, meshGeometry, sendI
 
 /** A bird is drawn whole from this many pixels across, coarse down to `SPECK_PX`, a speck below. Back up at `BACK` × each. */
 const NEAR_PX = 40;
+/** A wing's area over its span times its inner chord (it tapers to the tip), and a body's side over its length squared. */
+const WING_TAPER = 0.6;
+const BODY_SIDE = 0.2;
 const SPECK_PX = 3;
 const BACK = 1.2;
 /** Homes are asked for out to here (m); again this often (s, real time) or after this move (m). */
@@ -227,7 +230,7 @@ export class BirdView {
         shown++;
         if (level === 2) {
           // The patch it covers: spread wings or a sitting body; thinning out toward the edge of what is asked for.
-          writeBirdSpeck(specks.data, nSpecks++, b.at, b.up, b.length, size, flying, 1 - smoothstep(FADE[0], FADE[1], distance), d.looks[one.nest.look], one.horizon);
+          writeBirdSpeck(specks.data, nSpecks++, b.at, b.up, b.length, size, spec.chord, flying, 1 - smoothstep(FADE[0], FADE[1], distance), d.looks[one.nest.look], one.horizon);
           continue;
         }
         this.pose(d, level, eye, b, one.phase, one.horizon, d.looks[one.nest.look]);
@@ -247,7 +250,7 @@ export class BirdView {
             // A settled bird's place is its feet: its body is about half its length above them.
             const middle = air ? at : v3madd(at, upOf(at), length * 0.27);
             fo.poses.delete(m);
-            writeBirdSpeck(specks.data, nSpecks++, middle, upOf(at), length, air ? spec.span * fo.size[m] : length, air, 1 - smoothstep(fade[0], fade[1], away(at, eye)), look, horizon);
+            writeBirdSpeck(specks.data, nSpecks++, middle, upOf(at), length, air ? spec.span * fo.size[m] : length, spec.chord, air, 1 - smoothstep(fade[0], fade[1], away(at, eye)), look, horizon);
             continue;
           }
           const b = this.posedNow(fo, m, at, level, t);
@@ -491,10 +494,14 @@ export class BirdView {
 
 /**
  * A bird as a speck (`index`-th): the patch of screen it covers, spread wings (`size` across) or a sitting body, round its
- * middle with up `up`; `fade` thins it out toward the edge of what is asked for.
+ * middle with up `up`; `fade` thins it out toward the edge of what is asked for. A flying bird covers, over its
+ * wingbeat and as it turns, about half its wings' area (the inner chord a share `chord` of the span, tapering to the
+ * tip) and its body's side: the speck is as tall as that over its width, never less than the body is deep.
  */
-function writeBirdSpeck(data: Float32Array, index: number, middle: Vec3, up: Vec3, length: number, size: number, flying: boolean, fade: number, look: PackedLook, horizon: readonly [number, number]): void {
-  const tall = length * (flying ? 0.3 : 0.55), across = flying ? size * 0.75 : length * 0.45;
+function writeBirdSpeck(data: Float32Array, index: number, middle: Vec3, up: Vec3, length: number, size: number, chord: number, flying: boolean, fade: number, look: PackedLook, horizon: readonly [number, number]): void {
+  const across = flying ? size * 0.75 : length * 0.45;
+  const covers = WING_TAPER * chord * size * size * 0.5 + BODY_SIDE * length * length;
+  const tall = flying ? Math.max(length * 0.3, covers / (across * BODY_FILL)) : length * 0.55;
   const feet = v3madd(middle, up, -tall * 0.5);
   writeSpeck(data, index * SPECK_STRIDE, feet, tall, [0, 0, 0], POSE.upright, look.bands, horizon, (fade * across) / (tall * BODY_WIDTH));
 }

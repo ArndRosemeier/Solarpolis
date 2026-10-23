@@ -145,8 +145,13 @@ const FEEDS = 24;
 /** A party spreads this far over its ground (m) and walks this far about (m) every so often (s). */
 const SPREAD = 12;
 const SHUFFLE: [number, number] = [1.5, 20];
-/** The murmuration: its size for 70 birds (Scale's: m across, up, along), how its size grows with the birds, how high over the ground (m). */
+/**
+ * The murmuration: its shape (Scale's ball, m across, up, along: only the proportions are kept), the air each bird
+ * has in it (m³: about a metre between neighbours, as measured in the starling flocks over Rome), and how high over
+ * the ground (m). Packed that close, a flock of thousands is a dark cloud from a few hundred metres off.
+ */
 const BALL: Vec3 = [19, 6, 12];
+const SPACE = 2;
 const MURMUR_HIGH: [number, number] = [50, 60];
 /** Its wander (s a step), and how long before the drop it drifts over the roost (s). */
 const MURMUR_STEP = 25;
@@ -582,7 +587,7 @@ function murmurOf(h: Habitat, flock: Flock, time: number, drop: number): Murmur 
   const up = flock.top + MURMUR_HIGH[0] + MURMUR_HIGH[1] * (wave(fs, 3, time / 40) + 1) / 2;
   const centre = airPoint(h, theta, s, reach * wave(fs, 1, time / MURMUR_STEP), reach * wave(fs, 2, time / MURMUR_STEP), up);
   const u = upOf(centre), round = spinward(u), along = v3cross(round, u);
-  const grow = Math.cbrt(flock.count / 70) * 0.6, clock = time / Math.max(1, grow);
+  const grow = Math.cbrt((flock.count * SPACE) / ((4 / 3) * Math.PI * BALL[0] * BALL[1] * BALL[2])), clock = time / Math.max(1, grow);
   const size: Vec3 = [BALL[0] * grow * (1 + 0.35 * Math.sin(clock * 0.31)), BALL[1] * grow * (1 + 0.4 * Math.sin(clock * 0.47 + 1)), BALL[2] * grow * (1 + 0.4 * Math.sin(clock * 0.23 + 2))];
   const frame = { centre, up: u, round, along, turn: 2.5 * wave(fs, 4, time / 30) + 0.7 * Math.sin(clock * 0.13), size, clock };
   if (kept.size >= 8) kept.delete(kept.keys().next().value!);
