@@ -2,6 +2,11 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.128 — The arrival ends in the normal view, and names each habitat by its own Mind
+
+- After the arrival reveal the view is back at its usual width; before, it stayed zoomed out for the rest of the session.
+- The welcome card shows the habitat's own Mind (a new blueprint value), so habitats made in the Lab no longer all carry the sample habitat's name.
+
 ## v0.127 — Upstairs room controls
 
 - A home's arrangement controls now follow the floor under your feet when climbing its internal stair.
