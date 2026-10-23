@@ -64,8 +64,8 @@
     "reason": "Each view makes its own meshes from its own kind's material and says whether they cast shadows; the shared part (a mesh drawn anywhere) is drawnAnywhere in geometry.ts."
   },
   {
-    "key": "idiom: [.createElement document] in solarpolis/render/outside.ts + solarpolis/render/solarControls.ts + solarpolis/render/view.ts",
-    "reason": "Renderers own canvases and the solar observer owns its DOM controls; their element creation constructs different elements, not duplicated behaviour."
+    "key": "idiom: [.createElement document] in solarpolis/render/outside.ts + solarpolis/render/solarControls.ts + solarpolis/render/vesselVisit.ts + solarpolis/render/view.ts",
+    "reason": "Standard DOM element construction in independent view controls; shared controls have different user actions and state, not duplicated UI logic."
   },
   {
     "key": "idiom: [.exposure .mul] in solarpolis/render/celestialShaders.ts + solarpolis/render/hullShaders.ts + solarpolis/render/materials.ts",
@@ -100,6 +100,10 @@
     "reason": "The views that draw creatures (people, drones, squirrels) name the same things the same way (stage, camera, screen, specks, each one's horizon and litAt, a start promise, a group): their shared steps are seams (ownSpecks, roomForSpecks, drawSpecks, pxPerMetre in render/specks.ts; FigureLoads in render/actors/slots.ts; standAt in render/actors/figure.ts); what is left is each view's own."
   },
   {
+    "key": "idiom: [.max .min .pitch Math] in solarpolis/render/outside.ts + solarpolis/render/vesselVisit.ts + solarpolis/space/flyer.ts + solarpolis/space/vesselPassenger.ts",
+    "reason": "Standard scalar clamp; orbit, exterior flight and ship-local passenger views deliberately have different pitch limits and coordinate conventions."
+  },
+  {
     "key": "idiom: [.mesh .specks] in solarpolis/render/animals.ts + solarpolis/render/fliers.ts + solarpolis/render/people.ts",
     "reason": "The views that draw creatures (people, drones, squirrels) name the same things the same way (stage, camera, screen, specks, each one's horizon and litAt, a start promise, a group): their shared steps are seams (ownSpecks, roomForSpecks, drawSpecks, pxPerMetre in render/specks.ts; FigureLoads in render/actors/slots.ts; standAt in render/actors/figure.ts); what is left is each view's own."
   },
@@ -112,8 +116,8 @@
     "reason": "TSL arithmetic (a.mul(b).sub(c)) is how every shader is written; the formulas differ."
   },
   {
-    "key": "idiom: [.mul .sub] in solarpolis/render/crowdShaders.ts + solarpolis/render/hullShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
-    "reason": "TSL has no operators: every shader file does its arithmetic with .mul and .sub. The stand-ins' pose (render/crowdShaders.ts) is its own step; the shared ones (sunlit, throughAir) are used from materials.ts, not copied."
+    "key": "idiom: [.mul .sub] in solarpolis/render/crowdShaders.ts + solarpolis/render/hullShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts + solarpolis/render/vesselShaders.ts",
+    "reason": "Basic shader arithmetic, not a repeated algorithm. Ship screen joints already use the shared screenSurface seam; ship hull geometry uses ShipMeshes and shipAxisShape."
   },
   {
     "key": "idiom: [.mul .sub] in solarpolis/render/hamletSkies.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
@@ -134,10 +138,6 @@
   {
     "key": "idiom: [.smoothGrid] in solarpolis/gen/building.ts + solarpolis/gen/hallMesh.ts + solarpolis/gen/underMesh.ts",
     "reason": "Existing building, hall and understorey generators call the same smoothGrid seam for different geometry."
-  },
-  {
-    "key": "idiom: [.start Promise] in solarpolis/render/animals.ts + solarpolis/render/fliers.ts + solarpolis/render/people.ts",
-    "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; each view does its own work in each."
   },
   {
     "key": "idiom: [.x0 .x1 .y0] in solarpolis/gen/hallMesh.ts + solarpolis/gen/homeInterior.ts + solarpolis/gen/homes.ts",
@@ -212,8 +212,16 @@
     "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; each view does its own work in each."
   },
   {
+    "key": "same name: solarpolis/gen/liftStair.ts#place + solarpolis/render/vesselVisit.ts#place",
+    "reason": "Independent resource/view lifecycle owner. The ship delegates hull geometry and transforms to ShipMeshes/setPose; its room pools, atlas and visitor state must be accounted for and released by their own owner."
+  },
+  {
     "key": "same name: solarpolis/gen/shapes.ts#band + solarpolis/render/shaderMath.ts#band",
     "reason": "Two meanings of band: Shape.band adds a ring of mesh between two radii; shaderMath's band is a smooth window function in a shader. Nothing in common but the word."
+  },
+  {
+    "key": "same name: solarpolis/gen/terrain.ts#turn + solarpolis/space/vesselPassenger.ts#turn",
+    "reason": "Distinct physical systems: ship-local thrust/freefall and finite-mass rocket integration versus habitat spin walking, geometry and observer flight. The shared movement-input seam is moveKeys/FlyInput."
   },
   {
     "key": "same name: solarpolis/gen/trees.ts#mesh + solarpolis/render/actors/animal.ts#mesh",
@@ -248,6 +256,10 @@
     "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; the squirrels' view (render/animals.ts) and an animal's figure (render/actors/animal.ts) do their own work in each."
   },
   {
+    "key": "same name: solarpolis/physics/world.ts#advance + solarpolis/space/vessel.ts#advance",
+    "reason": "Distinct physical systems: ship-local thrust/freefall and finite-mass rocket integration versus habitat spin walking, geometry and observer flight. The shared movement-input seam is moveKeys/FlyInput."
+  },
+  {
     "key": "same name: solarpolis/physics/world.ts#dispose + solarpolis/render/actors/figure.ts#dispose",
     "reason": "The Actors figure and animator are ported from Dunfinity with their method names, which follow Actors' own Character API (load, update, stop, dispose); the plan moves the animator into Actors, and keeping the names keeps that swap a drop-in."
   },
@@ -272,6 +284,10 @@
     "reason": "dispose() is the usual name for giving resources back."
   },
   {
+    "key": "same name: solarpolis/physics/world.ts#dispose + solarpolis/render/vessel.ts#dispose",
+    "reason": "Independent resource/view lifecycle owner. The ship delegates hull geometry and transforms to ShipMeshes/setPose; its room pools, atlas and visitor state must be accounted for and released by their own owner."
+  },
+  {
     "key": "same name: solarpolis/render/activityProps.ts#bytes + solarpolis/render/hullDetail.ts#bytes",
     "reason": "ActivityProps owns its small mesh pool; standard prepare, dispose and bytes lifecycle methods operate on different resources. Disposal uses the shared freeMesh seam."
   },
@@ -290,6 +306,10 @@
   {
     "key": "same name: solarpolis/render/activityProps.ts#bytes + solarpolis/render/tiled.ts#bytes",
     "reason": "ActivityProps owns its small mesh pool; standard prepare, dispose and bytes lifecycle methods operate on different resources. Disposal uses the shared freeMesh seam."
+  },
+  {
+    "key": "same name: solarpolis/render/activityProps.ts#bytes + solarpolis/render/vessel.ts#bytes",
+    "reason": "Independent resource/view lifecycle owner. The ship delegates hull geometry and transforms to ShipMeshes/setPose; its room pools, atlas and visitor state must be accounted for and released by their own owner."
   },
   {
     "key": "same name: solarpolis/render/activityProps.ts#dispose + solarpolis/render/animals.ts#dispose",
@@ -420,6 +440,10 @@
     "reason": "dispose() is the usual name for giving resources back."
   },
   {
+    "key": "same name: solarpolis/render/actors/figure.ts#dispose + solarpolis/render/vessel.ts#dispose",
+    "reason": "Independent resource/view lifecycle owner. The ship delegates hull geometry and transforms to ShipMeshes/setPose; its room pools, atlas and visitor state must be accounted for and released by their own owner."
+  },
+  {
     "key": "same name: solarpolis/render/actors/figure.ts#load + solarpolis/render/actors/slots.ts#load",
     "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; the squirrels' view (render/animals.ts) and an animal's figure (render/actors/animal.ts) do their own work in each."
   },
@@ -548,6 +572,10 @@
     "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
   },
   {
+    "key": "same name: solarpolis/render/fliers.ts#dispose + solarpolis/render/vessel.ts#dispose",
+    "reason": "Independent resource/view lifecycle owner. The ship delegates hull geometry and transforms to ShipMeshes/setPose; its room pools, atlas and visitor state must be accounted for and released by their own owner."
+  },
+  {
     "key": "same name: solarpolis/render/fliers.ts#follow + solarpolis/render/hullDetail.ts#follow",
     "reason": "The views' shared lifecycle (follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the drones' view (render/fliers.ts) does its own work in each."
   },
@@ -660,6 +688,10 @@
     "reason": "Independent owner lifecycle and byte reporting; adaptive furnishings own their bounded instance pool and nearby layout state."
   },
   {
+    "key": "same name: solarpolis/render/homes.ts#dispose + solarpolis/render/vessel.ts#dispose",
+    "reason": "Independent resource/view lifecycle owner. The ship delegates hull geometry and transforms to ShipMeshes/setPose; its room pools, atlas and visitor state must be accounted for and released by their own owner."
+  },
+  {
     "key": "same name: solarpolis/render/homes.ts#info + solarpolis/render/specks.ts#info",
     "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; each view does its own work in each."
   },
@@ -692,6 +724,10 @@
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
+    "key": "same name: solarpolis/render/hullDetail.ts#bytes + solarpolis/render/vessel.ts#bytes",
+    "reason": "Independent resource/view lifecycle owner. The ship delegates hull geometry and transforms to ShipMeshes/setPose; its room pools, atlas and visitor state must be accounted for and released by their own owner."
+  },
+  {
     "key": "same name: solarpolis/render/hullDetail.ts#dispose + solarpolis/render/landmarks.ts#dispose",
     "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
   },
@@ -714,6 +750,10 @@
   {
     "key": "same name: solarpolis/render/hullDetail.ts#dispose + solarpolis/render/tiled.ts#dispose",
     "reason": "dispose() is the usual name for giving resources back."
+  },
+  {
+    "key": "same name: solarpolis/render/hullDetail.ts#dispose + solarpolis/render/vessel.ts#dispose",
+    "reason": "Independent resource/view lifecycle owner. The ship delegates hull geometry and transforms to ShipMeshes/setPose; its room pools, atlas and visitor state must be accounted for and released by their own owner."
   },
   {
     "key": "same name: solarpolis/render/hullDetail.ts#follow + solarpolis/render/landmarks.ts#follow",
@@ -804,10 +844,6 @@
     "reason": "Both ask the workers for something to build under the same verb: LandmarkView for one landmark's level, StreamCache for one streamed entry; LandmarkView's meshes are few and built whole, so it does not stream through StreamCache."
   },
   {
-    "key": "same name: solarpolis/render/landmarks.ts#bytes + solarpolis/render/outside.ts#bytes",
-    "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; LandmarkView (render/landmarks.ts) is one more such view, with bodies of its own. Its meshes are few and built whole, so it does not stream through StreamCache."
-  },
-  {
     "key": "same name: solarpolis/render/landmarks.ts#bytes + solarpolis/render/solar.ts#bytes",
     "reason": "Independent view/model lifecycle owners: these methods account for, prepare, update or release their own resources through the existing Stage and geometry seams; no common resource ownership can be extracted."
   },
@@ -860,12 +896,28 @@
     "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; CabinView (render/lift.ts) is one more such view, holding the one lift cabin drawn."
   },
   {
+    "key": "same name: solarpolis/render/lift.ts#bytes + solarpolis/render/vessel.ts#bytes",
+    "reason": "Independent resource/view lifecycle owner. The ship delegates hull geometry and transforms to ShipMeshes/setPose; its room pools, atlas and visitor state must be accounted for and released by their own owner."
+  },
+  {
+    "key": "same name: solarpolis/render/lift.ts#place + solarpolis/render/vesselVisit.ts#place",
+    "reason": "Independent resource/view lifecycle owner. The ship delegates hull geometry and transforms to ShipMeshes/setPose; its room pools, atlas and visitor state must be accounted for and released by their own owner."
+  },
+  {
+    "key": "same name: solarpolis/render/lift.ts#step + solarpolis/render/vesselVisit.ts#step",
+    "reason": "Distinct physical systems: ship-local thrust/freefall and finite-mass rocket integration versus habitat spin walking, geometry and observer flight. The shared movement-input seam is moveKeys/FlyInput."
+  },
+  {
     "key": "same name: solarpolis/render/necklace.ts#dispose + solarpolis/render/tiled.ts#dispose",
     "reason": "dispose() is the usual name for giving resources back."
   },
   {
     "key": "same name: solarpolis/render/necklace.ts#dispose + solarpolis/render/traffic.ts#dispose",
     "reason": "The ship traffic view (render/traffic.ts) has the views' own interface (follow each frame, dispose), like the streamed and necklace views, with a body of its own."
+  },
+  {
+    "key": "same name: solarpolis/render/necklace.ts#dispose + solarpolis/render/vessel.ts#dispose",
+    "reason": "Independent resource/view lifecycle owner. The ship delegates hull geometry and transforms to ShipMeshes/setPose; its room pools, atlas and visitor state must be accounted for and released by their own owner."
   },
   {
     "key": "same name: solarpolis/render/necklace.ts#follow + solarpolis/render/people.ts#follow",
@@ -888,16 +940,8 @@
     "reason": "The ship traffic view (render/traffic.ts) has the views' own interface (follow each frame, dispose), like the streamed and necklace views, with a body of its own."
   },
   {
-    "key": "same name: solarpolis/render/necklace.ts#shed + solarpolis/render/outside.ts#shed",
-    "reason": "Everything that can give memory back does so through a shed() method the memory watchdog calls (CLAUDE.md rule 12); each sheds its own buffers."
-  },
-  {
     "key": "same name: solarpolis/render/necklace.ts#shed + solarpolis/render/people.ts#shed",
     "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
-  },
-  {
-    "key": "same name: solarpolis/render/outside.ts#bytes + solarpolis/render/solar.ts#bytes",
-    "reason": "Independent view/model lifecycle owners: these methods account for, prepare, update or release their own resources through the existing Stage and geometry seams; no common resource ownership can be extracted."
   },
   {
     "key": "same name: solarpolis/render/outside.ts#frame + solarpolis/render/view.ts#frame",
@@ -1024,8 +1068,20 @@
     "reason": "Everything that can give memory back does so through a shed() method the memory watchdog calls (CLAUDE.md rule 12); each sheds its own buffers."
   },
   {
+    "key": "same name: solarpolis/render/ship.ts#hide + solarpolis/render/vessel.ts#hide",
+    "reason": "Independent resource/view lifecycle owner. The ship delegates hull geometry and transforms to ShipMeshes/setPose; its room pools, atlas and visitor state must be accounted for and released by their own owner."
+  },
+  {
+    "key": "same name: solarpolis/render/ship.ts#pose + solarpolis/render/vessel.ts#pose",
+    "reason": "Independent resource/view lifecycle owner. The ship delegates hull geometry and transforms to ShipMeshes/setPose; its room pools, atlas and visitor state must be accounted for and released by their own owner."
+  },
+  {
     "key": "same name: solarpolis/render/solar.ts#bytes + solarpolis/space/solarSystem.ts#bytes",
     "reason": "Independent view/model lifecycle owners: these methods account for, prepare, update or release their own resources through the existing Stage and geometry seams; no common resource ownership can be extracted."
+  },
+  {
+    "key": "same name: solarpolis/render/solar.ts#dispose + solarpolis/render/vessel.ts#dispose",
+    "reason": "Independent resource/view lifecycle owner. The ship delegates hull geometry and transforms to ShipMeshes/setPose; its room pools, atlas and visitor state must be accounted for and released by their own owner."
   },
   {
     "key": "same name: solarpolis/render/specks.ts#bytes + solarpolis/space/solarSystem.ts#bytes",
@@ -1040,8 +1096,16 @@
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
+    "key": "same name: solarpolis/render/streamed.ts#bytes + solarpolis/render/vessel.ts#bytes",
+    "reason": "Independent resource/view lifecycle owner. The ship delegates hull geometry and transforms to ShipMeshes/setPose; its room pools, atlas and visitor state must be accounted for and released by their own owner."
+  },
+  {
     "key": "same name: solarpolis/render/terrain.ts#bytes + solarpolis/render/tiled.ts#bytes",
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/terrain.ts#bytes + solarpolis/render/vessel.ts#bytes",
+    "reason": "Independent resource/view lifecycle owner. The ship delegates hull geometry and transforms to ShipMeshes/setPose; its room pools, atlas and visitor state must be accounted for and released by their own owner."
   },
   {
     "key": "same name: solarpolis/render/terrain.ts#dispose + solarpolis/render/tiled.ts#dispose",
@@ -1088,12 +1152,48 @@
     "reason": "Everything that can give memory back does so through a shed() method the memory watchdog calls (CLAUDE.md rule 12); each sheds its own buffers."
   },
   {
+    "key": "same name: solarpolis/render/tiled.ts#bytes + solarpolis/render/vessel.ts#bytes",
+    "reason": "Independent resource/view lifecycle owner. The ship delegates hull geometry and transforms to ShipMeshes/setPose; its room pools, atlas and visitor state must be accounted for and released by their own owner."
+  },
+  {
+    "key": "same name: solarpolis/render/tiled.ts#dispose + solarpolis/render/vessel.ts#dispose",
+    "reason": "Independent resource/view lifecycle owner. The ship delegates hull geometry and transforms to ShipMeshes/setPose; its room pools, atlas and visitor state must be accounted for and released by their own owner."
+  },
+  {
     "key": "same name: solarpolis/render/tiled.ts#follow + solarpolis/render/traffic.ts#follow",
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
     "key": "same name: solarpolis/render/tiled.ts#info + solarpolis/render/traffic.ts#info",
     "reason": "info() is a view's lines for the one debug menu (CLAUDE.md rule 14); each reports its own state."
+  },
+  {
+    "key": "same name: solarpolis/render/traffic.ts#dispose + solarpolis/render/vessel.ts#dispose",
+    "reason": "Independent resource/view lifecycle owner. The ship delegates hull geometry and transforms to ShipMeshes/setPose; its room pools, atlas and visitor state must be accounted for and released by their own owner."
+  },
+  {
+    "key": "same name: solarpolis/render/vesselVisit.ts#place + solarpolis/world/walker.ts#place",
+    "reason": "Independent resource/view lifecycle owner. The ship delegates hull geometry and transforms to ShipMeshes/setPose; its room pools, atlas and visitor state must be accounted for and released by their own owner."
+  },
+  {
+    "key": "same name: solarpolis/render/vesselVisit.ts#step + solarpolis/space/flyer.ts#step",
+    "reason": "Distinct physical systems: ship-local thrust/freefall and finite-mass rocket integration versus habitat spin walking, geometry and observer flight. The shared movement-input seam is moveKeys/FlyInput."
+  },
+  {
+    "key": "same name: solarpolis/render/vesselVisit.ts#step + solarpolis/world/flyer.ts#step",
+    "reason": "Distinct physical systems: ship-local thrust/freefall and finite-mass rocket integration versus habitat spin walking, geometry and observer flight. The shared movement-input seam is moveKeys/FlyInput."
+  },
+  {
+    "key": "same name: solarpolis/render/vesselVisit.ts#turn + solarpolis/space/flyer.ts#turn",
+    "reason": "Distinct physical systems: ship-local thrust/freefall and finite-mass rocket integration versus habitat spin walking, geometry and observer flight. The shared movement-input seam is moveKeys/FlyInput."
+  },
+  {
+    "key": "same name: solarpolis/render/vesselVisit.ts#turn + solarpolis/space/vesselPassenger.ts#turn",
+    "reason": "Distinct physical systems: ship-local thrust/freefall and finite-mass rocket integration versus habitat spin walking, geometry and observer flight. The shared movement-input seam is moveKeys/FlyInput."
+  },
+  {
+    "key": "same name: solarpolis/render/vesselVisit.ts#turn + solarpolis/world/walker.ts#turn",
+    "reason": "Distinct physical systems: ship-local thrust/freefall and finite-mass rocket integration versus habitat spin walking, geometry and observer flight. The shared movement-input seam is moveKeys/FlyInput."
   },
   {
     "key": "same name: solarpolis/sim/neighbourhood.ts#placeOf + solarpolis/sim/population.ts#placeOf",
@@ -1104,11 +1204,23 @@
     "reason": "Speed of the flyer inside grows with height above the ground; outside, with the clearance to the nearest body. Same idea, different geometry."
   },
   {
+    "key": "same name: solarpolis/space/flyer.ts#step + solarpolis/space/vesselPassenger.ts#step",
+    "reason": "Distinct physical systems: ship-local thrust/freefall and finite-mass rocket integration versus habitat spin walking, geometry and observer flight. The shared movement-input seam is moveKeys/FlyInput."
+  },
+  {
     "key": "same name: solarpolis/space/flyer.ts#step + solarpolis/world/flyer.ts#step",
     "reason": "The flyer inside (up toward the axis, above the ground) and the one outside (clearance to every body, float64 over 50,000 km) share a name, not their rules."
   },
   {
+    "key": "same name: solarpolis/space/flyer.ts#turn + solarpolis/space/vesselPassenger.ts#turn",
+    "reason": "Distinct physical systems: ship-local thrust/freefall and finite-mass rocket integration versus habitat spin walking, geometry and observer flight. The shared movement-input seam is moveKeys/FlyInput."
+  },
+  {
     "key": "same name: solarpolis/space/flyer.ts#turn + solarpolis/world/walker.ts#turn",
     "reason": "Each camera turns by pointer movement in its own frame (walker: heading on the curved floor; flyer outside: yaw around the ecliptic pole)."
+  },
+  {
+    "key": "same name: solarpolis/space/vesselPassenger.ts#turn + solarpolis/world/walker.ts#turn",
+    "reason": "Distinct physical systems: ship-local thrust/freefall and finite-mass rocket integration versus habitat spin walking, geometry and observer flight. The shared movement-input seam is moveKeys/FlyInput."
   }
 ]

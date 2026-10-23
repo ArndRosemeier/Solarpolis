@@ -214,6 +214,23 @@ export const views = {
   ] },
   'far-meadow-up': { query: 'view=inside', about: 'standing in a meadow, looking up at the far side', settle: 6000, steps: [{ debug: 'Into the nearest meadow' }, { wait: 5000 }, { look: [0, -260] }, { wait: 3000 }] },
   outside: { query: 'view=outside', about: 'the home habitat from outside', default: true },
+  'exploration-ship': { query: 'view=outside', about: 'Recipe-built exploration ship: exterior, all six decks, adaptable rooms and a powered departure', settle: 5000, steps: [
+    { run: async page => { await page.getByRole('button', { name: 'Visit exploration ship', exact: true }).click(); await page.locator('.vessel-panel').waitFor({ state: 'visible' }); } },
+    { wait: 2000 }, { shot: 'hull' },
+    { run: async page => { await page.getByRole('button', { name: 'Enter airlock', exact: true }).click(); } },
+    { wait: 1000 }, { shot: 'welcome' },
+    ...['1', '2', '3', '4', '5'].flatMap(deck => [
+      { run: async page => { await page.getByLabel('Ship deck', { exact: true }).selectOption(deck); await page.getByRole('button', { name: 'Take central lift', exact: true }).click(); } },
+      { wait: 3000 }, { shot: `deck-${deck}` },
+    ]),
+    { run: async page => { await page.getByRole('button', { name: 'Make room', exact: true }).click(); } }, { wait: 3000 }, { shot: 'open-floor' },
+    { run: async page => { await page.getByRole('button', { name: 'Restore furnishings', exact: true }).click(); await page.getByRole('button', { name: 'Try a 20-second departure burn', exact: true }).click(); } },
+    { wait: 3000 }, { shot: 'thrust' },
+    { key: 'KeyE', hold: 700 }, { key: 'KeyB', hold: 700 }, { shot: 'passenger' },
+    { run: async page => { await page.getByRole('button', { name: 'Observe exterior', exact: true }).click(); } }, { wait: 1000 }, { shot: 'powered-hull' },
+    { run: async page => { await page.locator('.vessel-panel').getByRole('button', { name: 'Return to habitat', exact: true }).click(); } },
+    { wait: 2000 }, heap('exploration-ship'),
+  ] },
   'solar-system': { query: 'view=outside', about: 'Real-scale planetary observer: inner worlds, rings, major moons and the outer system', settle: 6000, steps: [
     { run: async page => { await page.locator('.solar-controls summary').click(); } },
     ...['sun', 'mercury', 'venus', 'earth', 'moon', 'mars', 'moon-401', 'jupiter', 'saturn', 'moon-606', 'uranus', 'neptune', 'moon-801', 'pluto', 'moon-901', 'haumea', 'makemake', 'eris'].flatMap(id => [

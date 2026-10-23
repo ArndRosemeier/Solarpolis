@@ -3,7 +3,7 @@
  * (HARDWARE, an albedo per part) and, for a torch, the exhaust plume (FLAME, its glow set per mesh by
  * `userData.flame`). `ShipMeshes` is the one way a ship enters the scene: the title's and every ship of the traffic.
  */
-import { Mesh, Vector4, type BufferGeometry } from 'three/webgpu';
+import { Mesh, Vector4, type BufferGeometry, type Material } from 'three/webgpu';
 import type { Stage } from '@futuremagic/stage';
 import { v3cross, v3norm, type Vec3 } from '@futuremagic/core';
 import type { Mat3, ShipRole, ShipShape } from '../space';
@@ -23,7 +23,7 @@ const ALBEDO: Record<ShipRole, RGB> = {
 };
 
 /** The builder works around z; the ship's axis is x. (x, y, z) of the ship is (z, x, y) of the builder. */
-function toShip(b: ShapeBuilder): void {
+export function shipAxisShape(b: Pick<ShapeBuilder, 'pos' | 'nrm'>): void {
   for (const a of [b.pos, b.nrm]) {
     for (let k = 0; k < a.length; k += 3) {
       const x = a[k], y = a[k + 1], z = a[k + 2];
@@ -35,7 +35,7 @@ function toShip(b: ShapeBuilder): void {
 export function shipGeometry(s: ShipShape): { body: BufferGeometry; plume: BufferGeometry | null } {
   const b = new ShapeBuilder(32, true);
   for (const p of s.parts) {
-    const c = ALBEDO[p.role];
+    const c = s.colours?.[p.role] ?? ALBEDO[p.role];
     if (p.shape === 'box') {
       // Ship (x, y, z) to builder (y, z, x).
       b.box([p.center[1], p.center[2], p.center[0]], [p.half[1], p.half[2], p.half[0]], c);
@@ -51,11 +51,11 @@ export function shipGeometry(s: ShipShape): { body: BufferGeometry; plume: Buffe
       if (p.offset) for (let k = base; k < b.pos.length; k += 3) { b.pos[k] += p.offset[0]; b.pos[k + 1] += p.offset[1]; }
     }
   }
-  toShip(b);
+  shipAxisShape(b);
   if (s.plumeLength <= 0) return { body: b.build(), plume: null };
   const plume = new ShapeBuilder(32, false);
   plume.band(0, s.nozzle, -s.plumeLength, s.plumeRadius, 0, 1);
-  toShip(plume);
+  shipAxisShape(plume);
   return { body: b.build(), plume: plume.build() };
 }
 
@@ -93,10 +93,10 @@ export class ShipMeshes {
   readonly plume: Mesh | null;
   private readonly flame: FlameUniforms;
 
-  constructor(readonly shape: ShipShape, name: string) {
+  constructor(readonly shape: ShipShape, name: string, bodyMaterial: Material = HARDWARE.material) {
     const g = shipGeometry(shape);
     this.flame = { flame: new Vector4(shape.plumeLength, 0, shape.nozzle, 0) };
-    this.body = new Mesh(g.body, HARDWARE.material);
+    this.body = new Mesh(g.body, bodyMaterial);
     this.body.name = name;
     this.plume = g.plume ? new Mesh(g.plume, FLAME.material) : null;
     if (this.plume) { this.plume.name = `${name} plume`; this.plume.userData.flame = this.flame; }

@@ -37,6 +37,8 @@ export type ShipPart =
 export interface ShipShape {
   params: ShipParams;
   parts: ShipPart[];
+  /** Optional recipe finish colours; traffic ships retain the shared defaults. */
+  colours?: Partial<Record<ShipRole, [number, number, number]>>;
   /** A torch's drive exit: radius of the bell's mouth at x = 0 (m; 0 without a torch). */
   nozzle: number;
   /** The exhaust's glowing length at full thrust (m), and its radius where it ends (0 without a torch). */

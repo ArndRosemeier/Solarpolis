@@ -28,6 +28,7 @@ import { EMISSION_SAMPLES, SUNLINE_STEPS } from '../world/sunline';
 import { HAZE_STEPS } from '../world/air';
 import { skyDome, starColor, starVertex } from './skyShaders';
 import { celestialColor, celestialRing } from './celestialShaders';
+import { cabinScreen, cabinSurface, cabinSign, vesselHull } from './vesselShaders';
 import { cellHash, floorShare, floorSurface, rockFromAfar, snowOver, woodsFromAfar } from './groundShaders';
 import { RISE_RANGE } from '../gen/tiles';
 import { filtered } from './textures';
@@ -373,6 +374,19 @@ export const CELESTIAL = kind('celestial body', ['position', 'normal'], { cast: 
   return m;
 });
 
+export const SHIP_CABIN = kind('ship cabin', ['position', 'normal', 'color'], { cast: false, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial(); m.colorNode = cabinSurface(); return m;
+});
+export const SHIP_HULL = kind('ship ceramic hull', ['position', 'normal', 'color'], { cast: false, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial(); m.colorNode = vesselHull(); return m;
+});
+export const SHIP_SCREEN = kind('ship screen', ['position', 'uv'], { cast: false, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial(); m.colorNode = cabinScreen(); return m;
+});
+export const SHIP_SIGN = kind('ship wayfinding', ['position', 'uv'], { cast: false, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial(); m.colorNode = cabinSign(); return m;
+});
+
 export const PLANET_RING = kind('planetary ring', ['position'], { cast: false, receive: false }, () => {
   const m = new MeshBasicNodeMaterial({ side: DoubleSide, transparent: true, depthWrite: false, forceSinglePass: true });
   const ring = celestialRing();
@@ -707,7 +721,7 @@ export const isPlantInstance = (attribute: string): boolean => attribute === 'pl
 
 /** The kinds of the view outside, for its Stage's warm-up (windows will add them to the interior's). */
 export function outsideKinds(): readonly Kind[] {
-  return [SKY, STARS, CELESTIAL, PLANET_RING, SKIN, SKIN_DETAIL, RADIATOR, HARDWARE, FLAME, BORE, LAMP];
+  return [SKY, STARS, CELESTIAL, PLANET_RING, SHIP_CABIN, SHIP_SCREEN, SHIP_HULL, SHIP_SIGN, SKIN, SKIN_DETAIL, RADIATOR, HARDWARE, FLAME, BORE, LAMP];
 }
 
 /**
