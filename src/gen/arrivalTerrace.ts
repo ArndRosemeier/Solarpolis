@@ -35,6 +35,19 @@ export interface ArrivalTerrace {
 export const DOOR_BACK = 0.6, DOOR_HALF = 0.08;
 export { BERTH_CLEAR };
 
+/**
+ * The porch over the landing's back half (handrails, or shares of the landing's depth): its front edge, how far its
+ * posts stand in from the side parapets and their half width, the canopy's underside, and the bronze ribs under it
+ * (their underside and half width).
+ */
+export const PORCH = { front: 0.52, side: 0.18, post: 0.13, canopy: 3.5, rib: 3.38, ribHalf: 0.045 } as const;
+
+/** Where the porch stands on the landing `q`, in plan: the door's face, the canopy's front edge, its posts' middles (w). */
+export function porchOf(q: StairPlatform, hr: number, parapet: number): { back: number; front: number; side: number; posts: [number, number] } {
+  const side = parapet + hr * PORCH.side;
+  return { back: q.z1 - hr * DOOR_BACK, front: q.z1 - (q.z1 - q.z0) * PORCH.front, side, posts: [q.w0 + side, q.w1 - side] };
+}
+
 export function arrivalTerraceOf(h: Habitat): ArrivalTerrace | null {
   const stair = liftStairOf(h);
   if (!stair) return null;

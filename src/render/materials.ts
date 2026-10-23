@@ -11,7 +11,7 @@
  */
 import { MeshBasicNodeMaterial, MeshPhysicalNodeMaterial, MeshStandardNodeMaterial, DoubleSide, BackSide, FrontSide, AdditiveBlending, type Material } from 'three/webgpu';
 import { Fn, If, abs, atan, attribute, faceDirection, mod, screenCoordinate, cross, dFdx, dFdy, floor, fwidth, length, fract, inverseSqrt, log2, mx_noise_float, uv, cameraPosition, hash, normalLocal, step, time, varying, clamp, color, cos, log, select, sign, sqrt, dot, exp, float, max, mix, normalize, min, modelWorldMatrix, normalWorld, positionLocal, positionWorld, pow, sin, smoothstep, texture, uniform, vec2, vec3, vec4, vertexColor } from 'three/tsl';
-import { DataTexture, Uint8BufferAttribute, RGBAFormat, UnsignedByteType, Vector4, DataUtils, Float32BufferAttribute, HalfFloatType, InstancedBufferAttribute, InstancedInterleavedBuffer, InterleavedBufferAttribute, RedFormat, Vector2, Vector3, type BufferGeometry, type Mesh } from 'three/webgpu';
+import { DataTexture, Uint8BufferAttribute, RGBAFormat, UnsignedByteType, Vector4, DataUtils, Float32BufferAttribute, HalfFloatType, InstancedBufferAttribute, InstancedInterleavedBuffer, InterleavedBufferAttribute, RedFormat, RGFormat, Vector2, Vector3, type BufferGeometry, type Mesh } from 'three/webgpu';
 import { PLANT_STRIDE } from '../gen/scatter';
 import { BARK_STRIPS } from '../gen/trees';
 import { BARK_TEXELS } from '../gen/foliage';
@@ -758,6 +758,23 @@ export const BUILT = kind('built', ['position', 'normal', 'color', 'uv', 'finish
 });
 /** A lantern's glass, as bright as this many times sunlit white paper: it reads lit at midday, a point of warmth at night. */
 const LANTERN = 1.4;
+
+/**
+ * The newcomers' notice at the port door (gen/welcomeSign.ts, render/notice.ts): dark glass lit from within, its letters
+ * glowing. The letters are a mask drawn once per habitat (`noticeLetters`: red the heading's, green the rest's and the
+ * rule round the edge); far off its mips blend them into the glass, so the panel dims to an even glow. Position, uv.
+ */
+export const noticeLetters = texture(filtered(new DataTexture(new Uint8Array([0, 0]), 1, 1, RGFormat, UnsignedByteType)));
+/** The glass behind the letters, the heading's amber and the lines' warm white (linear; lit white paper is 1). */
+const NOTICE_GLASS = vec3(0.012, 0.014, 0.017);
+const NOTICE_HEADING = vec3(1, 0.5, 0.12).mul(2.6);
+const NOTICE_TEXT = vec3(1, 0.85, 0.62).mul(1.5);
+export const NOTICE = kind('notice', ['position', 'uv'], { cast: false, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial();
+  const mask = noticeLetters.sample(uv());
+  m.colorNode = throughAir(NOTICE_GLASS.add(NOTICE_HEADING.mul(mask.r)).add(NOTICE_TEXT.mul(mask.g)));
+  return m;
+});
 const NO_ROOF = new Vector4(0, 0, 0, 0);
 
 /**
@@ -1198,5 +1215,5 @@ export function animalEyeMaterial(): Material {
 
 /** Every kind, for the Stage's warm-up. */
 export function allKinds(): readonly Kind[] {
-  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS, STONE, BUILT, CAP_GLASS, VAULT, PROP, CROWD, SPECK, DRONE, DRONE_VEIL, BIRD, BOAT, BOAT_WAKE, CLOUDS_FAR, CLOUDS_NEAR];
+  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS, STONE, BUILT, NOTICE, CAP_GLASS, VAULT, PROP, CROWD, SPECK, DRONE, DRONE_VEIL, BIRD, BOAT, BOAT_WAKE, CLOUDS_FAR, CLOUDS_NEAR];
 }

@@ -58,6 +58,7 @@ import type { Whereabouts } from '../system';
 import { AnimalView, DEER, SQUIRRELS } from './animals';
 import { BirdView } from './birds';
 import { CabinView } from './lift';
+import { NoticeView } from './notice';
 import { CapsuleLink, CapsuleView, type Passenger } from './capsules';
 import { GLASS, SKIES, skyOverBay } from '../gen/skies';
 import { GlassDeck, type GlassStage, type GlassWant } from './glassDeck';
@@ -157,6 +158,8 @@ export class InteriorView {
   private below = false;
   /** The cabin of the lift last used (gen/lifts.ts), and whether one is being made (a click then waits). */
   private cabin: CabinView | null = null;
+  /** The notice to newcomers at the port door (gen/welcomeSign.ts). */
+  private notice: NoticeView | null = null;
   /** The glass deck's views of the land above, while a hamlet with it is near (render/glassDeck.ts). */
   private glass: GlassDeck | null = null;
   private cabinMaking = false;
@@ -340,7 +343,7 @@ export class InteriorView {
 
   /** Bytes of geometry this view holds (memory watchdog). */
   bytes(): number {
-    return (this.tiles?.bytes() ?? 0) + (this.plants?.bytes() ?? 0) + (this.landmarks?.bytes() ?? 0) + (this.stair?.bytes() ?? 0) + (this.courts?.bytes() ?? 0) + (this.crossings?.bytes() ?? 0) + (this.halls?.bytes() ?? 0) + (this.harbours?.bytes() ?? 0) + (this.under?.bytes() ?? 0) + (this.cabin?.bytes() ?? 0) + (this.caps?.bytes() ?? 0) + (this.glass?.bytes() ?? 0) + (this.homes?.bytes() ?? 0);
+    return (this.tiles?.bytes() ?? 0) + (this.plants?.bytes() ?? 0) + (this.landmarks?.bytes() ?? 0) + (this.stair?.bytes() ?? 0) + (this.courts?.bytes() ?? 0) + (this.crossings?.bytes() ?? 0) + (this.halls?.bytes() ?? 0) + (this.harbours?.bytes() ?? 0) + (this.under?.bytes() ?? 0) + (this.cabin?.bytes() ?? 0) + (this.notice?.bytes() ?? 0) + (this.caps?.bytes() ?? 0) + (this.glass?.bytes() ?? 0) + (this.homes?.bytes() ?? 0);
   }
 
   /** Give memory back (memory watchdog): drop every cached tile and plant cell not on screen. */
@@ -623,6 +626,7 @@ export class InteriorView {
     if (this.harbours) { this.scene.remove(this.harbours.group); this.harbours.dispose(); }
     if (this.under) { this.scene.remove(this.under.group); this.under.dispose(); }
     if (this.cabin) { this.scene.remove(this.cabin.group); this.cabin.dispose(); }
+    if (this.notice) { this.scene.remove(this.notice.group); this.notice.dispose(); }
     this.caps?.dispose();
     this.glass?.dispose();
     this.homes?.dispose();
@@ -679,6 +683,8 @@ export class InteriorView {
     this.homes = new HomesView(this.terrain, this.stage);
     this.scene.add(this.homes.group);
     this.cabin = new CabinView(this.terrain, this.stage);
+    this.notice = new NoticeView(h, this.stage);
+    this.scene.add(this.notice.group);
     this.scene.add(this.cabin.group);
     this.caps = new CapsuleView(h, this.terrain, this.stage, this.pool, (line) => this.onLine?.(line));
     this.scene.add(this.caps.group);
@@ -704,7 +710,7 @@ export class InteriorView {
     const tick = (): void => { if (!loading) return; this.stage.frame(); requestAnimationFrame(tick); };
     requestAnimationFrame(tick);
     try {
-      await Promise.all([this.stage.add(this.sunline), this.clouds && this.stage.add(this.clouds), this.tiles.load()]);
+      await Promise.all([this.stage.add(this.sunline), this.clouds && this.stage.add(this.clouds), this.tiles.load(), this.notice.load()]);
     } finally {
       loading = false;
     }
@@ -762,6 +768,7 @@ export class InteriorView {
     const rideFrom = this.cabin?.aboard ? this.cabin.place(0) : null;
     this.under?.follow(v.eye, rideFrom ? eyeInCabin(this.habitat, rideFrom, EYE_HEIGHT) : v.eye);
     this.cabin?.poseAt(v.eye);
+    this.notice?.poseAt(v.eye);
     this.caps?.poseAt(v.eye);
     this.exitClock += this.frameDt;
     if (this.onExit && (!this.below || this.exitClock >= 0.1)) {

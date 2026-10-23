@@ -62,6 +62,7 @@ import { pavilionPlan } from './gen/pavilion';
 import { hutPlan } from './gen/summitHut';
 import { courtLayoutOf, courtWorld, type CourtLayout } from './gen/courts';
 import { legShapesOf, liftStairOf, onLeg, rampOf, stairTopAt, type LiftStair } from './gen/liftStair';
+import { welcomeSignOf } from './gen/welcomeSign';
 
 const app = document.getElementById('app')!;
 const debug = new DebugMenu();
@@ -1197,6 +1198,13 @@ byThreshold('Fly: the Threshold from off the Gate face', (st) => {
 byThreshold('Fly: the Threshold\'s portal', (st) => {
   const q = st.top, w = (q.w0 + q.w1) / 2;
   return { eye: [q.z0 + (q.z1 - q.z0) * 0.3, w, q.e + 1.7], at: [q.z1, w, q.e + st.handrail * 2.2] };
+});
+// The notice to newcomers (gen/welcomeSign.ts), from where one steps out of the port door.
+byThreshold('Fly: the notice at the port door, as a newcomer reads it', (st) => {
+  const f = stair(), sign = f && welcomeSignOf(f.h), q = st.top;
+  if (!sign) return null;
+  const w = (sign.plan.w0 + sign.plan.w1) / 2;
+  return { eye: [q.z1 - (q.z1 - q.z0) * 0.2, w, q.e + 1.7], at: [sign.plan.z, w, (sign.plan.e0 + sign.plan.e1) / 2] };
 });
 debug.add({
   label: 'To the Threshold: its lowest gallery, by the capsule berth', group: 'Go', run: () => {
