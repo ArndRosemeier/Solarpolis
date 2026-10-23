@@ -290,8 +290,27 @@ export interface Life {
   drones: Drones;
   /** The animals that live on the land (sim/fauna.ts). */
   animals: Animals;
+  /** The birds of the land (sim/birds.ts). */
+  birds: Birds;
   /** How people talk: silent speech bubbles over those near (src/talk). */
   talk: Talking;
+}
+
+/**
+ * The birds of the land (thread "Birds in the interior"), each a pure function of the seed, the land and the clock.
+ * Songbirds hold territories in the woods round trees the scatter really planted (gen/scatter.ts): they feed on the
+ * ground or in the bushes, sing from their song posts (the dawn chorus as the light comes up over them) and roost at
+ * night. Skylarks live on the open meadows and sing high over them; tawny owls hunt the woods at night.
+ */
+export interface Birds {
+  /** Songbird territories per hectare where the crowns close over the ground (blackbirds, robins, wrens, thrushes, woodpeckers, wood pigeons). */
+  woods: number;
+  /** How far a songbird's territory reaches from its home tree (m). */
+  territory: number;
+  /** Skylarks per hectare of open meadow. */
+  larks: number;
+  /** Tawny owls per km² of woods. */
+  owls: number;
 }
 
 /**

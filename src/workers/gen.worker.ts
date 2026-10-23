@@ -34,6 +34,8 @@ import { droneDesign, type DroneDesign } from '../gen/drone';
 import { densNear, type Den } from '../sim/fauna';
 import { herdsNear, type Herd } from '../sim/herds';
 import { coatsOf, type CoatAsk, type Coats } from '../gen/coat';
+import { birdBody, type BirdBody, type BirdKind } from '../gen/birds';
+import { nestsNear, type Nest } from '../sim/birds';
 import type { VoyageRequest } from './voyage';
 import type { VoyagePlan } from '../space/voyage';
 
@@ -65,7 +67,11 @@ export type GenRequest =
   /** The deer herds whose homes lie within `radius` m of (θ, s), with their places (sim/herds.ts). */
   | { kind: 'herds'; params: HabitatParams; theta: number; s: number; radius: number }
   /** An Actors animal pack's coats, one per look, baked per vertex (gen/coat.ts). */
-  | { kind: 'coats'; ask: CoatAsk };
+  | { kind: 'coats'; ask: CoatAsk }
+  /** The birds whose homes lie within `radius` m of (θ, s) (sim/birds.ts). */
+  | { kind: 'birds'; params: HabitatParams; theta: number; s: number; radius: number }
+  /** A bird species' body at both levels (gen/birds.ts). */
+  | { kind: 'bird'; bird: BirdKind };
 export type GenAnswer =
   | { kind: 'voyage'; plan: VoyagePlan }
   | { kind: 'tile'; tile: TileMesh }
@@ -86,6 +92,8 @@ export type GenAnswer =
   | { kind: 'squirrels'; homes: Den[] }
   | { kind: 'herds'; homes: Herd[] }
   | { kind: 'coats'; coats: Coats }
+  | { kind: 'birds'; nests: Nest[] }
+  | { kind: 'bird'; body: BirdBody }
   | { error: string };
 
 /** Every typed array's buffer in an answer, to transfer rather than copy. */
@@ -157,6 +165,10 @@ self.onmessage = async (e: MessageEvent<GenRequest>) => {
       post({ kind: 'drone', design: droneDesign(derive(req.params), req.role, req.index) });
       return;
     }
+    if (req.kind === 'bird') {
+      post({ kind: 'bird', body: birdBody(req.bird) });
+      return;
+    }
     if (req.kind === 'coats') {
       // The pack's files come over the network (from the browser's cache once the figures have loaded them).
       void coatsOf(req.ask, async (url) => { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.arrayBuffer(); })
@@ -187,6 +199,10 @@ self.onmessage = async (e: MessageEvent<GenRequest>) => {
     }
     if (req.kind === 'squirrels') {
       post({ kind: 'squirrels', homes: densNear(ecology, plants, req.theta, req.s, req.radius) });
+      return;
+    }
+    if (req.kind === 'birds') {
+      post({ kind: 'birds', nests: nestsNear(ecology, plants, req.theta, req.s, req.radius) });
       return;
     }
     if (req.kind === 'herds') {

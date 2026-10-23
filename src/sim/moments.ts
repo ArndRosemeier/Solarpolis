@@ -13,7 +13,8 @@
 import type { Ecology } from '../gen/ecology';
 import { landmarksOf } from '../gen/landmarks';
 import { pathsOf } from '../gen/paths';
-import { HUT_REACH, LIGHT_LAG, lightAt, type Listener, type Soundscape } from './sounds';
+import { HUT_REACH, type Listener, type Soundscape } from './sounds';
+import { LIGHT_LAG, lightAt } from './birds';
 import { floorGap } from './walks';
 
 export const MOMENTS = ['summit', 'sunwalk', 'lake', 'below'] as const;

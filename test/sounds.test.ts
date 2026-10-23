@@ -5,7 +5,7 @@ import { BEDS, callsIn, lightAt, soundscapeAt, stepSurfaceAt, strideAt, type Lis
 import { landmarksOf } from '../src/gen/landmarks';
 import { ROOM_BEDS } from '../src/sim/rooms';
 import { planOf } from '../src/gen/plan';
-import { ecologyOf } from './worlds';
+import { ecologyOf, woodBirdsOf } from './worlds';
 
 const EYE = 1.7;
 
@@ -67,16 +67,18 @@ for (const { name } of MATRIX) {
     assert.equal(soundscapeAt(e, night, standing(e, 0.2, wild)).birds, 0);
   });
 
-  test(`sounds (${name}): calls are the same however the time is cut, only owls at night, none below`, () => {
-    const e = ecologyOf(name), p = e.terrain.habitat.profile, h = e.terrain.habitat;
-    const s = p.floorStart + 0.3 * (p.floorEnd - p.floorStart), t0 = lightRisenTo(e, s, 0.3), l = standing(e, 2, s);
-    const whole = callsIn(e, t0, t0 + 60, l);
-    const cut = [...callsIn(e, t0, t0 + 25, l), ...callsIn(e, t0 + 25, t0 + 60, l)];
+  test(`sounds (${name}): calls are the birds' songs, the same however the time is cut, only owls at night, none below`, () => {
+    const e = ecologyOf(name), h = e.terrain.habitat, wood = woodBirdsOf(name);
+    if (!wood) return;
+    const { nests, theta, s } = wood, t0 = lightRisenTo(e, s, 0.3), l = standing(e, theta, s);
+    const whole = callsIn(e, nests, t0, t0 + 60, l);
+    assert.ok(whole.length > 0, 'the dawn chorus is heard in a wood');
+    const cut = [...callsIn(e, nests, t0, t0 + 25, l), ...callsIn(e, nests, t0 + 25, t0 + 60, l)];
     assert.deepEqual(cut, whole);
     for (const c of whole) assert.ok(c.t >= t0 && c.t < t0 + 60);
     const night = h.params.day.length * (h.params.day.daylight + (1 - h.params.day.daylight) / 2);
-    for (const c of callsIn(e, night, night + 120, l)) assert.equal(c.kind, 'owl');
-    assert.deepEqual(callsIn(e, t0, t0 + 60, { ...l, below: true }), []);
+    for (const c of callsIn(e, nests, night, night + 600, l)) assert.equal(c.kind, 'owl');
+    assert.deepEqual(callsIn(e, nests, t0, t0 + 60, { ...l, below: true }), []);
   });
 
   test(`sounds (${name}): a foot lands on the floor below, water in the lake, stone in a court`, () => {
