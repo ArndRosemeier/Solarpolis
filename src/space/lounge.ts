@@ -125,6 +125,23 @@ export function seatedFeet(l: Lounge, p: Place): Vec3 {
   return [l.floor, p.at[1] + p.facing[1] * SEAT_FEET, p.at[2] + p.facing[2] * SEAT_FEET];
 }
 
+/** Seated, the heights (m) over the floor of a passenger's lap, chest and head: where the Sun through the glass finds them. */
+const SEATED_LIT = [0.6, 0.95, 1.2];
+
+/**
+ * How much of the passengers seated at `places` the Sun reaches through the windows (0–1), with `sun` the way to it
+ * (ship frame, unit): the share of their laps, chests and heads (over the middle of each seat) that see it.
+ */
+export function sunOnSeated(l: Lounge, places: readonly Place[], sun: Vec3): number {
+  if (!places.length) return 0;
+  let lit = 0;
+  for (const p of places) {
+    const over = v3add(p.at, v3scale(p.facing, -LOUNGE.couch.deep / 2));
+    for (const h of SEATED_LIT) if (throughWindow(l, [l.floor + h, over[1], over[2]], sun)) lit++;
+  }
+  return lit / (places.length * SEATED_LIT.length);
+}
+
 /** A point of the ship frame in the frame the ship is posed in (its stern at `position`, nose along `forward`). */
 export function fromShip(pose: { position: Vec3; forward: Vec3; up: Vec3 }, p: Vec3): Vec3 {
   return v3add(pose.position, fromShipDirection(pose, p));

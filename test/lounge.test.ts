@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { v3add, v3cross, v3dot, v3norm, v3scale, v3sub } from '@futuremagic/core';
 import { MATRIX } from '../src/blueprint';
-import { ARRIVAL_SHOTS, CABIN_FOV, LOUNGE, arrival, cabinCamera, chooseStart, deriveShip, loungeOf, placesInView, seatedFeet, shipShape, throughWindow, windowFacing, windowLight, type Lounge } from '../src/space';
+import { ARRIVAL_SHOTS, CABIN_FOV, LOUNGE, arrival, cabinCamera, chooseStart, deriveShip, loungeOf, placesInView, seatedFeet, shipShape, sunOnSeated, throughWindow, windowFacing, windowLight, type Lounge } from '../src/space';
 import { loungeGeometry } from '../src/render/lounge';
 import { windingOk } from './meshChecks';
 import { spaceOf } from './worlds';
@@ -36,6 +36,12 @@ for (const { name } of MATRIX) {
         const feet = seatedFeet(l, p), out = Math.hypot(feet[1], feet[2]);
         assert.ok(feet[0] === l.floor && out > r && out < l.radius - 0.3, 'feet on the floor, in front of the seat, clear of the wall');
       }
+      // The Sun reaches a couch's sitters through the window they face (at some height of it), never along the axis.
+      const sitters = l.couches[0].places, facing = sitters[0].facing;
+      const lit = [-0.6, -0.3, 0, 0.3, 0.6].map((up) => sunOnSeated(l, sitters, v3norm(v3add(facing, [up, 0, 0]))));
+      assert.ok(Math.max(...lit) > 0, `${name}: no sun on the sitters through their window (${lit.join(', ')})`);
+      assert.equal(sunOnSeated(l, sitters, [1, 0, 0]), 0);
+      assert.equal(sunOnSeated(l, [], facing), 0);
       // Looking out of any window: the camera stands between the core and the couches, and sees some of them.
       for (let w = 0; w < l.windows.count; w += 5) {
         const look = l.windows.turn + (w * 2 * Math.PI) / l.windows.count, cam = cabinCamera(l, look), r = Math.hypot(cam.eye[1], cam.eye[2]);
