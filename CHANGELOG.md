@@ -2,6 +2,12 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.134 — A ship that welcomes you aboard
+
+- Visit A Perfectly Reasonable Detour from Outside: a Mind-hosted exploration ship with a matching exterior and six connected passenger decks.
+- Screens, upholstered supports, private suites, sealed laboratory benches, drone companions and a central lift come from a reusable ship recipe.
+- Coast in zero g, make room by withdrawing the furnishings, or try a short departure burn with reaction-mass use and thrust gravity. Full interplanetary navigation will build on this foundation.
+
 ## v0.133 — A new title theme
 
 - The title screen now plays the synth-and-strings theme: a rising arpeggio that opens like a sunrise.
