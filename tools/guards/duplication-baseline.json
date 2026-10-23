@@ -108,6 +108,18 @@
     "reason": "Neighbourhoods and population have bounded, explicitly shed-able day/route caches, unlike kept which retains one immutable value per owner. They share only the standard Map/WeakMap idiom."
   },
   {
+    "key": "same name: solarpolis/app/arrivalCard.ts#show + solarpolis/app/title.ts#show",
+    "reason": "Independent UI visibility methods for different panels."
+  },
+  {
+    "key": "same name: solarpolis/app/arrivalCard.ts#show + solarpolis/lab/lifeView.ts#show",
+    "reason": "Independent UI visibility methods for different panels."
+  },
+  {
+    "key": "same name: solarpolis/app/arrivalCard.ts#show + solarpolis/lab/planView.ts#show",
+    "reason": "Independent UI visibility methods for different panels."
+  },
+  {
     "key": "same name: solarpolis/app/debug.ts#add + solarpolis/gen/trees.ts#add",
     "reason": "gen/trees.ts is ported from Scale's vegetation.ts, which used three's Vector3; its small mutable vector V (three cannot be imported in gen/) keeps Vector3's method names so the ported code reads line for line like the original."
   },
@@ -118,6 +130,10 @@
   {
     "key": "same name: solarpolis/app/title.ts#show + solarpolis/lab/lifeView.ts#show",
     "reason": "The Blueprint Lab's map views (PlanView, LifeView) share one shape: show(habitat | null) from the Lab, then a private draw once the parameters settle. The title card's show is the app's own panel call. Same verbs, different things shown."
+  },
+  {
+    "key": "same name: solarpolis/gen/courts.ts#box + solarpolis/gen/liftStairMesh.ts#box",
+    "reason": "Local wrapper maps an arrival porch block through the curved ramp frame; courts use their own portal frame."
   },
   {
     "key": "same name: solarpolis/gen/courts.ts#frame + solarpolis/main.ts#frame",
@@ -745,10 +761,6 @@
   },
   {
     "key": "same name: solarpolis/render/outside.ts#setHabitat + solarpolis/render/view.ts#setHabitat",
-    "reason": "Both 3D views implement the page's view interface (PageView in main.ts: create, setHabitat, setRunning, bytes, shed, info, skip); their shared machinery is in render/surface.ts."
-  },
-  {
-    "key": "same name: solarpolis/render/outside.ts#setRunning + solarpolis/render/view.ts#setRunning",
     "reason": "Both 3D views implement the page's view interface (PageView in main.ts: create, setHabitat, setRunning, bytes, shed, info, skip); their shared machinery is in render/surface.ts."
   },
   {

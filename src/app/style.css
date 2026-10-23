@@ -166,3 +166,21 @@ button { font: inherit; color: inherit; }
 .exit-marker { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; max-width: calc(100% - 32px); padding: 10px 16px; border: 1px solid #9de9cd80; border-radius: 24px; background: #112c28df; color: #d9fff0; font-size: 14px; pointer-events: none; box-shadow: 0 2px 16px #0005; }
 .exit-marker[hidden] { display: none; }
 .exit-marker-arrow { font-size: 27px; line-height: 1; }
+
+/* A restrained welcome, leaving the cylinder itself as the focal point. */
+.arrival-card { position: absolute; left: clamp(24px, 5vw, 80px); bottom: clamp(52px, 8vh, 100px); max-width: min(580px, calc(100% - 48px)); color: #fff; text-shadow: 0 2px 16px #000c; z-index: 6; pointer-events: none; }
+.arrival-card[hidden] { display: none; }
+.arrival-eyebrow { font-size: 11px; letter-spacing: .22em; color: #e3cf9e; }
+.arrival-name { margin: 12px 0; font-size: clamp(26px, 3.4vw, 52px); line-height: 1.1; font-weight: 300; letter-spacing: -.025em; }
+.arrival-scale { font-size: 13px; color: #fffC; }
+.arrival-name, .arrival-scale { opacity: 0; transform: translateY(8px); transition: opacity 1.5s, transform 1.5s; }
+.arrival-card.welcoming .arrival-name, .arrival-card.welcoming .arrival-scale { opacity: 1; transform: none; }
+.arrival-route { display: none; border-left: 2px solid #ddba72; padding: 8px 14px; background: linear-gradient(90deg, #101d22d9, #101d2280); font-size: 14px; }
+.arrival-route p { margin: 6px 0 0; color: #dce5e6; font-size: 12px; }
+.arrival-skip { margin-top: 12px; padding: 7px 0; color: #fffB; background: none; border: 0; border-bottom: 1px solid #fff5; font: inherit; font-size: 12px; cursor: pointer; pointer-events: auto; }
+.arrival-card.arrived { left: 20px; bottom: 62px; max-width: min(380px, calc(100% - 40px)); }
+.arrival-card.arrived .arrival-name, .arrival-card.arrived .arrival-scale, .arrival-card.arrived .arrival-eyebrow { display: none; }
+.arrival-card.arrived .arrival-route { display: block; }
+.inside.revealing .gm, .inside.revealing .inside-hint { visibility: hidden; }
+
+.arrival-card:not(.arrived) { padding: 24px; background: linear-gradient(90deg, #07191ddd, #07191d88 70%, transparent); border-radius: 4px; }

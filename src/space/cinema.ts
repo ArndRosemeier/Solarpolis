@@ -223,9 +223,9 @@ export function arrival(space: Space, after: number): Arrival {
       // Shot 5: beside the arm's tip, a little out along it, the collar in the middle; a soft jolt as it latches.
       const time = elapsed - ARRIVAL_SHOTS[0], clock = guest.docked - SHOT5_BEFORE + time, since = clock - guest.docked;
       const jolt = since > 0 ? 0.03 * B * Math.exp(-3 * since) * Math.sin(4 * Math.PI * since) : 0;
-      const eye = v3add(collar, v3add(v3scale(radial, 0.4 * L - jolt), v3add(v3scale(side, 2.5 * B), [0, 0, 1.2 * B])));
-      const target = v3add(collar, v3scale(radial, 0.12 * L));
-      return { shot: 4, time, length: ARRIVAL_SHOTS[1], eye: toOrbit(eye, clock), target: toOrbit(target, clock), up: dirOrbit([0, 0, 1], clock), fov: 45, ship: null, title: 0, clock };
+      const eye = v3add(collar, v3add(v3scale(radial, 0.6 * L - jolt), v3add(v3scale(side, 0.8 * L), [0, 0, 0.28 * L])));
+      const target = v3add(collar, v3scale(radial, 0.35 * L));
+      return { shot: 4, time, length: ARRIVAL_SHOTS[1], eye: toOrbit(eye, clock), target: toOrbit(target, clock), up: dirOrbit([0, 0, 1], clock), fov: 58, ship: null, title: 0, clock };
     },
   };
 }

@@ -24,6 +24,7 @@ import { wantedCells, type Grid, type GridEye, type TileKey, type WantedTile } f
 import { legShapesOf, lineAt, liftStairOf, onLeg, rampOf, type LegShape, type LiftStair, type PlanPoint, type Ramp, type StairPlatform } from './liftStair';
 import { FINISH } from './pavilion';
 import { kept } from './kept';
+import { arrivalTerraceOf } from './arrivalTerrace';
 
 /** What a builder makes: a tile's detail, the physics' solid parts, or only a count of what a tile holds. */
 export type StairDetail = 'far' | 'mid' | 'near' | 'solid' | 'count';
@@ -260,7 +261,7 @@ class StairBuilder {
   private platform(q: StairPlatform): void {
     const ground = (z: number): number => this.ramp.groundAt(z) - this.bury;
     const corners: PlanPoint[] = [[q.z0, q.w0], [q.z1, q.w0], [q.z1, q.w1], [q.z0, q.w1]];
-    this.block(corners, corners.map((c) => ground(c[0])), corners.map(() => q.e), PAVING);
+    this.block(corners, corners.map((c) => ground(c[0])), corners.map(() => q.e), q.kind === 'top' ? [0.1, 0.13, 0.14] : PAVING);
     const p = this.st.parapet, hr = this.hr;
     // The parapets along each edge, less the openings where legs meet it.
     const open = this.openings(q);
@@ -286,6 +287,57 @@ class StairBuilder {
     // Lamps at the corners of its downhill edge, and its uphill edge on the larger ones.
     const inset = p + hr * 0.4;
     for (const z of [q.z0 + inset, ...(q.z1 - q.z0 > this.st.width * 1.5 ? [q.z1 - inset] : [])]) for (const w of [q.w0 + inset, q.w1 - inset]) this.lamp([z, w], q.e);
+    if (q.kind === 'top') this.arrivalPorch(q);
+  }
+
+  /** A sheltered threshold frames the reveal; the open half and bronze inlay lead to the real stair opening. */
+  private arrivalPorch(q: StairPlatform): void {
+    const terrace = arrivalTerraceOf(this.ramp.habitat);
+    if (!terrace) return;
+    const hr = this.hr, depth = q.z1 - q.z0, middle = (q.w0 + q.w1) / 2;
+    const back = q.z1 - hr * 0.6, front = q.z1 - depth * 0.52, side = this.st.parapet + hr * 0.18;
+    const box = (z0: number, z1: number, w0: number, w1: number, lo: number, hi: number, col: RGB, finish: number = FINISH.stone): void => {
+      this.solidBlock([[z0, w0], [z1, w0], [z1, w1], [z0, w1]], [lo, lo, lo, lo].map((e) => q.e + e), [hi, hi, hi, hi].map((e) => q.e + e), col, finish);
+    };
+    // Pale canopy and bronze ribs, held by posts outside the clear walking strip.
+    for (const z of [front, back]) for (const w of [q.w0 + side, q.w1 - side]) box(z - hr * 0.13, z + hr * 0.13, w - hr * 0.13, w + hr * 0.13, 0, hr * 3.5, STONE);
+    box(front - hr * 0.25, back + hr * 0.25, q.w0 + this.st.parapet, q.w1 - this.st.parapet, hr * 3.5, hr * 3.7, PAVING);
+    for (const z of [front, (front + back) / 2, back]) box(z - hr * 0.045, z + hr * 0.045, q.w0 + side, q.w1 - side, hr * 3.38, hr * 3.5, BRONZE, FINISH.bronze);
+    // The passage's closed pressure door stays behind the passenger. The cinematic cut covers the transfer here.
+    box(back - hr * 0.08, back + hr * 0.08, q.w0 + side, q.w1 - side, 0, hr * 3.4, [0.19, 0.26, 0.25], FINISH.panel);
+    box(back - hr * 0.095, back - hr * 0.08, middle - hr * 0.025, middle + hr * 0.025, 0, hr * 3.1, BRONZE, FINISH.bronze);
+    // Seats along the sheltered sides leave the centre free even on narrow habitats.
+    for (const w of [q.w0 + side + hr * 0.35, q.w1 - side - hr * 0.35]) {
+      box(front + hr * 0.6, back - hr * 0.8, w - hr * 0.22, w + hr * 0.22, 0, hr * 0.43, BRONZE, FINISH.timber);
+    }
+    if (this.detail === 'solid') return;
+    // The paving is a pair of flat triangles, not a curved constant-e surface.
+    const floor = ([z, w]: PlanPoint): number => {
+      const A = this.ramp.world(q.z0, q.w0, q.e), C = this.ramp.world(q.z1, q.w1, q.e);
+      const B = (z - q.z0) / (q.z1 - q.z0) >= (w - q.w0) / (q.w1 - q.w0)
+        ? this.ramp.world(q.z1, q.w0, q.e) : this.ramp.world(q.z0, q.w1, q.e);
+      const n = v3cross(v3sub(B, A), v3sub(C, A)), at = this.ramp.world(z, w, q.e);
+      const up = v3sub(this.ramp.world(z, w, q.e + 1), at);
+      return q.e + n.reduce((v, x, k) => v + x * (A[k] - at[k]), 0) / n.reduce((v, x, k) => v + x * up[k], 0);
+    };
+    const points = [terrace.start, terrace.finish, terrace.exit];
+    for (let k = 0; k + 1 < points.length; k++) {
+      const a = points[k], b = points[k + 1], dz = b[0] - a[0], dw = b[1] - a[1], len = Math.hypot(dz, dw);
+      if (len < hr * 0.2) continue;
+      const z = dz / len, w = dw / len, radius = hr * 0.14;
+      const stripe: PlanPoint[] = [[a[0] + w * radius, a[1] - z * radius], [b[0] + w * radius, b[1] - z * radius], [b[0] - w * radius, b[1] + z * radius], [a[0] - w * radius, a[1] + z * radius]];
+      if (area(stripe) < 0) stripe.reverse();
+      this.solidBlock(stripe, stripe.map((p) => floor(p) + hr * 0.015), stripe.map((p) => floor(p) + hr * 0.025), [0.65, 0.4, 0.12], FINISH.bronze);
+      for (let d = hr; d < len - hr * 0.5; d += hr * 2) {
+        const tip: PlanPoint = [a[0] + z * d, a[1] + w * d];
+        for (const sign of [-1, 1]) {
+          const tail: PlanPoint = [tip[0] - z * hr * 0.45 + w * sign * hr * 0.35, tip[1] - w * hr * 0.45 - z * sign * hr * 0.35];
+          const poly: PlanPoint[] = [tip, tail, [tail[0] - z * hr * 0.09, tail[1] - w * hr * 0.09], [tip[0] - z * hr * 0.09, tip[1] - w * hr * 0.09]];
+          if (area(poly) < 0) poly.reverse();
+          this.solidBlock(poly, poly.map((p) => floor(p) + hr * 0.027), poly.map((p) => floor(p) + hr * 0.03), [0.8, 0.55, 0.2], FINISH.bronze);
+        }
+      }
+    }
   }
 
   /** A parapet block on a plan polygon (counter-clockwise from above), from a floor at `e` to `top`, and its coping. */

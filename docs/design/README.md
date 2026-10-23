@@ -32,3 +32,6 @@
 - Daily routines reflect chosen pursuits and relationships. The world bible describes abundance without ordinary economic compulsion; a workshop or shared kitchen is a place people choose to participate.
 - A separate agent is building a portable conversation engine. Integrate it later with resident identity, place, activity and social context; do not build a second conversation engine here.
 - Finished work must be pushed to `main` so Arnd can publish and see the results; do not leave completed changes only on a local branch (Arnd, 2026-10-23).
+
+- Arrival ends on a sheltered terrace overlooking the cylinder, connected to the real Lift Stair, with bronze directions onward.
+- Homes have sleek, functional interiors appropriate to a civilisation a thousand years ahead: nearly every wall is a screen, and furniture adapts to residents and moves out of the way.

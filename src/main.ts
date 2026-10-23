@@ -1,5 +1,6 @@
 import { neighboursAt } from './sim/neighbourhood';
 import { ExitMarker } from './app/exitMarker';
+import { ArrivalCard } from './app/arrivalCard';
 /**
  * The page: the header with the version and What's new, the memory watchdog, the debug menu, and the current view:
  * the Blueprint Lab (design a habitat), Inside (walk in it) or Outside (the habitat in its orbit, with Earth, the Moon,
@@ -130,6 +131,12 @@ const insideSlot = new ViewSlot('Hold the right mouse button to look around · W
   const exits = new ExitMarker();
   insideSlot.box.append(exits.box);
   v.onExit = (exit, eye, forward, up) => exits.showExit(exit, eye, forward, up);
+  const welcome = new ArrivalCard(h, () => v.finishArrivalReveal());
+  insideSlot.box.append(welcome.root);
+  v.onArrival = (progress, nearby) => {
+    welcome.show(progress, nearby);
+    insideSlot.box.classList.toggle('revealing', progress < 1 && nearby);
+  };
   memory.track('player body', () => v.bodyBytes());
   memory.track('people', () => v.peopleBytes());
   memory.track('drones', () => v.droneBytes());
@@ -170,7 +177,17 @@ async function startArrival(): Promise<void> {
     showTab('inside');
     await starting;
     const h = lab.habitat, inside = insideSlot.view;
-    if (h && inside) { const hub = hubView(h); inside.floatAt(hub.eye, hub.look); }
+    if (h && inside) {
+      const terrace = await inside.prepareArrival();
+      if (insideSlot.box.hidden) { inside.finishArrivalReveal(); await drawCurtain(false); return; }
+      if (terrace) {
+        const reveal = inside.revealArrival();
+        await drawCurtain(false);
+        await reveal;
+        return;
+      }
+      const hub = hubView(h); inside.floatAt(hub.eye, hub.look);
+    }
   }
   await drawCurtain(false);
 }
@@ -941,6 +958,10 @@ debug.add({ label: 'Below: beside a resident wearing stockings', group: 'Go', ru
 debug.add({ label: 'Below: under the next kind of hamlet sky', group: 'Go', run: () => underSky(nextSky++ % SKIES.length) });
 debug.add({ label: 'Below: under a glass deck (the real sky above)', group: 'Go', run: () => underSky(GLASS) });
 debug.add({ label: 'Up onto the land (from below)', group: 'Go', run: () => { const v = view(); if (v) v.goTo(v.walker.at.theta, v.walker.at.s); } });
+debug.add({ label: 'Arrival: reveal the port terrace', group: 'Go', run: async () => {
+  const v = view();
+  if (v && await v.prepareArrival()) void v.revealArrival();
+} });
 debug.add({ label: 'Travel 10× faster (toggle)', group: 'Go', run: () => { const v = view(); if (v) v.boost = v.boost === 1 ? 10 : 1; } });
 debug.addInfo(() => view()?.clockLine() ?? '');
 /** The next of a cycle of clock speeds. */

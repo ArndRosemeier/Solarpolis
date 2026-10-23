@@ -219,6 +219,13 @@ Each row is a question you will have while coding, and the one place that answer
 | How do I see where everyone is over a day? | The Blueprint tab's "Who is out on the land" (`src/lab/lifeView.ts`): one dot per person over the land plan's maps, with a slider through the day. |
 | What happens when the player touches someone? | *Planned:* they become a live agent in `src/sim`, starting from their derived state, and go back to their routine after. |
 
+## Arrival
+
+| Question | The one way |
+|---|---|
+| Where does the port arrival leave the player? | `gen/arrivalTerrace.ts` derives the sheltered upper Lift Stair landing and its route from the actual last stair leg. `gen/liftStairMesh.ts` builds its canopy, seats and bronze directions at every detail, with solid geometry for walking. Habitats without a Lift Stair retain their hub arrival. |
+| How is the interior revealed after docking? | `world/arrival.ts` supplies the timed camera walk and widening view. `InteriorView.prepareArrival` waits for the stair tiles; `revealArrival` runs it and hands the exact final pose to the walker. Any key or looking skips to the landing. `app/arrivalCard.ts` introduces the habitat and then shows directions until the player leaves. The transfer from the bore remains a cinematic cut. |
+
 ## Planned
 
 | Question | The one way (to build) |

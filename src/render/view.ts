@@ -15,6 +15,8 @@ import { EYE_HEIGHT, Walker, type View } from '../world/walker';
 import { Flyer } from '../world/flyer';
 import { PhysicsWorld } from '../physics/world';
 import { gravityReading, type GravityReading } from '../world/motion';
+import { arrivalTerraceOf, revealAt, REVEAL_SECONDS } from '../world/arrival';
+import type { ArrivalTerrace } from '../gen/arrivalTerrace';
 import { HUMAN, type Character } from '../physics/character';
 import { Figure, castAsWorn, type MoveState } from './actors/figure';
 import { playerLook } from './actors/looks';
@@ -138,7 +140,11 @@ export class InteriorView {
   animals: AnimalView[] = [];
   /** In the air, or null on foot. */
   private flyer: Flyer | null = null;
+  private arrivalReveal: { terrace: ArrivalTerrace; elapsed: number; ready: (() => void) | null; done: (() => void) | null } | null = null;
+  private arrivalGuide: ArrivalTerrace | null = null;
+  onArrival: ((progress: number, nearby: boolean) => void) | null = null;
   private readonly loop = new FrameLoop((dt) => this.frame(dt), (e) => {
+    if (this.arrivalReveal && !e.ctrlKey && !e.altKey && !e.metaKey) { this.finishArrivalReveal(); return; }
     if (e.code === 'KeyF' && !e.repeat && !this.cabin?.aboard) this.toggleFlying();
     if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) this.jump = true; }
   });
@@ -443,6 +449,9 @@ export class InteriorView {
   /** Show another habitat (the Lab changed it). */
   async setHabitat(h: Habitat): Promise<void> {
     if (h === this.habitat) return;
+    this.finishArrivalReveal();
+    this.arrivalGuide = null;
+    this.onArrival?.(1, false);
     this.habitat = h;
     this.terrain = makeTerrain(h);
     this.flyer = null;
@@ -613,6 +622,7 @@ export class InteriorView {
   }
 
   private current(): View {
+    if (this.arrivalReveal) return revealAt(this.habitat, this.arrivalReveal.terrace, Math.max(0, this.arrivalReveal.elapsed));
     if (this.flyer) return this.flyer.view();
     const v = this.walker.view(), cabin = this.cabin?.aboard ? this.cabin.place() : null;
     // In a lift: standing in the cabin, looking round as on foot.
@@ -724,6 +734,45 @@ export class InteriorView {
   goTo(theta: number, s: number, heading?: number): void {
     this.below = false;
     this.stand(theta, s, heading);
+  }
+
+  /** Stream the actual arrival landing behind the curtain before showing the first reveal frame. */
+  async prepareArrival(): Promise<boolean> {
+    this.finishArrivalReveal();
+    const terrace = arrivalTerraceOf(this.habitat);
+    if (!terrace) return false;
+    const first = revealAt(this.habitat, terrace, 0);
+    this.below = false;
+    this.chase = 0;
+    this.floatAt(first.eye, first.look);
+    this.arrivalGuide = terrace;
+    await new Promise<void>((ready) => {
+      this.arrivalReveal = { terrace, elapsed: -1, ready, done: null };
+      this.place();
+    });
+    return true;
+  }
+
+  /** A short walk from shelter to overlook; any movement key or right-drag hands over early. */
+  revealArrival(): Promise<void> {
+    const reveal = this.arrivalReveal;
+    if (!reveal) return Promise.resolve();
+    reveal.elapsed = 0;
+    return new Promise((done) => { reveal.done = done; });
+  }
+
+  finishArrivalReveal(): void {
+    const reveal = this.arrivalReveal;
+    if (!reveal) return;
+    const last = revealAt(this.habitat, reveal.terrace, REVEAL_SECONDS);
+    this.arrivalReveal = null;
+    const at = fromWorld(this.habitat.profile, ...reveal.terrace.feet);
+    this.goTo(at.theta, at.s, last.heading);
+    this.walker.follow(reveal.terrace.feet);
+    this.walker.pitch = last.pitch;
+    this.camera.fov = last.fov;
+    this.camera.updateProjectionMatrix();
+    reveal.ready?.(); reveal.done?.();
   }
 
   /** Jump on foot to (θ, s) below the land, onto the Understorey's floor there (debug menu, until the lifts are built). */
@@ -862,6 +911,7 @@ export class InteriorView {
     }, (x, y) => !!this.doorsUnder(x, y));
     // The pointer stays visible and free (Arnd, 2026-10-21): the right button held down looks around.
     dragToLook(this.canvas, (dx, dy) => {
+      if (this.arrivalReveal) this.finishArrivalReveal();
       const k = 0.004;
       if (this.flyer) this.flyer.turn(dx * k, -dy * k);
       else this.walker.turn(dx * k, -dy * k);
@@ -875,6 +925,7 @@ export class InteriorView {
 
   /** Start or stop drawing (the page shows one view at a time). */
   setRunning(on: boolean): void {
+    if (!on) this.finishArrivalReveal();
     this.loop.set(on);
   }
 
@@ -883,10 +934,22 @@ export class InteriorView {
 
   private frame(dt: number): void {
     this.frameDt = dt;
+    const arrival = this.arrivalReveal;
+    if (arrival) {
+      if (arrival.elapsed < 0) {
+        if (this.stair?.complete) { arrival.ready?.(); arrival.ready = null; }
+      } else {
+        arrival.elapsed += dt;
+        if (arrival.elapsed >= REVEAL_SECONDS) this.finishArrivalReveal();
+      }
+      const f = revealAt(this.habitat, arrival.terrace, Math.max(0, arrival.elapsed));
+      this.camera.fov = f.fov;
+      this.camera.updateProjectionMatrix();
+    }
     this.glide(dt);
     const { forward, right, up, fast } = moveKeys(this.loop.keys);
     const run = this.boost * (fast ? RUN : 1);
-    if (this.cabin?.aboard) {
+    if (this.arrivalReveal || this.cabin?.aboard) {
       // In a lift the keys wait for its doors.
     } else if (this.flyer) {
       this.flyer.boost = run;
@@ -910,6 +973,12 @@ export class InteriorView {
     this.rideOn(dt);
     this.simulate(dt, this.current().eye);
     this.place();
+    const guide = this.arrivalGuide, eye = this.current().eye;
+    if (guide) {
+      const near = !this.below && Math.hypot(...eye.map((v, k) => v - guide.feet[k])) < guide.handrail * 35;
+      this.onArrival?.(this.arrivalReveal ? Math.max(0, this.arrivalReveal.elapsed) / REVEAL_SECONDS : 1, near);
+      if (!near && !this.arrivalReveal) this.arrivalGuide = null;
+    }
     this.weigh(dt);
     draw(this.stage);
     this.glass?.takeViews(dt, this.posedAt, this.glassWanted(), this.glassStage);

@@ -82,9 +82,10 @@ const memoryDetails = { debug: 'Show memory details' };
 export const views = {
   title: { query: '', about: 'the title card over the attract flight', default: true },
   arrival: {
-    query: '', about: 'Start: down the corridor (-corridor), nearing the berth (-berth), in the bore (-bore), past the bearing (-sleeve), then floating at the Hub',
-    steps: [{ run: async (page) => page.click('.title-start') }, { wait: 5000 }, { shot: 'corridor' }, { wait: 14000 }, { shot: 'berth' }, { wait: 9000 }, { shot: 'bore' }, { wait: 8000 }, { shot: 'sleeve' }, { wait: 14000 }],
+    query: '', about: 'Docking, the turning bore, the sheltered threshold, the cylinder reveal and an on-foot arrival terrace',
+    steps: [{ run: async (page) => page.click('.title-start') }, { wait: 5000 }, { shot: 'corridor' }, { wait: 14000 }, { shot: 'berth' }, { wait: 9000 }, { shot: 'bore' }, { wait: 8000 }, { shot: 'sleeve' }, { run: async (page) => page.waitForSelector('.arrival-card.welcoming', { timeout: 60000 }) }, { shot: 'welcome' }, { wait: 6500 }, { shot: 'reveal' }, { run: async (page) => page.waitForSelector('.arrival-card.arrived', { timeout: 30000 }) }, { wait: 3000 }, { shot: 'terrace' }, { run: logPeople }],
   },
+  'arrival-terrace': { query: 'view=inside', about: 'the port overlook and its usable connection to the Lift Stair', settle: 6000, steps: [memoryDetails, { debug: 'Arrival: reveal the port terrace' }, { wait: 5000 }, { shot: 'threshold' }, { wait: 7000 }, { shot: 'reveal' }, { wait: 7000 }, { shot: 'landed' }, { look: [300, 50] }, { wait: 1500 }, { shot: 'route' }, { run: logPeople }, heap('arrival-terrace')] },
   lab: { query: 'view=lab', about: 'the Blueprint Lab', settle: 1000, default: true },
   'lab-under': { query: 'view=lab', about: 'the Blueprint Lab scrolled to "Under the floor": the Understorey plan, the whole floor and one hamlet close up', settle: 3000, steps: [{ run: async (page) => page.evaluate(() => { [...document.querySelectorAll('h2')].find((e) => e.textContent === 'Under the floor')?.scrollIntoView(); }) }, { wait: 1500 }] },
   inside: { query: 'view=inside', about: 'standing on the floor, first look', default: true },
