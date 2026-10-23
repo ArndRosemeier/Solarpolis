@@ -2,6 +2,14 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.154 — The port lights up as you come in
+
+- The habitat's outline now blinks with red obstruction lights all round its radiator rims, flashing together.
+- A ring of steady green lights marks the rim of the port face, which never sees the Sun.
+- The dock spindle has rings of white running lights and a red beacon on its tip.
+- Each berth arm has a white strobe at its docking collar (the arms flash one after another round the spindle), amber lead-in lights that run out along the arm toward the collar, and red, green and white lights round the collar.
+- Ships carry navigation lights: red to port, green to starboard, a white strobe on the nose.
+
 ## v0.153 — You arrive with a body
 
 - After docking you now see yourself step out of the port door and walk to the overlook, the camera following a few metres behind; the walk ends behind you, and the mouse wheel takes you into your eyes.
