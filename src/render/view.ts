@@ -19,7 +19,7 @@ import { EYE_HEIGHT, VIEW_FOV, Walker, type View } from '../world/walker';
 import { Flyer } from '../world/flyer';
 import { PhysicsWorld } from '../physics/world';
 import { gravityReading, type GravityReading } from '../world/motion';
-import { arrivalTerraceOf, revealAt, REVEAL_SECONDS } from '../world/arrival';
+import { arrivalTerraceOf, revealAt, REVEAL_SECONDS, type ArrivalReveal } from '../world/arrival';
 import type { ArrivalTerrace } from '../gen/arrivalTerrace';
 import { HUMAN, type Character } from '../physics/character';
 import { Figure, castAsWorn, type AnimState, type MoveState } from './actors/figure';
@@ -36,7 +36,7 @@ import type { Level } from '../gen/scatter';
 import { slopeAt } from '../gen/scatter';
 import { setFloorEye, setRockBeds, setSnow } from './groundShaders';
 import { UNDER_CROWNS, crownsClosed, makeEcology, type Ecology } from '../gen/ecology';
-import { FrameLoop, clickToUse, dragToLook, draw, fitCanvas, moveKeys } from './surface';
+import { FrameLoop, clickToUse, dragToLook, draw, fitCanvas, moveKeys, wheelOver } from './surface';
 import { freeMesh } from './geometry';
 import { cloudClearings, cloudSpan, cloudsAt } from '../world/clouds';
 import { setCloudClearings, setCloudSpan, setCloudState } from './cloudShaders';
@@ -87,7 +87,8 @@ const DAY_SPEED = 1;
  * The camera on foot, set with the mouse wheel: from the player's eyes (0) out to `CHASE_FAR` metres behind the head,
  * rising to `CHASE_UP` above it by `CHASE_RISE` metres back. The nearest view from behind is `CHASE_NEAR`; one notch
  * further in goes back to the eyes. A notch moves it by a share (`CHASE_STEP` per unit of `deltaY`), and it glides
- * there (`CHASE_GLIDE`, 1/s). The body shows once the camera is `HEAD_CLEAR` behind the eyes.
+ * there (`CHASE_GLIDE`, 1/s). The body is always drawn on foot; its head (hair, eyes, hats: `HEAD_LAYER`) shows once the
+ * camera is `HEAD_CLEAR` behind the eyes.
  */
 const CHASE_NEAR = 1.2;
 const HEAD_CLEAR = 0.3;
@@ -98,8 +99,19 @@ const CHASE_STEP = 0.003;
 const CHASE_GLIDE = 10;
 /** The eyes' meter inside: a grid of rays over the frame, a few of them metered each frame (`glare`). */
 const GLARE_COLUMNS = 5, GLARE_ROWS = 4, GLARE_PER_FRAME = 3;
-/** The layer the player's body is drawn on: the shadow map always sees it, the camera only from behind. */
+/**
+ * The layers of the player's body: the body on `BODY_LAYER`, which the camera and the shadow map always see, and the
+ * head's own parts (`HEAD_PARTS`) on `HEAD_LAYER`, which the camera sees only from behind, so that from the eyes one
+ * looks down at one's own chest, legs and feet without hair or lashes over the view.
+ */
 const BODY_LAYER = 1;
+const HEAD_LAYER = 2;
+const HEAD_PARTS = /^(teeth|tongue|eyes|eyelashes|brows-.*|hair-.*|.*-hat|.*glasses)$/;
+/**
+ * From the eyes, the body stands this far back (m, for a person of `HUMAN.height`), so the eyes are just in front of
+ * the face and chest: looking down one sees their front, not the inside of the neck.
+ */
+const FIRST_PERSON_BACK = 0.3;
 /** How far (in handrails) one steps out of a lift's doors on arriving (`outside`). */
 const STEP_OUT = 1.5;
 /** The glass deck's views: how far over the tallest trees' height (×). */
@@ -270,11 +282,16 @@ export class InteriorView {
   private async loadPlayer(): Promise<void> {
     const figure = await Figure.load(await playerLook(deriveSeed(this.habitat.params.seed, 'player')));
     figure.object.visible = false;
-    figure.object.traverse((o) => o.layers.set(BODY_LAYER));
+    figure.object.traverse((o) => o.layers.set(HEAD_PARTS.test(o.name) ? HEAD_LAYER : BODY_LAYER));
     castAsWorn(figure.object);
     key.shadow.camera.layers.enable(BODY_LAYER);
+    key.shadow.camera.layers.enable(HEAD_LAYER);
+    this.camera.layers.enable(BODY_LAYER);
     // Every part's shadow is warmed, not one per kind of part: a figure's shadow shaders are its own (Stage.prepare).
-    await this.stage.prepare(figure.object, { everyCaster: true });
+    // The head's parts are compiled too (the camera sees them only from behind).
+    const head = this.camera.layers.isEnabled(HEAD_LAYER);
+    this.camera.layers.enable(HEAD_LAYER);
+    await this.stage.prepare(figure.object, { everyCaster: true }).finally(() => { if (!head) this.camera.layers.disable(HEAD_LAYER); });
     this.scene.add(figure.object);
     this.figure = figure;
   }
@@ -773,14 +790,27 @@ export class InteriorView {
   }
 
   private current(): View {
-    if (this.arrivalReveal) return revealAt(this.habitat, this.arrivalReveal.terrace, Math.max(0, this.arrivalReveal.elapsed));
+    const reveal = this.reveal();
+    // The arrival's walk: the camera follows the newcomer out of the door (world/arrival.ts).
+    if (reveal) return this.behind(reveal, reveal.chase);
     if (this.flyer) return this.flyer.view();
     const v = this.walker.view(), cabin = this.cabin?.aboard ? this.cabin.place() : null;
     // In a lift: standing in the cabin, looking round as on foot.
     if (cabin) return { eye: eyeInCabin(this.habitat, cabin, EYE_HEIGHT), look: v.look, up: cabin.ez };
-    if (this.chase < 0.01) return v;
-    // From behind and a little above the head, looking the same way; never under the ground.
-    const d = this.chase;
+    // From the eyes, at the body's own eye height (it differs from person to person), so one looks down at its front.
+    const f = this.figure, own = f && this.character ? (f.eyeHeight - EYE_HEIGHT) * Math.max(0, 1 - this.chase / HEAD_CLEAR) : 0;
+    return this.behind(own ? { ...v, eye: v3madd(v.eye, v.up, own) } : v, this.chase);
+  }
+
+  /** The arrival's walk at this moment, while it runs. */
+  private reveal(): ArrivalReveal | null {
+    const r = this.arrivalReveal;
+    return r ? revealAt(this.habitat, r.terrace, Math.max(0, r.elapsed)) : null;
+  }
+
+  /** The camera `d` m behind the eyes of `v` and a little above the head, looking the same way; never under the ground. */
+  private behind(v: View, d: number): View {
+    if (d < 0.01) return { eye: v.eye, look: v.look, up: v.up };
     let eye = v3madd(v3madd(v.eye, v.look, -d), v.up, CHASE_UP * Math.min(1, d / CHASE_RISE));
     const at = fromWorld(this.habitat.profile, ...eye), floor = this.standOn(at.theta, at.s) + 0.3;
     if (at.h < floor) eye = toWorld(this.habitat.profile, { ...at, h: floor });
@@ -855,9 +885,9 @@ export class InteriorView {
 
   /** Light the player's body where it stands and pose it for the frame (relative to the camera's eye). */
   private pose(eye: Vec3): void {
-    const f = this.figure, c = this.character;
+    const f = this.figure, c = this.character, reveal = this.reveal();
     // Light and shade around the player (or under the flyer).
-    const centre = this.flyer || !c ? eye : v3madd(this.walker.feetAt(), c.up, HUMAN.height / 2);
+    const centre = reveal ? v3madd(reveal.feet, reveal.up, HUMAN.height / 2) : this.flyer || !c ? eye : v3madd(this.walker.feetAt(), c.up, HUMAN.height / 2);
     if (this.below) {
       shineBelow(centre, eye, this.habitat.params.under.lamp);
       below.clock.value = this.time;
@@ -866,16 +896,26 @@ export class InteriorView {
     else shineOn(this.habitat, this.terrain, this.emission, emissionMean(this.emission), air.skyLight.value, this.norm, centre, eye);
     this.adaptEyes(eye);
     if (!f) return;
-    // On foot the body is always there and casts its shadow; the camera sees it once it is out of the head (BODY_LAYER).
-    f.object.visible = !!c && !this.flyer;
-    if (this.chase >= HEAD_CLEAR) this.camera.layers.enable(BODY_LAYER); else this.camera.layers.disable(BODY_LAYER);
-    if (!c || !f.object.visible) return;
-    const feet = this.walker.feetAt(), up = c.up;
-    const v = c.velocity, flat = v3madd(v, up, -v3dot(v, up)), speed = Math.hypot(...flat);
-    const look = this.walker.view().look, ahead = v3madd(look, up, -v3dot(look, up));
-    const front = v3norm(speed > 0.5 ? flat : ahead);
-    const move: MoveState = c.swimming ? 'swim' : !c.grounded ? (v3dot(v, up) > 0.5 ? 'jump' : 'fall') : speed < 0.3 ? 'idle' : speed < 2.5 ? 'walk' : speed < 5.5 ? 'run' : 'sprint';
-    f.update({ feet: toView(eye, feet), up, front, speed, anim: { move } }, this.frameDt, this.time);
+    // The one rule for the body (the capsules' seat follows it too): on foot, or walking out on arrival, the body is
+    // there and casts its shadow; the camera sees its head's parts only from behind (HEAD_LAYER).
+    f.object.visible = !!reveal || (!this.flyer && !!c);
+    const chase = reveal ? reveal.chase : this.chase;
+    if (chase >= HEAD_CLEAR) this.camera.layers.enable(HEAD_LAYER); else this.camera.layers.disable(HEAD_LAYER);
+    if (!f.object.visible) return;
+    let feet: Vec3, up: Vec3, front: Vec3, speed: number, move: MoveState;
+    if (reveal) {
+      ({ feet, up, front, speed } = reveal);
+      move = speed < 0.3 ? 'idle' : 'walk';
+    } else {
+      const ch = c!, v = ch.velocity, flat = v3madd(v, ch.up, -v3dot(v, ch.up));
+      feet = this.walker.feetAt(); up = ch.up; speed = Math.hypot(...flat);
+      const look = this.walker.view().look, ahead = v3madd(look, up, -v3dot(look, up));
+      // From the eyes the body faces where they look (it stands back from them along that line); from behind, the way it goes.
+      front = v3norm(speed > 0.5 && chase >= HEAD_CLEAR ? flat : ahead);
+      move = ch.swimming ? 'swim' : !ch.grounded ? (v3dot(v, up) > 0.5 ? 'jump' : 'fall') : speed < 0.3 ? 'idle' : speed < 2.5 ? 'walk' : speed < 5.5 ? 'run' : 'sprint';
+    }
+    const back = FIRST_PERSON_BACK * (f.height / HUMAN.height) * Math.max(0, 1 - chase / HEAD_CLEAR);
+    f.update({ feet: toView(eye, v3madd(feet, front, -back)), up, front, speed, anim: { move } }, this.frameDt, this.time);
   }
 
   /**
@@ -917,6 +957,8 @@ export class InteriorView {
     if (!reveal) return;
     const last = revealAt(this.habitat, reveal.terrace, REVEAL_SECONDS);
     this.arrivalReveal = null;
+    // The walk ends behind the newcomer; the walking view takes over from the same place (the wheel goes into the eyes).
+    this.chase = this.chaseGoal = last.chase;
     const at = fromWorld(this.habitat.profile, ...reveal.terrace.feet);
     this.goTo(at.theta, at.s, last.heading);
     this.walker.follow(reveal.terrace.feet);
@@ -1067,11 +1109,14 @@ export class InteriorView {
       if (this.flyer) this.flyer.turn(dx * k, -dy * k);
       else this.walker.turn(dx * k, -dy * k);
     });
-    // The wheel moves the camera on foot between the player's eyes and behind them (flying has no body).
-    this.canvas.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      if (this.loop.running && !this.flyer) this.zoom(e.deltaY);
-    }, { passive: false });
+    // The wheel moves the camera on foot between the player's eyes and behind them (flying has no body): over the
+    // view and whatever lies over it (the arrival's card, the gravity meter), unless that scrolls itself.
+    wheelOver(this.canvas, (deltaY) => {
+      if (!this.loop.running) return;
+      // During the arrival's walk the wheel hands over to walking, like a key or a look.
+      if (this.arrivalReveal) this.finishArrivalReveal();
+      if (!this.flyer) this.zoom(deltaY);
+    });
   }
 
   /** Start or stop drawing (the page shows one view at a time). */

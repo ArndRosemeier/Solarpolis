@@ -24,7 +24,7 @@ import { wantedCells, type Grid, type GridEye, type TileKey, type WantedTile } f
 import { legShapesOf, lineAt, liftStairOf, onLeg, rampOf, type LegShape, type LiftStair, type PlanPoint, type Ramp, type StairPlatform } from './liftStair';
 import { FINISH } from './pavilion';
 import { kept } from './kept';
-import { arrivalTerraceOf } from './arrivalTerrace';
+import { arrivalTerraceOf, DOOR_BACK, DOOR_HALF } from './arrivalTerrace';
 
 /** What a builder makes: a tile's detail, the physics' solid parts, or only a count of what a tile holds. */
 export type StairDetail = 'far' | 'mid' | 'near' | 'solid' | 'count';
@@ -295,7 +295,7 @@ class StairBuilder {
     const terrace = arrivalTerraceOf(this.ramp.habitat);
     if (!terrace) return;
     const hr = this.hr, depth = q.z1 - q.z0, middle = (q.w0 + q.w1) / 2;
-    const back = q.z1 - hr * 0.6, front = q.z1 - depth * 0.52, side = this.st.parapet + hr * 0.18;
+    const back = q.z1 - hr * DOOR_BACK, front = q.z1 - depth * 0.52, side = this.st.parapet + hr * 0.18;
     const box = (z0: number, z1: number, w0: number, w1: number, lo: number, hi: number, col: RGB, finish: number = FINISH.stone): void => {
       this.solidBlock([[z0, w0], [z1, w0], [z1, w1], [z0, w1]], [lo, lo, lo, lo].map((e) => q.e + e), [hi, hi, hi, hi].map((e) => q.e + e), col, finish);
     };
@@ -304,8 +304,8 @@ class StairBuilder {
     box(front - hr * 0.25, back + hr * 0.25, q.w0 + this.st.parapet, q.w1 - this.st.parapet, hr * 3.5, hr * 3.7, PAVING);
     for (const z of [front, (front + back) / 2, back]) box(z - hr * 0.045, z + hr * 0.045, q.w0 + side, q.w1 - side, hr * 3.38, hr * 3.5, BRONZE, FINISH.bronze);
     // The passage's closed pressure door stays behind the passenger. The cinematic cut covers the transfer here.
-    box(back - hr * 0.08, back + hr * 0.08, q.w0 + side, q.w1 - side, 0, hr * 3.4, [0.19, 0.26, 0.25], FINISH.panel);
-    box(back - hr * 0.095, back - hr * 0.08, middle - hr * 0.025, middle + hr * 0.025, 0, hr * 3.1, BRONZE, FINISH.bronze);
+    box(back - hr * DOOR_HALF, back + hr * DOOR_HALF, q.w0 + side, q.w1 - side, 0, hr * 3.4, [0.19, 0.26, 0.25], FINISH.panel);
+    box(back - hr * (DOOR_HALF + 0.015), back - hr * DOOR_HALF, middle - hr * 0.025, middle + hr * 0.025, 0, hr * 3.1, BRONZE, FINISH.bronze);
     // Seats along the sheltered sides leave the centre free even on narrow habitats.
     for (const w of [q.w0 + side + hr * 0.35, q.w1 - side - hr * 0.35]) {
       box(front + hr * 0.6, back - hr * 0.8, w - hr * 0.22, w + hr * 0.22, 0, hr * 0.43, BRONZE, FINISH.timber);
@@ -337,6 +337,17 @@ class StairBuilder {
           this.solidBlock(poly, poly.map((p) => floor(p) + hr * 0.027), poly.map((p) => floor(p) + hr * 0.03), [0.8, 0.55, 0.2], FINISH.bronze);
         }
       }
+    }
+    // The capsule berth (gen/arrivalTerrace.ts): a bronze ring let into the paving where a capsule waits.
+    const berth = terrace.berth;
+    if (!berth) return;
+    const c = this.ramp.plan(berth.at), ring = berth.clear * 0.8, band = hr * 0.06, n = 32;
+    for (let k = 0; k < n; k++) {
+      const a0 = (2 * Math.PI * k) / n, a1 = (2 * Math.PI * (k + 0.7)) / n;
+      const onRing = (a: number, r: number): PlanPoint => [c.z + Math.cos(a) * r, c.w + Math.sin(a) * r];
+      let poly: PlanPoint[] = [onRing(a0, ring - band), onRing(a1, ring - band), onRing(a1, ring + band), onRing(a0, ring + band)];
+      if (area(poly) < 0) poly = poly.reverse();
+      this.solidBlock(poly, poly.map((p) => floor(p) + hr * 0.015), poly.map((p) => floor(p) + hr * 0.025), [0.65, 0.4, 0.12], FINISH.bronze);
     }
   }
 

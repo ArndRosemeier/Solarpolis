@@ -9,7 +9,8 @@
  *
  * Outings. Each day the others are dealt out by a seeded shuffle (sim/permute.ts): slot j = shuffle(i) says where
  * resident i goes that day. The first slots walk the Sunwalk, the next go to the landmarks (each its share), then to
- * the courts, each court as many as its places draw; the remaining slots stay below. A court's visitors are found by
+ * the courts, each court as many as its places draw; the remaining slots stay below. The last residents crew the
+ * boats (sim/crews.ts), out on the days their boat sails. A court's visitors are found by
  * turning its slots back into residents, so asking one court never looks at anyone else, and nobody is in two places.
  *
  * Time. People follow the light: the bright stretch of the sunline travels from the wild end to the port end over the
@@ -37,6 +38,7 @@ import { courtFloorOf, courtPassageOf, courtWayIn, courtWayOut } from '../gen/co
 import type { Terrain } from '../gen/terrain';
 import { POSE } from '../gen/standIn';
 import { beatAt, type Act } from './beats';
+import { crewBytes, crewMemberAt, crewOf, crewOfResident, crewsAt, crewsBelow, crewsOf } from './crews';
 
 const TURN = 2 * Math.PI;
 const WEEK = 7;
@@ -90,6 +92,14 @@ export interface Person {
   posture: number;
   from: number;
   since: number;
+  /** In a boat's crew (sim/crews.ts): the boat (`outing` is their place in its crew). Aboard: their place on it (its
+   * frame: x to port, y up from the water, z forward) and the way they face from its bow; the height of their feet over
+   * the profile, the boat heeled and lifted as it is; the way they go over the water with it. */
+  boat?: number;
+  seat?: readonly [number, number, number];
+  facing?: number;
+  deck?: number;
+  drift?: number;
 }
 
 /** Someone on their way: upright, as they have been for long. */
@@ -106,7 +116,7 @@ const FORM: Readonly<Record<Activity, Form>> = {
   meet: 'ring', gather: 'ring', sit: 'ring', make: 'ring', play: 'ring',
   picnic: 'row', stargaze: 'row', watch: 'row', bench: 'bench',
   walk: 'loose', stroll: 'loose', bathe: 'loose', herd: 'loose', wander: 'loose', swim: 'loose',
-  climb: 'loose', fly: 'loose', hike: 'loose', sunwalk: 'loose',
+  climb: 'loose', fly: 'loose', hike: 'loose', sunwalk: 'loose', sail: 'loose',
 };
 
 /** How far apart neighbours stand in a ring (m): close to talk, an arm's reach round a bench, wide to dance or play catch. */
@@ -131,7 +141,7 @@ function partySize(shares: readonly number[], pick: number): number {
 }
 
 /** Where a member walks in their party: across the way (m, to the left) and behind the first pair. */
-function walkSlot(member: number, size: number): [number, number] {
+export function walkSlot(member: number, size: number): [number, number] {
   const row = Math.floor(member / 2), alone = size % 2 === 1 && member === size - 1;
   return [alone ? 0 : ((member % 2) - 0.5) * ABREAST, row * BEHIND];
 }
@@ -163,6 +173,8 @@ interface Census {
   readonly courtBlocks: readonly (readonly number[])[];
   /** Slots that go up at all (the rest stay below). */
   readonly going: number;
+  /** Residents who keep no rhythm and are dealt out each day (the rest after them crew the boats: sim/crews.ts). */
+  readonly others: number;
 }
 
 /** A float in [0, 1) from a seed and three numbers (the population's and the drones'). */
@@ -182,7 +194,7 @@ const seedsOf = kept((h: Habitat) => {
 function makeCensus(h: Habitat): Census {
   const life = h.params.life, v = venuesOf(h);
   const residents = Math.max(0, Math.floor(h.params.population)), regulars = Math.round(residents * life.regulars);
-  const others = residents - regulars, going = Math.round(others * life.outings);
+  const others = Math.max(0, residents - regulars - crewsOf(h).sailors), going = Math.round(others * life.outings);
   const all = residents * life.outings;
   const sunwalk = Math.min(going, Math.round(all * life.sunwalk));
   const starts: number[] = [], venues: number[] = [], courts: number[] = [];
@@ -202,7 +214,7 @@ function makeCensus(h: Habitat): Census {
   const courtBlocks: number[][] = v.courts.map(() => []);
   courts.forEach((c, b) => courtBlocks[c].push(b));
   return {
-    residents, regulars, sunwalk, going,
+    residents, regulars, sunwalk, going, others,
     blockStart: Float64Array.from(starts), blockVenue: Int32Array.from(venues), blockCourt: Int32Array.from(courts), courtBlocks,
   };
 }
@@ -218,7 +230,7 @@ function shuffleFor(h: Habitat, day: number): Shuffle {
   if (!sh) {
     if (byDay.size > 8) byDay.clear();
     const c = censusOf(h);
-    sh = shuffleOf(c.residents - c.regulars, deriveSeed(h.seed, 'life', 'day', day));
+    sh = shuffleOf(c.others, deriveSeed(h.seed, 'life', 'day', day));
     byDay.set(day, sh);
   }
   return sh;
@@ -228,7 +240,8 @@ function shuffleFor(h: Habitat, day: number): Shuffle {
 export function residentOf(h: Habitat, i: number): Resident {
   const c = censusOf(h), life = h.params.life, courts = venuesOf(h).courts.length, seed = seedsOf(h).resident;
   const regular = i < c.regulars, worn = unit(seed, i, 2, 0);
-  const home = courts ? Math.min(courts - 1, Math.floor(regular ? (i * courts) / Math.max(1, c.regulars) : ((i - c.regulars) * courts) / Math.max(1, c.residents - c.regulars))) : 0;
+  const crew = i >= c.regulars + c.others ? crewOfResident(h, i) : null;
+  const home = crew ? crew.court : courts ? Math.min(courts - 1, Math.floor(regular ? (i * courts) / Math.max(1, c.regulars) : ((i - c.regulars) * courts) / Math.max(1, c.others))) : 0;
   return {
     id: i, regular, home,
     being: unit(seed, i, 1, 0) < life.minds ? 'mind' : 'human',
@@ -247,9 +260,9 @@ export function stayingBelow(h: Habitat, day: number, court: number): number[] {
   if (!courts || court < 0 || court >= courts) return [];
   const up = new Set(outingsOf(h, day, court).resident), out: number[] = [];
   for (let i = Math.ceil(court * c.regulars / courts); i < Math.ceil((court + 1) * c.regulars / courts); i++) if (!up.has(i)) out.push(i);
-  const others = c.residents - c.regulars, sh = shuffleFor(h, day);
+  const others = c.others, sh = shuffleFor(h, day);
   for (let i = Math.ceil(court * others / courts); i < Math.ceil((court + 1) * others / courts); i++) if (sh.permute(i) >= c.going) out.push(c.regulars + i);
-  return out;
+  return out.concat(crewsBelow(h, day, court));
 }
 
 /** Where in the day the bright stretch is over a place along the profile (phase 0 … daylight). */
@@ -358,7 +371,7 @@ export function lifeBytes(h: Habitat, ground?: Terrain): number {
   for (const r of (ground && passages.get(ground)?.values()) || []) n += r.points.byteLength + r.along.byteLength;
   for (const w of walkerCache.get(h)?.values() ?? []) n += w.resident.byteLength * 9;
   for (const r of routeCache.get(h)?.values() ?? []) n += r.points.byteLength + r.along.byteLength;
-  return n;
+  return n + crewBytes(h, ground);
 }
 
 /** Routes kept per habitat, a bounded number (the one way to a route between two points of the walk net: people and couriers). */
@@ -447,7 +460,7 @@ const SECTORS = 12;
  * they leave the court; to a spot in the court itself (`inside`: the angle of the spot round its middle), out of the
  * portal and round the aisle to the spot's sector. Without, it starts at the court's middle, where its way begins.
  */
-function wayOf(h: Habitat, ground: Terrain | undefined, court: number, to: number, inside: number | null): Route {
+export function wayOf(h: Habitat, ground: Terrain | undefined, court: number, to: number, inside: number | null): Route {
   const v = venuesOf(h), paths = routeOf(h, v.courtVertex[court], to);
   const pass = ground && courtPassageOf(ground, court);
   if (!pass) return paths;
@@ -629,20 +642,21 @@ export interface Near {
 }
 
 /** One number for someone up on the land today, the same for every level that draws them (court and outing, or the Sunwalker). */
-export function personKey(p: Pick<Person, 'court' | 'outing' | 'below'>): number {
-  return p.below ? -(2 ** 40) - p.outing : p.court < 0 ? -1 - p.outing : p.court * 2 ** 22 + p.outing;
+export function personKey(p: Pick<Person, 'court' | 'outing' | 'below' | 'boat'>): number {
+  return p.boat !== undefined ? -(2 ** 30) - p.boat * 64 - p.outing : p.below ? -(2 ** 40) - p.outing : p.court < 0 ? -1 - p.outing : p.court * 2 ** 22 + p.outing;
 }
 
 /** One number for someone's party, the same for every member (a shared domestic gathering's own, below). */
-export function partyKey(p: Pick<Person, 'court' | 'outing' | 'member' | 'gathering'>): number {
-  return p.gathering ?? (personKey({ court: p.court, outing: p.outing - p.member }) | 0);
+export function partyKey(p: Pick<Person, 'court' | 'outing' | 'member' | 'gathering' | 'boat'>): number {
+  return p.gathering ?? (personKey({ court: p.court, outing: p.outing - p.member, boat: p.boat }) | 0);
 }
 
 /**
  * Who is in someone's party up on the land at clock time t: its residents in member order (0 chose where to go), or
  * an empty list for a Sunwalker or someone below (their parties are kept elsewhere).
  */
-export function partyMembers(h: Habitat, t: number, p: Pick<Person, 'court' | 'outing' | 'member' | 'size' | 'below'>): number[] {
+export function partyMembers(h: Habitat, t: number, p: Pick<Person, 'court' | 'outing' | 'member' | 'size' | 'below' | 'boat'>): number[] {
+  if (p.boat !== undefined) { const crew = crewOf(h, p.boat); return crew ? Array.from({ length: crew.size }, (_, k) => crew.first + k) : []; }
   if (p.below || p.court < 0) return [];
   const o = outingsOf(h, Math.floor(t / h.params.day.length), p.court), lead = p.outing - p.member, out: number[] = [];
   for (let k = 0; k < p.size && lead + k < o.resident.length; k++) out.push(o.resident[lead + k]);
@@ -656,7 +670,7 @@ const TURN_TALK = 4;
  * Who in someone's party is speaking at clock time t (their `member`), or −1 for a party of one: turns of 4 to 8 s,
  * passed round at the toss of the party's own coin, so everyone in it agrees. Pure.
  */
-export function talkerAt(p: Pick<Person, 'court' | 'outing' | 'member' | 'size' | 'gathering'>, t: number): number {
+export function talkerAt(p: Pick<Person, 'court' | 'outing' | 'member' | 'size' | 'gathering' | 'boat'>, t: number): number {
   if (p.size < 2) return -1;
   const party = partyKey(p);
   // Turns in steps of TURN_TALK s; a step continues the last turn half the time, so turns run from one step to many.
@@ -691,6 +705,7 @@ export function peopleAt(h: Habitat, t: number, near?: Near, ground?: Terrain): 
     const p = sunwalkerAt(h, w, j, t, near);
     if (p && inArea(p.theta, p.s, 0)) out.push(p);
   }
+  for (const p of crewsAt(h, t, near, ground)) out.push(p);
   return out;
 }
 
@@ -698,8 +713,9 @@ export function peopleAt(h: Habitat, t: number, near?: Near, ground?: Terrain): 
  * Someone found by `peopleAt` (their court and outing), at another clock time of the same day: where they are now, or
  * null once they have gone below. Cheap enough to ask for everyone in view every frame.
  */
-export function whereIs(h: Habitat, t: number, who: Pick<Person, 'court' | 'outing'>, ground?: Terrain): Person | null {
+export function whereIs(h: Habitat, t: number, who: Pick<Person, 'court' | 'outing' | 'boat'>, ground?: Terrain): Person | null {
   const day = Math.floor(t / h.params.day.length);
+  if (who.boat !== undefined) { const crew = crewOf(h, who.boat); return crew ? crewMemberAt(h, t, crew, who.outing, ground) : null; }
   if (who.court < 0) return who.outing < censusOf(h).sunwalk ? sunwalkerAt(h, sunwalkersOf(h, day), who.outing, t) : null;
   const o = outingsOf(h, day, who.court);
   return who.outing < o.resident.length ? placeOf(h, o, who.outing, who.court, day, t, ground) : null;

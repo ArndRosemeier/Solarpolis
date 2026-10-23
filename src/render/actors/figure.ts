@@ -26,6 +26,9 @@ export interface FigureFrame extends Stance {
   anim: AnimState;
 }
 
+/** Eye height as a share of standing height, for a figure whose eyes cannot be measured (adults: about 93 %). */
+const EYE_SHARE = 0.935;
+
 const basis = new Matrix4(), axes = [new Vector3(), new Vector3(), new Vector3()] as const;
 
 /**
@@ -117,6 +120,23 @@ export class Figure {
   get height(): number {
     return this.character.height;
   }
+
+  /**
+   * How high its eyes are over its feet (m), standing: the middle of its eyes' mesh, or the usual share of its height
+   * where it has none. The player's camera looks from there.
+   */
+  get eyeHeight(): number {
+    if (this.eyes === undefined) {
+      const mesh = this.object.getObjectByName('eyes') as Mesh | undefined, g = mesh?.geometry;
+      g?.computeBoundingBox();
+      const box = g?.boundingBox;
+      const y = box && !box.isEmpty() ? (box.min.y + box.max.y) / 2 : NaN;
+      // Only a measure in the head counts (a mesh in another frame or shape gives something else).
+      this.eyes = y > this.height * 0.8 && y < this.height ? y : null;
+    }
+    return this.eyes ?? this.height * EYE_SHARE;
+  }
+  private eyes: number | null | undefined;
 
   /** Bytes of the figure's geometry (memory watchdog). */
   bytes(): number {

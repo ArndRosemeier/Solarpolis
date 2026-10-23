@@ -1500,8 +1500,8 @@
     "reason": "Reading the profile radius at s to turn metres round the axis into an angle; the floor-frame seam (gen/shapes.ts floorAt) is used where a frame exists, the flocks only offset a point."
   },
   {
-    "key": "idiom: [.clear .get .size] in solarpolis/sim/birds.ts + solarpolis/sim/flocks.ts + solarpolis/sim/population.ts",
-    "reason": "A small cache cleared when it grows past its count: each keeps different results (cells of nests, the light's moments per place and day, residents) and the eviction is one line."
+    "key": "idiom: [.clear .get .size] in solarpolis/sim/birds.ts + solarpolis/sim/crews.ts + solarpolis/sim/flocks.ts + solarpolis/sim/population.ts",
+    "reason": "A small cache cleared when it grows past its count: each keeps different results (cells of nests, the light's moments per place and day, residents, the crews out on a day) and the eviction is one line."
   },
   {
     "key": "idiom: [.cos .sin .turn Math] in solarpolis/gen/scatter.ts + solarpolis/render/people.ts + solarpolis/sim/flocks.ts",
@@ -1520,8 +1520,8 @@
     "reason": "Plain idioms of the pure layers (profile radius with a guard, a cell's rows and columns, terrain heights, a kept cache) used by the birds' homes and day plan as by the other animals' and people's; each works its own data. The flocks (sim/flocks.ts) joined with the same plain idiom."
   },
   {
-    "key": "idiom: [Map WeakMap] in solarpolis/gen/kept.ts + solarpolis/sim/birds.ts + solarpolis/sim/flocks.ts + solarpolis/sim/neighbourhood.ts + solarpolis/sim/population.ts",
-    "reason": "Neighbourhoods and population have bounded, explicitly shed-able day/route caches, unlike kept which retains one immutable value per owner. They share only the standard Map/WeakMap idiom. The birds (sim/birds.ts, render/birds.ts, render/birdShaders.ts) joined the group with the same plain idiom. The flocks (sim/flocks.ts) joined with the same plain idiom."
+    "key": "idiom: [Map WeakMap] in solarpolis/gen/kept.ts + solarpolis/sim/birds.ts + solarpolis/sim/crews.ts + solarpolis/sim/flocks.ts + solarpolis/sim/neighbourhood.ts + solarpolis/sim/population.ts",
+    "reason": "Neighbourhoods and population have bounded, explicitly shed-able day/route caches, unlike kept which retains one immutable value per owner. They share only the standard Map/WeakMap idiom. The birds (sim/birds.ts, render/birds.ts, render/birdShaders.ts) joined the group with the same plain idiom. The flocks (sim/flocks.ts) joined with the same plain idiom. The crews (sim/crews.ts) keep their routes per terrain or habitat (bytes reported) and the last two days out, the same way."
   },
   {
     "key": "same name: solarpolis/blueprint/profile.ts#nearest + solarpolis/render/birds.ts#nearest",

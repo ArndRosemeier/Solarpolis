@@ -68,7 +68,7 @@ for (const { name, params } of MATRIX) {
     if (whole) assert.ok(mean(evening) > mean(morning), `the crowd stays at ${mean(evening).toFixed(0)} m from ${mean(morning).toFixed(0)} m`);
     let walkers = 0, onPaths = 0;
     for (const p of [...morning, ...evening]) {
-      if (lake && !['swim', 'gather', 'sunwalk', 'walk'].includes(p.activity)) assert.ok(fromLake(lake, p.s) >= 0, `someone ${p.activity}s in the lake`);
+      if (lake && !['swim', 'gather', 'sunwalk', 'walk', 'sail'].includes(p.activity)) assert.ok(fromLake(lake, p.s) >= 0, `someone ${p.activity}s in the lake`);
       if (p.activity !== 'walk') continue;
       walkers++;
       // On the paths, or on the last stretch over the land from where they leave the paths to their place.
@@ -84,7 +84,7 @@ for (const { name, params } of MATRIX) {
 
   test(`life (${name}): parties come up together, walk two abreast and stand in rings facing in`, () => {
     const parties = new Map<string, Person[]>();
-    for (const t of [at(5), at(8)]) for (const p of (whole ? peopleAt(h, t) : sample(t)).filter((q) => q.court >= 0)) {
+    for (const t of [at(5), at(8)]) for (const p of (whole ? peopleAt(h, t) : sample(t)).filter((q) => q.court >= 0 && q.boat === undefined)) {
       const key = `${t}:${personKey({ court: p.court, outing: p.outing - p.member })}`;
       const list = parties.get(key) ?? [];
       list.push(p);

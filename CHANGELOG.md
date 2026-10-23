@@ -2,6 +2,21 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.153 — You arrive with a body
+
+- After docking you now see yourself step out of the port door and walk to the overlook, the camera following a few metres behind; the walk ends behind you, and the mouse wheel takes you into your eyes.
+- From your eyes, look down: your chest, legs and feet are there, and they walk and jump with you.
+- The mouse wheel zooms in and out even with the pointer over the welcome card or the gravity meter.
+- The arrival landing has a bronze ring where the first transport capsule will wait.
+
+## v0.152 — The boats have crews
+
+- Every boat is sailed by its own residents, the same people every time, who live under the court nearest its harbour.
+- On a day their boat goes out they come up out of their court's lift together, walk to the harbour, out along the pier and the pontoon, and step aboard over the stern before it casts off.
+- Aboard, each has their place: in the cockpit or on the trampolines when the boat motors or goes about, hiked out on the windward side under sail, crossing over at every tack. A foiler lifts them with it.
+- Back in the berth they step off and walk home. On days their boat stays in, they stay below.
+- Go → "Fly: beside the nearest crew on their way to their boat".
+
 ## v0.151 — Your neural link
 
 - Everyone in Solarpolis has a neural link with a visual overlay, and now the player does too: a thin ring in the top left corner (or the Tab key) opens it.
