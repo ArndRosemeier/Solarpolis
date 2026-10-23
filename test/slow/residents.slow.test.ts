@@ -45,10 +45,14 @@ test('residents: a stand-in is exactly as tall as the figure Actors builds from 
     for (const g of look.outfit) assert.ok(known.has(g), `resident ${r.id} wears ${g}, which the pack lacks`);
     assert.deepEqual(resolveOutfit(catalog, look.outfit), look.outfit, `resident ${r.id}: ${look.outfit}`);
     if (look.outfit.includes('future-halo')) assert.ok(!['hair-afro01', 'hair-cloud', 'hair-jungle', 'hair-80s'].includes(look.hair ?? ''), `${look.hair} under a halo`);
-    if (look.outfit.some((g) => g.startsWith('future-wrap') || g === 'future-screen')) commonwear++;
-    if (look.outfit.some((g) => ['future-mantle', 'future-screen', 'future-cuffs', 'future-halo'].includes(g))) screens++;
+    if (look.outfit.some((g) => g.startsWith('future-'))) commonwear++;
+    if (look.outfit.some((g) => ['future-mantle', 'future-screen', 'future-screen-leggings', 'future-cuffs', 'future-sash', 'future-halo'].includes(g))) screens++;
   }
   assert.ok(shells > 0, 'no shells among 40 residents');
-  assert.ok(commonwear > grown * 0.45 && commonwear < grown * 0.85, `${commonwear} of ${grown} in Commonwear`);
+  // Sheer hosiery keeps the skin under it (Actors 0.8.1 dropped its coverage mask); opaque socks still cover.
+  const mesh = (name: string) => human.runtime.manifest.meshes.find((m) => m.name === name);
+  for (const name of ['stockings', 'fishnet-stockings']) assert.ok(mesh(name) && !mesh(name)!.hidesBaseVertices, `${name} hides the skin`);
+  assert.ok(mesh('socks')?.hidesBaseVertices, 'socks no longer cover');
+  assert.ok(commonwear > grown * 0.5 && commonwear < grown * 0.9, `${commonwear} of ${grown} in Commonwear`);
   assert.ok(screens > grown * 0.2, `${screens} of ${grown} wear a screen`);
 });

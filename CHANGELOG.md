@@ -2,6 +2,36 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.164 — Clear capsule glass
+
+- A capsule's glass is clear now: it looked milky white from outside and was all but opaque from inside, so you could not see out on a ride.
+- Riding with the view from your own eyes, you no longer look at the back of your own head.
+
+## v0.163 — Murmurations you can see from afar
+
+- A starling murmuration now packs its birds as real starlings fly, about a metre apart, so the flock is a dark, shifting cloud over the lake from a few hundred metres off rather than a thin sprinkle you only noticed from inside it.
+- A far-off flying bird now covers as much of the view as its beating wings do, so distant swallows, swifts and starlings no longer fade to nothing.
+
+## v0.162 — More of 3026's clothes
+
+- Residents dress from the whole new Commonwear range: comet flares, cocoon pants, courtyard culottes, glowing lightstream leggings and drift shorts, the arc vest, the solstice bolero and the memory sash.
+- Tops and pants mix from person to person, so a crowd shows many more outfits.
+- Sheer stockings keep the skin under them, now fixed in Actors itself.
+
+## v0.161 — A capsule waits where you arrive
+
+- When you arrive, a capsule is already standing on its berth by the arrival terrace, ready to take you anywhere: click it to get in.
+- Called from further away, a parked capsule lifts off and flies over to you instead of answering "Still here".
+
+## v0.160 — Capsules in the debug menu
+
+- The debug menu can stand you beside a waiting capsule's door ("Capsule: walk up to it"), and its capsule line shows how much memory the pod holds.
+
+## v0.159 — Tugs and inspection drones at the port
+
+- Every berth arm has its own orange harbour tug, parked in a cradle on the dock spindle. When a ship comes in, its tug flies out to hold station beside it and comes in with it, then goes home. It sees the ship out again when it leaves.
+- While a ship is berthed, small inspection drones come out of the collar and work slowly round its crew section, their lamp eyes bright against the hull.
+
 ## v0.158 — Ships worth riding
 
 - Every ship at the port, and the one you arrive on, is now fitted out: plated hulls with seams, decks of windows lit warm from inside, a panoramic lounge under the nose, and its own livery colour.

@@ -20,6 +20,7 @@ import { Flyer } from '../world/flyer';
 import { PhysicsWorld } from '../physics/world';
 import { gravityReading, type GravityReading } from '../world/motion';
 import { arrivalTerraceOf, revealAt, REVEAL_SECONDS, type ArrivalReveal } from '../world/arrival';
+import { berthsOf } from '../gen/capsules';
 import type { ArrivalTerrace } from '../gen/arrivalTerrace';
 import { HUMAN, type Character } from '../physics/character';
 import { Figure, castAsWorn, type AnimState, type MoveState } from './actors/figure';
@@ -58,7 +59,6 @@ import { AnimalView, DEER, SQUIRRELS } from './animals';
 import { BirdView } from './birds';
 import { CabinView } from './lift';
 import { CapsuleLink, CapsuleView, type Passenger } from './capsules';
-import { SEATED_BACK } from '../world/mount';
 import { GLASS, SKIES, skyOverBay } from '../gen/skies';
 import { GlassDeck, type GlassStage, type GlassWant } from './glassDeck';
 import { nearestExitCourt, type ExitCourt } from '../gen/exitCourt';
@@ -943,9 +943,9 @@ export class InteriorView {
       front = v3norm(speed > 0.5 && chase >= HEAD_CLEAR ? flat : ahead);
       move = ch.swimming ? 'swim' : !ch.grounded ? (v3dot(v, up) > 0.5 ? 'jump' : 'fall') : speed < 0.3 ? 'idle' : speed < 2.5 ? 'walk' : speed < 5.5 ? 'run' : 'sprint';
     }
-    // Seated, the hips are where the eyes look down from already: the body stays on its seat.
-    const seated = rider ? rider.pose.back / SEATED_BACK : 0;
-    const back = FIRST_PERSON_BACK * (f.height / HUMAN.height) * Math.max(0, 1 - chase / HEAD_CLEAR) * (1 - seated);
+    // From the eyes the body sits as far back as it stands, seated too: its head leans forward of the hips, and the
+    // first renders on real WebGPU showed it from behind, inside the hair.
+    const back = FIRST_PERSON_BACK * (f.height / HUMAN.height) * Math.max(0, 1 - chase / HEAD_CLEAR);
     f.update({ feet: toView(eye, v3madd(feet, front, -back)), up, front, speed, anim: anim ?? { move } }, this.frameDt, this.time);
   }
 
@@ -968,10 +968,14 @@ export class InteriorView {
     this.chase = 0;
     this.floatAt(first.eye, first.look);
     this.arrivalGuide = terrace;
+    // A capsule already waits on the arrival's berth (Arnd, 2026-10-23), built before the curtain lifts.
+    const berth = berthsOf(this.habitat)[0];
+    const parked = berth && this.caps ? this.caps.parkAt(berth) : Promise.resolve(false);
     await new Promise<void>((ready) => {
       this.arrivalReveal = { terrace, elapsed: -1, ready, done: null };
       this.place();
     });
+    await parked;
     return true;
   }
 
@@ -1012,7 +1016,8 @@ export class InteriorView {
 
   private stand(theta: number, s: number, heading?: number): void {
     if (this.cabin) this.cabin.ride = null;
-    this.caps?.letGo();
+    // Taken out of a capsule one is in, it leaves empty; one waiting or on its way stays for the player to come back to.
+    if (this.caps?.carrying) this.caps.letGo();
     this.flyer = null;
     this.physics?.removeCharacter();
     this.character = null;
@@ -1132,6 +1137,11 @@ export class InteriorView {
     this.camera.updateMatrixWorld();
     const d = new Vector3((2 * x) / (this.canvas.clientWidth || 1) - 1, 1 - (2 * y) / (this.canvas.clientHeight || 1), 0.5).unproject(this.camera).normalize();
     return caps.hit(this.current().eye, [d.x, d.y, d.z], CAPSULE_SEEN);
+  }
+
+  /** A spot `steps` handrails out from the waiting capsule's door step (world), or null: the debug menu stands the player there. */
+  besideCapsule(steps = 3): Vec3 | null {
+    return this.caps?.besideDoor(steps) ?? null;
   }
 
   /** Get into the waiting capsule: the body walks round to its door from where it stands (too far, the capsule says so). */

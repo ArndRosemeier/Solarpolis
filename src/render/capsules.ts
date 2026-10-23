@@ -124,7 +124,8 @@ export class CapsuleView {
   /** The pod's frame now (flying: where its flight has it), or null while it is nowhere. */
   podAt(): Place | null {
     if (this.flight && (this.phase === 'coming' || this.phase === 'riding' || this.phase === 'leaving')) return flightAt(this.habitat, this.flight, this.elapsed).place;
-    return this.phase === 'idle' || this.phase === 'finding' ? null : this.pad;
+    // Looking for ground near a caller, it stays on the pad it stands on (if any) until it lifts off.
+    return this.phase === 'idle' ? null : this.pad;
   }
 
   /** What the passenger feels now (m/s², the way it pulls), or null when no one is aboard. */
@@ -142,11 +143,30 @@ export class CapsuleView {
     return this.phase === 'riding' && this.flight && this.flight.seconds - this.elapsed < within ? this.flight.to.at : null;
   }
 
+  /**
+   * Stand the pod on `pad` (a berth: the arrival's), door shut, before anyone sees it: built and uploaded first, so it
+   * never appears on screen; it waits there until it is boarded or called away. False while someone is aboard.
+   */
+  async parkAt(pad: CapPad): Promise<boolean> {
+    if (this.carrying) return false;
+    const ask = this.ask();
+    if (!(await this.meshes()) || !this.current(ask)) return false;
+    this.pad = pad;
+    this.flight = null;
+    this.aloft = false;
+    this.door = this.doorWant = 0;
+    this.phase = 'parked';
+    this.wait = Infinity;
+    return true;
+  }
+
   /** Call the pod to (θ, s), where the player stands. Says why when it cannot come. */
   async call(theta: number, s: number): Promise<void> {
     if (this.phase !== 'idle' && this.phase !== 'leaving' && this.phase !== 'parked') return;
-    // Still on its pad (or about to leave it): it stays and opens up again.
-    if (this.phase === 'parked' || (this.phase === 'leaving' && !this.flight && !this.aloft)) {
+    // Still on its pad (or about to leave it) near the caller: it stays and opens up again. Further off, it flies over.
+    const onPad = this.phase === 'parked' || (this.phase === 'leaving' && !this.flight && !this.aloft);
+    const padAt = onPad && this.pad ? fromWorld(this.habitat.profile, ...this.pad.at) : null;
+    if (padAt && overFloor(this.habitat, theta, s, padAt.theta, padAt.s) <= this.habitat.params.life.caps.reach) {
       this.ask();
       this.phase = 'waiting';
       this.doorWant = 1;
@@ -154,18 +174,22 @@ export class CapsuleView {
       return;
     }
     const h = this.habitat, hr = handrailOf(h), caps = h.params.life.caps, ask = this.ask();
-    const comingBack = this.phase === 'leaving' ? this.podAt() : null;
+    const comingBack = this.phase === 'leaving' || this.phase === 'parked' ? this.podAt() : null;
+    if (!onPad) this.pad = null;
     this.phase = 'finding';
     void this.meshes();
     const a = await this.pool.job({ kind: 'capPad', params: h.params, theta, s, reach: caps.reach, least: NOT_ON_TOP * hr, orStop: STOP_WALK * caps.reach });
     if (!this.current(ask)) return;
     const pad = 'kind' in a && a.kind === 'capPad' ? a.pad : null;
-    if (!pad) { this.phase = 'idle'; this.say({ from: MIND, text: 'There is no open ground near you to set down on. Walk on a little and call again.' }); return; }
+    if (!pad) { this.phase = onPad ? 'parked' : 'idle'; this.say({ from: MIND, text: 'There is no open ground near you to set down on. Walk on a little and call again.' }); return; }
     const at = fromWorld(h.profile, ...pad.at), walk = overFloor(h, theta, s, at.theta, at.s);
     if (walk > caps.reach) this.say({ from: MIND, text: `No open ground right here: I will wait at the stop ${Math.round(walk / 10) * 10} m away.` });
     const from = comingBack ?? awayFrom(this.terrain, pad, hashToFloat(hash3i(deriveSeed(h.seed, 'cap call'), this.calls++, 0, 0)));
-    const f = await this.planWay(from, pad, true, false);
-    if (!f || !this.current(ask) || !(await this.meshes()) || !this.current(ask)) return;
+    // From its pad it lifts off; from the air (leaving, or coming in from away) it flies straight on.
+    const f = await this.planWay(from, pad, !onPad, false);
+    if (!this.current(ask)) return;
+    if (!f) { this.phase = onPad ? 'parked' : 'idle'; return; }
+    if (!(await this.meshes()) || !this.current(ask)) return;
     this.pad = pad;
     this.flight = f;
     this.elapsed = 0;
@@ -179,12 +203,20 @@ export class CapsuleView {
     if (this.phase === 'seated' || this.phase === 'planning') { this.getOut(); return; }
     if (this.phase === 'finding' || this.phase === 'coming') {
       this.ask();
-      // Flying in, it turns back the way it came; still looking for ground, it never shows.
-      const p = this.phase === 'coming' ? this.podAt() : null;
-      if (p) void this.leave(p, true); else this.phase = 'idle';
+      // Flying in, it turns back the way it came; still looking for ground, it lifts off from its pad (or never shows).
+      const p = this.podAt();
+      if (p) void this.leave(p, this.phase === 'coming'); else this.phase = 'idle';
       return;
     }
     if (this.phase === 'waiting' || this.phase === 'parked') { this.phase = 'parked'; this.wait = LINGER; }
+  }
+
+  /** A spot on the ground a few steps out from the waiting pod's door (world), or null when none is waiting. */
+  besideDoor(steps = 3): Vec3 | null {
+    const p = this.podAt();
+    if (!p || (this.phase !== 'waiting' && this.phase !== 'parked')) return null;
+    const out = this.layout.door.outside;
+    return outOfPlace(p, [out[0], out[1] - steps * handrailOf(this.habitat), 0]);
   }
 
   /** Get in, from where the player's feet are (world): the body walks round to the door. False when too far or not here. */
@@ -236,7 +268,7 @@ export class CapsuleView {
     this.alight();
   }
 
-  /** The player was taken away (a jump elsewhere): the pod, empty, goes. */
+  /** The player was taken out of it (a jump elsewhere while aboard): the pod, empty, goes. */
   letGo(): void {
     if (this.phase === 'idle') return;
     this.ask();
@@ -360,7 +392,7 @@ export class CapsuleView {
     const f = this.flight, d = this.destination;
     const ride = f && (this.phase === 'coming' || this.phase === 'riding' || this.phase === 'leaving')
       ? `, ${(f.length / 1000).toFixed(2)} km in ${f.seconds.toFixed(0)} s, ${this.elapsed.toFixed(0)} s gone, nearest the axis ${(f.nearest).toFixed(0)} m, at most ${(f.heaviest / 9.81).toFixed(2)} g` : '';
-    return `capsule: ${this.phase}${d ? ` to ${d.title}` : ''}${ride}${this.drawn ? '' : ' (not built yet)'}`;
+    return `capsule: ${this.phase}${d ? ` to ${d.title}` : ''}${ride}${this.drawn ? `, ${(this.bytes() / 1e6).toFixed(2)} MB` : ' (not built yet)'}`;
   }
 
   dispose(): void {

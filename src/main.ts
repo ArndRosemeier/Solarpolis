@@ -1024,6 +1024,13 @@ const capOffer = (id: string, choose?: (choices: readonly LinkChoice[]) => LinkC
   if (pick) offer.take(pick.id);
 };
 debug.add({ label: 'Capsule: call one here', group: 'Go', run: () => capOffer('call') });
+debug.add({ label: 'Capsule: walk up to it', group: 'Go', run: () => {
+  const v = view(), h = lab.habitat, at = v?.besideCapsule(), step = v?.besideCapsule(0);
+  if (!v || !h || !at || !step) return;
+  // Facing the door.
+  const p = fromWorld(h.profile, ...at), d = fromWorld(h.profile, ...step);
+  v.goTo(p.theta, p.s, Math.atan2((p.theta - d.theta) * h.radius, d.s - p.s));
+} });
 debug.add({ label: 'Capsule: get in', group: 'Go', run: () => view()?.boardCapsule() });
 debug.add({ label: 'Capsule: ride to the nearest court', group: 'Go', run: () => capOffer('go', (cs) => cs.filter((c) => c.group !== 'Landmarks' && (c.near ?? 0) > 150).sort((a, b) => (a.near ?? 0) - (b.near ?? 0))[0]) });
 debug.add({ label: 'Capsule: get out', group: 'Go', run: () => capOffer('out') });
