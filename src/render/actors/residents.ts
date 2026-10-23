@@ -138,7 +138,12 @@ export class Residents {
 
   /** A resident's look: a grown body dressed plainly in their own colours, or a shell. The same resident, the same look. */
   figureLook(r: Resident): CharacterConfig {
-    const random = seededRandom(r.look), shell = r.body === 'shell';
+    return this.lookFrom(r.look, r.body === 'shell');
+  }
+
+  /** The look from a seed (a resident's `look`, or anyone's met outside the population: the arrival's passengers). */
+  lookFrom(seed: number, shell = false): CharacterConfig {
+    const random = seededRandom(seed);
     const look = randomConfig(this.catalog, this.base, { random, outfit: false, robot: shell });
     if (shell) return { ...look, robotLook: { ...look.robotLook, glowStrength: Math.min(look.robotLook.glowStrength, 0.25) }, anatomy: false, detail: 'high', animation: null };
     const body = { ...look.body, height: 0.5 + (look.body.height - 0.5) * GROWN_HEIGHT };

@@ -600,10 +600,6 @@
     "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; each view does its own work in each."
   },
   {
-    "key": "same name: solarpolis/render/glassDeck.ts#bytes + solarpolis/render/outside.ts#bytes",
-    "reason": "Independent view/model lifecycle owners: these methods account for, prepare, update or release their own resources through the existing Stage and geometry seams; no common resource ownership can be extracted."
-  },
-  {
     "key": "same name: solarpolis/render/glassDeck.ts#bytes + solarpolis/render/people.ts#bytes",
     "reason": "The views' own interface (bytes, info, dispose), which InteriorView and the memory watchdog call on each of them; GlassDeck (render/glassDeck.ts) is one more such view, holding the glass deck's atlas."
   },
@@ -2350,5 +2346,53 @@
   {
     "key": "idiom: [.max .min .pitch Math] in solarpolis/render/outside.ts + solarpolis/render/vesselVisit.ts + solarpolis/space/flyer.ts",
     "reason": "Clamping a dragged camera's pitch (`Math.max(-1.5, Math.min(1.5, pitch + dy))`) in three controllers that each own their look; unchanged code that crossed the idiom finder's floor when the lounge's lines were added to outside.ts (2026-10-23), not a new copy."
+  },
+  {
+    "key": "idiom: [.dispose .disposed] in solarpolis/render/animals.ts + solarpolis/render/passengers.ts + solarpolis/render/people.ts",
+    "reason": "Each loader of Actors figures (people, animals, the cabin's passengers) checks a `disposed` flag after every await and gives a late arrival back with `dispose`: the cancel-on-await idiom of an async loader, each over its own collection (2026-10-23)."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/figure.ts#bytes + solarpolis/render/passengers.ts#bytes",
+    "reason": "`bytes()` and `dispose()` are the memory watchdog's and the lifecycle's names every owner of GPU memory uses (CLAUDE.md rule 12); the passengers own their own figures and lights (2026-10-23)."
+  },
+  {
+    "key": "same name: solarpolis/render/habitatLights.ts#bytes + solarpolis/render/passengers.ts#bytes",
+    "reason": "`bytes()` and `dispose()` are the memory watchdog's and the lifecycle's names every owner of GPU memory uses (CLAUDE.md rule 12); the passengers own their own figures and lights (2026-10-23)."
+  },
+  {
+    "key": "same name: solarpolis/render/landmarks.ts#bytes + solarpolis/render/passengers.ts#bytes",
+    "reason": "`bytes()` and `dispose()` are the memory watchdog's and the lifecycle's names every owner of GPU memory uses (CLAUDE.md rule 12); the passengers own their own figures and lights (2026-10-23)."
+  },
+  {
+    "key": "same name: solarpolis/render/landmarks.ts#dispose + solarpolis/render/passengers.ts#dispose",
+    "reason": "`bytes()` and `dispose()` are the memory watchdog's and the lifecycle's names every owner of GPU memory uses (CLAUDE.md rule 12); the passengers own their own figures and lights (2026-10-23)."
+  },
+  {
+    "key": "same name: solarpolis/render/notice.ts#dispose + solarpolis/render/passengers.ts#dispose",
+    "reason": "`bytes()` and `dispose()` are the memory watchdog's and the lifecycle's names every owner of GPU memory uses (CLAUDE.md rule 12); the passengers own their own figures and lights (2026-10-23)."
+  },
+  {
+    "key": "same name: solarpolis/render/passengers.ts#bytes + solarpolis/render/solar.ts#bytes",
+    "reason": "`bytes()` and `dispose()` are the memory watchdog's and the lifecycle's names every owner of GPU memory uses (CLAUDE.md rule 12); the passengers own their own figures and lights (2026-10-23)."
+  },
+  {
+    "key": "same name: solarpolis/render/passengers.ts#bytes + solarpolis/space/solarSystem.ts#bytes",
+    "reason": "`bytes()` and `dispose()` are the memory watchdog's and the lifecycle's names every owner of GPU memory uses (CLAUDE.md rule 12); the passengers own their own figures and lights (2026-10-23)."
+  },
+  {
+    "key": "same name: solarpolis/render/passengers.ts#bytes + solarpolis/talk/conversations.ts#bytes",
+    "reason": "`bytes()` and `dispose()` are the memory watchdog's and the lifecycle's names every owner of GPU memory uses (CLAUDE.md rule 12); the passengers own their own figures and lights (2026-10-23)."
+  },
+  {
+    "key": "same name: solarpolis/render/animals.ts#dispose + solarpolis/render/passengers.ts#dispose",
+    "reason": "`dispose()` is the lifecycle's name every owner of GPU memory uses (CLAUDE.md rule 12); the passengers give back their own figures and dim the lounge's lights (2026-10-23)."
+  },
+  {
+    "key": "same name: solarpolis/render/guardians.ts#dispose + solarpolis/render/passengers.ts#dispose",
+    "reason": "`dispose()` is the lifecycle's name every owner of GPU memory uses (CLAUDE.md rule 12); the passengers give back their own figures and dim the lounge's lights (2026-10-23)."
+  },
+  {
+    "key": "same name: solarpolis/render/homes.ts#dispose + solarpolis/render/passengers.ts#dispose",
+    "reason": "`dispose()` is the lifecycle's name every owner of GPU memory uses (CLAUDE.md rule 12); the passengers give back their own figures and dim the lounge's lights (2026-10-23)."
   }
 ]

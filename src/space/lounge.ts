@@ -25,7 +25,7 @@ export const LOUNGE = {
   /** Couches stand at every window but each `every`th (an aisle to the glass between them). */
   every: 3,
   /** The newcomer's eyes: this far from the axis (share of the room's radius; at least `clear` m off the core and behind the couches' backs), this high over the floor (m), standing. */
-  eye: { out: 0.38, high: 1.62, clear: 0.25 },
+  eye: { out: 0.38, high: 1.62, clear: 0.6 },
   /** How far the shot tilts down toward the floor from straight out (rad): the couches and their sitters in the bottom of the frame, the window above them. */
   tilt: 0.3,
   /**
@@ -115,6 +115,14 @@ export function cabinCamera(l: Lounge, look: number): { eye: Vec3; target: Vec3 
 export function placesInView(l: Lounge, look: number, spread = 0.45): Place[] {
   const off = (a: number): number => Math.abs(angleDiff(look, a));
   return l.couches.filter((c) => off(c.angle) <= spread).sort((a, b) => off(a.angle) - off(b.angle)).flatMap((c) => c.places);
+}
+
+/** Seated, one's feet rest this far (m) out from the front of the seat (as on the courts' seats and the capsules'). */
+export const SEAT_FEET = 0.15;
+
+/** Where a passenger seated at `p` has their feet: on the floor, a little out from the seat's front (ship frame). */
+export function seatedFeet(l: Lounge, p: Place): Vec3 {
+  return [l.floor, p.at[1] + p.facing[1] * SEAT_FEET, p.at[2] + p.facing[2] * SEAT_FEET];
 }
 
 /** A point of the ship frame in the frame the ship is posed in (its stern at `position`, nose along `forward`). */
