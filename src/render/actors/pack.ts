@@ -4,7 +4,7 @@
  * Where the Actors asset pack is served (vite.config.ts serves and builds it under /actors/,
  * tools/actors/pack.mjs fetches it), and the one place its files are fetched.
  */
-import type { Fetcher } from '@actors/core';
+import type { Fetcher, MeshData } from '@actors/core';
 import { Character, buildCatalog, defaultConfig, type CharacterCatalog, type CharacterConfig } from '@actors/generator';
 import { Human } from '@actors/human';
 import { IRIS_PRESETS, type ActorMaterialKit } from '@actors/three';
@@ -49,11 +49,19 @@ export function humanCatalog(): Promise<{ catalog: CharacterCatalog; base: Chara
   return catalog;
 }
 
-/**
- * Actors' WebGPU material kit as the game uses it, for people and animals alike: one shader per material kind for all
- * characters. Its face morphs are vertex attributes in one interleaved buffer (Actors 0.6.6; a face peaks at 7 of
- * WebGPU's 8 vertex buffers), so a face's morphs do not make its shader its own.
- */
-export const actorKit: ActorMaterialKit = nodeMaterials;
+/** Actors 0.6.6 stockings carry an opaque coverage mask despite their sheer texture.
+ * Keep the skin behind the holes; ordinary clothes still remove covered body triangles. */
+export function keepSkinUnderSheerGarment(data: MeshData): void {
+  if (data.def.name === 'stockings' || data.def.name === 'fishnet-stockings') data.hidesBaseVertices = undefined;
+}
+
+/** Actors' shared WebGPU graphs, with pack compatibility fixes applied before hidden skin is calculated. */
+export const actorKit: ActorMaterialKit = {
+  ...nodeMaterials,
+  mesh(data, actor) {
+    keepSkinUnderSheerGarment(data);
+    return nodeMaterials.mesh(data, actor);
+  },
+};
 
 export { Character };

@@ -291,7 +291,9 @@ export const WATER = kind('water', ['position', 'normal', 'flow', 'dir'], { cast
   const flow = attribute<'vec4'>('flow', 'vec4'), dir = attribute<'vec4'>('dir', 'vec4');
   const up = normalize(normalWorld);
   const side = normalize(cross(dir.xyz, up)), ahead = cross(up, side);
-  const river = step(0.01, dir.w), speed = flow.z, steep = flow.w;
+  const river = step(0.01, dir.w), speed = flow.z, steep = abs(flow.w);
+  const spray = flow.w.lessThan(0), travel = fract(time.mul(0.7).add(flow.y.mul(0.03))).mul(2).sub(1);
+  m.positionNode = positionLocal.add(select(spray, dir.xyz.mul(travel).mul(dir.w.mul(0.08)), vec3(0)));
   // The ripples' own coordinates (m): across the river and downstream, carried along with the water; on the lake the
   // world position, drifting slowly.
   const p = worldPosition();
@@ -818,6 +820,14 @@ function uprightAt(at: Node<'vec3'>, turn: Node<'float'>): (v: Node<'vec3'>) => 
   return (v) => ax.mul(v.x).add(up.mul(v.y)).add(az.mul(v.z));
 }
 
+/** Props use the same level's light as the people holding them. */
+export const PROP = kind('activity prop', ['position', 'normal', 'color'], { cast: true, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial();
+  // Instance transforms already put normalLocal in the camera-relative world's axes; interpolate it once.
+  m.colorNode = personColor(vertexColor().rgb, normalize(varying(normalLocal)), vec2(OPEN_SKY, OPEN_SKY));
+  return m;
+});
+
 /**
  * People beyond the near figures (render/people.ts): one small body (gen/standIn.ts) per person, instanced, posed and
  * coloured per instance (crowdShaders.ts) from the look their figure is built from, lit by the sunline past the
@@ -999,5 +1009,5 @@ export function animalEyeMaterial(): Material {
 
 /** Every kind, for the Stage's warm-up. */
 export function allKinds(): readonly Kind[] {
-  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS, STONE, BUILT, VAULT, CROWD, SPECK, DRONE, DRONE_VEIL, CLOUDS_FAR, CLOUDS_NEAR];
+  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS, STONE, BUILT, VAULT, PROP, CROWD, SPECK, DRONE, DRONE_VEIL, CLOUDS_FAR, CLOUDS_NEAR];
 }

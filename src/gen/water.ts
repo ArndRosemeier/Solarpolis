@@ -13,6 +13,7 @@
 import { groundNormal, toWorld, wrapAngle, type Vec3 } from '../blueprint';
 import type { Terrain } from './terrain';
 import { riverPoint as sample, type River, type RiverPoint as Along } from './rivers';
+import { v3cross, v3dot, v3norm, v3sub } from '@futuremagic/core';
 
 export interface WaterMesh {
   positions: Float32Array;
@@ -136,6 +137,7 @@ function riverOver(terrain: Terrain, r: River, b: WaterTile, origin: Vec3, out: 
     if (open < 0 || t0 > 0) open = section(terrain, r, b, at(t0), origin, out);
     const next = section(terrain, r, b, at(t1), origin, out);
     out.strip(open, next, ACROSS);
+    if (Math.max(at(t0).steep, at(t1).steep) > 0.35) fallVolume(terrain, r, b, at(t0), at(t1), origin, out);
     open = t1 < 1 ? -1 : next;
   }
 }
@@ -143,17 +145,84 @@ function riverOver(terrain: Terrain, r: River, b: WaterTile, origin: Vec3, out: 
 /** Pieces across a ribbon: enough for its edges to follow a coarse tile's ground, and for the shallows' shading. */
 const ACROSS = 4;
 
+/** Five overlapping ropes give a fall a closed cross-section instead of a paper edge.
+ * Width and depth come from its river; all LODs use the same section and run coordinates. */
+const FALL_STREAMS = 5, FALL_SIDES = 8;
+function fallVolume(t: Terrain, river: River, tile: WaterTile, a: Along, b: Along, origin: Vec3, out: Builder): void {
+  const h = t.habitat, dir = flowDirection(t, river, a);
+  const makeRing = (at: Along, stream: number): { start: number; centre: Vec3; up: Vec3; thick: number } => {
+    const radial = groundNormal(h.profile, at.theta, at.s), flow = flowDirection(t, river, at);
+    const up = v3norm(radial.map((v, k) => v - flow[k] * v3dot(radial, flow)) as Vec3);
+    const side = v3norm(v3cross(flow, up));
+    // Side follows increasing theta, independent of which end the river flows from.
+    const around: Vec3 = [-Math.sin(at.theta), Math.cos(at.theta), 0];
+    if (v3dot(side, around) < 0) for (let k = 0; k < 3; k++) side[k] *= -1;
+    const x = -1 + (2 * (stream + 0.5)) / FALL_STREAMS, width = at.halfWidth * 1.06 / FALL_STREAMS;
+    const falling = Math.min(1, Math.max(0, (at.steep - 0.2) / 0.7));
+    const depth = Math.min(river.depth * 0.65, width * 0.7);
+    const thick = Math.max(0.015, depth * falling * (0.8 + 0.2 * Math.sin(at.run / Math.max(width, 0.1) * 2 + stream * 2.4)));
+    const theta = at.theta + x * at.halfWidth / Math.max(1, h.profile.at(at.s).r);
+    const level = tile.cell > at.halfWidth * 0.25 ? Math.max(at.surface, tile.drawn(theta, at.s) + 0.05 + tile.cell * 0.02) : at.surface;
+    const centre = toWorld(h.profile, { theta, s: at.s, h: level });
+    const start = out.points;
+    for (let k = 0; k < FALL_SIDES; k++) {
+      const angle = 2 * Math.PI * k / FALL_SIDES, c = Math.cos(angle), s = Math.sin(angle);
+      const normal = v3norm(up.map((v, q) => v * s / thick + side[q] * c / width) as Vec3);
+      const p = centre.map((v, q) => v + side[q] * c * width + up[q] * (s + 0.15) * thick) as Vec3;
+      out.point(p, origin, normal, [x + c / FALL_STREAMS, at.run, speedOf(at.steep), at.steep], [...flow, at.halfWidth]);
+    }
+    return { start, centre, up, thick };
+  };
+  const triangle = (a: number, b: number, c: number): void => {
+    const point = (k: number) => out.positions.slice(k * 3, k * 3 + 3) as Vec3;
+    const n = v3cross(v3sub(point(b), point(a)), v3sub(point(c), point(a)));
+    const facing = out.normals.slice(a * 3, a * 3 + 3) as Vec3;
+    out.index.push(a, ...(v3dot(n, facing) >= 0 ? [b, c] : [c, b]));
+  };
+  for (let stream = 0; stream < FALL_STREAMS; stream++) {
+    const first = makeRing(a, stream), last = makeRing(b, stream);
+    for (let k = 0; k < FALL_SIDES; k++) {
+      const next = (k + 1) % FALL_SIDES;
+      triangle(first.start + k, last.start + k, first.start + next);
+      triangle(first.start + next, last.start + k, last.start + next);
+    }
+    // End faces close pieces at tile boundaries; coincident neighbours meet at identical run coordinates.
+    for (const [ring, at, sign] of [[first, a, -1], [last, b, 1]] as const) {
+      const outward = dir.map((v) => v * sign * (river.from === 'wild' ? 1 : -1)) as Vec3;
+      const centre = out.points;
+      out.point(ring.centre.map((v, q) => v + ring.up[q] * ring.thick * 0.15) as Vec3, origin, outward, [0, at.run, speedOf(at.steep), at.steep], [...dir, at.halfWidth]);
+      for (let k = 0; k < FALL_SIDES; k++) triangle(centre, ring.start + k, ring.start + (k + 1) % FALL_SIDES);
+    }
+    // Detached spray in front of the ropes: tiny closed ellipsoids, carried along by WATER's spray phase.
+    // Their negative steepness tags only the motion; shading uses its magnitude.
+    if (tile.cell < Math.min(a.halfWidth, b.halfWidth) && Math.min(first.thick, last.thick) > 0.1) {
+      const up = v3norm(first.up.map((v, k) => v + last.up[k]) as Vec3), side = v3norm(v3cross(dir, up));
+      const thickness = (first.thick + last.thick) / 2, radius = thickness * 0.18;
+      const mid = first.centre.map((v, k) => (v + last.centre[k]) / 2 + up[k] * thickness * (1.8 + 0.4 * Math.sin(a.run + stream))) as Vec3;
+      const start = out.points;
+      for (const [axis, size] of [[side, radius], [up, radius], [dir, radius * 2.5]] as const) for (const sign of [-1, 1]) {
+        out.point(mid.map((v, k) => v + axis[k] * size * sign) as Vec3, origin, axis.map((v) => v * sign) as Vec3,
+          [0, (a.run + b.run) / 2, speedOf(a.steep), -Math.max(a.steep, b.steep)], [...dir, a.halfWidth]);
+      }
+      for (const x of [0, 1]) for (const y of [2, 3]) for (const z of [4, 5]) triangle(start + x, start + y, start + z);
+    }
+  }
+}
+
+/** Downstream, shared by the surface and the fall's volume. */
+function flowDirection(t: Terrain, r: River, a: Along): Vec3 {
+  const ds = Math.max(r.step * 0.5, 0.25) * (r.from === 'wild' ? 1 : -1);
+  const next = sample(r, Math.min(r.s0 + r.step * (r.count - 1), Math.max(r.s0, a.s + ds)));
+  const p = t.habitat.profile;
+  return v3norm(v3sub(toWorld(p, { theta: next.theta, s: next.s, h: next.surface }), toWorld(p, { theta: a.theta, s: a.s, h: a.surface })));
+}
+
 /** One cross-section of a river at a point of its middle line; returns its first point's index. */
 function section(terrain: Terrain, r: River, b: WaterTile, a: Along, origin: Vec3, out: Builder): number {
   const { profile } = terrain.habitat;
   const p = profile.at(a.s), rad = Math.max(p.r, 1e-6);
   // Downstream: along the line, in the world (the next point minus this one).
-  const ds = Math.max(r.step * 0.5, 0.25) * (r.from === 'wild' ? 1 : -1);
-  const n2 = sample(r, Math.min(r.s0 + r.step * (r.count - 1), Math.max(r.s0, a.s + ds)));
-  const here = toWorld(profile, { theta: a.theta, s: a.s, h: a.surface }), there = toWorld(profile, { theta: n2.theta, s: n2.s, h: n2.surface });
-  let dx = there[0] - here[0], dy = there[1] - here[1], dz = there[2] - here[2];
-  const dl = Math.hypot(dx, dy, dz) || 1;
-  dx /= dl; dy /= dl; dz /= dl;
+  const [dx, dy, dz] = flowDirection(terrain, r, a);
   // Too coarse to carve the channel cleanly (fewer than about eight cells across it, and a coarser parent's while it
   // morphs): lift the water over the ground the tile draws. Only the finest tiles, near the eye, keep it at its level
   // between banks that rise out of it.

@@ -35,6 +35,8 @@ import { FigureLoads, type FigureSlot } from './actors/slots';
 import { humanCatalog } from './actors/pack';
 import { Residents, type Dress } from './actors/residents';
 import { drawSpecks, ownSpecks, pxPerMetre, roomForSpecks, type OwnSpecks } from './specks';
+import { ActivityProps, type PropPerson } from './activityProps';
+import { tossAt, TOSS } from '../sim/props';
 import HumanWorker from '@actors/human/worker?worker';
 
 /** People are placed out to here (m), each by their exact whereabouts; beyond, the far specks draw them. */
@@ -109,7 +111,6 @@ const SIT_DOWN = { clip: 'sit down', span: 1.33 }, STAND_UP = { clip: 'stand up'
 const PAIRED = {
   talk: { a: CMU['talk with hands A'], b: CMU['talk with hands B'], back: true },
   dance: { a: CMU['salsa A'], b: CMU['salsa B'], back: true },
-  catch: { a: CMU['throw and catch A'], b: CMU['throw and catch B'], back: false },
 };
 /** A pair that talks does it with both their hands this often (the rest take turns). */
 const PAIR_TALKS = 0.5;
@@ -191,9 +192,12 @@ export class PeopleView {
   private slowestLevels = 0;
   private disposed = false;
   private below = false;
+  private readonly props: ActivityProps;
 
   constructor(private readonly habitat: Habitat, private readonly terrain: Terrain, private readonly stage: Stage, private readonly camera: Camera, private readonly deckOf: (theta: number, s: number) => number | null) {
     this.group.name = 'people';
+    this.props = new ActivityProps(stage, habitat.params.landmarks?.handrail ?? 1);
+    this.group.add(this.props.group);
     void this.start();
   }
 
@@ -420,6 +424,12 @@ export class PeopleView {
       d[o + 11] = c[0]; d[o + 12] = c[1]; d[o + 13] = c[2]; d[o + 14] = c[3]; d[o + 15] = c[4]; d[o + 16] = c[5]; d[o + 17] = c[6];
       n++;
     }
+    const props: PropPerson[] = [];
+    for (const one of this.people.values()) if (one.placed && one.dress && (one.person.act === 'catch' || one.person.act === 'work')) props.push({
+      person: one.person, feet: one.feet, up: one.up, front: one.front, height: one.dress.height,
+      figure: one.figure?.figure ?? null, anim: animOf(one.person, one.resident, t),
+    });
+    this.props.update(props, eye);
     this.drawn = n;
     this.specksDrawn = m;
     this.figuresDrawn = figures;
@@ -445,7 +455,7 @@ export class PeopleView {
 
   /** Bytes held: the stand-ins' instances, the residents' measures, the figures and the population's caches (memory watchdog). */
   bytes(): number {
-    let n = this.data.byteLength + (this.specks?.data.byteLength ?? 0) * 1.25 + (this.residents?.heldBytes() ?? 0) + this.people.size * 400 + lifeBytes(this.habitat, this.terrain) + neighbourhoodBytes(this.terrain);
+    let n = this.props.bytes() + this.data.byteLength + (this.specks?.data.byteLength ?? 0) * 1.25 + (this.residents?.heldBytes() ?? 0) + this.people.size * 400 + lifeBytes(this.habitat, this.terrain) + neighbourhoodBytes(this.terrain);
     for (const one of this.people.values()) n += one.figure?.figure?.bytes() ?? 0;
     return n;
   }
@@ -463,6 +473,7 @@ export class PeopleView {
 
   dispose(): void {
     this.disposed = true;
+    this.props.dispose();
     for (const key of [...this.people.keys()]) this.letGo(key);
     if (this.mesh) freeMesh(this.mesh);
     if (this.specks) freeMesh(this.specks.mesh);
@@ -505,8 +516,11 @@ function animOf(p: Person, who: Resident, t: number): AnimState {
     case 'dance':
       // Two dance salsa; a group dances together, in step.
       return (p.size === 2 && paired(p, PAIRED.dance)) || { move: 'idle', pose: { clip: 'dance', hold: share(p.since, DANCE) } };
-    case 'catch':
-      return paired(p, PAIRED.catch) ?? held;
+    case 'catch': {
+      if (p.member % 2 === 0 && p.member + 1 >= p.size) return held;
+      const toss = tossAt(p.since);
+      return toss.thrower === p.member % 2 ? { ...held, action: { id: 'throw', t0: t - toss.phase, dur: TOSS.gesture } } : held;
+    }
     case 'stretch':
       return { move: 'idle', pose: byHash(STRETCHES, 0, 47) };
     case 'work':

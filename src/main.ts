@@ -424,6 +424,17 @@ const ringFall = (r: River, i: number): boolean => {
 };
 toRiver('Below the nearest Ring fall', 80, ringFall);
 toRiver('Above the nearest Ring fall', -40, ringFall);
+debug.add({ label: 'Fly: across the nearest Ring fall', group: 'Go', run: () => {
+  const v = view(), t = v?.ecology?.terrain, at = v?.walker.at;
+  const near = t && at && nearestSample(t.rivers, at.theta, at.s, ringFall);
+  if (!v || !t || !near) return;
+  const r = near.river, i = near.i, s = r.s0 + i * r.step, theta = r.theta[i], w = r.halfWidth[i];
+  const aim = toWorld(t.habitat.profile, { theta, s, h: r.surface[i] });
+  const eye = toWorld(t.habitat.profile, { theta: theta + w * 2.5 / t.habitat.radius, s: s + (r.from === 'wild' ? 1 : -1) * (w * 2 + 12), h: r.surface[i] + 4 });
+  const d = Math.hypot(...aim.map((q, k) => q - eye[k]));
+  v.floatAt(eye, aim.map((q, k) => (q - eye[k]) / d) as Vec3);
+} });
+
 go('The middle of the floor', (h) => (h.profile.floorStart + h.profile.floorEnd) / 2);
 go('The foot of the wild endcap', (h) => h.profile.floorStart + 20);
 go('Halfway up the wild endcap', (h) => h.profile.floorStart / 2);
@@ -913,6 +924,20 @@ debug.add({ label: 'Below: beside neighbours at a shared hall', group: 'Go', run
   v.goBelow(p.theta, s, p.s > s ? 0 : Math.PI);
 } });
 let nextSky = 0;
+debug.add({ label: 'Below: beside a resident wearing stockings', group: 'Go', run: async () => {
+  const h = lab.habitat, v = view(), t = v?.ecology?.terrain;
+  if (!h || !v || !t) return;
+  const { humanCatalog } = await import('./render/actors/pack');
+  const { Residents } = await import('./render/actors/residents');
+  const { catalog, base, human } = await humanCatalog(), looks = new Residents(catalog, base, human);
+  for (const m of hamletsNear(h, v.walker.at.theta, v.walker.at.s).slice(0, 8)) {
+    const people = neighboursAt(t, v.time, { ...m.site, radius: m.edge * h.params.under.bay * 1.3 });
+    const p = people.find((p) => !p.moving && looks.figureLook(residentOf(h, p.resident)).outfit.includes('stockings'));
+    if (!p) continue;
+    v.goBelow(p.theta, p.s - 3, 0);
+    return;
+  }
+} });
 debug.add({ label: 'Below: under the next kind of hamlet sky', group: 'Go', run: () => underSky(nextSky++ % SKIES.length) });
 debug.add({ label: 'Below: under a glass deck (the real sky above)', group: 'Go', run: () => underSky(GLASS) });
 debug.add({ label: 'Up onto the land (from below)', group: 'Go', run: () => { const v = view(); if (v) v.goTo(v.walker.at.theta, v.walker.at.s); } });
