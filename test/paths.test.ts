@@ -1,12 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { angleDiff } from '@futuremagic/core';
-import { FLOOR_LAYERS, MATRIX, STYLE_LAND, derive } from '../src/blueprint';
+import { FLOOR_LAYERS, MATRIX, STYLE_LAND } from '../src/blueprint';
 import { GROUND, mereReach, planOf, type PlanPath } from '../src/gen/plan';
 import { CROWN, pathCover, pathsOf } from '../src/gen/paths';
 import { cellsNear, plantCell, plantsOf, PLANT_STRIDE } from '../src/gen/scatter';
 import { fromWorld, toWorld } from '../src/blueprint';
-import { terrainOf, ecologyOf } from './worlds';
+import { habitatOf, terrainOf, ecologyOf } from './worlds';
 
 /** Every `every`-th point of a path, with the direction across it there (unit, in θ·R and s). */
 function along(path: PlanPath, R: number, every: number): { theta: number; s: number; nu: number; ns: number }[] {
@@ -20,7 +20,7 @@ function along(path: PlanPath, R: number, every: number): { theta: number; s: nu
 
 for (const { name, params } of MATRIX) {
   test(`paths (${name}): the plan's paths have their widths, and the ways swing gently but keep out of the lake`, () => {
-    const h = derive(params), plan = planOf(h), R = h.radius, widths = params.plan.pathWidth, lake = plan.lake;
+    const h = habitatOf(name), plan = planOf(h), R = h.radius, widths = params.plan.pathWidth, lake = plan.lake;
     for (const p of plan.paths) assert.equal(p.width, widths[p.kind]);
     let swung = 0, long = 0;
     for (const p of plan.paths.filter((k) => k.kind === 'way')) {

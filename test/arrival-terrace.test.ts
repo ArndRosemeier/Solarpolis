@@ -4,9 +4,10 @@ import { MATRIX, derive, fromWorld, validate } from '../src/blueprint';
 import { arrivalTerraceOf, revealAt, REVEAL_SECONDS } from '../src/world/arrival';
 import { liftStairOf, rampOf, stairStandAt, stairTopAt } from '../src/gen/liftStair';
 import { EYE_HEIGHT, VIEW_FOV, Walker } from '../src/world/walker';
+import { habitatOf } from './worlds';
 
-for (const { name, params } of MATRIX) test(`arrival terrace (${name}): reveal stays above a real landing and hands over without a camera jump`, () => {
-  const h = derive(params), terrace = arrivalTerraceOf(h), stair = liftStairOf(h);
+for (const { name } of MATRIX) test(`arrival terrace (${name}): reveal stays above a real landing and hands over without a camera jump`, () => {
+  const h = habitatOf(name), terrace = arrivalTerraceOf(h), stair = liftStairOf(h);
   if (!stair) { assert.equal(terrace, null, 'a blueprint without a Lift Stair keeps its existing hub arrival'); return; }
   assert.ok(terrace);
   const q = terrace.platform, ramp = rampOf(h), lastLeg = stair.legs[stair.legs.length - 1];

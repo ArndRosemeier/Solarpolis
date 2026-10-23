@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { MATRIX } from '../src/blueprint';
 import { DYES, MEAN_HEIGHT, POSE, SLOT, SPECK_ATTRIBUTES, SPECK_STRIDE, guessBands, hexColor, packColor, speckBands, unpackColor, writeSpeck } from '../src/gen/standIn';
 import { SWIM_DEPTH, SWIM_WATER, footingOf, postureOf, residentOf, type Person } from '../src/sim';
-import { derive, REFERENCE } from '../src/blueprint';
-import { terrainOf } from './worlds';
+import { REFERENCE } from '../src/blueprint';
+import { habitatOf, terrainOf } from './worlds';
 import { checkSpecks } from './specksCheck';
 
 test('specks: a colour packs and unpacks; bands of one colour are that colour', () => {
@@ -82,7 +82,7 @@ for (const { name } of MATRIX) {
 }
 
 test('residents: a share wears drone bodies, one of the bodies each; the shells stay as they were', () => {
-  const h = derive(REFERENCE), life = REFERENCE.life, n = 20000, seen = new Set<number>();
+  const h = habitatOf(MATRIX[0].name), life = REFERENCE.life, n = 20000, seen = new Set<number>();
   let drones = 0, shells = 0;
   for (let i = 0; i < n; i++) {
     const r = residentOf(h, i);
