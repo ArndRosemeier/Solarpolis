@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.142 — Sounds for swallows, swifts and starling flocks
+
+- New sounds ready for the birds overhead: a swallow's twitter, swifts' shrill screeching, and a starling murmuration's chatter and the rush of its wings. They are heard once the birds that make them fly in the habitat.
+
 ## v0.141 — The arrival can be heard, and music finds its moments
 
 - After Start you hear the flight from inside the ship: the cabin, the thrusters slowing it up its corridor, small trims as it creeps in, then contact, the clamps latching one by one and the hatch sealing. In the bore the great bearing rumbles past, and the air rushes as it brings you up to the habitat's spin. Every sound comes when the ship really does it.
