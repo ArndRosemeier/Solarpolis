@@ -14,7 +14,7 @@ import { climateOf, fromWorld, toWorld, wrapAngle, type Habitat } from '../bluep
 import { arrivalTerraceOf } from './arrivalTerrace';
 import { fleetOf, HARBOUR } from './harbours';
 import { keptClear, landmarkTopAt, landmarksOf } from './landmarks';
-import { liftStairOf, rampOf } from './liftStair';
+import { centreOf, liftStairOf, rampOf } from './liftStair';
 import { handrailOf } from './lifts';
 import { FINISH } from './pavilion';
 import { COURT, entrancesOf, planOf, siteOf } from './plan';
@@ -350,7 +350,7 @@ export function capDestinations(t: Terrain): CapDestination[] {
   if (terrace) { const at = fromWorld(h.profile, ...(terrace.berth?.at ?? terrace.feet)); list('arrival', 'Arrival terrace', 'Landmarks', at.theta, at.s); }
   const stair = liftStairOf(h);
   if (stair) {
-    const p = stair.platforms[0], at = fromWorld(h.profile, ...rampOf(h).world((p.z0 + p.z1) / 2, (p.w0 + p.w1) / 2, p.e));
+    const p = stair.platforms[0], at = fromWorld(h.profile, ...rampOf(h).world(...centreOf(p), p.e));
     list('stair-foot', 'Foot of the Lift Stair', 'Landmarks', at.theta, at.s);
   }
   for (const l of landmarksOf(t)) {

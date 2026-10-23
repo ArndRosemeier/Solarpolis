@@ -343,7 +343,12 @@ function layStair(h: Habitat): LiftStair | null {
 export const BERTH_CLEAR = 2.75;
 
 /** A platform's middle across the ramp. */
-const middleOf = (p: StairPlatform): number => (p.w0 + p.w1) / 2;
+const middleOf = (p: StairPlatform): number => centreOf(p)[1];
+
+/** The middle of a rectangle in plan (a platform, a gallery). */
+export function centreOf(q: { z0: number; z1: number; w0: number; w1: number }): PlanPoint {
+  return [(q.z0 + q.z1) / 2, (q.w0 + q.w1) / 2];
+}
 
 /**
  * Where a leg from platform a to platform b starts and ends. Straight up: from a's uphill edge to b's downhill edge.

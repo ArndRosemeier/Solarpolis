@@ -1,7 +1,7 @@
 /** The existing Lift Stair's upper landing is the port's arrival overlook.
  * Its entrance, clear walking strip and exit all derive from that landing and its last leg. Pure. */
 import type { Habitat, Vec3 } from '../blueprint';
-import { BERTH_CLEAR, liftStairOf, rampOf, type PlanPoint, type StairPlatform } from './liftStair';
+import { BERTH_CLEAR, centreOf, liftStairOf, rampOf, type PlanPoint, type StairPlatform } from './liftStair';
 
 /**
  * Where a transport capsule waits for the newcomer (thread "Transport capsules", `capStopsOf` in gen/capsules.ts
@@ -48,18 +48,18 @@ export function arrivalTerraceOf(h: Habitat): ArrivalTerrace | null {
     feet: ramp.world(...finish, platform.e), exitWorld: ramp.world(...exit, platform.e),
     door: platform.z1 - hr * (DOOR_BACK + DOOR_HALF),
     berth: stair.threshold ? (stair.threshold.berth && berthAt(h, stair.threshold.berth.at, stair.threshold.berth.e, stair.threshold.berth.toward, BERTH_CLEAR * hr))
-      : berthOf(h, platform, stair.parapet, hr, finish, exit) };
+      : landingBerth(h, platform, stair.parapet, hr, finish, exit) };
 }
 
 /**
  * The berth: in the open front of the landing, inside its parapets, on the side away from the stair's opening and
  * short of where the walk ends, so the walking strip and the way to the stair stay free. Null if it does not fit.
  */
-function berthOf(h: Habitat, q: StairPlatform, parapet: number, hr: number, finish: PlanPoint, exit: PlanPoint): ArrivalBerth | null {
+function landingBerth(h: Habitat, q: StairPlatform, parapet: number, hr: number, finish: PlanPoint, exit: PlanPoint): ArrivalBerth | null {
   const clear = BERTH_CLEAR * hr, edge = parapet + clear;
   const z = q.z0 + edge;
   // Away from the opening: on the other side of the landing's middle from the last leg's end.
-  const side = exit[1] >= (q.w0 + q.w1) / 2 ? -1 : 1;
+  const side = exit[1] >= centreOf(q)[1] ? -1 : 1;
   const w = side < 0 ? q.w0 + edge : q.w1 - edge;
   // Room in front of the walk's end, and inside both side parapets.
   if (z + clear > finish[0] - hr * 0.2) return null;

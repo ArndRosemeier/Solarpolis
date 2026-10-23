@@ -21,7 +21,7 @@ import { v3cross, v3norm, v3sub, type Vec3 } from '@futuremagic/core';
 import { fromWorld, type Habitat } from '../blueprint';
 import { Shape, intoPlace, placeAt, type MappedArrays, type Place, type RGB } from './shapes';
 import { wantedCells, type Grid, type GridEye, type TileKey, type WantedTile } from './detailTree';
-import { legShapesOf, lineAt, liftStairOf, onLeg, openingsOf, rampOf, type LegShape, type LiftStair, type PlanPoint, type Ramp, type StairPlatform } from './liftStair';
+import { centreOf, legShapesOf, lineAt, liftStairOf, onLeg, openingsOf, rampOf, type LegShape, type LiftStair, type PlanPoint, type Ramp, type StairPlatform } from './liftStair';
 import { FINISH } from './pavilion';
 import { kept } from './kept';
 import { arrivalTerraceOf, DOOR_BACK, DOOR_HALF } from './arrivalTerrace';
@@ -193,7 +193,7 @@ class StairBuilder {
     const st = this.st, pad = st.width;
     const away = (z0: number, z1: number, w0: number, w1: number): boolean => !!box && (z1 + pad < box[0] || z0 - pad > box[1] || w1 + pad < box[2] || w0 - pad > box[3]);
     const count = this.detail === 'count';
-    for (const q of st.platforms) if (!away(q.z0, q.z1, q.w0, q.w1) && mine([(q.z0 + q.z1) / 2, (q.w0 + q.w1) / 2])) { if (!count) this.platform(q); this.parts.platforms++; }
+    for (const q of st.platforms) if (!away(q.z0, q.z1, q.w0, q.w1) && mine(centreOf(q))) { if (!count) this.platform(q); this.parts.platforms++; }
     for (const s of legShapesOf(st)) {
       const l = s.leg;
       if (away(Math.min(l.from.z, l.to.z), Math.max(l.from.z, l.to.z), Math.min(l.from.w, l.to.w), Math.max(l.from.w, l.to.w))) continue;
@@ -328,7 +328,7 @@ class StairBuilder {
    * the spin arrow: a bronze line along the gallery, its head at the spinward end.
    */
   private bay(q: StairPlatform, bay: { tier: number; index: number }, berth: { at: PlanPoint; clear: number } | null): void {
-    const hr = this.hr, p = this.st.parapet, W = this.st.width, length = q.w1 - q.w0, mid = (q.w0 + q.w1) / 2;
+    const hr = this.hr, p = this.st.parapet, W = this.st.width, length = q.w1 - q.w0, mid = centreOf(q)[1];
     const every = Math.max(1, Math.round(W / length)), notch = q.z1 - q.z0 < (this.st.threshold?.galleries[bay.tier].z1 ?? q.z1) - q.z0 - 1e-6;
     const clearOf = (at: PlanPoint, r: number): boolean => !berth || Math.hypot(at[0] - berth.at[0], at[1] - berth.at[1]) > berth.clear + r;
     const lamp: PlanPoint = [q.z0 + p + hr * 0.4, mid];
@@ -414,7 +414,7 @@ class StairBuilder {
   private arrivalPorch(q: StairPlatform): void {
     const terrace = arrivalTerraceOf(this.ramp.habitat);
     if (!terrace) return;
-    const hr = this.hr, depth = q.z1 - q.z0, middle = (q.w0 + q.w1) / 2, p = this.st.parapet;
+    const hr = this.hr, depth = q.z1 - q.z0, middle = centreOf(q)[1], p = this.st.parapet;
     const back = q.z1 - hr * DOOR_BACK, front = q.z1 - depth * 0.52, side = p + hr * 0.18;
     const piece = (z0: number, z1: number, w0: number, w1: number, lo: number, hi: number, col: RGB, finish: number = FINISH.stone): void => this.boxOn(q, [z0, z1, w0, w1], lo, hi, col, finish);
     // The facade across the back, standing a little proud of the parapet there, and the portal: jambs, a lintel with a

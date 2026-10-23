@@ -21,7 +21,7 @@
  * and the handrail; where the ramp has no room beside the top terrace (a narrow habitat's stair tops out at the ramp's
  * edge) there is no Threshold. Pure.
  */
-import type { PlanPoint, Ramp, StairLeg, StairPlatform } from './liftStair';
+import { centreOf, type PlanPoint, type Ramp, type StairLeg, type StairPlatform } from './liftStair';
 
 /** How many galleries step down the face, and the steps of each flight between two. */
 export const TIERS = 3;
@@ -98,7 +98,7 @@ export function layThreshold(t: ThresholdSite): Threshold | null {
     return got;
   };
   // The upper gallery: out from the side of the top terrace away from where the stair arrives, or the roomier side.
-  const away = t.arrives > (top.w0 + top.w1) / 2 ? -1 : 1;
+  const away = t.arrives > centreOf(top)[1] ? -1 : 1;
   const sides = [away, -away].map((s) => ({ s, len: freeRun(top.z0, top.z1, s < 0 ? top.w0 : top.w1, s) }));
   const best = sides[0].len >= least ? sides[0] : sides[1];
   if (best.len < least) return null;
@@ -163,7 +163,7 @@ function gallery(t: ThresholdSite, tier: number, e: number, z0: number, z1: numb
 function berthAtEnd(t: ThresholdSite, g: Gallery, flight: StairLeg | null): Threshold['berth'] {
   const edge = t.parapet + t.berthClear;
   if (g.z1 - g.z0 < 2 * edge) return null;
-  const foot: PlanPoint = flight ? [flight.from.z, flight.from.w] : [(g.z0 + g.z1) / 2, (g.w0 + g.w1) / 2];
+  const foot: PlanPoint = flight ? [flight.from.z, flight.from.w] : centreOf(g);
   const w = foot[1] - g.w0 > g.w1 - foot[1] ? g.w0 + edge : g.w1 - edge;
   const at: PlanPoint = [g.z0 + edge, w];
   // Clear of the flight's notch and parapets.
