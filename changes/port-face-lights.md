@@ -5,3 +5,4 @@
 - Windows go on and off on their own over the hours, and more of the town is lit in the habitat's night.
 - A ring of lamps runs round the foot of the spindle, where the turning face meets the still dock, so you can see the habitat turn against it.
 - The radiator brims were lit as if from their far side; they now catch earthshine on the side that faces it.
+- Fixed: you could fall straight through the Threshold's lower galleries, where the capsule waits for you on arrival. Every floor of the Threshold now holds you, however high it stands over the ground below.
