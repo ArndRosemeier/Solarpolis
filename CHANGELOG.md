@@ -2,6 +2,11 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.177 — A smoother arrival
+
+- The interior starts loading as soon as the title appears, so it is mostly ready by the time you press Start.
+- Loading the people and animal packs no longer freezes the docking shot: it waits for the next cut between shots, where a held frame isn't seen.
+
 ## v0.176 — The arrival lists what it loads
 
 - The debug menu lists what loads during the arrival and when (the interior's warm-up and build, the people and animal packs, your body), to plan the flight as the loading screen.
