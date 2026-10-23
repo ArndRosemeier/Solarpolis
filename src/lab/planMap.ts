@@ -8,7 +8,7 @@
  * Plain arrays, no DOM: the Lab puts them on a canvas, and a script can write them out as pictures.
  */
 import { wrapAngle, type DistrictStyle } from '../blueprint';
-import { fromLake, type FaceKind, type Plan, type PlanPath, type PlannedRiver } from '../gen/plan';
+import { type FaceKind, type Plan, type PlanPath, type PlannedRiver } from '../gen/plan';
 
 export interface PlanImage {
   width: number;
@@ -69,7 +69,7 @@ function colorAt(plan: Plan, theta: number, s: number, out: number[]): number {
     const face = plan.faceAt(theta, s);
     c = FACE_COLORS[face.kind].map((v) => v * (0.82 + 0.06 * band)) as unknown as Rgb;
     id = 2000 + face.index * 10 + band;
-  } else if (fromLake(plan.lake, s) < 0) {
+  } else if (plan.inWater(theta, s)) {
     c = LAKE;
     id = 3000;
   } else if (s < plan.reserveEnd) {

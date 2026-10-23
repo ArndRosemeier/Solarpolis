@@ -53,6 +53,106 @@ export const fromLake = (lake: Lake | null, s: number): number => (lake ? Math.a
 /** How wide the lake's shore is (m): the band past its water where the hills flatten down to meet it (gen/terrain.ts). */
 export const shoreOf = (lake: Lake | null): number => (lake ? Math.max(lake.depth * 10, lake.halfWidth * 0.3) : 0);
 
+/**
+ * A lake on the floor besides the ring lake (`HabitatParams.relief.lakes`, Arnd 2026-10-23): the great lake, where the
+ * great river leaves the Mountain's foot and runs through it, and the smaller ones (`kind` 'mere') in the rooms between
+ * the Rings. Its shore is a superellipse over the floor unrolled, round (`theta`, `s`): `along` m from its middle along
+ * its long axis (turned `heading` from +s toward +θ) and `across` m square to it, its bays and headlands from `lobes`.
+ * How natural it is (`wild`, 1 in the reserve, 0 in tended land) follows the care where it lies: a made basin's crisp,
+ * squarer edge and steep sides in the tended rooms, a ragged shore shelving gently in the wild.
+ */
+export interface Mere {
+  id: number;
+  kind: 'great' | 'mere';
+  theta: number;
+  s: number;
+  along: number;
+  across: number;
+  heading: number;
+  /** How deep it is in its middle (m). */
+  depth: number;
+  /** Its water's surface, as a height above the profile: its room's level, where a river through it rests too. */
+  level: number;
+  wild: number;
+  /** Its long axis's cosine and sine (of `heading`), and its outline's superellipse power (round when wild, square when made). */
+  cos: number;
+  sin: number;
+  power: number;
+  /** The shore's lobes: for each harmonic 2, 3, … its amplitude times the cosine and the sine of its phase. */
+  lobes: Float64Array;
+  /** The lobes' amplitudes summed (the shore's wave is their sum over this, −1 … 1). */
+  lobeSum: number;
+}
+
+/**
+ * The lakes' shapes: how far a wild shore's bays reach in (a share of the radius to the shore), how square a made basin
+ * is and how round a natural one (the superellipse's power), how much of the way to its middle a lake shelves down to
+ * its depth (natural, made), how far out its shore reaches (`shoreOf`: depths, or a share of its half width), and how
+ * steeply the land rises from its water within it (m per m).
+ */
+export const MERE = { bays: 0.32, harmonics: 6, round: 2, square: 4.5, shelf: [0.6, 0.12], shore: { depths: 10, natural: 0.3, made: 0.08 }, rise: 0.025 } as const;
+
+/** Where a point lies by a lake on the floor: which, and how far from its shore (m, negative in the water). */
+export interface MereHit {
+  mere: Mere;
+  edge: number;
+}
+
+/** How wide a lake's shore is (m): the band past its water where the land comes down to meet it (gen/terrain.ts). */
+export const mereShore = (m: Mere): number =>
+  Math.max(m.depth * MERE.shore.depths * m.wild, m.across * (MERE.shore.made + (MERE.shore.natural - MERE.shore.made) * m.wild));
+
+/**
+ * How far a lake's shore reaches from its middle at most (m), its shore band not counted: a made basin's corners reach
+ * out past its half length (the square superellipse's corner, its bays only ever draw the shore in).
+ */
+export const mereReach = (m: Mere): number => Math.max(m.along, m.across) * Math.pow(2, 0.5 - 1 / m.power);
+
+/**
+ * How far a point (θ, s) lies from a lake's shore (m, negative in the water), measured along the line from the lake's
+ * middle through it (exact there, and never more than the distance to the nearest shore for these shapes); `radius`
+ * unrolls θ. At the middle itself, minus its half width.
+ */
+export function mereEdge(m: Mere, radius: number, theta: number, s: number): number {
+  const a = theta - m.theta, du = (a - TURN * Math.round(a / TURN)) * radius, dv = s - m.s;
+  const x = dv * m.cos + du * m.sin, y = du * m.cos - dv * m.sin, r = Math.hypot(x, y);
+  const qx = Math.abs(x) / m.along, qy = Math.abs(y) / m.across, p = m.power;
+  const rho = p === 2 ? Math.hypot(qx, qy) : Math.pow(Math.pow(qx, p) + Math.pow(qy, p), 1 / p);
+  if (rho < 1e-9) return -m.across;
+  // The bays: the shore drawn in by up to `bays` of the way to the middle, by the lobes round it (each harmonic's
+  // cosine and sine from the last's, round the angle of the point on the shape's unit circle).
+  let f = 1;
+  if (m.wild > 0) {
+    const q = Math.hypot(qx, qy), c1 = x / m.along / q, s1 = y / m.across / q;
+    let ck = c1 * c1 - s1 * s1, sk = 2 * c1 * s1, wave = 0;
+    for (let k = 0; k < m.lobes.length; k += 2) {
+      wave += m.lobes[k] * ck - m.lobes[k + 1] * sk;
+      const nc = ck * c1 - sk * s1;
+      sk = sk * c1 + ck * s1; ck = nc;
+    }
+    f = 1 - m.wild * MERE.bays * (0.5 + (0.5 * wave) / m.lobeSum);
+  }
+  return r * (1 - f / rho);
+}
+
+/** How far into a lake a point lies, 0 at its shore … 1 well out (where it is as deep as it gets, by `MERE.shelf`). */
+export const mereDeep = (m: Mere, edge: number): number => {
+  const shelf = MERE.shelf[1] + (MERE.shelf[0] - MERE.shelf[1]) * m.wild;
+  return Math.min(1, Math.max(0, -edge / (m.across * shelf)));
+};
+
+/** The Sunwalk's line runs along the main valley's side, this share of the way out to the ridge. */
+export const SUNWALK_SIDE = 0.25;
+
+/**
+ * How far in from each end of the floor the land ramps from the endcap's slope onto the floor proper (m): the terrain's
+ * hills and landforms grow in over it (gen/terrain.ts), and the lakes keep beyond it.
+ */
+export const floorRamp = (h: Habitat): number => {
+  const floor = h.profile.floorEnd - h.profile.floorStart;
+  return Math.min(floor * 0.05, Math.max(h.params.relief.hills * 40, 1) * 0.5);
+};
+
 export type { FaceKind } from '../blueprint';
 
 export interface Face {
@@ -231,6 +331,12 @@ export interface Landform {
    * toward the lake, a Ring's `step` at each (cut sharply at its line, where a river falls through the gorge).
    */
   roomAt(theta: number, s: number): number;
+  /** The lakes on the floor besides the ring lake: the great lake first, then the smaller ones (`Mere`). */
+  readonly meres: readonly Mere[];
+  /** The lake on the floor whose shore lies nearest a point, if within `reach` m of it (negative: in the water). */
+  mereAt(theta: number, s: number, reach?: number): MereHit | null;
+  /** Whether a point lies in water standing on the floor (the ring lake or a lake on it), or within `margin` m of its shore. */
+  inWater(theta: number, s: number, margin?: number): boolean;
 }
 
 export interface Plan extends Landform {
@@ -445,11 +551,142 @@ export function makeLandform(h: Habitat): Landform {
   const { grounds, ringLine, landformAt, roomAt } = groundsOf(h, { lake, reserveEnd, valleys: N, rivers, valleyAt, ridgeAt, routeOf });
   // The lake lies in the lowest room, every Ring's step below the floor's ends: its water as far down.
   const stepped = lake ? { ...lake, level: lake.level + roomAt(0, lake.s) } : null;
+  const meres = meresOf(h, { lake, reserveEnd, valleys: N, rivers, valleyAt, ridgeAt, routeOf, careAt, grounds, ringLine, landformAt, roomAt });
+  /** The most any lake reaches from its middle, its shore included: a point further than that from every middle is dry. */
+  const reaches = meres.map((m) => mereReach(m) + mereShore(m));
+  const mereAt = (theta: number, s: number, reach = 0): MereHit | null => {
+    let best: MereHit | null = null;
+    for (let i = 0; i < meres.length; i++) {
+      const m = meres[i];
+      if (Math.abs(s - m.s) > reaches[i] + reach || Math.abs(angleDiff(m.theta, theta)) * R > reaches[i] + reach) continue;
+      const edge = mereEdge(m, R, theta, s);
+      if (edge <= reach && (!best || edge < best.edge)) best = { mere: m, edge };
+    }
+    return best;
+  };
+  const inWater = (theta: number, s: number, margin = 0): boolean => {
+    if (fromLake(stepped, s) < margin) return true;
+    for (let i = 0; i < meres.length; i++) {
+      const m = meres[i], far = reaches[i] + margin;
+      if (Math.abs(s - m.s) < far && Math.abs(angleDiff(m.theta, theta)) * R < far && mereEdge(m, R, theta, s) < margin) return true;
+    }
+    return false;
+  };
 
   return {
     habitat: h, lake: stepped, reserveEnd, valleys: N, faces, mountain, rivers, phase, stairHalfWidth: R * 0.02,
-    careAt, gravityAt, bandAt, valleyAt, acrossAt, ridgeAt, faceAt, routeOf, endcapAt, grounds, ringLine, landformAt, roomAt,
+    careAt, gravityAt, bandAt, valleyAt, acrossAt, ridgeAt, faceAt, routeOf, endcapAt, grounds, ringLine, landformAt, roomAt, meres, mereAt, inWater,
   };
+}
+
+/** What the lakes are placed by: the parts of the landform made before them (`lake` before its room's step). */
+type MereBase = GroundBase & Pick<Landform, 'careAt' | 'grounds' | 'ringLine' | 'landformAt' | 'roomAt'>;
+
+/**
+ * The habitat mind's lakes on the floor (`HabitatParams.relief.lakes`). The great lake lies where the great river
+ * leaves the Mountain's foot: down the main valley from the end of the ramp onto the floor, as long as the room before
+ * the first Ring's long slope (or the ring lake) allows, as wide as fits between the valley's far side and the Sunwalk,
+ * so the river runs through it and the Sunwalk along its shore. The smaller ones lie in the rooms between the Rings,
+ * a room each where they can, in the lowest ground thrown (down the valleys' sides), clear of the landforms, the rivers,
+ * the Sunwalk, the ring lake, each other and the port end (the Gate's foot and the founders' grove). Each lies level in
+ * its room (`roomAt`: where the rivers rest too, so a river through a lake runs in at its level and out again). Pure.
+ */
+function meresOf(h: Habitat, base: MereBase): Mere[] {
+  const spec = h.params.relief.lakes, R = h.radius, { floorStart, floorEnd } = h.profile, floor = floorEnd - floorStart;
+  if (!spec) return [];
+  const { lake, valleys, rivers, valleyAt, ridgeAt, routeOf, careAt, grounds, ringLine, landformAt, roomAt } = base;
+  const gap = TURN / valleys, ramp = floorRamp(h), widths = h.params.plan.pathWidth;
+  const riverWidth = h.params.relief.rivers?.width ?? 0;
+  // The rivers' water rests no lower than its room's level less this (gen/rivers.ts): so does a lake's.
+  const sink = lake ? lake.level : -1;
+  const rng = new Rng(deriveSeed(h.seed, 'plan', 'meres'));
+  const out: Mere[] = [];
+  const lobes = (): Pick<Mere, 'lobes' | 'lobeSum'> => {
+    const l = new Float64Array(MERE.harmonics * 2);
+    let sum = 0;
+    for (let k = 0; k < MERE.harmonics; k++) {
+      const amp = rng.range(0.3, 1) / (k + 1), phase = rng.range(0, TURN);
+      l[k * 2] = amp * Math.cos(phase); l[k * 2 + 1] = amp * Math.sin(phase); sum += amp;
+    }
+    return { lobes: l, lobeSum: sum };
+  };
+  const wildOf = (s: number): number => 1 - smoothstep(0.25, 0.7, careAt(s));
+  const walkTheta = (s: number): number => valleyAt(0, s) + (SUNWALK_SIDE * gap) / 2;
+  const shapedMere = (kind: Mere['kind'], theta: number, s: number, along: number, across: number, heading: number): Mere => {
+    const wild = wildOf(s);
+    return {
+      id: out.length, kind, theta: wrap(theta), s, along, across, heading, depth: spec.depth * across * 2, level: sink + roomAt(theta, s), wild,
+      cos: Math.cos(heading), sin: Math.sin(heading), power: MERE.round + (MERE.square - MERE.round) * (1 - wild), ...lobes(),
+    };
+  };
+  /** Whether a lake's footprint and its shore stay off every landform (the Rings' slopes, the Heights). */
+  const offForms = (m: Mere): boolean => {
+    if (landformAt(m.theta, m.s)) return false;
+    const c = m.cos, sn = m.sin, shore = mereShore(m);
+    for (let q = 0; q < 24; q++) {
+      const a = (q / 24) * TURN, x = Math.cos(a) * m.along, y = Math.sin(a) * m.across;
+      // On the line out from its middle through its shore, a shore's width beyond the water.
+      const k = 1 + shore / Math.max(1, Math.hypot(x, y));
+      if (landformAt(m.theta + ((x * sn + y * c) * k) / R, m.s + (x * c - y * sn) * k)) return false;
+    }
+    return true;
+  };
+
+  if (spec.great) {
+    // From the end of the ramp onto the floor to the first Ring's long slope, or the ring lake's shore.
+    const first = grounds.filter((g) => g.kind === 'ring').sort((a, b) => a.s - b.s)[0];
+    const lo = floorStart + ramp, hi = Math.min(first ? first.s - first.radius : floorEnd - ramp, lake ? lake.s - lake.halfWidth - shoreOf(lake) : Infinity);
+    const swing = rivers.length ? riverWidth * (rivers[0].meander + 2) : 0;
+    // Shrunk until it fits clear of every landform (a Height by the valley), down to two fifths of what was asked.
+    for (let k = 1; k > 0.35; k -= 0.1) {
+      const want = shapedMere('great', 0, 0, (spec.great.length * R * k) / 2, (spec.great.width * R * k) / 2, 0), shore = mereShore(want);
+      const along = Math.min(want.along, (hi - lo) / 2 - shore);
+      if (along < want.along * 0.4) break;
+      const s = lo + shore + along, line = valleyAt(0, s);
+      // Across the main valley: over the great river's line (meanders and all), its far side out toward the next
+      // ridge, its near side a few of the Sunwalk's widths off the walk's nearest point along it.
+      let walk = Infinity;
+      for (let i = 0; i <= 16; i++) walk = Math.min(walk, (walkTheta(s - along + (i / 8) * along) - line) * R);
+      const top = walk - widths.sunwalk * 3, across = want.across, mid = Math.min(top - across, 0);
+      if (!(mid + across > swing && mid - across < -swing)) break;
+      const m = shapedMere('great', line + mid / R, s, along, across, 0);
+      if (offForms(m)) { out.push(m); break; }
+    }
+  }
+
+  // The smaller lakes: thrown over the floor between the ramp and the port end's Gate foot and grove, each the lowest of
+  // its throws that fit, in a room no other lake has where one is left.
+  const rings = grounds.filter((g) => g.kind === 'ring');
+  const roomOf = (theta: number, s: number): number => rings.reduce((n, g) => n + (s > ringLine(g, theta) ? 1 : 0), 0);
+  const portEnd = floorEnd - floor * 0.12, size = spec.size * R;
+  for (let n = 0; n < spec.count; n++) {
+    let best: { m: Mere; score: number } | null = null;
+    for (let tries = 0; tries < 48; tries++) {
+      const d = size * rng.range(0.7, 1.35), aspect = rng.range(1, 1.8), heading = rng.range(0, Math.PI);
+      const along = (d / 2) * Math.sqrt(aspect), across = d / 2 / Math.sqrt(aspect);
+      const s = rng.range(floorStart, floorEnd), theta = rng.range(0, TURN);
+      const m = shapedMere('mere', theta, s, along, across, heading), reach = mereReach(m) + mereShore(m);
+      if (s - reach < floorStart + ramp || s + reach > portEnd) continue;
+      if (lake && fromLake(lake, s) < reach + shoreOf(lake)) continue;
+      if (out.some((o) => Math.hypot(wrap(o.theta - theta) * R, o.s - s) < reach + mereReach(o) + mereShore(o))) continue;
+      let clear = true;
+      for (const f of [-1, -0.5, 0, 0.5, 1]) {
+        const at = s + f * mereReach(m);
+        if (Math.abs(wrap(theta - walkTheta(at))) * R < reach + widths.sunwalk * 3) { clear = false; break; }
+        for (const r of rivers) {
+          if (lake && (r.from === 'wild') !== (at < lake.s)) continue;
+          if (Math.abs(wrap(theta - routeOf(r, at))) * R < reach + riverWidth * (r.meander + 3)) { clear = false; break; }
+        }
+        if (!clear) break;
+      }
+      if (!clear || !offForms(m)) continue;
+      // Low ground first (down a valley's side, not up on its ridge), and a room of its own.
+      const room = roomOf(theta, s), score = ridgeAt(theta, s) + (out.some((o) => o.kind === 'mere' && roomOf(o.theta, o.s) === room) ? 1 : 0);
+      if (!best || score < best.score) best = { m, score };
+    }
+    if (best) { best.m.id = out.length; out.push(best.m); }
+  }
+  return out;
 }
 
 /** What the landforms are placed by: the parts of the landform made before them. */
@@ -615,7 +852,7 @@ export function makePlan(h: Habitat): Plan {
   const form = landformOf(h);
   const { profile, params } = h, R = h.radius, spec = params.plan;
   const { floorStart, floorEnd } = profile, floor = floorEnd - floorStart;
-  const { lake, reserveEnd, faces, rivers, phase, careAt, valleyAt, acrossAt, routeOf, endcapAt, landformAt } = form;
+  const { lake, reserveEnd, faces, rivers, phase, careAt, valleyAt, acrossAt, routeOf, endcapAt, landformAt, meres, mereAt } = form;
   const N = form.valleys, gap = TURN / N;
   const riverWidth = params.relief.rivers?.width ?? 0;
 
@@ -639,6 +876,15 @@ export function makePlan(h: Habitat): Plan {
       districts.push({ id: districts.length, theta: wrap(theta), s, style: 'let-go', care: careAt(s), neighbours: [], entrances: [] });
     }
   }
+  // A seed thrown into a lake on the floor is moved out onto its shore, a shore's width beyond the water: the district's
+  // commons lie by the lake, not in it.
+  for (const d of districts) {
+    const hit = mereAt(d.theta, d.s);
+    if (!hit) continue;
+    const m = hit.mere, du = wrap(d.theta - m.theta) * R, dv = d.s - m.s, r = Math.hypot(du, dv) || 1, out = -hit.edge + mereShore(m) * 1.5;
+    d.theta = wrap(d.theta + ((du || 1) / r) * out / R);
+    d.s += (dv / r) * out;
+  }
   const cell = (c: number, r: number): District => districts[r * columns + (((c % columns) + columns) % columns)];
   const dist = (t0: number, s0: number, t1: number, s1: number): number => Math.hypot(wrap(t1 - t0) * R, s1 - s0);
   const colWidth = TURN / columns;
@@ -650,7 +896,7 @@ export function makePlan(h: Habitat): Plan {
   const nearby = (theta: number, s: number): boolean => {
     near.length = 0; near2.length = 0;
     if (!(s >= reserveEnd && s <= floorEnd) || districts.length === 0) return false;
-    if (fromLake(lake, s) < 0) return false;
+    if (form.inWater(theta, s)) return false;
     const u = Math.cos(theta) * R, v = Math.sin(theta) * R;
     theta += (sway / R) * bend.fbm3(u / bendWidth, v / bendWidth, s / bendWidth, 1);
     s += sway * bend.fbm3(u / bendWidth + 31.7, v / bendWidth, s / bendWidth, 1);
@@ -723,7 +969,7 @@ export function makePlan(h: Habitat): Plan {
   const spacing = spec.entranceSpacing, widths = spec.pathWidth;
   const firstEntrance = reserveEnd + spacing * 0.15, lastEntrance = Math.max(firstEntrance, floorEnd - spacing * 0.15);
   // The Sunwalk's line: along the main valley's side, a quarter of the way out to the ridge.
-  const sunwalkSide = 0.25 * gap / 2;
+  const sunwalkSide = (SUNWALK_SIDE * gap) / 2;
   const walkTheta = (s: number): number => valleyAt(0, s) + sunwalkSide;
 
   // Landmarks.
@@ -768,6 +1014,28 @@ export function makePlan(h: Habitat): Plan {
     return true;
   };
 
+  // The lakes on the floor as the ways see them: a row of discs down each one's long axis, each holding the lake's
+  // width there and a way's width more, together its whole footprint. A way is bent round them as round a work (and
+  // through one costs as much); courts and works keep off them far enough that a way bent round fits between.
+  const mereDiscs: Obstacle[] = [];
+  for (const m of meres) {
+    const n = Math.max(1, Math.ceil((m.along / m.across) * 1.5)), c = m.cos, sn = m.sin, p = m.power;
+    for (let i = 0; i < n; i++) {
+      // (Its widest across the disc's stretch is at the end nearer the middle.)
+      const x = m.along * (-1 + (2 * i + 1) / n), near = Math.max(0, Math.abs(x) - m.along / n) / m.along;
+      const half = m.across * Math.pow(Math.max(0, 1 - near ** p), 1 / p);
+      mereDiscs.push({ theta: wrap(m.theta + (x * sn) / R), s: m.s + x * c, keep: Math.hypot(half, m.along / n) + widths.way * 2, work: true });
+    }
+  }
+  /** Whether something reaching `reach` m from a point keeps clear of every lake's discs, and of a way bent round them. */
+  const offMeres = (theta: number, s: number, reach: number): boolean => {
+    for (const o of mereDiscs) {
+      const keep = o.keep * 1.25 + reach + widths.way * 2;
+      if (Math.abs(o.s - s) < keep && dist(o.theta, o.s, theta, s) < keep) return false;
+    }
+    return true;
+  };
+
   // The signature works (gen/works.ts `SIGNATURE_KINDS`): `landforms.signature` of them, the Spiral, the Wave Field and
   // the Tilt in turn, placed before the entrances (whose courts keep off them) by sightlines: of the throws that fit (on
   // the worked floor, clear of the lake, the Sunwalk, the rivers, the founders' grove, the Heights and the Rings' fronts
@@ -784,7 +1052,7 @@ export function makePlan(h: Habitat): Plan {
     const room = ringsOn.length ? (params.relief.landforms?.ringEvery ?? 1) * R : floor;
     const sigFits = (theta: number, s: number, radius: number): boolean => {
       if (s - radius < firstEntrance || s + radius > lastEntrance) return false;
-      if (fromLake(lake, s) < radius + spacing * 0.2) return false;
+      if (fromLake(lake, s) < radius + spacing * 0.2 || !offMeres(theta, s, radius + spacing * 0.2)) return false;
       if (!offLines(theta, s, radius, walkKeep, WORKS.river, along)) return false;
       if (grove && dist(grove.theta, grove.s, theta, s) < radius + grove.size * 1.2) return false;
       for (const o of works) if (dist(o.theta, o.s, theta, s) < (o.radius + radius) * 1.2) return false;
@@ -839,7 +1107,7 @@ export function makePlan(h: Habitat): Plan {
   };
   // Nor in the Sunwalk's way: its court stands clear of the walk's edge.
   const walkClear = court + COURT.clear * (params.landmarks?.handrail ?? 0) + spec.pathWidth.sunwalk / 2;
-  const fits = (theta: number, s: number): boolean => Math.abs(wrap(theta - walkTheta(s))) * R >= walkClear && onFoot(theta, s) && !onSignature(theta, s);
+  const fits = (theta: number, s: number): boolean => Math.abs(wrap(theta - walkTheta(s))) * R >= walkClear && onFoot(theta, s) && !onSignature(theta, s) && offMeres(theta, s, court + COURT.clear * (params.landmarks?.handrail ?? 0));
   // Entrances filed by a grid a spacing wide (around the axis, along it), so a new one checks only its neighbours.
   const bin = new Map<number, Site[]>(), grid = floorGrid(R, spacing);
   const tooClose = (theta: number, s: number): boolean => {
@@ -855,7 +1123,7 @@ export function makePlan(h: Habitat): Plan {
       // Each throw lands on the middle of a bay below (gen/bays.ts), where the vault reaches the deck and the court's
       // light well can come down through it; the cheap checks first, and each must pass them all where it lands.
       const at = bays.middleNear(k.theta + (erng.range(-0.75, 0.75) * reach) / R, k.s + erng.range(-0.75, 0.75) * reach), theta = wrap(at.theta), s = at.s;
-      if (fromLake(lake, s) < Math.max(spacing * 0.15, shoreOf(lake) + court * 2) || s < firstEntrance || s > lastEntrance) continue;
+      if (fromLake(lake, s) < Math.max(spacing * 0.15, shoreOf(lake) + court * 2) || !offMeres(theta, s, court * 2) || s < firstEntrance || s > lastEntrance) continue;
       if (tooClose(theta, s) || districtAt(theta, s) !== k || nearRiver(theta, s) || !fits(theta, s)) continue;
       const site: Site = { kind: 'entrance', theta, s, size: spacing * 0.025, facing: erng.range(0, TURN), district: k.id };
       k.entrances.push(site);
@@ -909,6 +1177,7 @@ export function makePlan(h: Habitat): Plan {
     for (let dr = -n; dr <= n; dr++) for (let dc = -n; dc <= n; dc++) fileUnder(courtFiles, courtKey(c + dc, r + dr), o);
   };
   for (const e of placed) fileObstacle({ theta: e.theta, s: e.s, keep: keepOff(e), work: false });
+  for (const o of mereDiscs) fileObstacle(o);
   /** The obstacles near a point, but the courts at `a` and `b`. */
   const obstaclesNear = (theta: number, s: number, a?: { theta: number; s: number }, b?: { theta: number; s: number }): Obstacle[] => {
     const out: Obstacle[] = [], column = columnOf(theta), row = Math.floor(s / courtCell);
@@ -930,7 +1199,7 @@ export function makePlan(h: Habitat): Plan {
   /** Whether a work fits at a point: in district `k` (or the reserve, for null), clear of everything above. */
   const workFits = (k: District | null, theta: number, s: number, radius: number): boolean => {
     if (k ? s - radius < reserveEnd || s + radius > lastEntrance : s - radius < floorStart + spacing * 0.15 || s + radius > reserveEnd) return false;
-    if (fromLake(lake, s) < radius + spacing * 0.2) return false;
+    if (fromLake(lake, s) < radius + spacing * 0.2 || !offMeres(theta, s, radius * WORKS.apart)) return false;
     if (k && !inside(k, theta, s, radius * 0.7)) return false;
     if (!offLines(theta, s, radius, widths.sunwalk * WORKS.walk, WORKS.river, [-1, 0, 1])) return false;
     if (grove && dist(grove.theta, grove.s, theta, s) < radius + grove.size * 1.2) return false;

@@ -115,6 +115,13 @@ export interface Relief {
    * with fewer Rings has taller steps), so every river falls through each Ring's gorge. Absent: level rooms.
    */
   landforms?: { ring: number; ringEvery: number; height: number; heights: number; works?: number; wild?: number; signature?: number; fall?: number } | null;
+  /**
+   * The lakes on the floor besides the ring lake (gen/plan.ts, `meres`; Arnd 2026-10-23): the great lake where the great
+   * river leaves the Mountain's foot, `great.length` radii along the axis and `great.width` radii around it (null: none),
+   * and `count` smaller lakes in the rooms between the Rings, `size` radii across on average. Each is `depth` of its
+   * width deep. Absent or null: none.
+   */
+  lakes?: { great: { length: number; width: number } | null; count: number; size: number; depth: number } | null;
 }
 
 export type AxisOrientation = 'side-on' | 'end-on';

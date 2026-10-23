@@ -1,8 +1,10 @@
 /**
- * The water over a terrain tile: the ring lake's surface and the rivers' ribbons (`rivers.ts`), in one mesh, so a tile
- * draws its water once. Every point carries how the water moves there (`flow`: across the river, how far downstream,
+ * The water over a terrain tile: the ring lake's surface, the lakes' on the floor (gen/plan.ts, `meres`) and the rivers'
+ * ribbons (`rivers.ts`), in one mesh, so a tile draws its water once. Every point carries how the water moves there (`flow`: across the river, how far downstream,
  * how fast, how steep) and which way it runs (`dir`), for the water's ripples, white water and glints (`WATER` in
- * render/materials.ts). The lake lies still.
+ * render/materials.ts). The lakes lie still. A lake's grid follows its shore: the points of a cell its water reaches
+ * that lie past the shore are drawn in onto it, along the line from the lake's middle, so its outline is smooth at any
+ * level; a river through a lake runs under it, and its ribbon stops at the shores.
  *
  * A river's ribbon in a tile is its middle line clipped to the tile's (θ, s) rectangle, sampled every power-of-two
  * number of the river's own samples (so the levels nest), about twice per cell along the river. Neighbouring tiles cut
@@ -12,7 +14,8 @@
  */
 import { groundNormal, toWorld, wrapAngle, type Vec3 } from '../blueprint';
 import type { Terrain } from './terrain';
-import { riverPoint as sample, type River, type RiverPoint as Along } from './rivers';
+import { mereEdge, mereReach, type Mere } from './plan';
+import { riverPoint as sample, sampleS, type River, type RiverPoint as Along } from './rivers';
 import { v3cross, v3dot, v3norm, v3sub } from '@futuremagic/core';
 
 export interface WaterMesh {
@@ -80,6 +83,7 @@ class Builder {
 export function buildWater(terrain: Terrain, tile: WaterTile, origin: Vec3): WaterMesh | null {
   const out = new Builder();
   lakeOver(terrain, tile, origin, out);
+  for (const m of terrain.meres) mereOver(terrain, m, tile, origin, out);
   for (const river of terrain.rivers) riverOver(terrain, river, tile, origin, out);
   return out.done();
 }
@@ -102,12 +106,93 @@ function lakeOver(terrain: Terrain, b: WaterTile, origin: Vec3, out: Builder): v
   for (let j = 0; j < N; j++) out.strip(first + j * row, first + (j + 1) * row, N);
 }
 
+/**
+ * A lake's surface over a tile's rectangle: a grid at the water's level over the part of its footprint in the tile, each
+ * point past the shore of a cell the water reaches drawn in onto the shore; cells wholly ashore left out.
+ */
+function mereOver(terrain: Terrain, m: Mere, b: WaterTile, origin: Vec3, out: Builder): void {
+  const { profile } = terrain.habitat, R = terrain.habitat.radius, reach = mereReach(m);
+  const s0 = Math.max(b.s0, m.s - reach), s1 = Math.min(b.s1, m.s + reach);
+  if (s1 <= s0) return;
+  // Its middle round the axis brought next to the tile's (within half a turn of its middle).
+  const mid = (b.theta0 + b.theta1) / 2, theta = mid + wrapAngle(m.theta - mid + Math.PI) - Math.PI;
+  const t0 = Math.max(b.theta0, theta - reach / R), t1 = Math.min(b.theta1, theta + reach / R);
+  if (t1 <= t0) return;
+  const N = LAKE_CELLS, row = N + 1;
+  const edge = new Float64Array(row * row), at = new Float64Array(row * row * 2);
+  for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) {
+    const k = j * row + i, th = t0 + ((t1 - t0) * i) / N, s = s0 + ((s1 - s0) * j) / N, e = mereEdge(m, R, th, s);
+    edge[k] = e;
+    // Past the shore: in along the line from its middle onto the shore.
+    const du = (th - theta) * R, dv = s - m.s, r = Math.hypot(du, dv), f = e > 0 && r > 0 ? Math.max(0, 1 - e / r) : 1;
+    at[k * 2] = theta + (du * f) / R; at[k * 2 + 1] = m.s + dv * f;
+  }
+  // Only the points of the cells drawn, each once.
+  const still = [0, 0, 0, 0], made = new Int32Array(row * row).fill(-1);
+  const pointOf = (k: number): number => {
+    if (made[k] < 0) {
+      made[k] = out.points;
+      out.point(toWorld(profile, { theta: at[k * 2], s: at[k * 2 + 1], h: m.level }), origin, groundNormal(profile, at[k * 2], at[k * 2 + 1]), still, [0, 0, 1, 0]);
+    }
+    return made[k];
+  };
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const k = j * row + i;
+    if (Math.min(edge[k], edge[k + 1], edge[k + row], edge[k + row + 1]) >= 0) continue;
+    const p = pointOf(k), q = pointOf(k + 1), r = pointOf(k + row), t = pointOf(k + row + 1);
+    out.index.push(p, r, q, q, r, t);
+  }
+}
+
+/**
+ * Where a river runs through the lakes on the floor: the stretches of its s (from, to, …) where its middle line is in a
+ * lake's water, each end found to a hundredth of a sample apart; kept per river.
+ */
+const wetRuns = new WeakMap<River, Float64Array>();
+function wetOf(terrain: Terrain, r: River): Float64Array {
+  let runs = wetRuns.get(r);
+  if (runs) return runs;
+  const R = terrain.habitat.radius, list: number[] = [];
+  const wet = (s: number): boolean => {
+    const theta = sample(r, s).theta;
+    return terrain.meres.some((m) => Math.abs(s - m.s) < mereReach(m) && mereEdge(m, R, theta, s) < 0);
+  };
+  const cut = (a: number, b: number): number => {
+    const from = wet(a);
+    for (let k = 0; k < 12; k++) { const c = (a + b) / 2; if (wet(c) === from) a = c; else b = c; }
+    return (a + b) / 2;
+  };
+  if (terrain.meres.length) {
+    let was = wet(r.s0), start = r.s0;
+    for (let i = 1; i < r.count; i++) {
+      const s = sampleS(r, i), now = wet(s);
+      if (now === was) continue;
+      const c = cut(s - r.step, s);
+      if (now) start = c; else list.push(start, c);
+      was = now;
+    }
+    if (was) list.push(start, r.s0 + r.step * (r.count - 1));
+  }
+  runs = Float64Array.from(list);
+  wetRuns.set(r, runs);
+  return runs;
+}
+
 /** A river's ribbon over a tile: its middle line clipped to the tile, each run of it a strip of cross-sections. */
 function riverOver(terrain: Terrain, r: River, b: WaterTile, origin: Vec3, out: Builder): void {
   const lake = terrain.lake;
-  // From the spring to the lake's edge (the lake's own grid takes over there).
+  // From the spring to the lake's edge (the lake's own grid takes over there), but through the lakes on the floor.
   let lo = r.s0, hi = r.s0 + r.step * (r.count - 1);
   if (lake) { if (r.from === 'wild') hi = Math.min(hi, lake.s - lake.halfWidth); else lo = Math.max(lo, lake.s + lake.halfWidth); }
+  const wet = wetOf(terrain, r);
+  for (let k = 0; k <= wet.length; k += 2) {
+    const a = k === 0 ? lo : Math.max(lo, wet[k - 1]), c = k < wet.length ? Math.min(hi, wet[k]) : hi;
+    if (c > a) ribbonOver(terrain, r, b, origin, out, a, c);
+  }
+}
+
+/** A river's ribbon over a tile, between lo and hi along s. */
+function ribbonOver(terrain: Terrain, r: River, b: WaterTile, origin: Vec3, out: Builder, lo: number, hi: number): void {
   const sA = Math.max(lo, b.s0), sB = Math.min(hi, b.s1);
   if (!(sB > sA)) return;
   // Every k-th sample (k a power of two), about two per cell; plus the cuts at the tile's edges.

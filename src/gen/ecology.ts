@@ -100,7 +100,9 @@ export function makeEcology(terrain: Terrain): Ecology {
   const wander = new Noise(deriveSeed(h.seed, 'ecology', 'moisture'));
   const tint = new Noise(deriveSeed(h.seed, 'ecology', 'tint'));
   const patterns = biomes.map((b) => new Noise(deriveSeed(h.seed, 'ecology', b.name)));
-  const lake = terrain.lake, hills = Math.max(h.params.relief.hills, 1e-6);
+  const lake = terrain.lake, meres = terrain.meres, hills = Math.max(h.params.relief.hills, 1e-6);
+  // How far out the lakes on the floor wet their shores at most (four of the widest's reach below).
+  const mereWets = (Math.max(0, ...meres.map((m) => m.across)) * 0.6 + patch * 0.05) * 4;
   // The lake wets the land a few lake widths out, more in a large habitat.
   const reach = lake ? lake.halfWidth * 2 + patch * 0.3 : 1;
   // A river wets its banks a few of its widths out (a strip of reeds and willows), and its valley a little.
@@ -148,6 +150,11 @@ export function makeEcology(terrain: Terrain): Ecology {
     const [x, y, z] = toWorld(profile, { theta, s, h: 0 });
     let m = climate.wetness + (district ? STYLE_LAND[district.style].wet : 0) + 0.3 * wander.fbm3(x / patch, y / patch, z / patch, 3);
     if (lake) m += 0.55 * Math.exp(-Math.max(0, fromLake(lake, s)) / reach);
+    // A lake on the floor wets its shores a little way out, as far as its own width or so.
+    if (meres.length) {
+      const by = plan.mereAt(theta, s, mereWets);
+      if (by) m += 0.45 * Math.exp(-Math.max(0, by.edge) / (by.mere.across * 0.6 + patch * 0.05));
+    }
     const river = rivers.length ? riverAt(rivers, theta, s, banks * 4) : null;
     if (river) m += 0.5 * Math.exp(-Math.max(0, Math.abs(river.across) - river.halfWidth) / banks);
     // Water gathers in hollows and drains off hilltops; the endcaps dry out as they climb.
@@ -293,6 +300,18 @@ export function makeEcology(terrain: Terrain): Ecology {
       c0 += (sh[0] - c0) * sand; c1 += (sh[1] - c1) * sand; c2 += (sh[2] - c2) * sand;
       c0 += (bd[0] - c0) * bed; c1 += (bd[1] - c1) * bed; c2 += (bd[2] - c2) * bed;
     }
+    // By a lake on the floor: sand at a wild one's waterline, a made basin's rim laid in gravel and stone, its bed below.
+    const by = meres.length ? plan.mereAt(theta, s, Math.max(4, cell)) : null;
+    if (by) {
+      const below = by.mere.level - height, rim = smoothstep(-1.5, 0, below) * (1 - smoothstep(0.5, 3, below)), wild = by.mere.wild;
+      sand = Math.max(sand, rim * wild);
+      gravel = Math.max(gravel, rim * (1 - wild));
+      bed = Math.max(bed, smoothstep(0.5, 3, below));
+      const sh = climate.shore, bd = climate.bed;
+      const g0 = sh[0] * wild + gravelColor[0] * (1 - wild), g1 = sh[1] * wild + gravelColor[1] * (1 - wild), g2 = sh[2] * wild + gravelColor[2] * (1 - wild);
+      c0 += (g0 - c0) * rim; c1 += (g1 - c1) * rim; c2 += (g2 - c2) * rim;
+      c0 += (bd[0] - c0) * bed; c1 += (bd[1] - c1) * bed; c2 += (bd[2] - c2) * bed;
+    }
     let rock = smoothstep(0.45, 0.75, slope + 0.15 * tint.fbm3(x / patch, y / patch, z / patch, 2)), r = climate.rock;
     // The Gate's faces read by what they are made of (gen/plan.ts, `faceAt`): the Stair face dressed stone, paler than
     // the rock it was cut from; the Vine face green over its walls; the Water face dark wet rock with pools on its treads.
@@ -316,7 +335,7 @@ export function makeEcology(terrain: Terrain): Ecology {
     // A path over it all, as much of the patch as it covers; not under water (the Sunwalk's bridges cross the lake), nor
     // on a court's floor, where the ways arrive.
     const way = net.pieces ? net.pathAt(theta, s, Math.max(cell / 2, 0.1)) : null;
-    const path = way && !(lake && height < lake.level && fromLake(lake, s) < 0) && !(court && court.distance < court.court.radius) ? pathCover(way, cell) : 0;
+    const path = way && !(lake && height < lake.level && fromLake(lake, s) < 0) && !(by && by.edge < 0) && !(court && court.distance < court.court.radius) ? pathCover(way, cell) : 0;
     if (path > 0 && way) {
       // A mown grass way is the meadow, a little paler and drier; the others their material.
       const c: Rgb = way.kind === 'sunwalk' ? sunwalk : laid[way.layer] ?? [c0 * 1.08, c1 * 1.06, c2 * 0.9];

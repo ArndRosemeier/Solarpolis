@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MATRIX, derive, validate, withParams, REFERENCE } from '../src/blueprint';
-import { fromLake, planOf } from '../src/gen/plan';
+import { planOf } from '../src/gen/plan';
 import { pathsOf } from '../src/gen/paths';
 import { makeUnder, sharesOf, underOf, type Under } from '../src/gen/under';
 import { terrainOf } from './worlds';
@@ -90,11 +90,12 @@ for (const { name } of MATRIX) {
 
   test(`under (${name}): galleries under the ways, cisterns between the hamlets, the works under the reserve, the lake's own`, () => {
     const { under, h, plan, u } = of();
-    const paths = pathsOf(h), shares = sharesOf(under, 7), lake = plan.lake;
+    const paths = pathsOf(h), shares = sharesOf(under, 7);
     for (let j = 0; j < under.along; j += 11) for (let i = 0; i < under.around; i += 13) {
       const use = under.useAt(i, j), { theta, s } = under.centreOf(i, j);
-      if (s < plan.reserveEnd && fromLake(lake, s) >= 0) assert.equal(use, 'works');
-      if (fromLake(lake, s) < 0) assert.equal(use, 'lake');
+      const wet = plan.inWater(theta, s);
+      if (s < plan.reserveEnd && !wet) assert.equal(use, 'works');
+      if (wet) assert.equal(use, 'lake');
       if (use === 'gallery') {
         const hit = paths.pathAt(theta, s, u.bay / 2);
         assert.ok(hit && hit.kind !== 'trail' && hit.distance <= u.bay / 2 + 1e-9, 'a gallery runs under a way or the Sunwalk');

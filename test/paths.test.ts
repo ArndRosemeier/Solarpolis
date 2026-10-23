@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { angleDiff } from '@futuremagic/core';
 import { FLOOR_LAYERS, MATRIX, STYLE_LAND, derive } from '../src/blueprint';
-import { GROUND, planOf, type PlanPath } from '../src/gen/plan';
+import { GROUND, mereReach, planOf, type PlanPath } from '../src/gen/plan';
 import { CROWN, pathCover, pathsOf } from '../src/gen/paths';
 import { cellsNear, plantCell, plantsOf, PLANT_STRIDE } from '../src/gen/scatter';
 import { fromWorld, toWorld } from '../src/blueprint';
@@ -38,11 +38,23 @@ for (const { name, params } of MATRIX) {
         const u = angleDiff(q[0], w.theta) * R, v = w.s - q[1], t = Math.min(1, Math.max(0, (u * du + v * dv) / (length * length || 1)));
         if (Math.hypot(u - du * t, v - dv * t) < w.radius * 1.3 + widths.way * 3) round = Math.max(round, w.radius * 1.3 + widths.way * 3);
       }
+      // And one bent round a lake on the floor (gen/plan.ts, `meres`), as far as the lake reaches, and a little more.
+      for (const m of plan.meres) {
+        const u = angleDiff(q[0], m.theta) * R, v = m.s - q[1], t = Math.min(1, Math.max(0, (u * du + v * dv) / (length * length || 1))), keep = mereReach(m) * 1.35 + widths.way * 6;
+        if (Math.hypot(u - du * t, v - dv * t) < keep) round = Math.max(round, keep);
+      }
       // And one kept off a Ring's crest and steep front (gen/plan.ts) as far as those reach from its line.
       for (const g of plan.grounds) {
         if (g.kind !== 'ring') continue;
+        // (The Ring's line wanders round the axis, and the way kept off it with it: by as much as it wanders over the way.)
         const keep = g.height * (GROUND.crest / 2 + GROUND.face) + widths.way;
-        for (let k = 0; k <= 20; k++) if (Math.abs(q[1] + (dv * k) / 20 - plan.ringLine(g, q[0] + (du * k) / 20 / R)) < keep * 1.05) round = Math.max(round, keep * 1.05);
+        let near = false, lo = Infinity, hi = -Infinity;
+        for (let k = 0; k <= 20; k++) {
+          const line = plan.ringLine(g, q[0] + (du * k) / 20 / R);
+          lo = Math.min(lo, line); hi = Math.max(hi, line);
+          if (Math.abs(q[1] + (dv * k) / 20 - line) < keep * 1.05) near = true;
+        }
+        if (near) round = Math.max(round, keep * 1.05 + (hi - lo));
       }
       assert.ok(most <= length * 0.11 + round, `a way swings ${most.toFixed(0)} m off a ${length.toFixed(0)} m line`);
       if (n > 4) { long++; if (most > length * 0.005) swung++; }

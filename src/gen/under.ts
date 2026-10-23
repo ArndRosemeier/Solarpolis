@@ -9,7 +9,7 @@
  *   lane     the lanes left open between them, every `under.lanes` bay lines, crossing at the wellhead;
  *   gallery  the indoor streets between hamlets, under the land's Sunwalk and ways;
  *   cistern  pillared water halls: the water the habitat moves to keep its spin balanced, warmed on its way to the radiators;
- *   lake     under the ring lake: a gallery whose ceiling is the lake's glass bed;
+ *   lake     under the ring lake or a lake on the floor: a gallery whose ceiling is the lake's glass bed;
  *   works    under the reserve: the habitat mind's own (no hamlets there, as there are no entrances);
  *   dim      the rest: open pillar forest, lit low.
  *
@@ -29,7 +29,7 @@ import type { Habitat } from '../blueprint';
 import { kept } from './kept';
 import { baysOf, type Bays } from './bays';
 import { fileUnder, floorGrid } from './floorGrid';
-import { entrancesOf, fromLake, planOf, type Site } from './plan';
+import { entrancesOf, planOf, type Site } from './plan';
 import { pathsOf } from './paths';
 
 const TURN = 2 * Math.PI;
@@ -152,7 +152,7 @@ export function makeUnder(h: Habitat): Under {
   /** A bay's use before the cisterns are laid out. */
   const baseUse = (i: number, j: number): BayUse => {
     const { theta, s } = centreOf(i, j);
-    if (fromLake(lake, s) < 0) return 'lake';
+    if (plan.inWater(theta, s)) return 'lake';
     if (s < plan.reserveEnd) return 'works';
     const near = inHamlet(i, j);
     if (near) {
@@ -175,7 +175,7 @@ export function makeUnder(h: Habitat): Under {
   const blockMiddle = (bi: number, bj: number): { theta: number; s: number } => centreOf(bi * k + (k - 1) / 2, bj * k + (k - 1) / 2);
   const clear = (bi: number, bj: number): boolean => {
     const { theta, s } = blockMiddle(bi, bj);
-    if (bj < 0 || (bj + 1) * k > along || s - halfDiagonal < plan.reserveEnd || fromLake(lake, s) < halfDiagonal) return false;
+    if (bj < 0 || (bj + 1) * k > along || s - halfDiagonal < plan.reserveEnd || plan.inWater(theta, s, halfDiagonal)) return false;
     const near = nearest(theta, s);
     if (near && near.d * bay - halfDiagonal < near.m.edge * (1 + WOBBLE * 1.6) * bay) return false;
     return !isGallery(theta, s, halfDiagonal + bay / 2);
@@ -207,8 +207,8 @@ export function makeUnder(h: Habitat): Under {
     return base === 'dim' && isCistern(i, j) ? 'cistern' : base;
   };
   const hamletOf = (i: number, j: number): Hamlet | null => {
-    const { s } = centreOf(i, j);
-    if (j < 0 || j >= along || fromLake(lake, s) < 0 || s < plan.reserveEnd) return null;
+    const { theta, s } = centreOf(i, j);
+    if (j < 0 || j >= along || plan.inWater(theta, s) || s < plan.reserveEnd) return null;
     return inHamlet(i, j)?.m ?? null;
   };
 
