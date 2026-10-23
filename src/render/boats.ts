@@ -215,14 +215,15 @@ export class BoatView {
    * to its heading, its heel to leeward, its wing set to the wind over it, its foils lifting it. `dt` 0: at once.
    */
   private carry(one: One, t: number, dt: number): void {
-    const h = this.habitat, s = one.state!, spec = BOAT_KINDS[s.boat.kind], since = t - one.asked;
-    const theta = s.theta + (Math.sin(s.heading) * s.speed * since) / h.radius, along = s.s + Math.cos(s.heading) * s.speed * since;
+    const h = this.habitat, s = one.state!, spec = BOAT_KINDS[s.boat.kind], since = t - one.asked, way = (s.astern ? -s.speed : s.speed) * since;
+    const theta = s.theta + (Math.sin(s.heading) * way) / h.radius, along = s.s + Math.cos(s.heading) * way;
     one.at = toWorld(h.profile, { theta, s: along, h: s.level });
     if (away(one.at, one.litAt) > LIGHT_MOVE) { one.horizon = horizonAt(this.terrain, theta, along); one.litAt = one.at; }
-    // The wind over the boat (true less its own way), from where; the wing sets a little off it, to leeward.
-    const au = s.wind.around - Math.sin(s.heading) * s.speed, av = s.wind.along - Math.cos(s.heading) * s.speed;
-    const from = Math.atan2(-au, -av), off = Math.abs(angleDiff(s.heading, from));
-    const wing = -s.tack * Math.max(0, Math.min(SHEETED_OUT, off - ATTACK)), roll = -s.tack * s.heel, lift = s.foiling && spec.foil ? spec.foil.lift : 0;
+    // The wind over the boat (true less its own way), from where; the wing sets a little off it, to leeward, or
+    // feathered into it at its berth and on its drive (free to turn all the way round its mast).
+    const own = s.astern ? -s.speed : s.speed, au = s.wind.around - Math.sin(s.heading) * own, av = s.wind.along - Math.cos(s.heading) * own;
+    const from = Math.atan2(-au, -av), off = Math.abs(angleDiff(s.heading, from)), feathered = !s.sailing || s.motoring;
+    const wing = -s.tack * (feathered ? off : Math.max(0, Math.min(SHEETED_OUT, off - ATTACK))), roll = -s.tack * s.heel, lift = s.foiling && spec.foil ? spec.foil.lift : 0;
     const turn = turnFor(h.profile, along, s.heading);
     if (dt <= 0) { one.turn = turn; one.roll = roll; one.wing = wing; one.lift = lift; return; }
     one.turn = angleDiff(0, one.turn + Math.max(-TURN_RATE * dt, Math.min(TURN_RATE * dt, angleDiff(one.turn, turn))));
@@ -248,7 +249,7 @@ export class BoatView {
     const l = d.levels[level], top = BOAT_KINDS[s.boat.kind].top, share = Math.min(1, s.speed / top);
     writeBoat(l.data, l.count++ * BOAT_STRIDE, {
       at: toView(frame.eye, one.at), turn: one.turn, pitch: -SQUAT * share, roll: one.roll, wing: one.wing, lift: one.lift,
-      livery: one.livery, foam: s.sailing ? Math.min(1, share * 1.6) * (one.lift > 0.3 ? 0.35 : 1) : 0, horizon: one.horizon, phase: one.phase, speed: share,
+      livery: one.livery, foam: s.sailing && !s.astern ? Math.min(1, share * 1.6) * (one.lift > 0.3 ? 0.35 : 1) : 0, horizon: one.horizon, phase: one.phase, speed: share,
     });
   }
 

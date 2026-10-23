@@ -12,11 +12,8 @@ import type { Stage } from '@futuremagic/stage';
 import { toView, type Habitat, type Vec3 } from '../blueprint';
 import { coverOf, rootTiles, tileId, type Grid, type TileKey, type WantedTile } from '../gen/detailTree';
 import { stairGridOf, stairTilesFor } from '../gen/liftStairMesh';
-import { courtSites } from '../gen/courts';
-import { crossingSites } from '../gen/crossings';
-import { hallSites } from '../gen/grownHall';
+import { SITE_PARTS } from '../gen/landmarks';
 import { underGridOf, underTilesFor } from '../gen/underMesh';
-import type { SiteParts } from '../gen/siteTiles';
 import type { Terrain } from '../gen/terrain';
 import { mappedBytes, type MappedArrays, type Place } from '../gen/shapes';
 import type { Mat3 } from '../space';
@@ -165,13 +162,13 @@ export class TiledView {
 export const stairSource = (h: Habitat): TiledSource => ({ name: 'lift stair', part: 'stair', grid: stairGridOf(h), tilesFor: (eye) => stairTilesFor(h, eye) });
 
 /** A kind of thing at sites on the floor (gen/siteTiles.ts) as a source of tiles. */
-const siteSource = (name: string, part: Exclude<TiledPart, 'stair' | 'under'>, parts: SiteParts, t: Terrain): TiledSource => ({ name, part, grid: parts.gridOf(t), tilesFor: (eye) => parts.tilesFor(t, eye) });
+const siteSource = (name: string, part: keyof typeof SITE_PARTS, t: Terrain): TiledSource => ({ name, part, grid: SITE_PARTS[part].gridOf(t), tilesFor: (eye) => SITE_PARTS[part].tilesFor(t, eye) });
 
 /** The entrance courts' tiles. */
-export const courtSource = (t: Terrain): TiledSource => siteSource('entrance courts', 'courts', courtSites, t);
+export const courtSource = (t: Terrain): TiledSource => siteSource('entrance courts', 'courts', t);
 
 /** The river crossings' tiles. */
-export const crossingSource = (t: Terrain): TiledSource => siteSource('river crossings', 'crossings', crossingSites, t);
+export const crossingSource = (t: Terrain): TiledSource => siteSource('river crossings', 'crossings', t);
 
 /** What the Understorey's tiles may hold. */
 const UNDER_BYTES = 64 * 1024 * 1024;
@@ -179,4 +176,7 @@ const UNDER_BYTES = 64 * 1024 * 1024;
 export const underSource = (t: Terrain): TiledSource => ({ name: 'understorey', part: 'under', grid: underGridOf(t.habitat), tilesFor: (eye) => underTilesFor(t, eye), kind: VAULT, inside: true, maxBytes: UNDER_BYTES });
 
 /** The grown halls' tiles (their vaults, screens and furniture; the trees are planted plants). */
-export const hallSource = (t: Terrain): TiledSource => siteSource('grown halls', 'halls', hallSites, t);
+export const hallSource = (t: Terrain): TiledSource => siteSource('grown halls', 'halls', t);
+
+/** The harbours' tiles: landings, piers, pontoons and their piles (gen/harbourBuild.ts). */
+export const harbourSource = (t: Terrain): TiledSource => siteSource('harbours', 'harbours', t);

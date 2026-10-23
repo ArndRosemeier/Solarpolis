@@ -1734,5 +1734,49 @@
   {
     "key": "same name: solarpolis/render/boats.ts#start + solarpolis/render/fliers.ts#start",
     "reason": "The views' shared lifecycle (start, follow each frame, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the boats' view (render/boats.ts) does its own work in each."
+  },
+  {
+    "key": "same name: solarpolis/gen/crossings.ts#at + solarpolis/gen/harbourBuild.ts#at",
+    "reason": "The members of a SiteKind (gen/siteTiles.ts): each kind of thing at sites on the floor (courts, crossings, grown halls, harbours) says its frame, build, at and top under the seam's own names; siteParts does everything else once."
+  },
+  {
+    "key": "same name: solarpolis/gen/crossings.ts#build + solarpolis/gen/harbourBuild.ts#build",
+    "reason": "The members of a SiteKind (gen/siteTiles.ts): each kind of thing at sites on the floor (courts, crossings, grown halls, harbours) says its frame, build, at and top under the seam's own names; siteParts does everything else once."
+  },
+  {
+    "key": "same name: solarpolis/gen/crossings.ts#frame + solarpolis/gen/harbourBuild.ts#frame",
+    "reason": "The members of a SiteKind (gen/siteTiles.ts): each kind of thing at sites on the floor (courts, crossings, grown halls, harbours) says its frame, build, at and top under the seam's own names; siteParts does everything else once."
+  },
+  {
+    "key": "same name: solarpolis/gen/crossings.ts#top + solarpolis/gen/harbourBuild.ts#top",
+    "reason": "The members of a SiteKind (gen/siteTiles.ts): each kind of thing at sites on the floor (courts, crossings, grown halls, harbours) says its frame, build, at and top under the seam's own names; siteParts does everything else once."
+  },
+  {
+    "key": "same name: solarpolis/gen/grownHall.ts#at + solarpolis/gen/harbourBuild.ts#at",
+    "reason": "The members of a SiteKind (gen/siteTiles.ts): each kind of thing at sites on the floor (courts, crossings, grown halls, harbours) says its frame, build, at and top under the seam's own names; siteParts does everything else once."
+  },
+  {
+    "key": "same name: solarpolis/gen/grownHall.ts#build + solarpolis/gen/harbourBuild.ts#build",
+    "reason": "The members of a SiteKind (gen/siteTiles.ts): each kind of thing at sites on the floor (courts, crossings, grown halls, harbours) says its frame, build, at and top under the seam's own names; siteParts does everything else once."
+  },
+  {
+    "key": "same name: solarpolis/gen/grownHall.ts#frame + solarpolis/gen/harbourBuild.ts#frame",
+    "reason": "The members of a SiteKind (gen/siteTiles.ts): each kind of thing at sites on the floor (courts, crossings, grown halls, harbours) says its frame, build, at and top under the seam's own names; siteParts does everything else once."
+  },
+  {
+    "key": "same name: solarpolis/gen/grownHall.ts#top + solarpolis/gen/harbourBuild.ts#top",
+    "reason": "The members of a SiteKind (gen/siteTiles.ts): each kind of thing at sites on the floor (courts, crossings, grown halls, harbours) says its frame, build, at and top under the seam's own names; siteParts does everything else once."
+  },
+  {
+    "key": "same name: solarpolis/gen/harbourBuild.ts#at + solarpolis/gen/terrain.ts#at",
+    "reason": "Different things that share a short name: a SiteKind member (gen/siteTiles.ts) and an unrelated local helper."
+  },
+  {
+    "key": "same name: solarpolis/gen/harbourBuild.ts#at + solarpolis/render/animals.ts#at",
+    "reason": "Different things that share a short name: a SiteKind member (gen/siteTiles.ts) and an unrelated local helper."
+  },
+  {
+    "key": "idiom: [.y0 .y1] in solarpolis/gen/building.ts + solarpolis/gen/hallMesh.ts + solarpolis/gen/harbourBuild.ts",
+    "reason": "Extents along y of unrelated layouts (a building's rooms, a hall's parts, a harbour's pontoon); nothing to share but the names."
   }
 ]

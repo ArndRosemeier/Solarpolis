@@ -19,13 +19,10 @@ import { groundLayer } from '../gen/groundTex';
 import { makeSkin, type Skin } from '../gen/skin';
 import { buildPartTile, detailParts, type DetailPart, type PartTile } from '../gen/hullParts';
 import type { TileKey as DetailKey } from '../gen/detailTree';
-import { buildLandmark, landmarksOf } from '../gen/landmarks';
+import { SITE_PARTS, buildLandmark, landmarksOf } from '../gen/landmarks';
 import type { LandmarkLevel } from '../gen/pavilion';
 import type { MappedArrays } from '../gen/shapes';
 import { buildStairTile, type StairTile } from '../gen/liftStairMesh';
-import { courtSites } from '../gen/courts';
-import { crossingSites } from '../gen/crossings';
-import { hallSites } from '../gen/grownHall';
 import type { SiteTile } from '../gen/siteTiles';
 import { buildUnderTile, type UnderTile } from '../gen/underMesh';
 import { specksAt, type Specks } from '../sim/specks';
@@ -43,7 +40,7 @@ import type { VoyageRequest } from './voyage';
 import type { VoyagePlan } from '../space/voyage';
 
 /** The built things that stream in tiles. */
-export type TiledPart = 'stair' | 'courts' | 'crossings' | 'halls' | 'under';
+export type TiledPart = 'stair' | 'under' | keyof typeof SITE_PARTS;
 
 export type GenRequest =
   | VoyageRequest
@@ -222,7 +219,7 @@ self.onmessage = async (e: MessageEvent<GenRequest>) => {
     }
     if (req.kind === 'tiled') {
       const p = req.part;
-      post({ kind: 'tiled', part: p, built: p === 'stair' ? buildStairTile(terrain.habitat, req.key) : p === 'under' ? buildUnderTile(terrain, req.key) : { courts: courtSites, crossings: crossingSites, halls: hallSites }[p].buildTile(terrain, req.key) });
+      post({ kind: 'tiled', part: p, built: p === 'stair' ? buildStairTile(terrain.habitat, req.key) : p === 'under' ? buildUnderTile(terrain, req.key) : SITE_PARTS[p].buildTile(terrain, req.key) });
       return;
     }
     if (req.kind === 'squirrels') {
