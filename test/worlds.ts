@@ -4,7 +4,9 @@
  */
 import { MATRIX, derive, withParams, type Habitat, type HabitatParams } from '../src/blueprint';
 import { makeTerrain, type Terrain } from '../src/gen/terrain';
-import { makeEcology, type Ecology } from '../src/gen/ecology';
+import { makeEcology, nearestWood, type Ecology } from '../src/gen/ecology';
+import { plantsOf } from '../src/gen/scatter';
+import { nestsNear, type Nest } from '../src/sim/birds';
 
 const habitats = new Map<string, Habitat>(), terrains = new Map<string, Terrain>(), ecologies = new Map<string, Ecology>();
 
@@ -42,4 +44,16 @@ export function climateOf(climate: string): Ecology {
 export function flatOf(name: string): Terrain {
   const params = MATRIX.find((m) => m.name === name)!.params;
   return terrainOf(`${name}, flat`, withParams({ relief: { hills: 0, ringLake: null, terraceStep: params.relief.terraceStep, massif: 0, rivers: null }, landmarks: null }, params));
+}
+
+/** The birds round the nearest wood to the middle of a habitat's floor (a small patch, to stay in the CI budget). */
+const woodBirds = new Map<string, { nests: Nest[]; theta: number; s: number } | null>();
+export const BIRDS_RADIUS = 70;
+export function woodBirdsOf(name: string): { nests: Nest[]; theta: number; s: number } | null {
+  if (woodBirds.has(name)) return woodBirds.get(name)!;
+  const e = ecologyOf(name), { profile } = e.terrain.habitat;
+  const w = nearestWood(e, 0.5, (profile.floorStart + profile.floorEnd) / 2, 3000, 0.5);
+  const found = w && { nests: nestsNear(e, plantsOf(e), w.theta, w.s, BIRDS_RADIUS), theta: w.theta, s: w.s };
+  woodBirds.set(name, found);
+  return found;
 }

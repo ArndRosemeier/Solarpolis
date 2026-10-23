@@ -10,7 +10,7 @@
  * world position is the `view.eye` uniform, for whatever needs the true place (the axis, ground patterns).
  */
 import { MeshBasicNodeMaterial, MeshPhysicalNodeMaterial, MeshStandardNodeMaterial, DoubleSide, BackSide, FrontSide, AdditiveBlending, type Material } from 'three/webgpu';
-import { Fn, If, abs, atan, attribute, mod, screenCoordinate, cross, dFdx, dFdy, floor, fwidth, length, fract, inverseSqrt, log2, mx_noise_float, uv, cameraPosition, hash, normalLocal, step, time, varying, clamp, color, cos, log, select, sign, sqrt, dot, exp, float, max, mix, normalize, min, modelWorldMatrix, normalWorld, positionLocal, positionWorld, pow, sin, smoothstep, texture, uniform, vec2, vec3, vec4, vertexColor } from 'three/tsl';
+import { Fn, If, abs, atan, attribute, faceDirection, mod, screenCoordinate, cross, dFdx, dFdy, floor, fwidth, length, fract, inverseSqrt, log2, mx_noise_float, uv, cameraPosition, hash, normalLocal, step, time, varying, clamp, color, cos, log, select, sign, sqrt, dot, exp, float, max, mix, normalize, min, modelWorldMatrix, normalWorld, positionLocal, positionWorld, pow, sin, smoothstep, texture, uniform, vec2, vec3, vec4, vertexColor } from 'three/tsl';
 import { DataTexture, Uint8BufferAttribute, RGBAFormat, UnsignedByteType, Vector4, DataUtils, Float32BufferAttribute, HalfFloatType, InstancedBufferAttribute, InstancedInterleavedBuffer, InterleavedBufferAttribute, RedFormat, Vector2, Vector3, type BufferGeometry } from 'three/webgpu';
 import { PLANT_STRIDE } from '../gen/scatter';
 import { BARK_STRIPS } from '../gen/trees';
@@ -40,6 +40,7 @@ import { LAMPLIGHT } from '../gen/underMesh';
 import { speckLook, standInHorizon, standInPose, unpack } from './crowdShaders';
 import { SPECK_ATTRIBUTES, SPECK_SHOWN, SPECK_STRIDE, STAND_IN_ATTRIBUTES, STAND_IN_STRIDE } from '../gen/standIn';
 import { FLIER_ATTRIBUTES, FLIER_STRIDE, flierPose } from './droneShaders';
+import { BIRD_ATTRIBUTES, BIRD_STRIDE, birdPattern, birdPose } from './birdShaders';
 import { LIGHT_SCALE, VEIL_LIGHT } from '../gen/drone';
 import { boreColor, flameColor, hardwareColor, lampColor, radiatorColor, skinColor, skinDetailColor, skinShown } from './hullShaders';
 
@@ -692,6 +693,9 @@ export function standInAttribute(g: BufferGeometry, name: string): boolean {
   else if ((SPECK_ATTRIBUTES as readonly string[]).includes(name)) { if (name === SPECK_ATTRIBUTES[0]) layInstances(g, new Float32Array(SPECK_STRIDE), SPECK_LAYOUT); }
   else if (name === SPECK_SHOWN) g.setAttribute(SPECK_SHOWN, new InstancedBufferAttribute(new Float32Array(1), 1));
   else if ((FLIER_ATTRIBUTES as readonly string[]).includes(name)) { if (name === FLIER_ATTRIBUTES[0]) layInstances(g, new Float32Array(FLIER_STRIDE), FLIER_LAYOUT); }
+  else if ((BIRD_ATTRIBUTES as readonly string[]).includes(name)) { if (name === BIRD_ATTRIBUTES[0]) layInstances(g, new Float32Array(BIRD_STRIDE), BIRD_LAYOUT); }
+  else if (name === 'birdPart' || name === 'birdFiber') g.setAttribute(name, new Float32BufferAttribute(new Array(12).fill(0), 4));
+  else if (name === 'birdFolded') g.setAttribute(name, new Float32BufferAttribute(new Array(9).fill(0), 3));
   else if (name === 'paint') g.setAttribute('paint', new Uint8BufferAttribute(new Array(12).fill(0), 4, true));
   else if (name === 'spin') g.setAttribute('spin', new Float32BufferAttribute(new Array(12).fill(0), 4));
   else if (name === 'part') g.setAttribute('part', new Float32BufferAttribute(new Array(6).fill(0), 2));
@@ -945,24 +949,52 @@ export const DRONE_VEIL = kind('drone veil', ['position', 'normal', 'paint', ...
   return m;
 });
 
+/**
+ * Birds (render/birds.ts; their bodies gen/birds.ts), near and at the coarse level: one instanced mesh per species and
+ * level, each bird posed by `birdPose` (birdShaders.ts: wings beating and folding, tail fanning, beak opening, head
+ * turning) and coloured by its look's zones with its species' pattern drawn per pixel, lit as people are by the
+ * sunline past the horizons where it is. Feathers are single sheets, so both sides are drawn. They cast shadows.
+ */
+export const BIRD = kind('bird', ['position', 'normal', 'birdFolded', 'birdPart', 'birdFiber', ...BIRD_ATTRIBUTES], { cast: true, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial({ side: DoubleSide });
+  const pose = birdPose();
+  m.positionNode = pose.position;
+  const marks = birdPattern(pose.rest, pose.pattern);
+  const albedo = mix(mix(pose.albedo, pose.dark, marks.x.mul(pose.where)), pose.light, marks.y.mul(pose.where));
+  m.colorNode = personColor(albedo, normalize(varying(pose.normal)).mul(faceDirection), pose.horizon);
+  return m;
+});
+
 /** How wide a hazard stripe is (m, along the drone's x + y + z): a pair is twice this. */
 const HAZARD_STRIPE = 0.05;
 
-/** How instances are laid out (gen/standIn.ts, droneShaders.ts): the stand-ins' floats and attributes, the specks', the drones'. */
+/** How instances are laid out (gen/standIn.ts, droneShaders.ts, birdShaders.ts): the stand-ins' floats and attributes, the specks', the drones', the birds'. */
 export const STAND_IN_LAYOUT = { stride: STAND_IN_STRIDE, attributes: STAND_IN_ATTRIBUTES } as const;
 export const SPECK_LAYOUT = { stride: SPECK_STRIDE, attributes: SPECK_ATTRIBUTES } as const;
 export const FLIER_LAYOUT = { stride: FLIER_STRIDE, attributes: FLIER_ATTRIBUTES } as const;
-export type Layout = typeof STAND_IN_LAYOUT | typeof SPECK_LAYOUT | typeof FLIER_LAYOUT;
+export const BIRD_LAYOUT = { stride: BIRD_STRIDE, attributes: BIRD_ATTRIBUTES } as const;
+export type Layout = typeof STAND_IN_LAYOUT | typeof SPECK_LAYOUT | typeof FLIER_LAYOUT | typeof BIRD_LAYOUT;
 
 /**
  * Put instances on a geometry, `layout.stride` floats each in vec4 attributes: the stand-ins (CROWD), the specks
- * (SPECK) or the drones (DRONE, DRONE_VEIL). Pass the buffer of another mesh to share it (a drone's body and veil).
+ * (SPECK), the drones (DRONE, DRONE_VEIL) or the birds (BIRD). Pass the buffer of another mesh to share it (a drone's body and veil).
  * The one way.
  */
 export function layInstances(g: BufferGeometry, data: Float32Array | InstancedInterleavedBuffer, layout: Layout): InstancedInterleavedBuffer {
   const buffer = data instanceof InstancedInterleavedBuffer ? data : new InstancedInterleavedBuffer(data, layout.stride);
   layout.attributes.forEach((name, k) => g.setAttribute(name, new InterleavedBufferAttribute(buffer, 4, k * 4)));
   return buffer;
+}
+
+/**
+ * Room for at least `need` instances (doubling) in a level's buffer, shared by the geometries given (a drone's body
+ * and veil): new instances on the same meshes, so nothing is compiled again.
+ */
+export function roomForInstances(l: { data: Float32Array; buffer: InstancedInterleavedBuffer }, need: number, layout: Layout, geometries: readonly BufferGeometry[]): void {
+  if (l.data.length >= need * layout.stride) return;
+  l.data = new Float32Array(Math.max(need, (2 * l.data.length) / layout.stride) * layout.stride);
+  l.buffer = layInstances(geometries[0], l.data, layout);
+  for (const g of geometries.slice(1)) layInstances(g, l.buffer, layout);
 }
 
 /**
@@ -1051,5 +1083,5 @@ export function animalEyeMaterial(): Material {
 
 /** Every kind, for the Stage's warm-up. */
 export function allKinds(): readonly Kind[] {
-  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS, STONE, BUILT, VAULT, PROP, CROWD, SPECK, DRONE, DRONE_VEIL, CLOUDS_FAR, CLOUDS_NEAR];
+  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS, STONE, BUILT, VAULT, PROP, CROWD, SPECK, DRONE, DRONE_VEIL, BIRD, CLOUDS_FAR, CLOUDS_NEAR];
 }

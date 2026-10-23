@@ -20,7 +20,8 @@ import { canopyOf } from '../gen/ecology';
 import type { Ecology } from '../gen/ecology';
 import { keptClear } from '../gen/landmarks';
 import { plantedCanopy } from '../gen/planted';
-import { standsIn, type Species } from '../gen/scatter';
+import { LEVELS, poseOf, standsIn, type Species } from '../gen/scatter';
+import { toWorld } from '../blueprint';
 import type { Terrain } from '../gen/terrain';
 import { dayPhase } from '../world/sunline';
 import { localNoon, unit } from './population';
@@ -100,7 +101,7 @@ export function densNear(ecology: Ecology, plants: readonly Species[], theta: nu
       const expect = (a.squirrels * G * G * cover) / 1e4, cell = hash3i(seed, k, c, 0);
       const count = Math.floor(expect) + (unit(cell, 0, 0, 0) < expect - Math.floor(expect) ? 1 : 0);
       for (let j = 0; j < count; j++) {
-        const home = treeOf(ecology, trees, cell, j, c * dTheta, k * G, dTheta, G);
+        const home = treeNear(ecology, trees, cell, j, c * dTheta, k * G, dTheta, G);
         if (!home || floorGap(r, theta, s, home.theta, home.s) > radius) continue;
         out.push({ id: (k * 100000 + c) * 32 + j, theta: home.theta, s: home.s, seed: hash3i(cell, j, 1, 0) });
       }
@@ -122,16 +123,20 @@ export function crownsOf(ecology: Ecology): (theta: number, s: number, ground: n
   };
 }
 
-/** A squirrel's tree: the nearest home tree to a spot of its cell, a few spots tried; or none (no tree near). */
-function treeOf(ecology: Ecology, trees: readonly Species[], cell: number, j: number, theta0: number, s0: number, dTheta: number, G: number): { theta: number; s: number } | null {
-  const { profile } = ecology.terrain.habitat;
+/**
+ * A home tree for animal j of a cell (θ0, s0 its corner, dθ × G its size, `cell` its hash): the nearest of `trees` to a
+ * spot of the cell, a few spots tried, with its height (m, as the scatter draws it); or none (no tree near). Squirrels'
+ * trees, and songbirds' (sim/birds.ts).
+ */
+export function treeNear(ecology: Ecology, trees: readonly Species[], cell: number, j: number, theta0: number, s0: number, dTheta: number, G: number): { theta: number; s: number; height: number } | null {
+  const { profile } = ecology.terrain.habitat, shapes = LEVELS[0].variants;
   for (let tries = 0; tries < 4; tries++) {
     const theta = theta0 + dTheta * unit(cell, j, 2, tries), s = Math.min(profile.length, s0 + G * unit(cell, j, 3, tries));
     const r = Math.max(1, profile.at(s).r), b = { theta0: theta - TREE_SEARCH / r, theta1: theta + TREE_SEARCH / r, s0: s - TREE_SEARCH, s1: s + TREE_SEARCH };
-    let best: { theta: number; s: number } | null = null, d = Infinity;
-    for (const sp of trees) standsIn(ecology, sp, b, 0, (pt, ps) => {
+    let best: { theta: number; s: number; height: number } | null = null, d = Infinity;
+    for (const sp of trees) standsIn(ecology, sp, b, 0, (pt, ps, ground, f, along) => {
       const e = floorGap(r, theta, s, pt, ps);
-      if (e < d) { d = e; best = { theta: pt, s: ps }; }
+      if (e < d) { d = e; best = { theta: pt, s: ps, height: poseOf(ecology, sp, pt, ps, toWorld(profile, { theta: pt, s: ps, h: ground }), f, along, shapes).height }; }
     });
     if (best) return best;
   }
