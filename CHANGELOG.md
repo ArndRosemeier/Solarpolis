@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.148 — The checks run faster
+
+- Nothing changes in the game. The automatic checks that guard every change now take about a third less time, so they stay well inside their two-minute limit as the world grows.
+
 ## v0.147 — Harbours on every water
 
 - The boats now lie in harbours round the ring lake, the great lake and the smaller lakes, where the paths come down to the shore: a stone landing, a timber pier on slender bronze piles, a floating pontoon with fingers between the berths, tall guide piles, cleats, lamp bollards and a swimming ladder.
