@@ -1,7 +1,8 @@
 /**
  * The lounge under the arriving ship's nose (space/lounge.ts), drawn for the arrival's cabin shot (space/cinema.ts):
  * its floor and ceiling, the wall round it with the deep reveals of its panoramic windows (the same openings the hull
- * shows from outside), the core up its middle, the couches facing the glass, and the lamps in the ceiling's cove.
+ * shows from outside), wooden ledges along the sills with a rail under them, beams across the ceiling over the
+ * pillars, the core up its middle, the couches facing the glass on their rugs, and the lamps in the ceiling's cove.
  * Meshes in the ship frame (+x to the nose), posed with the ship each frame of the shot and hidden otherwise. The ship's
  * own hull faces outward only, so from in here it is not drawn: the room stands in for it.
  *
@@ -25,6 +26,15 @@ const REVEAL: RGB = [0.22, 0.22, 0.23];
 const CORE: RGB = [0.3, 0.18, 0.1];
 const COUCH: RGB = [0.34, 0.2, 0.11];
 const CUSHION: RGB = [0.4, 0.26, 0.15];
+/** The window ledges (the core's wood), the brass rail under them, the beams across the ceiling, the rugs. */
+const LEDGE: RGB = CORE;
+const RAIL: RGB = [0.45, 0.33, 0.16];
+const BEAM: RGB = [0.44, 0.42, 0.39];
+const RUG: RGB = [0.07, 0.1, 0.1];
+/** A ledge's depth into the room and thickness, the rail's height under the sill and its thickness, a beam's width and depth (m). */
+const LEDGE_DEEP = 0.2, LEDGE_THICK = 0.04, RAIL_UNDER = 0.2, RAIL_THICK = 0.035, BEAM_WIDE = 0.12, BEAM_DEEP = 0.1;
+/** A rug reaches this far (m) in front of its couch's seat, behind its back, and past its ends. */
+const RUG_FRONT = 0.75, RUG_BACK = 0.45, RUG_ENDS = 0.4;
 /** The cove's light strip (luminance, relative to sunlit white paper) and the faint line along the foot of the wall. */
 const COVE: RGB = [0.09, 0.075, 0.055];
 const FOOT: RGB = [0.03, 0.025, 0.02];
@@ -35,6 +45,9 @@ const AROUND = 96;
 
 /** A point of the ship frame (x along the axis, r out from it at angle a) in the builder's frame (it works around its z). */
 const inShip = (x: number, r: number, a: number): Vec3 => [r * Math.cos(a), r * Math.sin(a), x];
+/** Out from the axis at angle a, and the ship's axis, in the builder's frame. */
+const radial = (a: number): Vec3 => [Math.cos(a), Math.sin(a), 0];
+const AXIS: Vec3 = [0, 0, 1];
 
 /** The lounge's room (LOUNGE_ROOM) and its lamps (LAMP), in the ship frame. */
 export function loungeGeometry(l: Lounge): { room: BufferGeometry; lamps: BufferGeometry } {
@@ -56,12 +69,21 @@ export function loungeGeometry(l: Lounge): { room: BufferGeometry; lamps: Buffer
       const e = a + side * half, into: Vec3 = [Math.sin(e) * side, -Math.cos(e) * side, 0];
       b.faceToward(inShip(sill, R, e), inShip(sill, H, e), inShip(head, H, e), inShip(head, R, e), into, REVEAL);
     }
+    // A wooden ledge along the sill to lean on, a rail under it to hold on to, a beam across the ceiling over the pillar.
+    const u = radial(a), v = radial(a + Math.PI / 2), chord = R * Math.sin(half);
+    b.block(inShip(sill - LEDGE_THICK / 2, R - LEDGE_DEEP / 2, a), u, v, AXIS, [LEDGE_DEEP / 2, chord, LEDGE_THICK / 2], LEDGE);
+    b.block(inShip(sill - RAIL_UNDER, R - 0.07, a), u, v, AXIS, [RAIL_THICK / 2, chord * 0.92, RAIL_THICK / 2], RAIL);
+    const p = a + step / 2, inner = Math.max(l.core, 0.3);
+    b.block(inShip(l.ceiling - BEAM_DEEP / 2, (R + inner) / 2, p), radial(p), radial(p + Math.PI / 2), AXIS, [(R - inner) / 2, BEAM_WIDE / 2, BEAM_DEEP / 2], BEAM);
   }
   // The couches: a seat, a back toward the axis with its cushion, an arm at each end.
   const c = LOUNGE.couch;
   for (const couch of l.couches) {
-    const a = couch.angle, u: Vec3 = [Math.cos(a), Math.sin(a), 0], v: Vec3 = [-Math.sin(a), Math.cos(a), 0], z: Vec3 = [0, 0, 1];
+    const a = couch.angle, u = radial(a), v = radial(a + Math.PI / 2), z = AXIS;
     const width = couch.places.length * c.place + 0.1, mid = (r: number, x: number): Vec3 => inShip(x, r, a);
+    // The rug the couch stands on (just over the floor; its front faces the ceiling, as the floor's does).
+    const span = (width / 2 + RUG_ENDS) / couch.out, inner = Math.max(couch.out - c.deep / 2 - RUG_BACK, l.core + 0.05);
+    b.arc(l.floor + 0.004, Math.min(couch.out + c.deep / 2 + RUG_FRONT, R - 0.05), l.floor + 0.004, inner, 1, 0, a - span, a + span, 8, RUG);
     b.block(mid(couch.out, l.floor + c.seat / 2), u, v, z, [c.deep / 2, width / 2, c.seat / 2], COUCH, true);
     b.block(mid(couch.out - c.deep / 2 - 0.08, l.floor + c.back / 2), u, v, z, [0.08, width / 2, c.back / 2], COUCH, true);
     b.block(mid(couch.out - c.deep / 2 + 0.06, l.floor + c.seat + 0.22), u, v, z, [0.06, width / 2 - 0.04, 0.2], CUSHION);

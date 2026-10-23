@@ -6,12 +6,14 @@
  * ready yet stays empty, so nobody appears in the middle of the shot. Given back once the arrival is over.
  *
  * Actors' bodies are lit by three's lights, so the lounge has its own in the Outside scene (lights.ts `loungeLights`),
- * lit as the room's kind is (loungeShaders.ts): its lamps from the ceiling and the light its windows let in from the
- * view, both scaled by the eyes' exposure as the kinds are.
+ * lit as the room's kind is (loungeShaders.ts): its lamps from the ceiling, the light its windows let in from the
+ * view, and the Sun where it falls through the glass on them, all scaled by the eyes' exposure as the kinds are. One
+ * sun light serves them all, so it shines with the share of them it reaches (space/lounge.ts `sunOnSeated`): the
+ * seats in view sit at the same window or the next, mostly all in the sun or all out of it.
  */
 import type { Stage } from '@futuremagic/stage';
 import { deriveSeed, v3add, v3len, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
-import { LOUNGE, fromShip, fromShipDirection, seatedFeet, type Lounge, type Place } from '../space';
+import { LOUNGE, fromShip, fromShipDirection, seatedFeet, sunOnSeated, toShipDirection, type Lounge, type Place } from '../space';
 import { Figure } from './actors/figure';
 import { Residents } from './actors/residents';
 import { humanCatalog } from './actors/pack';
@@ -30,6 +32,7 @@ export class Passengers {
   private readonly lamps = loungeLights.lamps;
   private readonly windows = loungeLights.windows;
   private readonly room = loungeLights.room;
+  private readonly sun = loungeLights.sun;
   private disposed = false;
   /** Resolves once every passenger is loaded (or given up). */
   readonly ready: Promise<void>;
@@ -53,10 +56,10 @@ export class Passengers {
 
   /**
    * Seat them on `places` (nearest the window first), with the ship at `ship` round the eye at `eye`, sitting still,
-   * lit by the room's lamps (`lamps`, its light on the floor) and by what its windows let in (`windows`, ship frame),
-   * at the eyes' `exposure`. The rest are hidden.
+   * lit by the room's lamps, by what its windows let in (`windows`, ship frame) and by the Sun through them (`sun`: the
+   * way to it in the scene and its light), at the eyes' `exposure`. The rest are hidden.
    */
-  seat(l: Lounge, places: readonly Place[], ship: ShipPose, eye: Vec3, windows: { all: number; toward: Vec3 }, exposure: number, dt: number, time: number): void {
+  seat(l: Lounge, places: readonly Place[], ship: ShipPose, eye: Vec3, windows: { all: number; toward: Vec3 }, sun: { dir: Vec3; light: number }, exposure: number, dt: number, time: number): void {
     screenTextures.update(dt);
     const up = fromShipDirection(ship, [1, 0, 0]);
     this.seated.forEach((f, k) => {
@@ -75,12 +78,16 @@ export class Passengers {
     this.windows.target.position.set(...at);
     this.windows.intensity = (Math.PI * strength * exposure) / 2;
     this.room.intensity = Math.PI * (LOUNGE.lamps * (1 - LAMPS_FROM_ABOVE) + windows.all / 2) * exposure;
-    for (const light of [this.lamps.target, this.windows.target]) light.updateMatrixWorld();
+    const sitting = places.slice(0, this.seated.length);
+    this.sun.position.set(...v3add(at, v3scale(sun.dir, 10)));
+    this.sun.target.position.set(...at);
+    this.sun.intensity = Math.PI * sun.light * sunOnSeated(l, sitting, toShipDirection(ship, sun.dir)) * exposure;
+    for (const light of [this.lamps.target, this.windows.target, this.sun.target]) light.updateMatrixWorld();
   }
 
   hide(): void {
     for (const f of this.seated) f.object.visible = false;
-    this.lamps.intensity = this.windows.intensity = this.room.intensity = 0;
+    this.lamps.intensity = this.windows.intensity = this.room.intensity = this.sun.intensity = 0;
   }
 
   /** Bytes their bodies hold (memory watchdog). */

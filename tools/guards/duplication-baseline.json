@@ -2344,10 +2344,6 @@
     "reason": "TSL shader node chains (`.add(…).mul(…)`) are how every kind's shader is written in three's node language; the lounge's lighting (lamps, windows, the Sun through the glass) is its own, not a copy (2026-10-23)."
   },
   {
-    "key": "idiom: [.max .min .pitch Math] in solarpolis/render/outside.ts + solarpolis/render/vesselVisit.ts + solarpolis/space/flyer.ts",
-    "reason": "Clamping a dragged camera's pitch (`Math.max(-1.5, Math.min(1.5, pitch + dy))`) in three controllers that each own their look; unchanged code that crossed the idiom finder's floor when the lounge's lines were added to outside.ts (2026-10-23), not a new copy."
-  },
-  {
     "key": "idiom: [.dispose .disposed] in solarpolis/render/animals.ts + solarpolis/render/passengers.ts + solarpolis/render/people.ts",
     "reason": "Each loader of Actors figures (people, animals, the cabin's passengers) checks a `disposed` flag after every await and gives a late arrival back with `dispose`: the cancel-on-await idiom of an async loader, each over its own collection (2026-10-23)."
   },

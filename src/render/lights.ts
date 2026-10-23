@@ -110,15 +110,17 @@ export const loungeLights = {
   lamps: new DirectionalLight(0xfff0dc, 0),
   windows: new DirectionalLight(0xffffff, 0),
   room: new AmbientLight(0xffffff, 0),
+  sun: new DirectionalLight(0xffffff, 0),
 };
 loungeLights.lamps.name = 'lounge lamps';
 loungeLights.windows.name = 'lounge windows';
 loungeLights.room.name = 'lounge room light';
+loungeLights.sun.name = 'lounge sun';
 
 /** Put the lounge's pool into the Outside scene (once, before its warm-up). */
 export function addLoungeLights(scene: Scene): void {
   const l = loungeLights;
-  scene.add(l.lamps, l.lamps.target, l.windows, l.windows.target, l.room);
+  scene.add(l.lamps, l.lamps.target, l.windows, l.windows.target, l.room, l.sun, l.sun.target);
 }
 
 /** Below the land: the share of the lamps' light that comes from all round (the rest from above), and how far above the player the key light stands (m): under the ceiling, so nothing up on the land shades them. */

@@ -86,6 +86,7 @@ export class OutsideView {
   private passengers: Passengers | null = null;
   /** What the lounge's windows let in this frame (the meter's), for the passengers' light. */
   private cabinWindows: { all: number; toward: Vec3 } = { all: 0, toward: [0, 0, 0] };
+  private cabinSun: { dir: Vec3; light: number } = { dir: [0, 0, 1], light: 0 };
   /** Called each frame of the attract loop with how far the title has faded in (0–1). */
   onTitle: ((fade: number) => void) | null = null;
   /** Each frame of the arrival after Start: how far in it is (s) and the arrival itself (its sounds and the Mind's lines). */
@@ -659,7 +660,7 @@ export class OutsideView {
     if (!p) return;
     if (!cabin || !this.lounge) { p.hide(); return; }
     const l = this.lounge.lounge;
-    p.seat(l, placesInView(l, cabin.look), cabin.ship, this.eyeAndTarget().eye, this.cabinWindows, this.exposure, dt, this.arriving!.elapsed);
+    p.seat(l, placesInView(l, cabin.look), cabin.ship, this.eyeAndTarget().eye, this.cabinWindows, this.cabinSun, this.exposure, dt, this.arriving!.elapsed);
   }
 
   /** How much of the Sun is in view (0–1): the stars fade only then. */
@@ -694,7 +695,8 @@ export class OutsideView {
       // windows and the room round them.
       const l = this.lounge.lounge, ship = cabin.ship, from = cabinCamera(l, cabin.look).eye;
       const windows = windowLight(l, (d) => rayLuminance(metered, fromShipDirection(ship, d)));
-      this.lounge.lit(ship, this.sky.sunDir, this.sky.sunlight * outside.irradiance.value, windows);
+      this.cabinSun = { dir: this.sky.sunDir, light: this.sky.sunlight * outside.irradiance.value };
+      this.lounge.lit(ship, this.cabinSun.dir, this.cabinSun.light, windows);
       const light = LOUNGE.lamps + windows.all / 2;
       metered.room = { luminance: LOUNGE.albedo * light, light, open: (d) => throughWindow(l, from, toShipDirection(ship, d)) };
       this.cabinWindows = windows;
