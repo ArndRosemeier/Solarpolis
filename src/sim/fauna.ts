@@ -68,7 +68,7 @@ const FOOT = 0.6;
 /** Its spots: the share of them at the foot of its tree. */
 const AT_TREE = 0.2;
 /** How far from a spot of its cell its tree may stand (m): squirrels live where trees are. */
-const TREE_SEARCH = 10;
+export const TREE_SEARCH = 10;
 /** Trees at least this tall (m, full grown) are homes: fruit trees too, not shrubs. */
 const HOME_HEIGHT = 4;
 /** How steep a spot may be (rise per metre). */

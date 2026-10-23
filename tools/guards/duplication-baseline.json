@@ -1388,10 +1388,6 @@
     "reason": "The views' shared shape (a group named for the debug menu, the stage and camera for pixels per metre, own specks, a scan of homes in a worker, the light where each is): the birds' view (render/birds.ts) follows the pattern of the drones' and animals' views and does its own work in each."
   },
   {
-    "key": "idiom: [.floor .max .min .r .round Math] in solarpolis/sim/birds.ts + solarpolis/sim/fauna.ts + solarpolis/sim/herds.ts",
-    "reason": "Plain idioms of the pure layers (profile radius with a guard, a cell's rows and columns, terrain heights, a kept cache) used by the birds' homes and day plan as by the other animals' and people's; each works its own data."
-  },
-  {
     "key": "idiom: [.group .name] in solarpolis/render/animals.ts + solarpolis/render/birds.ts + solarpolis/render/fliers.ts + solarpolis/render/landmarks.ts + solarpolis/render/lift.ts + solarpolis/render/specks.ts",
     "reason": "Each view names its scene group for the debug menu and the shader monitor's labels: one assignment. The birds (sim/birds.ts, render/birds.ts, render/birdShaders.ts) joined the group with the same plain idiom."
   },

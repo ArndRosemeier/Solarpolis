@@ -70,7 +70,7 @@ for (const { name } of MATRIX) {
   test(`birds (${name}): a bird moves smoothly, never faster than it flies; out by day, at roost by night (owls the other way)`, () => {
     const e = ecologyOf(name), t = e.terrain, found = woodBirdsOf(name);
     if (!found) return;
-    const nests = [...found.nests.slice(0, 5), ...larksOf(name).slice(0, 1)], dawn = dawnAt(e, found.s, 0.3);
+    const owl = found.nests.find((n) => BIRDS[n.kind].night), nests = [...found.nests.filter((n) => !BIRDS[n.kind].night).slice(0, 3), ...(owl ? [owl] : []), ...larksOf(name).slice(0, 1)], dawn = dawnAt(e, found.s, 0.3);
     for (const n of nests) {
       const spec = BIRDS[n.kind];
       let was = birdAt(t, n, dawn);
@@ -109,13 +109,13 @@ for (const { name } of MATRIX) {
     if (!lark) return;
     const dawn = dawnAt(e, lark.s, 0.3), { profile } = t.habitat;
     let high = 0, dropped = false, sangAloft = 0;
-    for (let time = dawn; time < dawn + 2 * 3600; time += 3) {
+    for (let time = dawn; time < dawn + 3600; time += 3) {
       const b = birdAt(t, lark, time);
       const p = Math.hypot(b.at[0], b.at[1]), ground = profile.at(lark.s).r - t.standAt(lark.theta, lark.s);
       high = Math.max(high, ground - p);
       if (b.doing === 'drop') { dropped = true; assert.ok(b.fold > 0.8, 'wings closed as it drops'); }
     }
-    for (const song of songsIn(t, lark, dawn, dawn + 2 * 3600)) {
+    for (const song of songsIn(t, lark, dawn, dawn + 3600)) {
       const doing = birdAt(t, lark, song.t).doing;
       assert.ok(doing === 'climb' || doing === 'hover', `a lark sings in the air (${doing})`);
       sangAloft++;

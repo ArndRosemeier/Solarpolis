@@ -34,7 +34,7 @@ import { LEVELS, poseOf, standsIn, type Species } from '../gen/scatter';
 import type { Terrain } from '../gen/terrain';
 import { apparentAcceleration, upAt } from '../world/motion';
 import { emissionAt, sunlineEmission } from '../world/sunline';
-import { crownsOf, open, treeNear } from './fauna';
+import { TREE_SEARCH, crownsOf, open, treeNear } from './fauna';
 import { unit } from './population';
 import { floorGap } from './walks';
 
@@ -236,12 +236,18 @@ function owlPerches(ecology: Ecology, trees: readonly Species[], home: { theta: 
 const cellsOf = kept((_: Ecology) => new Map<string, Nest[]>());
 const CELLS_KEPT = 1024;
 
-/** Every cell of side `G` (rows along the axis, as many cells round it as fit) that reaches within `reach` of (θ, s). */
+/** How far a home may stand outside its cell (m): its tree is the nearest to a spot of the cell, searched in a square. */
+const SLACK = TREE_SEARCH * Math.SQRT2;
+
+/**
+ * Every cell of side `G` (rows along the axis, as many cells round it as fit) whose homes may stand within `reach` of
+ * (θ, s): the cells reaching that far, and those a home's slack past it.
+ */
 function cells(h: Habitat, theta: number, s: number, reach: number, G: number, visit: (row: number, col: number, mid: number, sMid: number, dTheta: number, r: number) => void): void {
-  const { profile } = h, rows = Math.floor(profile.length / G);
-  for (let k = Math.max(0, Math.floor((s - reach) / G)); k <= Math.min(rows, Math.floor((s + reach) / G)); k++) {
+  const { profile } = h, rows = Math.floor(profile.length / G), far = reach + SLACK;
+  for (let k = Math.max(0, Math.floor((s - far) / G)); k <= Math.min(rows, Math.floor((s + far) / G)); k++) {
     const sMid = Math.min(profile.length, (k + 0.5) * G), r = Math.max(1, profile.at(sMid).r);
-    const n = Math.max(1, Math.round((TURN * r) / G)), dTheta = TURN / n, around = reach / r + dTheta;
+    const n = Math.max(1, Math.round((TURN * r) / G)), dTheta = TURN / n, around = far / r;
     const c0 = Math.floor((theta - around) / dTheta), c1 = Math.min(c0 + n - 1, Math.floor((theta + around) / dTheta));
     for (let cc = c0; cc <= c1; cc++) {
       const c = ((cc % n) + n) % n;
