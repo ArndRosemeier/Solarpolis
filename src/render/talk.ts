@@ -13,6 +13,8 @@ import { toView, toWorld, type Habitat, type Vec3 } from '../blueprint';
 import { POSE } from '../gen/standIn';
 import type { Terrain } from '../gen/terrain';
 import { footingOf, partyKey, partyMembers, talkerAt, voiceOf, type Person } from '../sim';
+import { REFERENCE_SPACE } from '../space';
+import type { Whereabouts } from '../system';
 import type { Conversations } from '../talk';
 import { lineAt, type Line } from '../talk/lines';
 import type { Talker } from './people';
@@ -48,9 +50,12 @@ export class TalkView {
   private readonly talkers: Talker[] = [];
   /** The speaker by party this frame, where a conversation is held (−1: a pause). */
   private readonly speaking = new Map<number, number>();
+  /** The clock at the last frame (for the debug line's news). */
+  private t = 0;
   readonly bubbles: Bubble[] = [];
 
-  constructor(private readonly habitat: Habitat, private readonly terrain: Terrain) {}
+  /** `where`: the player's place in the system, for the news heard here (a visited habitat hears with its own lag). */
+  constructor(private readonly habitat: Habitat, private readonly terrain: Terrain, private readonly where: Whereabouts = { home: habitat.params, at: 'home' }) {}
 
   /** Who in someone's party speaks at clock time t: the conversation's speaker where one is held, else `talkerAt`. */
   readonly speaker = (p: Person, t: number): number => this.speaking.get(partyKey(p)) ?? talkerAt(p, t);
@@ -59,6 +64,7 @@ export class TalkView {
   bubblesAt(people: { talkers(out: Talker[]): void }, eye: Vec3, t: number, camera: Camera, width: number, height: number): void {
     const h = this.habitat, talk = h.params.life.talk, out = this.bubbles;
     out.length = 0;
+    this.t = t;
     this.speaking.clear();
     people.talkers(this.talkers);
     if (!this.talkers.length) return;
@@ -115,11 +121,18 @@ export class TalkView {
     return Math.hypot(at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]);
   }
 
-  /** The conversation engine, loaded the first time anyone near talks (its own chunk). */
+  /**
+   * The conversation engine, loaded the first time anyone near talks (its own chunk), with the system's ledger for the
+   * news from elsewhere: the reference world around the player's home, heard where they are (`where.at`); the Inside
+   * clock is the world's.
+   */
   private loadEngine(): void {
     if (this.loading) return;
     this.loading = true;
-    void import('../talk').then((m) => { this.conversations = new m.Conversations(this.habitat); });
+    void Promise.all([import('../talk'), import('../system')]).then(([m, system]) => {
+      const ledger = system.makeLedger({ ...REFERENCE_SPACE, home: this.where.home }, system.REFERENCE_SYSTEM);
+      this.conversations = new m.Conversations(this.habitat, { ledger, at: this.where.at });
+    });
   }
 
   bytes(): number {
@@ -131,6 +144,6 @@ export class TalkView {
   }
 
   info(): string {
-    return this.conversations ? `${this.conversations.summary()}, ${this.bubbles.length} bubbles` : `talk: ${this.loading ? 'loading' : 'not loaded'}`;
+    return this.conversations ? `${this.conversations.summary(this.t)}, ${this.bubbles.length} bubbles` : `talk: ${this.loading ? 'loading' : 'not loaded'}`;
   }
 }

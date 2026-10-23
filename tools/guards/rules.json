@@ -21,7 +21,8 @@
   "layers": [
     { "from": "src/blueprint", "deny": ["three", "src/render", "src/app", "src/lab", "src/gen", "src/world", "src/sim", "src/physics", "src/space"], "why": "the blueprint is the root of everything: pure numbers, no three.js, nothing above it" },
     { "from": "src/gen", "deny": ["three", "src/render", "src/app", "src/lab", "src/world", "src/sim", "src/physics", "src/space"], "why": "the generator is pure data: it runs in workers and headless tests" },
-    { "from": "src/space", "deny": ["three", "src/render", "src/app", "src/lab", "src/gen", "src/world", "src/sim", "src/physics"], "why": "the space model (clock, ephemeris, frames, the Necklace) is pure: windows, the title flight, workers and tests all read it" },
+    { "from": "src/space", "deny": ["three", "src/render", "src/app", "src/lab", "src/gen", "src/world", "src/sim", "src/physics", "src/system"], "why": "the space model (clock, ephemeris, frames, the Necklace) is pure: windows, the title flight, workers and tests all read it" },
+    { "from": "src/system", "deny": ["three", "src/render", "src/app", "src/lab", "src/gen", "src/world", "src/sim", "src/physics", "src/talk"], "why": "the whole system (ledger, light time, news) is pure: workers, tests and every view read it" },
     { "from": "src/world", "deny": ["three", "src/render", "src/app", "src/lab", "src/physics"], "why": "world queries are pure: gameplay, workers and tests use them" },
     { "from": "src/sim", "deny": ["three", "src/render", "src/app", "src/lab", "src/physics"], "why": "the society sim is pure: it runs in a worker and in headless tests" },
     { "from": "src/talk", "deny": ["three", "src/render", "src/app", "src/lab", "src/physics"], "why": "what people say is pure: the conversation engine runs in a worker and in headless tests" },

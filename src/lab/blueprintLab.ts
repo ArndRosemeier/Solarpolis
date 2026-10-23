@@ -108,6 +108,13 @@ export class BlueprintLab {
     return this.params;
   }
 
+  /** Show another habitat's parameters (a visit to it, docs/system.md): the derived habitat everyone reads follows. */
+  use(params: HabitatParams): void {
+    this.params = params;
+    this.syncSliders();
+    this.update();
+  }
+
   private syncSliders(): void {
     for (const s of this.sliders) s.input.value = String(toSlider(s.c, s.c.get(this.params)));
     for (const b of this.presets.querySelectorAll('button')) b.classList.toggle('on', b.textContent === this.preset);

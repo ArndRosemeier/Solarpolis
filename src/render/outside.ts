@@ -32,6 +32,9 @@ import { AU, SUN } from '../space/constants';
 import { apply, transpose } from '../space/pose';
 import { SolarView } from './solar';
 import { SolarControls } from './solarControls';
+import { HabitatLights } from './habitatLights';
+import { HabitatCatalogue } from './habitatCatalogue';
+import { REFERENCE_SYSTEM, makeLedger, type Ledger } from '../system';
 import { polePlane } from '../space/orbits';
 import { VesselVisit } from './vesselVisit';
 import type { VoyagePanel, VoyagePanelFactory } from './voyagePanel';
@@ -95,6 +98,13 @@ export class OutsideView {
   private moonMap: Texture | null = null;
   private solar!: SolarView;
   private solarControls!: SolarControls;
+  /** The system's habitats as points of light, and their part of the catalogue (plan "The Whole System"). */
+  private habitatLights!: HabitatLights;
+  private habitatCatalogue!: HabitatCatalogue;
+  /** The system around the home habitat (system/ledger.ts). */
+  private ledger!: Ledger;
+  /** Visit chosen in the catalogue: a habitat id ('home' to go back) and the ledger it is in (docs/system.md). */
+  onVisit: ((id: string, ledger: Ledger) => void) | null = null;
   private observer: { id: string; yaw: number; pitch: number; distance: number } | null = null;
   private controlClock = 0;
   private vessel!: VesselVisit;
@@ -132,9 +142,15 @@ export class OutsideView {
     v.dome.renderOrder = -1;
     v.dome.frustumCulled = false;
     v.solar = new SolarView(v.stage, v.system, DOME * .7, v.space.params.seed);
-    await Promise.all([v.stage.add(v.dome), v.buildNecklace(), v.loadMaps('full'), v.loadStars(), v.solar.start()]);
+    const ledger = makeLedger(v.space.params, REFERENCE_SYSTEM);
+    v.habitatLights = new HabitatLights(v.stage, v.system, ledger, DOME * .7);
+    await Promise.all([v.stage.add(v.dome), v.buildNecklace(), v.loadMaps('full'), v.loadStars(), v.solar.start(), v.habitatLights.start()]);
     outside.bodiesInDome.value = 0;
     v.solarControls = new SolarControls(v.system, id => v.observe(id), () => { v.observer = null; v.flyer = null; v.frameHabitat(); }, n => { v.timeScale = n; });
+    v.ledger = ledger;
+    v.habitatCatalogue = new HabitatCatalogue(ledger, id => v.observe(id), on => { v.habitatLights.naming = on; }, id => v.onVisit?.(id, v.ledger));
+    v.habitatLights.onPick = id => v.habitatCatalogue.showHabitat(id);
+    v.solarControls.element.append(v.habitatCatalogue.element);
     v.vessel = new VesselVisit(v.stage, () => { v.stopAttract(); v.observer = null; v.flyer = null; v.timeScale = 1; v.exposure = 1; }, () => { v.frameHabitat(); v.voyage?.showCabin(false); }, TOUR_SHIP);
     v.voyage = makeVoyagePanel(v.system, () => v.space, () => v.time, () => { v.stopAttract(); v.vessel.close(); v.observer = null; v.flyer = null; v.exposure = 1; }, () => {
       v.vessel.inside = true;
@@ -146,7 +162,7 @@ export class OutsideView {
 
   /** Bytes this view holds (memory watchdog): the surface maps with their mipmaps, the star field, the skin's detail tiles. */
   bytes(): number {
-    return this.textureBytes + this.starBytes + (this.necklace?.detailBytes() ?? 0) + (this.solar?.bytes() ?? 0) + (this.vessel?.meshes.bytes() ?? 0) + (this.voyage?.bytes() ?? 0);
+    return this.textureBytes + this.starBytes + (this.necklace?.detailBytes() ?? 0) + (this.solar?.bytes() ?? 0) + (this.habitatLights?.bytes() ?? 0) + (this.vessel?.meshes.bytes() ?? 0) + (this.voyage?.bytes() ?? 0);
   }
 
   /** Give memory back (memory watchdog): Earth's day map drops to half resolution, detail tiles out of sight go. */
@@ -154,6 +170,7 @@ export class OutsideView {
     if (this.dayDetail === 'full') void this.loadMaps('reduced');
     this.necklace?.shed();
     this.solar?.shed();
+    this.habitatLights?.shed();
     this.vessel?.releaseIdle();
   }
 
@@ -216,6 +233,12 @@ export class OutsideView {
     if (h === this.habitat) return;
     this.habitat = h;
     this.space = makeSpace({ ...REFERENCE_SPACE, home: h.params }, this.system);
+    if (this.habitatLights) {
+      const ledger = makeLedger(this.space.params, REFERENCE_SYSTEM);
+      this.ledger = ledger;
+      this.habitatLights.reset(ledger);
+      this.habitatCatalogue.reset(ledger);
+    }
     this.voyage?.reset();
     this.shipShape = shipShape(guestShip(this.space, this.space.home));
     // The title's ship was made for the last habitat's berths: made again when the title next plays.
@@ -224,6 +247,11 @@ export class OutsideView {
     this.flyer = null;
     this.frameHabitat();
     await this.buildNecklace();
+  }
+
+  /** The player is now at habitat `id` ('home' when back): the catalogue tells trips from there. */
+  setVisiting(id: string): void {
+    this.habitatCatalogue?.setAt(id);
   }
 
   /** Back to the start view: the habitat in front of Earth, a little from the side. */
@@ -358,6 +386,7 @@ export class OutsideView {
     const ratio = this.renderer?.getPixelRatio() ?? 1, px = (this.canvas.clientHeight || 720) * ratio;
     this.necklace?.follow(eye, t, sky, px / ((this.camera.fov * Math.PI) / 180));
     this.solar?.follow(sp, eye, t, px / ((this.camera.fov * Math.PI) / 180));
+    this.habitatLights?.follow(sp, eye, t, [sky.earth, sky.moon, ...(this.solar?.seen ?? []).map(s => ({ center: s.center, radius: s.body.radius }))]);
     if (this.stars) setPose(this.stars, sp.frames.relative('sun', f, t).axes, [0, 0, 0]);
     this.camera.position.set(0, 0, 0);
     const shot = this.shot;
@@ -490,6 +519,7 @@ export class OutsideView {
   /** Start or stop drawing (the page shows one view at a time). */
   setRunning(on: boolean): void {
     if (this.solarControls && this.canvas.parentElement && !this.solarControls.element.parentElement) this.canvas.parentElement.append(this.solarControls.element);
+    if (this.habitatLights && this.canvas.parentElement && !this.habitatLights.element.parentElement) this.canvas.parentElement.append(this.habitatLights.element);
     if (this.vessel && this.canvas.parentElement && !this.vessel.launch.parentElement) this.canvas.parentElement.append(this.vessel.launch, this.vessel.element, this.vessel.help);
     if (this.voyage && this.canvas.parentElement && !this.voyage.element.parentElement) this.canvas.parentElement.append(this.voyage.element);
     this.vessel?.show(on && !this.attracting && !this.voyage?.active);
@@ -562,12 +592,16 @@ export class OutsideView {
       this.solarControls.element.hidden = this.attracting || this.vessel?.active || this.voyage?.active;
       this.vessel?.show(!this.attracting && (!this.voyage?.active || this.vessel.active));
       this.solarControls.update(dateOf(this.space.jd(this.time)), this.observer?.id ?? null, this.sky?.sunDistance ?? AU);
+      this.habitatCatalogue.update(this.time, this.habitatLights.count);
     }
     // A cut is a new camera: it meters afresh instead of adapting from the last shot.
     this.meterAndAdapt(cut ? Infinity : dt);
     const ratio = this.renderer.getPixelRatio(), px = (this.canvas.clientHeight || 720) * ratio;
     outside.pixelSolidAngle.value = ((this.camera.fov * Math.PI) / 180 / px) ** 2;
     outside.starExposure.value = starExposure(this.exposure, outside.pixelSolidAngle.value, this.sunSeen(), this.heroicStars);
+    // The overlay's names, as a citizen's link shows them; not in the title's flight, aboard or on the tour.
+    this.habitatLights.label(this.camera, this.canvas.clientWidth || 1280, this.canvas.clientHeight || 720, outside.starExposure.value, outside.pixelSolidAngle.value,
+      !this.attracting && !this.vessel?.active && !this.voyage?.active && this.loop.running);
     outside.viewport.value.set((this.canvas.clientWidth || 1280) * ratio, px);
     draw(this.stage);
   }

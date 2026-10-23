@@ -38,7 +38,8 @@ import { OutsideView } from './render/outside';
 import type { BirdSeen } from './render/birds';
 import { VoyageComputer } from './app/voyageComputer';
 import { arrivalScore, captionAt, hubView, type ArrivalScore } from './space';
-import { apart, fromWorld, toWorld, type DebrisSpec, type Habitat, type Vec3 } from './blueprint';
+import { apart, fromWorld, toWorld, type DebrisSpec, type Habitat, type HabitatParams, type Vec3 } from './blueprint';
+import { blueprintOf, placeInWords, type Ledger, type Whereabouts } from './system';
 import { levelRunOf, nearestOf, onRow, plantsOf, slopeAt, type Level } from './gen/scatter';
 import { frameOf, landmarksOf, type Hut, type Pavilion } from './gen/landmarks';
 import { plantingsOf, type Grove, type Hall } from './gen/planted';
@@ -89,7 +90,8 @@ header.append(soundButton(sound));
 
 // ---- the view ------------------------------------------------------------------------------------
 const lab = new BlueprintLab(new URLSearchParams(location.search), (query) => {
-  // The Lab owns the habitat's fields; the open view rides along.
+  // The Lab owns the habitat's fields; the open view rides along. A visit's habitat is not the page's to keep.
+  if (visiting) return;
   const q = new URLSearchParams(query);
   const open = new URLSearchParams(location.search).get('view');
   if (open === 'inside' || open === 'outside' || open === 'lab' || open === 'tour') q.set('view', open);
@@ -97,6 +99,41 @@ const lab = new BlueprintLab(new URLSearchParams(location.search), (query) => {
   history.replaceState(null, '', all ? `?${all}` : location.pathname);
 });
 app.append(lab.root);
+
+// ---- visiting another habitat (docs/system.md: a proof of concept, one arrives at once) ----------------------
+/** The habitat visited (a ledger id), or null at home. */
+let visiting: string | null = null;
+/** Home while away (the habitat left behind): its parameters and the habitat the Outside view keeps showing. */
+let left: { params: HabitatParams; habitat: Habitat } | null = null;
+/** Where the player is in the system, for the Inside view (news heard with the visited habitat's light-lag). */
+let whereabouts: Whereabouts | null = null;
+/** Where the arrival card says one has arrived. */
+let arrivedAt = 'the Necklace';
+let arrivalCard: ArrivalCard | null = null;
+
+/** Be at habitat `id` ('home', or a ledger id with its blueprint): the Inside view follows, the Outside view stays home. */
+function settle(id: string, params: HabitatParams, where: string): void {
+  if (id !== 'home' && !visiting && !(left && lab.parameters === left.params) && lab.habitat) left = { params: lab.parameters, habitat: lab.habitat };
+  if (id !== 'home' && !left) return;
+  visiting = id === 'home' ? null : id;
+  whereabouts = visiting && left ? { home: left.params, at: visiting } : null;
+  if (insideSlot.view) insideSlot.view.whereabouts = whereabouts;
+  arrivedAt = where;
+  lab.use(params);
+  if (lab.habitat) arrivalCard?.describe(lab.habitat, where);
+  outsideSlot.view?.setVisiting(id);
+}
+
+/** Visit habitat `id` of the ledger ('home' to go back): through the curtain onto its arrival terrace. */
+async function travelTo(id: string, ledger: Ledger): Promise<void> {
+  const back = id === 'home';
+  const record = ledger.habitat(id);
+  const params = back ? left?.params : blueprintOf(ledger, id);
+  if (!params || (!back && !record) || (back && !visiting) || id === visiting) return;
+  await drawCurtain(true);
+  settle(id, params, back || !record ? 'the Necklace' : `${record.name}, ${placeInWords(record)}`);
+  await arriveInside();
+}
 
 /** A 3D view on the page: made on first show, then kept and handed the Lab's current habitat. */
 interface PageView {
@@ -112,14 +149,15 @@ class ViewSlot<V extends PageView> {
   private readonly note = el('p', 'inside-note');
   view: V | null = null;
 
-  constructor(hint: string, private readonly building: string, private readonly memoryOwner: string, private readonly make: (h: Habitat) => Promise<V>) {
+  /** `habitat`: the one this view shows (the Lab's, or for the Outside view the home one while visiting). */
+  constructor(hint: string, private readonly building: string, private readonly memoryOwner: string, private readonly make: (h: Habitat) => Promise<V>, private readonly habitat: () => Habitat | null = () => lab.habitat) {
     this.box.append(this.note, el('p', 'inside-hint', hint));
     this.box.hidden = true;
     app.append(this.box);
   }
 
   async show(): Promise<void> {
-    const h = lab.habitat;
+    const h = this.habitat();
     if (!h) { this.note.textContent = 'These parameters make no habitat: fix them in the Blueprint first.'; return; }
     if (this.view) { await this.view.setHabitat(h); this.view.setRunning(!this.box.hidden); return; }
     this.note.textContent = this.building;
@@ -139,7 +177,7 @@ class ViewSlot<V extends PageView> {
 }
 
 const insideSlot = new ViewSlot('Hold the right mouse button to look around · W A S D to move · Shift to run · Space to jump · wheel to see yourself · F to fly (E up, Q down)', 'Building the interior…', 'terrain tiles', async (h) => {
-  const v = await InteriorView.create(h);
+  const v = await InteriorView.create(h, whereabouts);
   // The gravity the player feels, and why (with the spin, against it, higher up): Arnd, 2026-10-22.
   const meter = new GravityMeter(() => (lab.habitat ? { habitat: lab.habitat, ...v.paces } : null));
   insideSlot.box.append(meter.box);
@@ -154,7 +192,8 @@ const insideSlot = new ViewSlot('Hold the right mouse button to look around · W
   const room = new HomeControls((mode) => v.arrangeHome(mode));
   insideSlot.box.append(room.root);
   v.onRoom = (state) => room.updateRoom(state);
-  const welcome = new ArrivalCard(h, () => v.finishArrivalReveal());
+  const welcome = new ArrivalCard(h, arrivedAt, () => v.finishArrivalReveal());
+  arrivalCard = welcome;
   insideSlot.box.append(welcome.root);
   v.onArrival = (progress, nearby) => {
     welcome.show(progress, nearby);
@@ -169,7 +208,11 @@ const insideSlot = new ViewSlot('Hold the right mouse button to look around · W
   memory.track('boats', () => v.boatBytes());
   return v;
 });
-const outsideSlot = new ViewSlot('Hold the right mouse button to swing around · wheel to come closer · 1 habitat, 2 Earth, 3 Moon, 4 nearest neighbour · F to fly (W A S D, E up, Q down, Shift faster)', 'Building the sky…', 'sky maps, stars and skin detail', (h) => OutsideView.create(h, (...args) => new VoyageComputer(...args)));
+const outsideSlot = new ViewSlot('Hold the right mouse button to swing around · wheel to come closer · 1 habitat, 2 Earth, 3 Moon, 4 nearest neighbour · F to fly (W A S D, E up, Q down, Shift faster)', 'Building the sky…', 'sky maps, stars and skin detail', async (h) => {
+  const v = await OutsideView.create(h, (...args) => new VoyageComputer(...args));
+  v.onVisit = (id, ledger) => void travelTo(id, ledger);
+  return v;
+}, () => (left && (visiting || lab.parameters === left.params) ? left.habitat : lab.habitat));
 /** A black curtain over the views for the short fade from the crossing into the Hub (Arnd, 2026-10-21). */
 const curtain = el('div', 'curtain');
 app.append(curtain);
@@ -193,6 +236,8 @@ function drawCurtain(closed: boolean): Promise<void> {
 async function startArrival(): Promise<void> {
   const v = outsideSlot.view;
   if (!v?.attracting) { showTab('inside'); return; }
+  // The title's ship comes in to the home habitat: a visit ends there.
+  if (visiting && left) settle('home', left.params, 'the Necklace');
   arriving = true;
   try { await flyIn(v); } finally {
     arriving = false;
@@ -219,21 +264,24 @@ async function flyIn(v: OutsideView): Promise<void> {
   await v.arrive();
   if (tab !== 'title') return;
   await drawCurtain(true);
-  if (tab === 'title') {
-    showTab('inside');
-    await starting;
-    const h = lab.habitat, inside = insideSlot.view;
-    if (h && inside) {
-      const terrace = await inside.prepareArrival();
-      if (insideSlot.box.hidden) { inside.finishArrivalReveal(); await drawCurtain(false); return; }
-      if (terrace) {
-        const reveal = inside.revealArrival();
-        await drawCurtain(false);
-        await reveal;
-        return;
-      }
-      const hub = hubView(h); inside.floatAt(hub.eye, hub.look);
+  if (tab === 'title') await arriveInside();
+  else await drawCurtain(false);
+}
+/** Behind the closed curtain: into the Inside view, out onto its arrival terrace (or the Hub), the curtain drawn back. */
+async function arriveInside(): Promise<void> {
+  showTab('inside');
+  await starting;
+  const h = lab.habitat, inside = insideSlot.view;
+  if (h && inside) {
+    const terrace = await inside.prepareArrival();
+    if (insideSlot.box.hidden) { inside.finishArrivalReveal(); await drawCurtain(false); return; }
+    if (terrace) {
+      const reveal = inside.revealArrival();
+      await drawCurtain(false);
+      await reveal;
+      return;
     }
+    const hub = hubView(h); inside.floatAt(hub.eye, hub.look);
   }
   await drawCurtain(false);
 }

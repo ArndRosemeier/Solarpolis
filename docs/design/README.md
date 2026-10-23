@@ -21,8 +21,16 @@
 | Process | Automatic merges. CI capped at 2 minutes. Versioning v0.001 + 0.001 per build with a What's new button. Memory watchdog and debug menu from the start. |
 | Orbit | The reference habitat sits in the geostationary ring ("the Necklace", Earth 17° wide), axis on the ecliptic pole so the Sun stays side-on. |
 | Outside | Radiators are flat brims at the endcaps; the port hub is a despun spindle where ships dock; the title is a live docking flight into the Hub. |
-| Ships | Two modes: laser-pushed solar sails (lasers on the Moon and other bodies; cheapest, slowest) and fusion torch ships with continuous thrust (what citizens use). Habitats stay solar-only. |
+| Ships | Laser-pushed solar sails (lasers on the Moon and other bodies; cheapest, slowest) and fusion torch ships. Habitats stay solar-only. Speeds are a hierarchy (2026-10-23, below). |
 | Earth in 3026 | Much like today (the sea rose and fell back). Cities smaller and darker: targeted light, citizens who hardly need it. |
+
+## The whole system (2026-10-23)
+
+- The cylinder is a sample habitat; the setting is the whole solar system of the [world bible](../world-bible.md). Plan "The Whole System": https://claude.ai/artifact/XdinpntDM6cx9rGRkaiURD. A very big sandbox with the bible's story hooks as situations on their own clock, no forced plot. First step built: light-lag and the system ledger ([system.md](../system.md)).
+- **Speeds are a hierarchy:** light sails with laser help (cheapest), torch ships that mostly coast (the middle tier), and a constant burn only when someone is in a hurry, which wastes fuel and rarely has a reason. Fuel (mainly hydrogen) is not expensive but not cheap everywhere.
+- **No hibernation:** citizens have solved ageing and simply sleep, voluntarily, as long as they like on a long voyage, with optional wake-ups. Better than speeding up time.
+- **Show, don't tell:** most of a voyage has nothing to see, so the game must show what is going on in natural ways, partly through the senses.
+- **The neural link and its overlay are canon:** as common as phones today; everybody basically needs one. Names and facts drawn over the world (habitats named beside their points of light) are what a citizen's overlay shows.
 
 ## The sample habitat and life below (2026-10-23)
 

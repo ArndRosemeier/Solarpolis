@@ -10,6 +10,9 @@
  * (`life.talk.read`). So a conversation is a pure function of the seed and the clock like everything else: whoever
  * arrives mid-sentence finds the same sentence.
  *
+ * Residents also talk about the world beyond: the news whose light has reached their habitat (talk/news.ts, from the
+ * system's ledger), each knowing it once it has reached them.
+ *
  * Only parties near the eye are asked (the caller says which and when; one new conversation at a time). The scripts
  * are kept under a count, report their bytes and go on memory pressure; each conversation's engine is let go once its
  * lines are timed. Pure: no three, no DOM, no clock of its own.
@@ -19,7 +22,9 @@ import { createConversationWorld, type Profile } from 'solarpolis-dialogue';
 import { createEnglishResources, englishModule } from 'solarpolis-dialogue/english';
 import type { Habitat } from '../blueprint';
 import { residentOf, voiceOf, type Resident } from '../sim';
+import { newsHeard, type Ledger } from '../system';
 import { readFor, type Line } from './lines';
+import { NEWS_PREDICATES, NEWS_TEMPLATES, newsTalk } from './news';
 import { PURSUIT_WORDS } from './words';
 
 /** A party that talks: its key (`partyKey`), its residents in member order, and when its talk beat began (clock, s). */
@@ -54,7 +59,10 @@ export class Conversations {
   /** Conversations made so far (the debug line). */
   made = 0;
 
-  constructor(private readonly habitat: Habitat) {
+  /**
+   * `news`: the system's ledger and the habitat's id in it, for what people have heard from elsewhere (none without).
+   */
+  constructor(private readonly habitat: Habitat, private readonly news: { ledger: Ledger; at: string } | null = null) {
     this.seed = deriveSeed(habitat.seed, 'talk', 'conversation');
   }
 
@@ -85,11 +93,15 @@ export class Conversations {
     const h = this.habitat, talk = h.params.life.talk;
     // A catalogue of the party alone: the engine's English wants a name for everyone in it, and nobody else matters.
     const ids = party.members.map((i) => `r${i}`), names: Record<string, string> = {};
-    const world = createConversationWorld({ profiles: party.members.map((i, k) => this.profileOf(i, ids[k])) });
-    party.members.forEach((i, k) => { names[ids[k]] = voiceOf(h, i).name; });
-    const session = world.createSession({ participants: ids, languageModule: englishModule, resources: createEnglishResources({ entities: names, pursuits: PURSUIT_WORDS }) });
     const salt = Math.round(party.start * 10) | 0, chainRoll = (k: number): number => hashToFloat(hash3i(this.seed, party.key, salt, s.next * 8 + k));
-    const chat = session.conversation({ seed: hash3i(this.seed, party.key, salt, 0), occasion: s.next, maxTurns: TURNS.least + Math.floor(chainRoll(1) * (TURNS.more + 1)) });
+    const told = this.news && newsTalk(this.news.ledger, this.news.at, s.from, party.members.map((i, k) => ({ id: ids[k], resident: i })), hash3i(this.seed, party.key, salt, s.next * 8 + 5));
+    const entities = Object.fromEntries(Object.keys(told?.names ?? {}).map((id) => [id, { type: 'thing' }]));
+    const world = createConversationWorld({ entities, predicates: NEWS_PREDICATES, profiles: party.members.map((i, k) => this.profileOf(i, ids[k])) });
+    if (told) world.addFacts(told.facts);
+    party.members.forEach((i, k) => { names[ids[k]] = voiceOf(h, i).name; });
+    const resources = createEnglishResources({ entities: { ...told?.names, ...names }, predicates: NEWS_TEMPLATES, pursuits: PURSUIT_WORDS });
+    const session = world.createSession({ participants: ids, languageModule: englishModule, resources });
+    const chat = session.conversation({ seed: hash3i(this.seed, party.key, salt, 0), occasion: s.next, maxTurns: TURNS.least + Math.floor(chainRoll(1) * (TURNS.more + 1)), topics: told?.topics });
     let at = s.from;
     for (let turn = chat.next(); turn; turn = chat.next()) {
       const member = ids.indexOf(turn.speaker);
@@ -114,9 +126,9 @@ export class Conversations {
     return { id, temperament: v.temperament, pursuits: v.pursuits, bodyKind: BODY[residentOf(this.habitat, i).body] };
   }
 
-  /** Bytes held: the scripts' lines (an estimate; each conversation's engine is let go once its lines are timed). */
+  /** Bytes held: the scripts' lines and the ledger (an estimate; each conversation's engine is let go once its lines are timed). */
   bytes(): number {
-    let b = 0;
+    let b = this.news?.ledger.bytes() ?? 0;
     for (const s of this.scripts.values()) b += s.bytes;
     return b;
   }
@@ -126,7 +138,11 @@ export class Conversations {
     this.scripts.clear();
   }
 
-  summary(): string {
-    return `talk: ${this.scripts.size} parties kept, ${this.made} conversations`;
+  summary(t?: number): string {
+    const base = `talk: ${this.scripts.size} parties kept, ${this.made} conversations`;
+    if (!this.news || t === undefined) return base;
+    const heard = newsHeard(this.news.ledger, this.news.at, t, this.news.ledger.params.news.recent);
+    const last = heard[0];
+    return last ? `${base}; news heard here in ${Math.round(this.news.ledger.params.news.recent / 86400)} d: ${heard.length}, latest ${last.news.id} from ${last.news.from} after ${((last.heard - last.news.t) / 60).toFixed(1)} min` : `${base}; no news heard lately`;
   }
 }
