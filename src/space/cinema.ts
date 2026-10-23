@@ -25,6 +25,8 @@ import { hash3i, hashToFloat, v3add, v3cross, v3dot, v3norm, v3scale, v3sub, typ
 import type { Habitat } from '../blueprint';
 import type { Space } from './space';
 import { skyFrom } from './sky';
+import { cabinCamera, fromShip, loungeOf, toShipDirection, windowFacing } from './lounge';
+import { shipShape } from './ship';
 import { approachOf as phasesOf, beforeBerth, berthOf, guestShip, guestVisit, shipAt, type Visit } from './traffic';
 
 /** Shot lengths (s), as the plan has them. */
@@ -42,7 +44,7 @@ export const LIT_FROM = 0.55;
 export const LIT_TO = 0.85;
 
 export interface Frame {
-  shot: 0 | 1 | 2 | 3 | 4 | 5;
+  shot: 0 | 1 | 2 | 3 | 4 | 5 | 6;
   /** Seconds into the shot, and the shot's length. */
   time: number;
   length: number;
@@ -157,13 +159,24 @@ export function attractLoop(space: Space, start: number, keepOut: number, shipLe
   };
 }
 
-/** The arrival's shot lengths (s): shot 4 down the corridor, shot 5 at the berth (long enough after contact to see the clamps home and the collar's lights turn green, space/dock.ts), shot 6 through the bore. */
-export const ARRIVAL_SHOTS = [15, 13, 15] as const;
-export const ARRIVAL = ARRIVAL_SHOTS[0] + ARRIVAL_SHOTS[1] + ARRIVAL_SHOTS[2];
+/**
+ * The arrival's shot lengths (s): shot 4 down the corridor, the cabin shot from the lounge (space/lounge.ts) as the
+ * ship creeps in along its berth arm with the port face beside it, shot 5 at the berth (long enough after contact to see the clamps home and
+ * the collar's lights turn green, space/dock.ts), shot 6 through the bore.
+ */
+export const ARRIVAL_SHOTS = [7, 8, 13, 15] as const;
+export const ARRIVAL = ARRIVAL_SHOTS[0] + ARRIVAL_SHOTS[1] + ARRIVAL_SHOTS[2] + ARRIVAL_SHOTS[3];
+/** When the berth shot starts, and the crossing (s after Start). */
+const BERTH_SHOT = ARRIVAL_SHOTS[0] + ARRIVAL_SHOTS[1];
+const CROSSING_SHOT = BERTH_SHOT + ARRIVAL_SHOTS[2];
+/** The cabin shot's field of view (degrees): a person's, standing in a room. */
+const CABIN_FOV = 62;
 /** Shot 4 starts with the ship this far up its corridor (outer radii; at most half its coast, where it slows). */
 const SHOT4_UP = 1.5;
 /** Shot 5 starts this long before the ship berths (s); the rest of it is the jolt, the clamps and the green light. */
 const SHOT5_BEFORE = 7;
+/** The cabin shot starts this long before the berth (s): on the final creep in, the ship beside the port face. */
+const CABIN_BEFORE = 30;
 /** On the final creep in, the thrusters trim about this often (s), and a turn's start and stop is a pair of pulses this far apart (s). */
 const TRIM = 2.6, PAIR = 0.35;
 /** Shot 6: this long after the berth (s; through the lock and along the arm), floating at this pace (m/s), the bearing
@@ -176,6 +189,11 @@ export const SPIN_UP = 60;
 export interface ArrivalFrame extends Frame {
   /** The clock time this frame shows (s since the space's epoch). */
   clock: number;
+  /**
+   * In the cabin shot: the window it looks out of (rad round the ship's axis, space/lounge.ts) and where the ship is
+   * (its stern, nose and up in the orbit frame, as the frame's eye), so the lounge is drawn round the eye.
+   */
+  cabin?: { look: number; ship: { position: Vec3; forward: Vec3; up: Vec3 } };
 }
 
 /**
@@ -215,9 +233,11 @@ export function arrival(space: Space, after: number): Arrival {
   const across = v3cross([0, 0, 1], radial), side = v3dot(across, sun) >= 0 ? across : v3scale(across, -1);
   // Shot 6, in the spindle's frame: a third of the way out from the axis, down the bore at DRIFT, the bearing passed
   // BEARING_AT of the way through (sooner or later where the bore is short), then turning with the air.
-  const b = h.exterior.spindle.bore, T = ARRIVAL_SHOTS[2];
+  const b = h.exterior.spindle.bore, T = ARRIVAL_SHOTS[3];
   const z0 = Math.min(b.to - b.radius, b.bearing + BEARING_AT * T * DRIFT), z1 = Math.max(b.from + 1.5 * b.radius, b.bearing - (1 - BEARING_AT) * T * DRIFT);
   const bearingIn = (T * (z0 - b.bearing)) / (z0 - z1);
+  // The cabin shot looks out at the port face's middle, where the spindle stands (a ship without a lounge stays outside).
+  const lounge = loungeOf(shipShape(ship)), face: Vec3 = [0, 0, h.exterior.spindle.from];
   const crossing = (time: number): ArrivalFrame => {
     const clock = guest.docked + SHOT6_AFTER + time, z = z0 + (z1 - z0) * (time / T);
     // Seconds since the bearing, and how far the air has turned the passenger round the axis since (rad).
@@ -225,41 +245,54 @@ export function arrival(space: Space, after: number): Arrival {
     const a = (h.spin * Math.min(since, SPIN_UP) ** 2) / (2 * SPIN_UP) + h.spin * Math.max(0, since - SPIN_UP);
     const r = b.radius / 3, out: Vec3 = [Math.cos(a), Math.sin(a), 0];
     const eye: Vec3 = [out[0] * r, out[1] * r, z], target: Vec3 = [0, 0, z - 20 * b.radius];
-    return { shot: 5, time, length: T, eye: toOrbit(eye, clock), target: toOrbit(target, clock), up: dirOrbit(v3scale(out, -1), clock), fov: 70, ship: null, title: 0, clock };
+    return { shot: 6, time, length: T, eye: toOrbit(eye, clock), target: toOrbit(target, clock), up: dirOrbit(v3scale(out, -1), clock), fov: 70, ship: null, title: 0, clock };
   };
   return {
     guest,
-    moments: momentsOf(h, guest, lead, ARRIVAL_SHOTS[0] + ARRIVAL_SHOTS[1] + bearingIn),
+    moments: momentsOf(h, guest, lead, CROSSING_SHOT + bearingIn, lounge !== null),
     at(elapsed: number): ArrivalFrame | null {
       if (elapsed < 0 || elapsed >= ARRIVAL) return null;
-      if (elapsed < ARRIVAL_SHOTS[0]) {
+      if (elapsed < BERTH_SHOT && lounge && elapsed >= ARRIVAL_SHOTS[0]) {
+        // The cabin shot: in the lounge under the nose, looking out of the window that faces the port face, past the
+        // other passengers in their couches, as the ship creeps in along its arm.
+        const time = elapsed - ARRIVAL_SHOTS[0], clock = guest.docked - CABIN_BEFORE + time, s = shipAt(h, guest, clock)!;
+        const toFace = toShipDirection(s, v3sub(face, fromShip(s, [lounge.floor, 0, 0]))), look = windowFacing(lounge, toFace);
+        // Up is the nose: the floor is aft.
+        const c = cabinCamera(lounge, look);
+        return { shot: 4, time, length: ARRIVAL_SHOTS[1], eye: toOrbit(fromShip(s, c.eye), clock), target: toOrbit(fromShip(s, c.target), clock), up: dirOrbit(s.forward, clock), fov: CABIN_FOV, ship: null, title: 0, clock,
+          cabin: { look, ship: { position: toOrbit(s.position, clock), forward: dirOrbit(s.forward, clock), up: dirOrbit(s.up, clock) } } };
+      }
+      if (elapsed < BERTH_SHOT) {
         // Shot 4: behind the ship, above its back (toward the axis) and out to its sunlit side, looking past its nose
         // at the spindle: the ship in three-quarter view, low and to one side of the frame.
         const clock = guest.docked - lead + elapsed, s = shipAt(h, guest, clock)!;
         const mid = v3add(s.position, v3scale(s.forward, L / 2));
         const eye = v3add(mid, v3add(v3scale(s.forward, -2.2 * L), v3add(v3scale(s.up, 0.45 * L), v3scale(side, 0.6 * L))));
         const target: Vec3 = [0, 0, h.exterior.spindle.arms.z];
-        return { shot: 3, time: elapsed, length: ARRIVAL_SHOTS[0], eye: toOrbit(eye, clock), target: toOrbit(target, clock), up: dirOrbit(s.up, clock), fov: 50, ship: null, title: 0, clock };
+        return { shot: 3, time: elapsed, length: lounge ? ARRIVAL_SHOTS[0] : BERTH_SHOT, eye: toOrbit(eye, clock), target: toOrbit(target, clock), up: dirOrbit(s.up, clock), fov: 50, ship: null, title: 0, clock };
       }
-      if (elapsed >= ARRIVAL_SHOTS[0] + ARRIVAL_SHOTS[1]) return crossing(elapsed - ARRIVAL_SHOTS[0] - ARRIVAL_SHOTS[1]);
+      if (elapsed >= CROSSING_SHOT) return crossing(elapsed - CROSSING_SHOT);
       // Shot 5: beside the arm's tip, a little out along it, the collar in the middle; a soft jolt as it latches.
-      const time = elapsed - ARRIVAL_SHOTS[0], clock = guest.docked - SHOT5_BEFORE + time, since = clock - guest.docked;
+      const time = elapsed - BERTH_SHOT, clock = guest.docked - SHOT5_BEFORE + time, since = clock - guest.docked;
       const jolt = since > 0 ? 0.03 * B * Math.exp(-3 * since) * Math.sin(4 * Math.PI * since) : 0;
       const eye = v3add(collar, v3add(v3scale(radial, 0.6 * L - jolt), v3add(v3scale(side, 0.8 * L), [0, 0, 0.28 * L])));
       const target = v3add(collar, v3scale(radial, 0.35 * L));
-      return { shot: 4, time, length: ARRIVAL_SHOTS[1], eye: toOrbit(eye, clock), target: toOrbit(target, clock), up: dirOrbit([0, 0, 1], clock), fov: 58, ship: null, title: 0, clock };
+      return { shot: 5, time, length: ARRIVAL_SHOTS[2], eye: toOrbit(eye, clock), target: toOrbit(target, clock), up: dirOrbit([0, 0, 1], clock), fov: 58, ship: null, title: 0, clock };
     },
   };
 }
 
 /**
- * The arrival's moments (ArrivalMoments) for a guest whose shot 4 starts `lead` s before it berths: shots 4 and 5 each
- * show a stretch of its approach (`u` s before the berth, counting down), cut between; the burns, pulses and the
- * berth are heard where they fall in what is shown.
+ * The arrival's moments (ArrivalMoments) for a guest whose shot 4 starts `lead` s before it berths: shot 4, the cabin
+ * shot (`cabin`: the ship has a lounge) and shot 5 each show a stretch of its approach (`u` s before the berth,
+ * counting down), cut between; the burns, pulses and the berth are heard where they fall in what is shown.
  */
-function momentsOf(h: Habitat, guest: Visit, lead: number, bearing: number): ArrivalMoments {
+function momentsOf(h: Habitat, guest: Visit, lead: number, bearing: number, cabin: boolean): ArrivalMoments {
   const a = phasesOf(h, guest.ship), turnFrom = a.final + a.turn, coastTo = turnFrom + 2 * a.half;
-  const shown = [{ from: 0, to: ARRIVAL_SHOTS[0], u: lead }, { from: ARRIVAL_SHOTS[0], to: ARRIVAL_SHOTS[0] + ARRIVAL_SHOTS[1], u: SHOT5_BEFORE }];
+  const shown = [
+    ...(cabin ? [{ from: 0, to: ARRIVAL_SHOTS[0], u: lead }, { from: ARRIVAL_SHOTS[0], to: BERTH_SHOT, u: CABIN_BEFORE }] : [{ from: 0, to: BERTH_SHOT, u: lead }]),
+    { from: BERTH_SHOT, to: CROSSING_SHOT, u: SHOT5_BEFORE },
+  ];
   const burns: Array<[number, number]> = [], pulses: number[] = [];
   /** Where `u` s before the berth is shown (s since Start), if it is. */
   const when = (u: number): number[] => shown.map((w) => w.from + w.u - u).filter((e, k) => e >= shown[k].from && e < shown[k].to);
@@ -276,7 +309,7 @@ function momentsOf(h: Habitat, guest: Visit, lead: number, bearing: number): Arr
       if (u > uLo && u <= uHi) pulses.push(w.from + w.u - u);
     }
   }
-  return { burns, pulses: pulses.sort((x, y) => x - y), berth: when(0)[0] ?? ARRIVAL_SHOTS[0] + SHOT5_BEFORE, through: ARRIVAL_SHOTS[0] + ARRIVAL_SHOTS[1], bearing };
+  return { burns, pulses: pulses.sort((x, y) => x - y), berth: when(0)[0] ?? BERTH_SHOT + SHOT5_BEFORE, through: CROSSING_SHOT, bearing };
 }
 
 /**

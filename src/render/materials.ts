@@ -47,6 +47,7 @@ import { BOAT_ATTRIBUTES, BOAT_STRIDE, boatPose, wakePose } from './boatShaders'
 import { BOAT_FINISH } from '../gen/boat';
 import { LIGHT_SCALE, VEIL_LIGHT } from '../gen/drone';
 import { boreColor, flameColor, hardwareColor, lampColor, radiatorColor, skinColor, skinDetailColor, skinShown } from './hullShaders';
+import { loungeColor } from './loungeShaders';
 
 /** The air's look, shared by every kind (uniforms: changing them never builds a shader). */
 export const air = {
@@ -458,6 +459,16 @@ export const BORE = kind('bore', ['position', 'normal', 'color'], { cast: false,
   return m;
 });
 
+/**
+ * The lounge the newcomer watches the arrival from (render/lounge.ts): its lamps', windows' and the Sun's light
+ * (loungeShaders.ts, `loungeColor`). Position, normal, color (albedo), in the ship frame.
+ */
+export const LOUNGE_ROOM = kind('lounge', ['position', 'normal', 'color'], { cast: false, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial();
+  m.colorNode = loungeColor();
+  return m;
+});
+
 /** Lamps: their own light (hullShaders.ts, `lampColor`), the vertex colour as luminance. Position, color. */
 export const LAMP = kind('lamp', ['position', 'color'], { cast: false, receive: false }, () => {
   const m = new MeshBasicNodeMaterial();
@@ -737,7 +748,7 @@ export const isPlantInstance = (attribute: string): boolean => attribute === 'pl
 
 /** The kinds of the view outside, for its Stage's warm-up (windows will add them to the interior's). */
 export function outsideKinds(): readonly Kind[] {
-  return [SKY, STARS, CELESTIAL, PLANET_RING, SHIP_CABIN, SHIP_SCREEN, SHIP_HULL, SHIP_SIGN, SKIN, SKIN_DETAIL, RADIATOR, HARDWARE, FLAME, BORE, LAMP];
+  return [SKY, STARS, CELESTIAL, PLANET_RING, SHIP_CABIN, SHIP_SCREEN, SHIP_HULL, SHIP_SIGN, SKIN, SKIN_DETAIL, RADIATOR, HARDWARE, FLAME, BORE, LOUNGE_ROOM, LAMP];
 }
 
 /**

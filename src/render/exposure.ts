@@ -41,10 +41,10 @@ export interface Meterable {
   /** Irradiance from Earth on the hull, relative to full sunlight. */
   earthshine: number;
   /**
-   * Inside an enclosure (the spindle's bore), where every ray lands on its walls: their luminance and the light on
-   * them, relative to full sunlight.
+   * Inside an enclosure (the spindle's bore, a ship's lounge), where every ray lands on its walls, but those `open`
+   * lets out (a window): their luminance and the light on them, relative to full sunlight.
    */
-  room?: { luminance: number; light: number } | null;
+  room?: { luminance: number; light: number; open?: (d: Vec3) => boolean } | null;
   celestial?: { center: Vec3; radius: number; albedo: number; light: number }[];
 }
 
@@ -62,7 +62,7 @@ function lit(sun: number, sunlight: number): number {
 }
 
 function rayMeter(m: Meterable, d: Vec3): { luminance: number; light: number } {
-  if (m.room) return m.room;
+  if (m.room && !m.room.open?.(d)) return m.room;
   const s = m.sky;
   const a = v3len(v3cross(d, s.sunDir));
   const solarSin = Math.sin(s.sunRadius), irradiance = (AU / s.sunDistance) ** 2;

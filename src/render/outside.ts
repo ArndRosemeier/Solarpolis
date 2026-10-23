@@ -15,11 +15,12 @@ import { Color, Mesh, PerspectiveCamera, Scene, SphereGeometry, Texture, type We
 import { Stage, createRenderer, type ShaderMonitor } from '@futuremagic/stage';
 import { Rng, deriveSeed, v3add, v3dot, v3len, v3scale, v3sub, v3norm, type Vec3 } from '@futuremagic/core';
 import type { Habitat } from '../blueprint';
-import { DAY, EARTH, MOON, REFERENCE_SPACE, SpaceFlyer, arrival, attractLoop, calendarOf, chooseStart, decodeStars, guestShip, julianDay, makeSpace, shipLightsOf, shipShape, skyFrom, type Arrival, type ArrivalFrame, type Cinema, type CinemaFrame, type HullLight, type Mat3, type ShipShape, type Space, type SkyView } from '../space';
+import { DAY, EARTH, MOON, REFERENCE_SPACE, SpaceFlyer, arrival, attractLoop, calendarOf, chooseStart, decodeStars, cabinCamera, fromShipDirection, guestShip, julianDay, loungeOf, LOUNGE, makeSpace, throughWindow, toShipDirection, windowLight, shipLightsOf, shipShape, skyFrom, type Arrival, type ArrivalFrame, type Cinema, type CinemaFrame, type HullLight, type Mat3, type ShipShape, type Space, type SkyView } from '../space';
 import { SKY, STARS, outsideKinds, standInAttribute } from './materials';
 import { filtered } from './textures';
 import { outside, skyMaps } from './skyShaders';
-import { DARKEST, PERIPHERY, adapt, exposureFor, meterRays, starExposure, sunInView, type Meterable } from './exposure';
+import { DARKEST, PERIPHERY, adapt, exposureFor, meterRays, rayLuminance, starExposure, sunInView, type Meterable } from './exposure';
+import { LoungeView } from './lounge';
 import { NecklaceView } from './necklace';
 import { meshGeometry, setPose } from './geometry';
 import { SHIP_ALBEDO, ShipMeshes, shipAxes } from './ship';
@@ -77,6 +78,8 @@ export class OutsideView {
   private ship: ShipMeshes | null = null;
   /** The title ship's navigation lights (space/lights.ts). */
   private shipLamps: { lights: HullLight[]; points: LampPoints } | null = null;
+  /** The lounge under its nose, for the arrival's cabin shot (null for a ship without one). */
+  private lounge: LoungeView | null = null;
   /** Called each frame of the attract loop with how far the title has faded in (0–1). */
   onTitle: ((fade: number) => void) | null = null;
   /** Each frame of the arrival after Start: how far in it is (s) and the arrival itself (its sounds and the Mind's lines). */
@@ -171,7 +174,7 @@ export class OutsideView {
 
   /** Bytes this view holds (memory watchdog): the surface maps with their mipmaps, the star field, the skin's detail tiles. */
   bytes(): number {
-    return this.textureBytes + this.starBytes + (this.necklace?.detailBytes() ?? 0) + (this.necklace?.trafficBytes() ?? 0) + (this.ship?.bytes ?? 0) + (this.solar?.bytes() ?? 0) + (this.habitatLights?.bytes() ?? 0) + (this.vessel?.meshes.bytes() ?? 0) + (this.voyage?.bytes() ?? 0);
+    return this.textureBytes + this.starBytes + (this.necklace?.detailBytes() ?? 0) + (this.necklace?.trafficBytes() ?? 0) + (this.ship?.bytes ?? 0) + (this.lounge?.bytes ?? 0) + (this.solar?.bytes() ?? 0) + (this.habitatLights?.bytes() ?? 0) + (this.vessel?.meshes.bytes() ?? 0) + (this.voyage?.bytes() ?? 0);
   }
 
   /** Give memory back (memory watchdog): Earth's day map drops to half resolution, detail tiles out of sight go. */
@@ -255,6 +258,8 @@ export class OutsideView {
     this.ship = null;
     this.shipLamps?.points.leave(this.stage);
     this.shipLamps = null;
+    this.lounge?.removeFrom(this.stage);
+    this.lounge = null;
     this.flyer = null;
     this.frameHabitat();
     await this.buildNecklace();
@@ -407,10 +412,13 @@ export class OutsideView {
     this.camera.lookAt(look[0], look[1], look[2]);
     this.camera.fov = voyageCamera?.fov ?? aboard?.fov ?? (shot ? shot.fov : this.look === 'habitat' || this.flyer || this.observer ? 45 : this.zoom);
     this.placeShip(eye, shot?.ship ?? null);
+    const cabin = this.arriving?.frame.cabin;
+    if (cabin && this.lounge) this.lounge.aboard(cabin.ship, eye);
+    else this.lounge?.hide();
     this.vessel?.place(eye);
     // Close to a surface the near plane comes in with it; reversed depth keeps the far side precise.
     this.camera.near = Math.max(0.05, Math.min(10, this.clearance([0, 0, 0]) * 0.25));
-    if (this.vessel?.active) this.camera.near = .05;
+    if (this.vessel?.active || cabin) this.camera.near = .05;
     this.camera.updateProjectionMatrix();
     this.camera.updateMatrixWorld();
   }
@@ -435,9 +443,12 @@ export class OutsideView {
     if (!this.ship) {
       const ship = new ShipMeshes(this.shipShape, 'torch ship');
       const lights = shipLightsOf(this.shipShape), lamps = { lights, points: new LampPoints(lights.length, 'torch ship lights') };
-      await Promise.all([ship.addTo(this.stage, true), lamps.points.enter(this.stage)]);
+      // The lounge too, while the title plays: the cabin shot after Start finds its shaders built.
+      const room = loungeOf(this.shipShape), lounge = room ? new LoungeView(room, 'torch ship') : null;
+      await Promise.all([ship.addTo(this.stage, true), lamps.points.enter(this.stage), lounge?.addTo(this.stage)]);
       this.ship = ship;
       this.shipLamps = lamps;
+      this.lounge = lounge;
     }
     this.flyer = null;
     const start = chooseStart(this.space, 0);
@@ -652,6 +663,16 @@ export class OutsideView {
     const room = this.vessel?.active && this.vessel.inside ? { luminance: .18, light: 1 } : this.necklace?.insideBore() ? { luminance: BORE_ALBEDO * BORE_LIGHT, light: BORE_LIGHT } : null;
     const celestial = this.solar.seen.filter(s => s.body.radius / s.distance > .0003).sort((a, b) => a.distance - b.distance).map(s => ({ center: s.center, radius: s.body.radius, albedo: s.body.albedo, light: s.light }));
     const metered: Meterable = { sky: this.sky, hulls, earthshine: outside.earthshine.value, room, celestial };
+    const cabin = this.arriving?.frame.cabin;
+    if (cabin && this.lounge) {
+      // In the lounge: lit by what its windows look out on and by the Sun through them; the eyes see out of the
+      // windows and the room round them.
+      const l = this.lounge.lounge, ship = cabin.ship, from = cabinCamera(l, cabin.look).eye;
+      const windows = windowLight(l, (d) => rayLuminance(metered, fromShipDirection(ship, d)));
+      this.lounge.lit(ship, this.sky.sunDir, this.sky.sunlight * outside.irradiance.value, windows);
+      const light = LOUNGE.lamps + windows.all / 2;
+      metered.room = { luminance: LOUNGE.albedo * light, light, open: (d) => throughWindow(l, from, toShipDirection(ship, d)) };
+    }
     this.exposure = adapt(this.exposure, exposureFor(metered, rays, this.nightEyes ? DARKEST.nightEyes : DARKEST.plain), dt);
     outside.exposure.value = this.exposure;
   }

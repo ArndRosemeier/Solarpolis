@@ -89,7 +89,7 @@ test('sky: Earth hides the Sun around local midnight near the equinox, for about
 });
 
 test('exposure: full Earth in view sets it near 0.6, a sunlit hull against black keeps its highlights, empty sky opens the eyes', async () => {
-  const { exposureFor, adapt, KEY, DARKEST, HIGHLIGHT_LEVEL, ANCHOR_LEVEL } = await import('../src/render/exposure');
+  const { exposureFor, rayLuminance, adapt, KEY, DARKEST, HIGHLIGHT_LEVEL, ANCHOR_LEVEL } = await import('../src/render/exposure');
   const s = spaceOf('reference');
   // Local noon at the equinox: the Sun behind the eye, Earth full.
   const t0 = tOf(s, 3026, 3, 20);
@@ -109,6 +109,10 @@ test('exposure: full Earth in view sets it near 0.6, a sunlit hull against black
   const rays: Vec3[] = [back, pole, pole, pole, pole];
   const lit = exposureFor({ sky: { ...sky, sunlight: 1 }, hulls: [hull], earthshine: 0 }, rays, DARKEST.plain);
   near(lit, Math.min(HIGHLIGHT_LEVEL / 0.08, ANCHOR_LEVEL), 1e-6, 'the sunlight on the hull sets the exposure: a dark hull stays dark');
+  // In a room with a window: the rays it lets out see the lit hull, the rest the room's dim walls.
+  const room = { luminance: 0.004, light: 0.01, open: (d: Vec3) => v3dot(d, back) > 0.99 };
+  assert.ok(rayLuminance({ sky: { ...sky, sunlight: 1 }, hulls: [hull], earthshine: 0, room }, back) > 0.07, 'out of the window: the hull');
+  assert.equal(rayLuminance({ sky: { ...sky, sunlight: 1 }, hulls: [hull], earthshine: 0, room }, pole), 0.004, 'the wall');
   const dark = exposureFor({ sky: { ...sky, sunlight: 0 }, hulls: [], earthshine: 0 }, [away], DARKEST.plain);
   near(dark, KEY / DARKEST.plain, 1e-6 * KEY / DARKEST.plain, 'eyes open to their limit');
   // Adapting: a second in the light gets most of the way; the dark takes longer.

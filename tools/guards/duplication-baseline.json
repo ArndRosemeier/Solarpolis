@@ -1076,12 +1076,8 @@
     "reason": "Everything that can give memory back does so through a shed() method the memory watchdog calls (CLAUDE.md rule 12); each sheds its own buffers."
   },
   {
-    "key": "same name: solarpolis/render/ship.ts#hide + solarpolis/render/vessel.ts#hide",
-    "reason": "Independent resource/view lifecycle owner. The ship delegates hull geometry and transforms to ShipMeshes/setPose; its room pools, atlas and visitor state must be accounted for and released by their own owner."
-  },
-  {
-    "key": "same name: solarpolis/render/ship.ts#pose + solarpolis/render/vessel.ts#pose",
-    "reason": "Independent resource/view lifecycle owner. The ship delegates hull geometry and transforms to ShipMeshes/setPose; its room pools, atlas and visitor state must be accounted for and released by their own owner."
+    "key": "same name: solarpolis/render/geometry.ts#hide + solarpolis/render/vessel.ts#hide",
+    "reason": "Independent resource/view lifecycle owner. The ship delegates hull geometry and transforms to ShipMeshes (PosedMeshes)/setPose; its room pools, atlas and visitor state must be accounted for and released by their own owner."
   },
   {
     "key": "same name: solarpolis/render/solar.ts#bytes + solarpolis/render/talk.ts#bytes",
@@ -2296,10 +2292,6 @@
     "reason": "Each view's per-frame update by its own clock and pose (the dock: its clamps posed and its lamps lit from the berth's state); the name is the views' convention, the bodies share nothing."
   },
   {
-    "key": "idiom: [.eye .profile] in solarpolis/render/animals.ts + solarpolis/render/birds.ts + solarpolis/render/homes.ts",
-    "reason": "`fromWorld(h.profile, ...eye)` is the one way (blueprint) to find where the eye stands in the habitat; each view then does its own thing there. Surfaced only because new files shifted the guard's word weights."
-  },
-  {
     "key": "same name: solarpolis/render/actors/figure.ts#bytes + solarpolis/render/dock.ts#bytes",
     "reason": "Each view reports the bytes it holds for the memory watchdog (CLAUDE.md rule 12), each counting what is its own; the counting itself is `geometryBytes` (render/geometry.ts)."
   },
@@ -2350,5 +2342,13 @@
   {
     "key": "same name: solarpolis/render/outside.ts#shaderLog + solarpolis/render/view.ts#shaderLog",
     "reason": "each view has its own renderer and Stage; both hand out their Stage's monitor for the arrival's timing line (app/arrivalTiming.ts)."
+  },
+  {
+    "key": "idiom: [.add .mul] in solarpolis/render/crowdShaders.ts + solarpolis/render/groundShaders.ts + solarpolis/render/loungeShaders.ts",
+    "reason": "TSL shader node chains (`.add(…).mul(…)`) are how every kind's shader is written in three's node language; the lounge's lighting (lamps, windows, the Sun through the glass) is its own, not a copy (2026-10-23)."
+  },
+  {
+    "key": "idiom: [.max .min .pitch Math] in solarpolis/render/outside.ts + solarpolis/render/vesselVisit.ts + solarpolis/space/flyer.ts",
+    "reason": "Clamping a dragged camera's pitch (`Math.max(-1.5, Math.min(1.5, pitch + dy))`) in three controllers that each own their look; unchanged code that crossed the idiom finder's floor when the lounge's lines were added to outside.ts (2026-10-23), not a new copy."
   }
 ]

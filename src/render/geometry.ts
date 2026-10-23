@@ -193,6 +193,43 @@ export function posedMesh(geometry: BufferGeometry, material: Material, name: st
   return m;
 }
 
+/**
+ * Meshes that enter the scene together, hidden until posed, and leave together: a ship (render/ship.ts), its lounge
+ * (render/lounge.ts). Posed by `setPose` in one frame (its axes in the scene, its origin relative to the eye).
+ */
+export class PosedMeshes {
+  /** The bytes their geometry holds on the GPU (and on the CPU too, until `addTo` lets go of them). */
+  readonly bytes: number;
+
+  constructor(readonly meshes: readonly Mesh[]) {
+    for (const m of meshes) { m.matrixAutoUpdate = false; m.frustumCulled = false; m.visible = false; }
+    this.bytes = meshes.reduce((n, m) => n + geometryBytes(m.geometry), 0);
+  }
+
+  /**
+   * Into the scene, hidden until posed (the Stage still builds their shaders under its cap). With `drop`, the CPU copy
+   * of their geometry goes once the GPU holds it (`dropUploaded`): for meshes whose geometry nothing reads again.
+   */
+  async addTo(stage: Stage, drop = false): Promise<void> {
+    for (const m of this.meshes) m.visible = false;
+    await Promise.all(this.meshes.map((m) => stage.add(m)));
+    if (drop) for (const m of this.meshes) dropUploaded(m, stage.renderer);
+  }
+
+  removeFrom(stage: Stage): void {
+    for (const m of this.meshes) { stage.remove(m); freeMesh(m); }
+  }
+
+  /** Posed and shown: their frame's axes in the scene, its origin relative to the eye. */
+  protected poseAll(axes: Mat3, at: Vec3): void {
+    for (const m of this.meshes) { setPose(m, axes, at); m.visible = true; }
+  }
+
+  hide(): void {
+    for (const m of this.meshes) m.visible = false;
+  }
+}
+
 /** The geometry of built things (the BUILT and VAULT kinds): a shape's arrays with its uvs and finishes, and the light baked per vertex (`glow`, VAULT's) if given. */
 export const builtGeometry = (a: MappedArrays, glow?: Float32Array): BufferGeometry => arraysGeometry(a, { uv: [a.uvs, 2], finish: [a.finishes, 1], ...(glow ? { glow: [glow, 2] as const } : {}) });
 
