@@ -527,27 +527,27 @@ export interface Seat {
  */
 export function seatsOf(kind: BoatKind): { still: readonly Seat[]; sailing: readonly Seat[] } {
   const spec = BOAT_KINDS[kind], L = spec.length, B = spec.beam, hulls = HULLS[kind](spec), lines = linesOf(hulls[0]), t = (z: number): number => z / L + 0.5;
-  const at = (x: number, y: number, z: number, facing = 0, pose = 1): Seat => ({ x, y, z, facing, pose });
+  const seat = (x: number, y: number, z: number, facing = 0, pose = 1): Seat => ({ x, y, z, facing, pose });
   if (kind === 'skiff') {
     const sole = lines.deck(t(-0.44 * L), 0) + 0.004, rack = B / 2 - 0.3, inboard = -Math.PI / 3;
     return {
-      still: [at(0, sole, -0.3 * L), at(0, sole, -0.16 * L)],
-      sailing: [-0.3, -0.15].map((k) => at(rack, lines.free(t(k * L)), k * L, inboard)),
+      still: [seat(0, sole, -0.3 * L), seat(0, sole, -0.16 * L)],
+      sailing: [-0.3, -0.15].map((k) => seat(rack, lines.free(t(k * L)), k * L, inboard)),
     };
   }
   if (kind === 'foiler') {
     const net = (lines.free(0.5) + linesOf(hulls[1]).free(0.5)) / 2 + 0.03 * L + 0.012;
     return {
-      still: [at(0.2 * B, net, -0.06 * L), at(-0.2 * B, net, -0.06 * L), at(0.2 * B, net, -0.13 * L)],
-      sailing: [at(0.25 * B, net, -0.06 * L), at(0.36 * B, net, -0.1 * L), at(0.25 * B, net, -0.14 * L)],
+      still: [seat(0.2 * B, net, -0.06 * L), seat(-0.2 * B, net, -0.06 * L), seat(0.2 * B, net, -0.13 * L)],
+      sailing: [seat(0.25 * B, net, -0.06 * L), seat(0.36 * B, net, -0.1 * L), seat(0.25 * B, net, -0.14 * L)],
     };
   }
   const top = lines.free(0.5) * 1.1 + 0.01, net = lines.free(0.5) * 1.02 + 0.01, across = 0.18 * B, up = 0;
   const all = [
-    at(-0.22 * B, top, -0.33 * L, 0, up),
-    ...[-0.24, -0.14, -0.04, 0.06].flatMap((k) => [at(across, top, k * L, -Math.PI / 2, up), at(-across, top, k * L, Math.PI / 2, up)]),
-    at(0.14 * B, top, 0.18 * L, 0, up), at(-0.14 * B, top, 0.18 * L, 0, up),
-    at(0, net, 0.3 * L),
+    seat(-0.22 * B, top, -0.33 * L, 0, up),
+    ...[-0.24, -0.14, -0.04, 0.06].flatMap((k) => [seat(across, top, k * L, -Math.PI / 2, up), seat(-across, top, k * L, Math.PI / 2, up)]),
+    seat(0.14 * B, top, 0.18 * L, 0, up), seat(-0.14 * B, top, 0.18 * L, 0, up),
+    seat(0, net, 0.3 * L),
   ];
   return { still: all, sailing: all };
 }

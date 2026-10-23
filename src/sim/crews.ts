@@ -19,13 +19,15 @@ import { angleDiff, deriveSeed } from '@futuremagic/core';
 import type { Habitat } from '../blueprint';
 import type { Terrain } from '../gen/terrain';
 import { kept } from '../gen/kept';
+import { planOf } from '../gen/plan';
 import { BOAT_KINDS, seatsOf } from '../gen/boat';
-import { HARBOUR, basinPoint, fleetOf, type Boat } from '../gen/harbours';
+import { HARBOUR, basinPoint, fleetOf, inBasinFrame, offShore } from '../gen/harbours';
 import { landingOf } from '../gen/harbourBuild';
 import { floorAt } from '../gen/shapes';
 import { POSE } from '../gen/standIn';
 import { boatAt, outingOf, type BoatState } from './sailing';
 import { venuesOf } from './venues';
+import { dayNumber } from '../world/sunline';
 import { floorGap, pointAlong, routeThrough, walksOf, type Route } from './walks';
 import { residentOf, unit, walkSlot, wayOf, type Near, type Person } from './population';
 
@@ -35,6 +37,8 @@ export interface Crew {
   first: number;
   size: number;
   court: number;
+  /** Where they leave the paths for their harbour (a point of the walk net), or −1 at a buoy. */
+  vertex: number;
 }
 
 export interface Crews {
@@ -63,25 +67,19 @@ export const crewsOf: (h: Habitat) => Crews = kept((h: Habitat): Crews => {
   if (!courts.length || sailors > (N - Math.round(N * h.params.life.regulars)) * SPARE) return { crews: [], first: N, sailors: 0, byCourt: courts.map(() => []) };
   const first = N - sailors, crews: Crew[] = [], byCourt: number[][] = courts.map(() => []);
   let at = first;
+  const vertices = fleet.harbours.map((hb) => { const p = floorAt(h, hb.frame, landingOf(hb), 0); return dryVertex(h, p.theta, p.s); });
   fleet.boats.forEach((b, i) => {
-    // Home: the court nearest where the boat lies.
-    const p = homeOf(h, b);
+    // Home: the court nearest where they leave the paths for its harbour (or nearest its buoy).
+    const vertex = b.harbour < 0 ? -1 : vertices[b.harbour], net = walksOf(h);
+    const p = vertex < 0 ? basinPoint(fleet.basins[b.basin], b.home.u, b.home.v) : { theta: net.theta(vertex), s: net.s(vertex) };
     let court = 0, best = Infinity;
     courts.forEach((c, k) => { const d = floorGap(h.radius, c.theta, c.s, p.theta, p.s); if (d < best) { best = d; court = k; } });
     byCourt[court].push(crews.length);
-    crews.push({ boat: b.id, first: at, size: sizes[i], court });
+    crews.push({ boat: b.id, first: at, size: sizes[i], court, vertex });
     at += sizes[i];
   });
   return { crews, first, sailors, byCourt };
 });
-
-/** Where a boat lies when it is in (its harbour's landing, or its buoy), on the floor. */
-function homeOf(h: Habitat, b: Boat): { theta: number; s: number } {
-  const fleet = fleetOf(h);
-  if (b.harbour < 0) return basinPoint(fleet.basins[b.basin], b.home.u, b.home.v);
-  const hb = fleet.harbours[b.harbour];
-  return floorAt(h, hb.frame, landingOf(hb), 0);
-}
 
 /** A boat's crew, or null (its habitat has none). */
 export const crewOf = (h: Habitat, boat: number): Crew | null => crewsOf(h).crews[boat] ?? null;
@@ -125,7 +123,7 @@ export function crewRoute(h: Habitat, ground: Terrain | undefined, crew: Crew): 
     const hb = fleet.harbours[boat.harbour], hr = hb.handrail, berth = hb.berths.find((b) => b.boat === boat.id)!;
     const mid = hb.pontoon + (HARBOUR.pontoon * hr) / 2, stern = hb.pontoon + HARBOUR.pontoon * hr - 0.3 * hr;
     const along = [[landingOf(hb) - hr, 0], [0, 0], [hb.pontoon, 0], [mid, 0], [mid, berth.y], [stern, berth.y]].map(([x, y]) => floorAt(h, hb.frame, x, y));
-    const net = walksOf(h), v = net.vertexNear(along[0].theta, along[0].s), paths = wayOf(h, ground, crew.court, v, null).points;
+    const paths = wayOf(h, ground, crew.court, crew.vertex, null).points;
     const out = new Float64Array(paths.length + along.length * 2);
     out.set(paths);
     let last = paths.length ? paths[paths.length - 2] : along[0].theta;
@@ -140,10 +138,36 @@ export function crewRoute(h: Habitat, ground: Terrain | undefined, crew: Crew): 
   return r;
 }
 
+/** Within this (m) of a harbour's landing, the land may lie lower than the lake's plan says (the shore shelves in). */
+const SHORE = 10;
+
+/** The point of the walk net nearest a place that one walks to it from over dry land (the nearest, if none is). */
+function dryVertex(h: Habitat, theta: number, s: number): number {
+  const net = walksOf(h), plan = planOf(h), R = h.radius, gap = new Float64Array(net.size);
+  let nearest = 0;
+  for (let v = 0; v < net.size; v++) { gap[v] = floorGap(R, theta, s, net.theta(v), net.s(v)); if (gap[v] < gap[nearest]) nearest = v; }
+  const dry = (v: number): boolean => {
+    const d = gap[v], dt = angleDiff(0, net.theta(v) - theta), ds = net.s(v) - s, steps = Math.ceil(d / 8);
+    for (let k = 0; k <= steps; k++) if ((d * k) / steps > SHORE && plan.inWater(theta + (dt * k) / steps, s + (ds * k) / steps)) return false;
+    return true;
+  };
+  // Nearest first, looking further out a ring at a time.
+  for (let from = 0, to = gap[nearest] + 200; from < Infinity; from = to, to = to * 2 > R * 50 ? Infinity : to * 2) {
+    const ring: number[] = [];
+    for (let v = 0; v < net.size; v++) if (gap[v] >= from && gap[v] < to) ring.push(v);
+    ring.sort((a, b) => gap[a] - gap[b]);
+    for (const v of ring) if (dry(v)) return v;
+  }
+  return nearest;
+}
+
 /** Bytes the crews' routes hold for a habitat (and its terrain), for the memory watchdog. */
 export function crewBytes(h: Habitat, ground?: Terrain): number {
   let n = 0;
-  for (const owner of [h, ground]) for (const r of (owner && routes.get(owner)?.values()) || []) n += r.points.byteLength + r.along.byteLength;
+  for (const owner of [h, ground]) {
+    for (const r of (owner && routes.get(owner)?.values()) || []) n += r.points.byteLength + r.along.byteLength;
+    n += ((owner && reaches.get(owner)?.size) || 0) * 64;
+  }
   return n;
 }
 
@@ -160,7 +184,7 @@ export function crewWindow(h: Habitat, crew: Crew, day: number, ground?: Terrain
  * (their boat stays in, or they are not yet come or already gone). `state`: the boat's, if it is known already.
  */
 export function crewMemberAt(h: Habitat, t: number, crew: Crew, member: number, ground?: Terrain, state?: BoatState): Person | null {
-  const day = Math.floor(t / h.params.day.length), boat = fleetOf(h).boats[crew.boat], o = outingOf(h, boat, day);
+  const day = dayNumber(h, t), boat = fleetOf(h).boats[crew.boat], o = outingOf(h, boat, day);
   if (!o || member >= crew.size) return null;
   const route = crewRoute(h, ground, crew), i = crew.first + member, size = crew.size;
   const base: Crewed = { resident: i, activity: 'sail', court: crew.court, outing: member, member, size, boat: crew.boat };
@@ -189,41 +213,70 @@ function aboard(h: Habitat, t: number, crew: Crew, member: number, base: Crewed,
   const hiking = b.sailing && !b.motoring && !b.turning && seats.sailing !== seats.still;
   const seat = (hiking ? seats.sailing : seats.still)[member], side = hiking ? -b.tack : 1;
   const x = seat.x * side, facing = seat.facing * side, roll = -b.tack * b.heel, lift = b.foiling && spec.foil ? spec.foil.lift : 0;
-  const c = Math.cos(b.heading), sn = Math.sin(b.heading);
-  const around = sn * seat.z + c * x, along = c * seat.z - sn * x;
+  const at = floorAt(h, { theta: b.theta, s: b.s, height: b.level, heading: b.heading }, seat.z, x);
   return {
-    ...base, theta: b.theta + around / h.radius, s: b.s + along, heading: b.heading + facing, moving: false, speed: b.speed,
+    ...base, theta: at.theta, s: at.s, heading: b.heading + facing, moving: false, speed: b.speed,
     act: 'quiet', posture: seat.pose, from: POSE.upright, since,
     seat: [x, seat.y, seat.z], facing, deck: b.level + x * Math.sin(roll) + seat.y * Math.cos(roll) + lift, drift: b.astern ? b.heading + Math.PI : b.heading,
   };
 }
 
-/** The crews out on a day and when (`crewWindow`), kept for the last two days asked per terrain (or habitat). */
-const days = new WeakMap<object, Map<number, { crew: Crew; start: number; end: number }[]>>();
-function outOn(h: Habitat, day: number, ground?: Terrain): { crew: Crew; start: number; end: number }[] {
+/** Where a crew's way runs: a circle round it on the floor (kept with the routes), or null at a buoy. */
+const reaches = new WeakMap<object, Map<number, { theta: number; s: number; radius: number }>>();
+function wayBounds(h: Habitat, ground: Terrain | undefined, crew: Crew): { theta: number; s: number; radius: number } | null {
+  const r = crewRoute(h, ground, crew);
+  if (!r) return null;
+  const owner: object = ground ?? h;
+  let m = reaches.get(owner);
+  if (!m) { m = new Map(); reaches.set(owner, m); }
+  let c = m.get(crew.boat);
+  if (!c) {
+    const mid = pointAlong(r, h.radius, r.length / 2);
+    let radius = 0;
+    for (let k = 0; k < r.points.length; k += 2) radius = Math.max(radius, floorGap(h.radius, mid.theta, mid.s, r.points[k], r.points[k + 1]));
+    c = { theta: mid.theta, s: mid.s, radius };
+    m.set(crew.boat, c);
+  }
+  return c;
+}
+
+/** Whether anyone of a crew can be within an area: on their way, or on their boat's water. */
+function mayBeIn(h: Habitat, crew: Crew, near: Near, ground?: Terrain): boolean {
+  const fleet = fleetOf(h), boat = fleet.boats[crew.boat], b = fleet.basins[boat.basin], at = inBasinFrame(b, near.theta, near.s);
+  if (-offShore(b, at.u, at.v) <= near.radius + BOAT_KINDS[boat.kind].length) return true;
+  const c = wayBounds(h, ground, crew);
+  return !!c && floorGap(h.radius, near.theta, near.s, c.theta, c.s) <= near.radius + c.radius;
+}
+
+/** Each crew's day on the water (`crewWindow`) once worked out, kept for the last two days asked per terrain (or habitat). */
+const days = new WeakMap<object, Map<number, Map<number, { start: number; end: number } | null>>>();
+function windowOn(h: Habitat, crew: Crew, day: number, ground?: Terrain): { start: number; end: number } | null {
   const owner: object = ground ?? h;
   let m = days.get(owner);
   if (!m) { m = new Map(); days.set(owner, m); }
-  let out = m.get(day);
-  if (!out) {
+  let d = m.get(day);
+  if (!d) {
     if (m.size >= 2) m.clear();
-    out = [];
-    for (const crew of crewsOf(h).crews) { const w = crewWindow(h, crew, day, ground); if (w) out.push({ crew, ...w }); }
-    m.set(day, out);
+    d = new Map();
+    m.set(day, d);
   }
-  return out;
+  let w = d.get(crew.boat);
+  if (w === undefined) { w = crewWindow(h, crew, day, ground); d.set(crew.boat, w); }
+  return w;
 }
 
-/** Everyone of the crews up at clock time t (within `near`, if given). */
+/** Everyone of the crews up at clock time t (within `near`, if given: only crews that can be there are looked at). */
 export function crewsAt(h: Habitat, t: number, near?: Near, ground?: Terrain): Person[] {
-  const out: Person[] = [], day = Math.floor(t / h.params.day.length), R = h.radius;
-  for (const { crew, start, end } of outOn(h, day, ground)) {
-    if (t < start || t > end) continue;
+  const out: Person[] = [], day = dayNumber(h, t), R = h.radius;
+  for (const crew of crewsOf(h).crews) {
+    if (near && !mayBeIn(h, crew, near, ground)) continue;
+    const w = windowOn(h, crew, day, ground);
+    if (!w || t < w.start || t > w.end) continue;
     let state: BoatState | undefined;
     for (let m = 0; m < crew.size; m++) {
       const p = crewMemberAt(h, t, crew, m, ground, state);
       if (!p) continue;
-      if (p.boat !== undefined && p.seat && !state) state = boatAt(h, fleetOf(h).boats[crew.boat], t);
+      if (p.seat && !state) state = boatAt(h, fleetOf(h).boats[crew.boat], t);
       if (!near || floorGap(R, near.theta, near.s, p.theta, p.s) <= near.radius) out.push(p);
     }
   }
