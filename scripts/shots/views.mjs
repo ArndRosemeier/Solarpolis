@@ -229,6 +229,11 @@ export const views = {
   // The rooms step down to the lake (gen/plan.ts `roomAt`): a river's fall where it breaks through a Ring, from below and from its lip.
   'ring-fall-volume': { query: 'view=inside', about: 'the Ring fall across its face and nearer its edge, clear of riverbank foliage', settle: 6000, steps: [{ debug: 'Fly: across the nearest Ring fall' }, { wait: 14000 }, { shot: 'across' }, { key: 'KeyW', hold: 1700 }, { wait: 4000 }, { shot: 'near' }, { key: 'KeyD', hold: 1300 }, { wait: 3000 }, { shot: 'edge' }, { run: logPeople }] },
   'ring-fall': { query: 'view=inside', about: 'the nearest river fall where a river breaks through a Ring: from the room below, looking up at it, then from beside its lip, looking down into the lower room', settle: 6000, steps: [{ debug: 'Below the nearest Ring fall' }, { wait: 12000 }, { shot: 'below' }, { debug: 'Above the nearest Ring fall' }, { wait: 12000 }, { shot: 'lip' }] },
+  // The lakes on the floor (gen/plan.ts `meres`): the great lake and the smaller ones from off their ends, then from a shore.
+  lakes: { query: 'view=inside', about: 'the lakes on the floor: the great lake in the reserve with the great river through it, then each smaller one, from off the end of its long axis; then standing on the great lake\'s shore', settle: 6000, steps: [
+    ...['great', 'lake-1', 'lake-2', 'lake-3'].flatMap((name) => [{ debug: 'Fly: the next lake' }, { wait: 12000 }, { shot: name }]),
+    { debug: 'To the next lake\'s shore' }, { wait: 12000 }, { shot: 'shore' },
+  ] },
   // The districts' works (gen/works.ts): each press of the Go entry moves to the next kind, nearest the eye.
   works: { query: 'view=inside', about: 'the districts\' works, one kind after another, each from two of its radii off: pyramid, cone, sunken court, mesa, fold, dome, down, scarp, vale, bowl, stepwell, half-pipe, amphitheatre, ramp, drumlin, tor', settle: 6000, steps: [
     ...['pyramid', 'cone', 'sunken', 'mesa', 'fold', 'dome', 'down', 'scarp', 'vale', 'bowl', 'stepwell', 'halfpipe', 'amphitheatre', 'ramp', 'drumlin', 'tor'].flatMap((kind) => [{ debug: 'Fly: the next district work' }, { wait: 9000 }, { shot: kind }]),

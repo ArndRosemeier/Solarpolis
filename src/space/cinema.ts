@@ -21,11 +21,11 @@
  * Every distance is a multiple of the home habitat's outer radius, so the same shots frame the smallest and the
  * largest habitat. Positions are in the home habitat's orbit frame (its centre at the origin), float64. Pure.
  */
-import { v3add, v3cross, v3dot, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
+import { hash3i, hashToFloat, v3add, v3cross, v3dot, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
 import type { Habitat } from '../blueprint';
 import type { Space } from './space';
 import { skyFrom } from './sky';
-import { beforeBerth, berthOf, guestShip, guestVisit, shipAt, type Visit } from './traffic';
+import { approachOf as phasesOf, beforeBerth, berthOf, guestShip, guestVisit, shipAt, type Visit } from './traffic';
 
 /** Shot lengths (s), as the plan has them. */
 export const SHOTS = [12, 13, 15] as const;
@@ -164,6 +164,8 @@ export const ARRIVAL = ARRIVAL_SHOTS[0] + ARRIVAL_SHOTS[1] + ARRIVAL_SHOTS[2];
 const SHOT4_UP = 1.5;
 /** Shot 5 starts this long before the ship berths (s); the rest of it is the latch and the jolt. */
 const SHOT5_BEFORE = 7;
+/** On the final creep in, the thrusters trim about this often (s), and a turn's start and stop is a pair of pulses this far apart (s). */
+const TRIM = 2.6, PAIR = 0.35;
 /** Shot 6: this long after the berth (s; through the lock and along the arm), floating at this pace (m/s), the bearing
  * passed this share of the way through the shot. The air in the sleeve brings a passenger up to the spin in SPIN_UP s. */
 const SHOT6_AFTER = 90;
@@ -176,9 +178,27 @@ export interface ArrivalFrame extends Frame {
   clock: number;
 }
 
+/**
+ * When the arrival's moments come, in seconds since Start, from what the ship really does in the time each shot shows
+ * (space/traffic.ts `shipAt`): its thrusters burning steadily as it slows up its corridor, the pulses that start and
+ * stop its turn and trim its final creep in, the berth, then the passenger through the lock and past the bearing.
+ */
+export interface ArrivalMoments {
+  /** Spans of a steady burn (the coast, slowing on the thrusters). */
+  burns: Array<[number, number]>;
+  /** Single thruster pulses, in order. */
+  pulses: number[];
+  berth: number;
+  /** Shot 6 begins: through the lock, into the bore. */
+  through: number;
+  /** The bearing is passed: from here the air turns the passenger with the habitat. */
+  bearing: number;
+}
+
 export interface Arrival {
   /** The passenger's ship's visit (draw it with the traffic: `trafficAt(..., guest)`). */
   guest: Visit;
+  moments: ArrivalMoments;
   /** The frame at `elapsed` seconds after Start; null once the arrival is over. */
   at(elapsed: number): ArrivalFrame | null;
 }
@@ -197,10 +217,11 @@ export function arrival(space: Space, after: number): Arrival {
   // BEARING_AT of the way through (sooner or later where the bore is short), then turning with the air.
   const b = h.exterior.spindle.bore, T = ARRIVAL_SHOTS[2];
   const z0 = Math.min(b.to - b.radius, b.bearing + BEARING_AT * T * DRIFT), z1 = Math.max(b.from + 1.5 * b.radius, b.bearing - (1 - BEARING_AT) * T * DRIFT);
+  const bearingIn = (T * (z0 - b.bearing)) / (z0 - z1);
   const crossing = (time: number): ArrivalFrame => {
     const clock = guest.docked + SHOT6_AFTER + time, z = z0 + (z1 - z0) * (time / T);
     // Seconds since the bearing, and how far the air has turned the passenger round the axis since (rad).
-    const since = Math.max(0, time - (T * (z0 - b.bearing)) / (z0 - z1));
+    const since = Math.max(0, time - bearingIn);
     const a = (h.spin * Math.min(since, SPIN_UP) ** 2) / (2 * SPIN_UP) + h.spin * Math.max(0, since - SPIN_UP);
     const r = b.radius / 3, out: Vec3 = [Math.cos(a), Math.sin(a), 0];
     const eye: Vec3 = [out[0] * r, out[1] * r, z], target: Vec3 = [0, 0, z - 20 * b.radius];
@@ -208,6 +229,7 @@ export function arrival(space: Space, after: number): Arrival {
   };
   return {
     guest,
+    moments: momentsOf(h, guest, lead, ARRIVAL_SHOTS[0] + ARRIVAL_SHOTS[1] + bearingIn),
     at(elapsed: number): ArrivalFrame | null {
       if (elapsed < 0 || elapsed >= ARRIVAL) return null;
       if (elapsed < ARRIVAL_SHOTS[0]) {
@@ -228,6 +250,33 @@ export function arrival(space: Space, after: number): Arrival {
       return { shot: 4, time, length: ARRIVAL_SHOTS[1], eye: toOrbit(eye, clock), target: toOrbit(target, clock), up: dirOrbit([0, 0, 1], clock), fov: 58, ship: null, title: 0, clock };
     },
   };
+}
+
+/**
+ * The arrival's moments (ArrivalMoments) for a guest whose shot 4 starts `lead` s before it berths: shots 4 and 5 each
+ * show a stretch of its approach (`u` s before the berth, counting down), cut between; the burns, pulses and the
+ * berth are heard where they fall in what is shown.
+ */
+function momentsOf(h: Habitat, guest: Visit, lead: number, bearing: number): ArrivalMoments {
+  const a = phasesOf(h, guest.ship), turnFrom = a.final + a.turn, coastTo = turnFrom + 2 * a.half;
+  const shown = [{ from: 0, to: ARRIVAL_SHOTS[0], u: lead }, { from: ARRIVAL_SHOTS[0], to: ARRIVAL_SHOTS[0] + ARRIVAL_SHOTS[1], u: SHOT5_BEFORE }];
+  const burns: Array<[number, number]> = [], pulses: number[] = [];
+  /** Where `u` s before the berth is shown (s since Start), if it is. */
+  const when = (u: number): number[] => shown.map((w) => w.from + w.u - u).filter((e, k) => e >= shown[k].from && e < shown[k].to);
+  for (const w of shown) {
+    const from = Math.max(w.from, w.from + w.u - coastTo), to = Math.min(w.to, w.from + w.u - turnFrom);
+    if (to > from) burns.push([from, to]);
+  }
+  for (const u of [turnFrom, a.final]) for (const e of when(u)) pulses.push(e, e + PAIR);
+  // Trims on the final creep in, on the clock (so a shot cut does not move them), each a little early or late.
+  for (const w of shown) {
+    const uHi = Math.min(a.final, w.u), uLo = Math.max(0, w.u - (w.to - w.from));
+    for (let n = Math.ceil((guest.docked - uHi) / TRIM); n * TRIM <= guest.docked - uLo; n++) {
+      const u = guest.docked - (n + 0.6 * (hashToFloat(hash3i(guest.ship.seed, n, 0x7219, 0)) - 0.5)) * TRIM;
+      if (u > uLo && u <= uHi) pulses.push(w.from + w.u - u);
+    }
+  }
+  return { burns, pulses: pulses.sort((x, y) => x - y), berth: when(0)[0] ?? ARRIVAL_SHOTS[0] + SHOT5_BEFORE, through: ARRIVAL_SHOTS[0] + ARRIVAL_SHOTS[1], bearing };
 }
 
 /**

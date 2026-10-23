@@ -72,6 +72,8 @@ export class OutsideView {
   private ship: ShipMeshes | null = null;
   /** Called each frame of the attract loop with how far the title has faded in (0–1). */
   onTitle: ((fade: number) => void) | null = null;
+  /** Each frame of the arrival after Start: how far in it is (s) and the arrival itself (its sounds and the Mind's lines). */
+  onArrival: ((elapsed: number, arrival: Arrival) => void) | null = null;
   /** Clock seconds since the space's epoch, and how many pass per real second. */
   time: number;
   timeScale = SPACE_SPEED;
@@ -540,6 +542,7 @@ export class OutsideView {
         cut = first || next.shot !== a.frame.shot;
         a.frame = next;
         this.time = next.clock;
+        this.onArrival?.(a.elapsed, a.arrival);
       } else {
         // Latched: hold the last frame (and its clock) until the page moves on.
         this.time = a.frame.clock;

@@ -29,7 +29,6 @@ import { fromWorld, toWorld, type Habitat } from '../blueprint';
 import { BIRDS, feetOf, lookFor, type BirdKind, type BirdSpec } from '../gen/birds';
 import type { Ecology } from '../gen/ecology';
 import { kept } from '../gen/kept';
-import { fromLake } from '../gen/plan';
 import { LEVELS, poseOf, standsIn, type Species } from '../gen/scatter';
 import type { Terrain } from '../gen/terrain';
 import { apparentAcceleration, upAt } from '../world/motion';
@@ -197,7 +196,7 @@ export function nestsNear(ecology: Ecology, plants: readonly Species[], theta: n
       const meadow = (floor[0] + floor[1]) / 255, larks = count((b.larks * G * G * meadow * Math.max(0, 1 - 4 * cover)) / 1e4, unit(cell, 1, 0, 0));
       for (let j = 0; j < larks; j++) {
         const at = { theta: col * dTheta + dTheta * unit(cell, j, 7, 0), s: Math.min(h.profile.length, row * G + G * unit(cell, j, 8, 0)) };
-        if (!open(t, at.theta, at.s) || fromLake(t.lake, at.s) < 0) continue;
+        if (!open(t, at.theta, at.s) || t.form.inWater(at.theta, at.s)) continue;
         const own = hash3i(cell, j, 9, 0);
         nests.push({ id: idOf(row, col, j, 1), kind: 'lark', ...at, seed: own, ...sizeLook('lark', own), perches: [], roost: { ...at, h: t.standAt(at.theta, at.s), ground: true } });
       }

@@ -2,6 +2,20 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.141 — The arrival can be heard, and music finds its moments
+
+- After Start you hear the flight from inside the ship: the cabin, the thrusters slowing it up its corridor, small trims as it creeps in, then contact, the clamps latching one by one and the hatch sealing. In the bore the great bearing rumbles past, and the air rushes as it brings you up to the habitat's spin. Every sound comes when the ship really does it.
+- The ship's Mind talks to you on screen, in three short lines, never in a voice.
+- Four short pieces of music now play once when the moment is right: dawn at the summit hut, a walk on the Sunwalk in full day, the lake at night, and your first time down in the Understorey. Long quiet in between.
+
+## v0.140 — Lakes on the floor
+
+- A great lake now lies at the Mountain's foot in the wild reserve, down the main valley: about 3.6 by 1.7 km in the reference habitat, with the great river running in at one end and out at the other, and the Sunwalk along its shore.
+- A few smaller lakes lie in the rooms between the Rings: round, with bays, where the land is let go; square stone-edged basins where it is kept.
+- Their shores come down to the water and their beds shelve to their depth; you can swim in them. Courts, works, halls, hamlets below, orchards and people keep out of the water.
+- Debug menu: Go → "Fly: the next lake" and "To the next lake's shore".
+- The tests run a little faster: finding where a point lies on the cylinder's profile and the Understorey's ceilings are quicker, with the same results.
+
 ## v0.139 — Stairs climb
 
 - You walk up stairs without getting stuck: the courts' stairs, the Lift Stair, kerbs and short steps. Before, even ordinary 16 cm steps often stopped you.

@@ -16,7 +16,7 @@ import { nearestOnPath } from './gen/paths';
 import { busiestNear, deerAt, fleetOf, flierAt, floorGap, herdsNear, peopleAt, personKey, residentOf, venuesOf, type Person } from './sim';
 import { POSE } from './gen/standIn';
 import { nearestPlace, vineFaceFoot } from './gen/places';
-import { besideRiver, nearestSample, type River } from './gen/rivers';
+import { besideRiver, nearestSample, sampleS, type River } from './gen/rivers';
 import './app/style.css';
 import { el } from './app/dom';
 import { GravityMeter } from './app/gravityMeter';
@@ -33,7 +33,7 @@ import { talksWithHands } from './render/people';
 import { speckMark } from './render/crowdShaders';
 import { OutsideView } from './render/outside';
 import { VoyageComputer } from './app/voyageComputer';
-import { hubView } from './space';
+import { arrivalScore, captionAt, hubView, type ArrivalScore } from './space';
 import { fromWorld, toWorld, type DebrisSpec, type Habitat, type Vec3 } from './blueprint';
 import { levelRunOf, nearestOf, onRow, plantsOf, slopeAt, type Level } from './gen/scatter';
 import { frameOf, landmarksOf, type Hut, type Pavilion } from './gen/landmarks';
@@ -42,7 +42,7 @@ import { daisOf } from './gen/grownHall';
 import type { Terrain } from './gen/terrain';
 import { floorAt, floorPoint, outOfPlace, placeAt, type FloorFrame } from './gen/shapes';
 import { crossingsOf, type Crossing, type CrossingKind } from './gen/crossings';
-import { landformOf, planOf, type GroundForm } from './gen/plan';
+import { landformOf, mereShore, planOf, type GroundForm } from './gen/plan';
 import { WORK_KINDS, isDug, isSignature, type DistrictWorkKind, type Work } from './gen/works';
 import { angleDiff } from '@futuremagic/core';
 import { baysOfHamlet, underOf, type Hamlet } from './gen/under';
@@ -191,6 +191,9 @@ async function startArrival(): Promise<void> {
   arriving = true;
   try { await flyIn(v); } finally {
     arriving = false;
+    v.onArrival = null;
+    title.caption(null);
+    sound.arrival(null);
     // The title theme carries the flight and the first look, then fades into the land.
     sound.music(null);
   }
@@ -200,6 +203,13 @@ let arriving = false;
 async function flyIn(v: OutsideView): Promise<void> {
   title.arriving();
   v.onTitle = null;
+  // The flight's sounds under the title theme, and the ship's Mind's lines on screen.
+  let score: ArrivalScore | null = null;
+  v.onArrival = (elapsed, a) => {
+    score ??= arrivalScore(a.moments, a.guest.ship.seed);
+    sound.arrival(score, elapsed);
+    title.caption(captionAt(score, elapsed));
+  };
   starting = (starting ?? Promise.resolve()).then(() => insideSlot.show());
   await v.arrive();
   if (tab !== 'title') return;
@@ -222,7 +232,7 @@ async function flyIn(v: OutsideView): Promise<void> {
   }
   await drawCurtain(false);
 }
-outsideSlot.box.append(title.root);
+outsideSlot.box.append(title.root, title.mind);
 
 type Tab = 'title' | 'lab' | 'inside' | 'outside' | 'tour';
 let tab: Tab = 'title';
@@ -491,7 +501,7 @@ toRiver('To the nearest river', 40, (r, i) => r.steep[i] < 0.05);
 toRiver('Below the nearest falls', 200, (r, i) => r.steep[i] > 0.8);
 // Where a river breaks through a Ring (gen/plan.ts `roomAt`): the only falls on the floor, one room down to the next.
 const ringFall = (r: River, i: number): boolean => {
-  const p = lab.habitat?.profile, s = r.s0 + i * r.step;
+  const p = lab.habitat?.profile, s = sampleS(r, i);
   return !!p && s > p.floorStart && s < p.floorEnd && r.steep[i] > 0.5;
 };
 toRiver('Below the nearest Ring fall', 80, ringFall);
@@ -500,7 +510,7 @@ debug.add({ label: 'Fly: across the nearest Ring fall', group: 'Go', run: () => 
   const v = view(), t = v?.ecology?.terrain, at = v?.walker.at;
   const near = t && at && nearestSample(t.rivers, at.theta, at.s, ringFall);
   if (!v || !t || !near) return;
-  const r = near.river, i = near.i, s = r.s0 + i * r.step, theta = r.theta[i], w = r.halfWidth[i];
+  const r = near.river, i = near.i, s = sampleS(r, i), theta = r.theta[i], w = r.halfWidth[i];
   const aim = toWorld(t.habitat.profile, { theta, s, h: r.surface[i] });
   const eye = toWorld(t.habitat.profile, { theta: theta + w * 2.5 / t.habitat.radius, s: s + (r.from === 'wild' ? 1 : -1) * (w * 2 + 12), h: r.surface[i] + 4 });
   const d = Math.hypot(...aim.map((q, k) => q - eye[k]));
@@ -775,6 +785,46 @@ debug.add({
   },
 });
 /**
+ * The lakes on the floor (gen/plan.ts `meres`): each press floats by the next, the great lake first, off the end of its
+ * long axis nearer the eye and up a fifth of its length, looking down it; the other entry stands on its shore, facing
+ * the water. The line names which lake it is.
+ */
+let mereTurn = -1, mereSeen = '';
+/** Float at `eye`, looking at `at`. */
+const floatToward = (eye: Vec3, at: Vec3): void => {
+  const d = Math.hypot(at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]);
+  view()?.floatAt(eye, [(at[0] - eye[0]) / d, (at[1] - eye[1]) / d, (at[2] - eye[2]) / d]);
+};
+const nextMere = () => {
+  const h = lab.habitat, meres = h ? planOf(h).meres : [];
+  if (!meres.length) return undefined;
+  mereTurn = (mereTurn + 1) % meres.length;
+  const m = meres[mereTurn];
+  mereSeen = `${m.kind === 'great' ? 'the great lake' : `lake ${m.id}`}, ${(m.along * 2).toFixed(0)} × ${(m.across * 2).toFixed(0)} m, ${m.depth.toFixed(0)} m deep, ${m.wild > 0.5 ? 'natural' : 'made'}`;
+  return m;
+};
+debug.add({
+  label: 'Fly: the next lake', group: 'Go', run: () => {
+    const v = view(), t = v?.ecology?.terrain, h = lab.habitat, m = nextMere();
+    if (!v || !t || !h || !m) return;
+    const R = h.radius, out = m.along + mereShore(m) * 2, side = Math.cos(m.heading) * (v.walker.at.s - m.s) >= 0 ? 1 : -1;
+    const et = m.theta + (side * Math.sin(m.heading) * out) / R, es = m.s + side * Math.cos(m.heading) * out;
+    const { theta, s, level } = m, eye = toWorld(h.profile, { theta: et, s: es, h: Math.max(t.heightAt(et, es), level) + m.along * 0.4 });
+    floatToward(eye, toWorld(h.profile, { theta, s, h: level }));
+  },
+});
+debug.add({
+  label: 'To the next lake\'s shore', group: 'Go', run: () => {
+    const v = view(), h = lab.habitat, m = nextMere();
+    if (!v || !h || !m) return;
+    // Across its long axis, a few metres up from the water, facing it (heading 0 along +s, rising toward −θ).
+    const R = h.radius, out = m.across + Math.min(mereShore(m) * 0.4, 12);
+    const theta = m.theta + (Math.cos(m.heading) * out) / R, s = m.s - Math.sin(m.heading) * out;
+    v.goTo(theta, s, Math.atan2((theta - m.theta) * R, m.s - s));
+  },
+});
+debug.addInfo(() => (mereSeen ? `lake: ${mereSeen}` : ''));
+/**
  * The districts' works (gen/works.ts): each press floats by the work of the next kind (in `WORK_KINDS` order) nearest
  * the eye, two of its radii off and half of one up, looking at its middle; a work that faces along the axis is seen
  * from its face's side. The line names what it is and who made it.
@@ -818,9 +868,8 @@ const signatureOf = (): Work | undefined => {
   return h ? planOf(h).works.filter(isSignature)[signatureTurn] : undefined;
 };
 const lookFrom = (eye: Vec3, w: Work, t: Terrain, h: Habitat): void => {
-  const { theta, s } = w, mid = toWorld(h.profile, { theta, s, h: t.heightAt(theta, s) });
-  const d = Math.hypot(mid[0] - eye[0], mid[1] - eye[1], mid[2] - eye[2]);
-  view()?.floatAt(eye, [(mid[0] - eye[0]) / d, (mid[1] - eye[1]) / d, (mid[2] - eye[2]) / d]);
+  const { theta, s } = w;
+  floatToward(eye, toWorld(h.profile, { theta, s, h: t.heightAt(theta, s) }));
 };
 debug.add({
   label: 'Fly: the next signature work', group: 'Go', run: () => {

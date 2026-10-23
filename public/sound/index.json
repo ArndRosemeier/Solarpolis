@@ -512,6 +512,38 @@
    ],
    "seconds": []
   },
+  "music/moment-below": {
+   "kind": "music",
+   "take": "music/moment-below",
+   "files": [
+    "music/moment-below.mp3"
+   ],
+   "seconds": []
+  },
+  "music/moment-lake": {
+   "kind": "music",
+   "take": "music/moment-lake",
+   "files": [
+    "music/moment-lake.mp3"
+   ],
+   "seconds": []
+  },
+  "music/moment-summit": {
+   "kind": "music",
+   "take": "music/moment-summit",
+   "files": [
+    "music/moment-summit.mp3"
+   ],
+   "seconds": []
+  },
+  "music/moment-sunwalk": {
+   "kind": "music",
+   "take": "music/moment-sunwalk",
+   "files": [
+    "music/moment-sunwalk.mp3"
+   ],
+   "seconds": []
+  },
   "music/stage-a": {
    "kind": "music",
    "take": "music/stage-a",
@@ -535,6 +567,84 @@
    ],
    "seconds": [
     0.731
+   ]
+  },
+  "ship/airlock": {
+   "kind": "call",
+   "files": [
+    "ship/airlock.mp3"
+   ],
+   "seconds": [
+    7.315
+   ]
+  },
+  "ship/bearing": {
+   "kind": "bed",
+   "files": [
+    "ship/bearing.mp3"
+   ],
+   "seconds": [
+    21.33
+   ]
+  },
+  "ship/burn": {
+   "kind": "bed",
+   "files": [
+    "ship/burn.mp3"
+   ],
+   "seconds": [
+    19.835
+   ]
+  },
+  "ship/cabin": {
+   "kind": "bed",
+   "files": [
+    "ship/cabin.mp3"
+   ],
+   "seconds": [
+    21.355
+   ]
+  },
+  "ship/clamp": {
+   "kind": "steps",
+   "files": [
+    "ship/clamp-1.mp3",
+    "ship/clamp-2.mp3",
+    "ship/clamp-3.mp3",
+    "ship/clamp-4.mp3"
+   ],
+   "seconds": [
+    0.41,
+    0.41,
+    0.41,
+    0.375
+   ]
+  },
+  "ship/contact": {
+   "kind": "call",
+   "files": [
+    "ship/contact.mp3"
+   ],
+   "seconds": [
+    3.025
+   ]
+  },
+  "ship/seal": {
+   "kind": "call",
+   "files": [
+    "ship/seal.mp3"
+   ],
+   "seconds": [
+    2.285
+   ]
+  },
+  "ship/thruster": {
+   "kind": "call",
+   "files": [
+    "ship/thruster.mp3"
+   ],
+   "seconds": [
+    2.16
    ]
   },
   "squirrel/chatter": {

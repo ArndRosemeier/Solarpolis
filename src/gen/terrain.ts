@@ -20,7 +20,7 @@ import { Noise, deriveSeed, smoothstep } from '@futuremagic/core';
 import { fromWorld, toWorld, type FaceKind, type Habitat, type Vec3 } from '../blueprint';
 import { LEVEL_STEP, gradePath, pathsOf } from './paths';
 import { carve, makeRivers, riverAt, valleyReach, type River, type RiverHit } from './rivers';
-import { COURT, courtOf, fromLake, landformOf, planOf, shoreOf, type Court, type Lake, type Landform, type OnGround } from './plan';
+import { COURT, MERE, courtOf, floorRamp, fromLake, landformOf, mereDeep, mereEdge, mereReach, mereShore, planOf, shoreOf, type Court, type Lake, type Landform, type Mere, type OnGround } from './plan';
 
 export type { Lake } from './plan';
 
@@ -29,13 +29,15 @@ export interface Terrain {
   /** The plan's big shapes the land is made from. */
   readonly form: Landform;
   readonly lake: Lake | null;
+  /** The lakes on the floor besides the ring lake (gen/plan.ts, `Landform.meres`), dug into the land here. */
+  readonly meres: readonly Mere[];
   /** The rivers into the lake (`rivers.ts`), with the land already carved for them. */
   readonly rivers: readonly River[];
   /** Where a point is across the river it is in, or null when it is in none. */
   riverAt(theta: number, s: number): RiverHit | null;
   /** Height of the ground above the profile, along its normal (m); negative in the lake. */
   heightAt(theta: number, s: number): number;
-  /** Where something standing there rests: the ground, or the water's surface over the lake. */
+  /** Where something standing there rests: the ground, or the water's surface over the ring lake, a lake or a river. */
   standAt(theta: number, s: number): number;
   /** How deep a world point lies under the lake's surface (m); 0 or less where there is no water over it. */
   waterDepth(p: Vec3): number;
@@ -168,7 +170,7 @@ export function makeTerrain(h: Habitat): Terrain {
   const relief = params.relief;
   const noise = new Noise(deriveSeed(h.seed, 'terrain'));
   const detail = new Noise(deriveSeed(h.seed, 'terrain', 'detail'));
-  const floorStart = profile.floorStart, floorEnd = profile.floorEnd, floor = floorEnd - floorStart;
+  const floorStart = profile.floorStart, floorEnd = profile.floorEnd;
   const hills = relief.hills;
   // Hills are wider than they are tall, by about the ratio of rolling English downland.
   const hillWave = Math.max(hills * 40, 1);
@@ -190,8 +192,8 @@ export function makeTerrain(h: Habitat): Terrain {
   const at = (theta: number, s: number): Vec3 => toWorld(profile, { theta, s, h: 0 });
 
   /** 0 on the slopes, rising to 1 a little way out on the floor. */
+  const ramp = floorRamp(h);
   const onFloor = (s: number): number => {
-    const ramp = Math.min(floor * 0.05, hillWave * 0.5);
     return smoothstep(floorStart, floorStart + ramp, s) * (1 - smoothstep(floorEnd - ramp, floorEnd, s));
   };
 
@@ -313,6 +315,26 @@ export function makeTerrain(h: Habitat): Terrain {
     return top + flank * rock;
   };
 
+  const meres = form.meres, mereReaches = meres.map((m) => mereReach(m) + mereShore(m));
+  /**
+   * The lakes on the floor dug into the land (`land` m high there): in the water a bed shelving from the shore down to
+   * the lake's depth (gently in the wild, steeply in a made basin); on its shore the land brought down to meet the water
+   * (its hills laid down toward the waterline over the shore's width, and never under the water's level, so the lake
+   * holds its water), back to the land as it was by the shore's edge.
+   */
+  const meresOver = (theta: number, s: number, land: number): number => {
+    for (let i = 0; i < meres.length; i++) {
+      const m = meres[i];
+      if (Math.abs(s - m.s) > mereReaches[i] || Math.abs(turnOf(theta - m.theta)) * R > mereReaches[i]) continue;
+      const edge = mereEdge(m, R, theta, s), shore = mereShore(m);
+      if (edge >= shore) continue;
+      if (edge < 0) return m.level - m.depth * Math.sqrt(smoothstep(0, 1, mereDeep(m, edge)));
+      const near = m.level + Math.max((land - m.level) * smoothstep(0, shore, edge), edge * MERE.rise);
+      return near + (land - near) * smoothstep(shore * 0.6, shore, edge);
+    }
+    return land;
+  };
+
   /** How high `landAt` last found a landform raising the land. */
   let raised = 0;
 
@@ -358,6 +380,8 @@ export function makeTerrain(h: Habitat): Terrain {
     }
     // Small ground roughness everywhere: tufts and hollows of a few tens of centimetres.
     height += Math.min(0.3, hills * 0.01) * detail.fbm3(x / 25, y / 25, z / 25, 3);
+    // (The lakes last: their beds are silt, and their shores never dip under their water.)
+    if (f > 0 && meres.length) height = meresOver(theta, s, height);
     return height;
   };
 
@@ -461,9 +485,19 @@ export function makeTerrain(h: Habitat): Terrain {
     return hit && Math.abs(hit.across) < hit.halfWidth ? hit : null;
   };
 
+  /** The lake on the floor whose water stands over ground `g` m high at a point, or null. */
+  const mereUnder = (theta: number, s: number, g: number): Mere | null => {
+    for (let i = 0; i < meres.length; i++) {
+      const m = meres[i];
+      if (g < m.level && Math.abs(s - m.s) < mereReaches[i] && mereEdge(m, R, theta, s) < mereShore(m) * 0.1) return m;
+    }
+    return null;
+  };
   const standAt = (theta: number, s: number): number => {
     const g = heightAt(theta, s);
     if (lake && g < lake.level && (inLake(s) ?? -1) > -0.1) return lake.level;
+    const m = meres.length ? mereUnder(theta, s, g) : null;
+    if (m) return m.level;
     const r = inRiver(theta, s);
     return r && r.surface > g ? r.surface : g;
   };
@@ -494,5 +528,5 @@ export function makeTerrain(h: Habitat): Terrain {
     return f > 0 ? f * (Math.max(0, (on?.top ?? 0) - (on?.room ?? 0)) + Math.max(0, plan.worksAt(theta, s))) : 0;
   };
 
-  return { habitat: h, form, lake, rivers, riverAt: inRiver, heightAt, standAt, waterDepth, courtAt, courts: courts.map((c) => c.court), terraceAt, builtAt, hollowAt };
+  return { habitat: h, form, lake, meres, rivers, riverAt: inRiver, heightAt, standAt, waterDepth, courtAt, courts: courts.map((c) => c.court), terraceAt, builtAt, hollowAt };
 }

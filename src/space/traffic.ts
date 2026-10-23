@@ -79,7 +79,7 @@ export function berthOf(h: Habitat, arm: number): { collar: Vec3; radial: Vec3 }
 }
 
 /** How a ship comes in to a berth: the corridor's lengths (m) and how long each phase takes (s). */
-interface Approach {
+export interface Approach {
   /** How far up the corridor from level with the arm the coast starts (where the drive cut out). */
   coastFrom: number;
   /** The stand-off: how far out along the arm from its berthed place the ship turns. */
@@ -92,7 +92,7 @@ interface Approach {
   final: number;
 }
 
-function approachOf(h: Habitat, ship: ShipParams): Approach {
+export function approachOf(h: Habitat, ship: ShipParams): Approach {
   const x = h.exterior, L = ship.length, plume = ship.plume * L, standOff = FINAL_LENGTHS * L;
   // The corridor runs at the ship's middle at the stand-off; the keep-out sphere is about the habitat's centre.
   const rc = x.spindle.radius + x.spindle.arms.length + L / 2 + standOff, above = x.spindle.arms.z - h.length / 2;

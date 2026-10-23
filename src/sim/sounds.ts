@@ -15,6 +15,7 @@ import { kept } from '../gen/kept';
 import { pathsOf } from '../gen/paths';
 import { placesOf } from '../gen/places';
 import { fromLake, planOf } from '../gen/plan';
+import { sampleS } from '../gen/rivers';
 import { crossingsOf } from '../gen/crossings';
 import { landmarksOf } from '../gen/landmarks';
 import type { Terrain } from '../gen/terrain';
@@ -119,7 +120,7 @@ const FALL_STEEP = 0.3, SLOW_STEEP = 0.004, SLOW_WIDTH = 5;
 /** Half loudness this far (m) past the pavilion's deck (the water under its piers) and the summit hut (its banners). */
 const PIERS_HALF = 20, FLAGS_HALF = 25;
 /** How far from its centre the summit hut's timber deck and terrace reach (m). */
-const HUT_REACH = 30;
+export const HUT_REACH = 30;
 
 /** How loud something is at a distance d (m) past its edge, half as loud at `at` m. */
 const falloff = (d: number, at: number): number => 1 / (1 + (Math.max(0, d) / at) ** 2);
@@ -155,13 +156,16 @@ function waterNear(t: Terrain, l: Listener): { river: number; slow: number; fall
   for (const rv of t.rivers) {
     const k0 = Math.max(0, Math.floor((l.s - RIVER_REACH - rv.s0) / rv.step)), k1 = Math.min(rv.count - 1, Math.ceil((l.s + RIVER_REACH - rv.s0) / rv.step));
     for (let k = k0; k <= k1; k++) {
-      const s = rv.s0 + k * rv.step, across = floorGap(rv.radius[k], l.theta, l.s, rv.theta[k], s);
+      const s = sampleS(rv, k), across = floorGap(rv.radius[k], l.theta, l.s, rv.theta[k], s);
       const d = Math.max(0, Math.hypot(across, l.h - rv.surface[k]) - rv.halfWidth[k]);
       if (rv.steep[k] >= FALL_STEEP) { if (d < falls) { falls = d; fallWidth = rv.halfWidth[k]; } continue; }
       if (d < river) { river = d; slow = rv.steep[k] < SLOW_STEEP && rv.halfWidth[k] > SLOW_WIDTH ? 1 : 0; }
     }
   }
-  const lakeAway = t.lake ? Math.hypot(Math.max(0, fromLake(t.lake, l.s)), l.h - t.lake.level) : Infinity;
+  let lakeAway = t.lake ? Math.hypot(Math.max(0, fromLake(t.lake, l.s)), l.h - t.lake.level) : Infinity;
+  // A lake on the floor laps at its shore the same way.
+  const by = t.meres.length ? t.form.mereAt(l.theta, l.s, LAKE_HALF * 8) : null;
+  if (by) lakeAway = Math.min(lakeAway, Math.hypot(Math.max(0, by.edge), l.h - by.mere.level));
   return {
     river: falloff(river, RIVER_HALF),
     slow,
@@ -296,6 +300,8 @@ export function stepSurfaceAt(e: Ecology, theta: number, s: number, feet: number
   if (below) return 'floor';
   const t = e.terrain, h = t.habitat, ground = t.heightAt(theta, s), lake = t.lake && fromLake(t.lake, s) < 0 ? t.lake : null;
   if (lake && feet < lake.level + 0.3) return 'water';
+  const by = t.meres.length ? t.form.mereAt(theta, s) : null;
+  if (by && by.edge < 0 && feet < by.mere.level + 0.3) return 'water';
   const river = t.riverAt(theta, s);
   if (river && feet < river.surface + 0.3) return 'water';
   if (feet > ground + 0.25) {

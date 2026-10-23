@@ -123,6 +123,9 @@ export function makeRivers(form: Landform, ground: (theta: number, s: number) =>
   return out;
 }
 
+/** Where a river's sample `i` lies along the profile (s). */
+export const sampleS = (r: River, i: number): number => r.s0 + i * r.step;
+
 /** A point of a river's middle line, between its samples (s clamped to the river's). */
 export interface RiverPoint {
   s: number;
@@ -183,7 +186,7 @@ export function nearestSample(rivers: readonly River[], theta: number, s: number
   for (const river of rivers) for (let i = 0; i < river.count; i++) {
     let turn = river.theta[i] - theta;
     turn -= TURN * Math.round(turn / TURN);
-    const du = turn * river.radius[i], ds = river.s0 + i * river.step - s, d = Math.sqrt(du * du + ds * ds);
+    const du = turn * river.radius[i], ds = sampleS(river, i) - s, d = Math.sqrt(du * du + ds * ds);
     if (d < gap && pick(river, i)) { gap = d; best = { river, i }; }
   }
   return best;
@@ -194,7 +197,7 @@ export function nearestSample(rivers: readonly River[], theta: number, s: number
  * from its middle, with the heading that looks back at the sample (the walker's: 0 along +s, rising toward −θ).
  */
 export function besideRiver(r: River, i: number, down: number, aside: number): { theta: number; s: number; heading: number } {
-  const s0 = r.s0 + i * r.step, s = Math.min(r.s0 + r.step * (r.count - 1), Math.max(r.s0, s0 + (r.from === 'wild' ? down : -down)));
+  const s0 = sampleS(r, i), s = Math.min(r.s0 + r.step * (r.count - 1), Math.max(r.s0, s0 + (r.from === 'wild' ? down : -down)));
   const at = riverPoint(r, s), rad = Math.max(r.radius[Math.min(r.count - 1, Math.round((s - r.s0) / r.step))], 1);
   const theta = at.theta + aside / rad;
   // From there back to the sample: across (θ·r) and along s.
