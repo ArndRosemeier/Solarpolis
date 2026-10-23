@@ -13,11 +13,15 @@ import type { Ecology } from '../gen/ecology';
 import { doorsAbove, doorsBelow } from '../gen/lifts';
 import type { Terrain } from '../gen/terrain';
 import { floorGap } from './walks';
+import { baysNear, baysOf } from '../gen/bays';
+import { hallAt } from '../gen/halls';
+import { floorBelow } from './rooms';
+import { toWorld } from '../blueprint';
 import type { DroneRole } from '../blueprint';
 import { TOSS } from './props';
 import { byTime, stepSurfaceAt, strideAt } from './sounds';
 
-export type SourceKind = 'person' | 'shell' | 'deer' | 'squirrel' | 'drone' | 'lift';
+export type SourceKind = 'person' | 'shell' | 'deer' | 'squirrel' | 'drone' | 'lift' | 'stage';
 
 /** A tool at work: sawing at a bench, chopping or tapping a chisel, pruning (tenders in the orchards). */
 export type Tool = 'saw' | 'mallet' | 'shears';
@@ -68,7 +72,7 @@ export interface Hum {
 }
 
 /** How far each kind is heard at all (m): past it a view need not hand it over. */
-export const HEARD_WITHIN: Readonly<Record<SourceKind, number>> = { person: 40, shell: 40, deer: 60, squirrel: 30, drone: 150, lift: 40 };
+export const HEARD_WITHIN: Readonly<Record<SourceKind, number>> = { person: 40, shell: 40, deer: 60, squirrel: 30, drone: 150, lift: 40, stage: 90 };
 
 /** A deer's hooves fall this far apart (m): its walk covers a little under a body length a cycle, two hooves heard in it. */
 const HOOF_STRIDE = 0.45;
@@ -150,7 +154,7 @@ export function cuesOf(e: Ecology, src: Source, t0: number, t1: number, gravity:
       // Tenders prune as they work over the orchards and gardens.
       if (src.role === 'tender' && src.doing === 'work') work('shears', 0.5);
       break;
-    case 'lift':
+    case 'lift': case 'stage':
       break;
   }
   return out.sort(byTime);
@@ -172,6 +176,9 @@ const DRONE_HUM: Readonly<Record<DroneRole, string>> = {
 /** The music a dancing party plays (files `music/dance-*`), chosen by the party. */
 export const DANCES = ['music/dance-a', 'music/dance-b'] as const;
 
+/** The music played on the halls' stages (file `music/stage-a`). */
+export const STAGE = 'music/stage-a';
+
 /** What a source makes heard as long as it does what it does (null: nothing lasting). */
 export function humOf(src: Source): Hum | null {
   switch (src.kind) {
@@ -180,6 +187,8 @@ export function humOf(src: Source): Hum | null {
       return { sound: DRONE_HUM[src.role], gain: src.doing === 'work' ? 0.6 : 0.8, pitch: 0.95 + 0.1 * roll(src.key, 41, 0, 0) };
     case 'lift':
       return { sound: 'lift/hum', gain: 0.5, pitch: 1 };
+    case 'stage':
+      return { sound: STAGE, gain: 0.8, pitch: 1 };
     case 'person': case 'shell':
       // A dancing party's music, played from where its first member stands.
       if (src.doing !== 'dance' || src.member !== 0) return null;
@@ -201,5 +210,16 @@ export function liftsNear(t: Terrain, theta: number, s: number, below: boolean):
     if (!doors) return;
     out.push({ key: court, kind: 'lift', theta: c.theta, s: c.s, h: 0, at: doors.at, below, speed: 0, doing: 'hum', began: 0 });
   });
+  return out;
+}
+
+/** The stages in the halls near a listener below, each playing from its bay's middle (keys are the bays'). */
+export function stagesNear(t: Terrain, theta: number, s: number): Source[] {
+  const out: Source[] = [], h = t.habitat, bays = baysOf(h);
+  for (const { i, j } of baysNear(bays, theta, s, Math.ceil(HEARD_WITHIN.stage / bays.bay))) {
+    if (hallAt(h, i, j) !== 'stage') continue;
+    const c = bays.centreOf(i, j), floor = floorBelow(t, c.theta, c.s);
+    out.push({ key: bays.key(i, j), kind: 'stage', ...c, h: floor, at: toWorld(h.profile, { ...c, h: floor + 2 }), below: true, speed: 0, doing: 'play', began: 0 });
+  }
   return out;
 }

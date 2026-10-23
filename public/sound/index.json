@@ -82,6 +82,15 @@
     3.34
    ]
   },
+  "bed/bath": {
+   "kind": "bed",
+   "files": [
+    "bed/bath.mp3"
+   ],
+   "seconds": [
+    19.83
+   ]
+  },
   "bed/bees": {
    "kind": "bed",
    "files": [
@@ -118,6 +127,15 @@
     19.875
    ]
   },
+  "bed/cistern": {
+   "kind": "bed",
+   "files": [
+    "bed/cistern.mp3"
+   ],
+   "seconds": [
+    19.83
+   ]
+  },
   "bed/crickets": {
    "kind": "bed",
    "files": [
@@ -125,6 +143,15 @@
    ],
    "seconds": [
     19.845
+   ]
+  },
+  "bed/dim": {
+   "kind": "bed",
+   "files": [
+    "bed/dim.mp3"
+   ],
+   "seconds": [
+    19.835
    ]
   },
   "bed/falls": {
@@ -154,6 +181,24 @@
     19.84
    ]
   },
+  "bed/home": {
+   "kind": "bed",
+   "files": [
+    "bed/home.mp3"
+   ],
+   "seconds": [
+    18.335
+   ]
+  },
+  "bed/kitchen": {
+   "kind": "bed",
+   "files": [
+    "bed/kitchen.mp3"
+   ],
+   "seconds": [
+    19.82
+   ]
+  },
   "bed/lake": {
    "kind": "bed",
    "files": [
@@ -179,6 +224,15 @@
    ],
    "seconds": [
     19.84
+   ]
+  },
+  "bed/minds": {
+   "kind": "bed",
+   "files": [
+    "bed/minds.mp3"
+   ],
+   "seconds": [
+    19.83
    ]
   },
   "bed/oaks": {
@@ -242,6 +296,24 @@
    ],
    "seconds": [
     19.835
+   ]
+  },
+  "bed/works": {
+   "kind": "bed",
+   "files": [
+    "bed/works.mp3"
+   ],
+   "seconds": [
+    19.84
+   ]
+  },
+  "bed/workshop": {
+   "kind": "bed",
+   "files": [
+    "bed/workshop.mp3"
+   ],
+   "seconds": [
+    18.875
    ]
   },
   "body/jump": {
@@ -397,6 +469,24 @@
     8
    ]
   },
+  "lift/chime": {
+   "kind": "call",
+   "files": [
+    "lift/chime.mp3"
+   ],
+   "seconds": [
+    2.345
+   ]
+  },
+  "lift/doors": {
+   "kind": "call",
+   "files": [
+    "lift/doors.mp3"
+   ],
+   "seconds": [
+    3.325
+   ]
+  },
   "lift/hum": {
    "kind": "loop",
    "files": [
@@ -419,6 +509,14 @@
    "take": "music/dance-b",
    "files": [
     "music/dance-b.mp3"
+   ],
+   "seconds": []
+  },
+  "music/stage-a": {
+   "kind": "music",
+   "take": "music/stage-a",
+   "files": [
+    "music/stage-a.mp3"
    ],
    "seconds": []
   },
