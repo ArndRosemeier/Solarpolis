@@ -74,9 +74,11 @@ export function welcomeSignOf(h: Habitat): WelcomeSign | null {
   const plan = { z: porch.front + hr * PORCH.ribHalf, w0: porch.posts[0] + side, w1: porch.posts[1] - side, e0: q.e + hr * (PORCH.rib - WELCOME.high), e1: q.e + hr * PORCH.rib };
   const zm = plan.z, wm = (plan.w0 + plan.w1) / 2, em = (plan.e0 + plan.e1) / 2;
   const at = ramp.world(zm, wm, em), toward = (p: Vec3): Vec3 => v3norm(v3sub(p, at));
-  // Up away from the floor; facing the door (+z on the landing), square to up; read left to right by someone facing it.
-  const ey = toward(ramp.world(zm, wm, em + 1)), z = toward(ramp.world(zm + 1, wm, em));
-  const ez = v3norm(v3madd(z, ey, -v3dot(z, ey))), ex = v3cross(ey, ez);
+  // In the plane of the case's face: along it (w, the way someone facing it from the door reads), up away from the
+  // floor square to that, and out of it toward the door.
+  const w = toward(ramp.world(zm, wm + 1, em)), up = toward(ramp.world(zm, wm, em + 1)), door = toward(ramp.world(zm + 1, wm, em));
+  const ex = v3dot(v3cross(up, door), w) > 0 ? w : v3madd([0, 0, 0], w, -1);
+  const ey = v3norm(v3madd(up, ex, -v3dot(up, ex))), ez = v3cross(ex, ey);
   const width = Math.hypot(...v3sub(ramp.world(zm, plan.w1, em), ramp.world(zm, plan.w0, em)));
   const here = (weight * floor) / STANDARD_G, onFloor = floor / STANDARD_G;
   const lines: NoticeLine[] = [

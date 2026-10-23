@@ -767,8 +767,8 @@ const LANTERN = 1.4;
 export const noticeLetters = texture(filtered(new DataTexture(new Uint8Array([0, 0]), 1, 1, RGFormat, UnsignedByteType)));
 /** The glass behind the letters, the heading's amber and the lines' warm white (linear; lit white paper is 1). */
 const NOTICE_GLASS = vec3(0.012, 0.014, 0.017);
-const NOTICE_HEADING = vec3(1, 0.5, 0.12).mul(2.6);
-const NOTICE_TEXT = vec3(1, 0.85, 0.62).mul(1.5);
+const NOTICE_HEADING = vec3(1, 0.42, 0.08).mul(1.6);
+const NOTICE_TEXT = vec3(1, 0.86, 0.66).mul(1.1);
 export const NOTICE = kind('notice', ['position', 'uv'], { cast: false, receive: false }, () => {
   const m = new MeshBasicNodeMaterial();
   const mask = noticeLetters.sample(uv());

@@ -24,7 +24,7 @@ const CAP = 0.72;
 const LEAST = 0.8;
 const FONT = "system-ui, -apple-system, 'Segoe UI', sans-serif";
 /** How far the glass stands in front of its case (m), clear of it in the depth buffer. */
-const PROUD = 0.004;
+const PROUD = 0.01;
 
 interface Row {
   text: string;
