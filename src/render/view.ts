@@ -9,7 +9,7 @@ import type { HomeMode } from '../gen/homeInterior';
  * is the spin's. The player is an Actors human (`render/actors`); V looks at them from behind, V again from their eyes.
  */
 import { Color, CylinderGeometry, Group, Mesh, PerspectiveCamera, Scene, SphereGeometry, Vector3, type WebGPURenderer } from 'three/webgpu';
-import { Stage, createRenderer } from '@futuremagic/stage';
+import { Stage, createRenderer, type ShaderMonitor } from '@futuremagic/stage';
 import { deriveSeed, smoothstep, v3cross, v3dot, v3madd, v3norm, v3scale } from '@futuremagic/core';
 import { fromWorld, toView, toWorld, type Habitat, type Vec3 } from '../blueprint';
 import type { LinkLine, LinkService, Sighting } from '../link';
@@ -291,8 +291,16 @@ export class InteriorView {
     await v.build();
     v.listen();
     void v.physicsReady();
-    void v.loadPlayer();
+    v.bodyLoaded = v.loadPlayer();
     return v;
+  }
+
+  /** Resolves once the player's body is loaded and its shaders warmed (the arrival's timing line). */
+  bodyLoaded: Promise<void> = Promise.resolve();
+
+  /** The shaders this view built and when (its Stage's monitor): the arrival's timing line watches them. */
+  get shaderLog(): ShaderMonitor {
+    return this.stage.monitor;
   }
 
   /** Load the player's body (the same person for the same world seed) and put it in, hidden until seen. */

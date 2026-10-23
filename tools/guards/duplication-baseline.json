@@ -2346,5 +2346,9 @@
   {
     "key": "same name: solarpolis/render/dock.ts#follow + solarpolis/render/habitatLights.ts#follow",
     "reason": "Each view's per-frame update by its own clock and pose (the dock: its clamps posed and its lamps lit from the berth's state); the name is the views' convention, the bodies share nothing."
+  },
+  {
+    "key": "same name: solarpolis/render/outside.ts#shaderLog + solarpolis/render/view.ts#shaderLog",
+    "reason": "each view has its own renderer and Stage; both hand out their Stage's monitor for the arrival's timing line (app/arrivalTiming.ts)."
   }
 ]

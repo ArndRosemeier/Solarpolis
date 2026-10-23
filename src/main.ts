@@ -13,6 +13,7 @@ import { Ways } from './app/link/ways';
 import type { LinkChoice } from './link/service';
 import { SpeechBubbles } from './app/bubbles';
 import { ArrivalCard } from './app/arrivalCard';
+import { ArrivalTiming } from './app/arrivalTiming';
 /**
  * The page: the header with the version and What's new, the memory watchdog, the debug menu, and the current view:
  * the Blueprint Lab (design a habitat), Inside (walk in it) or Outside (the habitat in its orbit, with Earth, the Moon,
@@ -236,6 +237,10 @@ app.append(curtain);
 const fit = (): void => { for (const box of [insideSlot.box, outsideSlot.box, curtain]) box.style.setProperty('--top', `${header.getBoundingClientRect().bottom}px`); };
 new ResizeObserver(fit).observe(header);
 let starting: Promise<void> | null = null;
+/** The arrival as the loading screen: how long until the title, whether the flight hid the interior's warm-up. */
+const timing = new ArrivalTiming(() => performance.now());
+timing.watchShaders('inside', () => insideSlot.view?.shaderLog ?? null);
+timing.watchShaders('outside', () => outsideSlot.view?.shaderLog ?? null);
 
 // The title: the Outside view flying its attract loop, with the card over it. It is where the page opens.
 const title = new TitleCard(() => void startArrival(), () => showTab('inside'));
@@ -268,6 +273,7 @@ async function startArrival(): Promise<void> {
 let arriving = false;
 async function flyIn(v: OutsideView): Promise<void> {
   title.arriving();
+  timing.mark('start');
   v.onTitle = null;
   // The flight's sounds under the title theme, and the ship's Mind's lines on screen.
   let score: ArrivalScore | null = null;
@@ -276,10 +282,17 @@ async function flyIn(v: OutsideView): Promise<void> {
     sound.arrival(score, elapsed);
     title.caption(captionAt(score, elapsed));
   };
-  starting = (starting ?? Promise.resolve()).then(() => insideSlot.show());
+  starting = (starting ?? Promise.resolve()).then(() => insideSlot.show()).then(() => {
+    const inside = insideSlot.view;
+    if (!inside) return;
+    timing.mark('inside');
+    void inside.bodyLoaded.then(() => timing.mark('body'));
+  });
   await v.arrive();
   if (tab !== 'title') return;
+  timing.mark('flown');
   await drawCurtain(true);
+  timing.mark('closed');
   if (tab === 'title') await arriveInside();
   else await drawCurtain(false);
 }
@@ -288,18 +301,19 @@ async function arriveInside(): Promise<void> {
   showTab('inside');
   await starting;
   const h = lab.habitat, inside = insideSlot.view;
+  const open = async (): Promise<void> => { timing.mark('ready'); await drawCurtain(false); timing.mark('open'); };
   if (h && inside) {
     const terrace = await inside.prepareArrival();
-    if (insideSlot.box.hidden) { inside.finishArrivalReveal(); await drawCurtain(false); return; }
+    if (insideSlot.box.hidden) { inside.finishArrivalReveal(); await open(); return; }
     if (terrace) {
       const reveal = inside.revealArrival();
-      await drawCurtain(false);
+      await open();
       await reveal;
       return;
     }
     const hub = hubView(h); inside.floatAt(hub.eye, hub.look);
   }
-  await drawCurtain(false);
+  await open();
 }
 outsideSlot.box.append(title.root, title.mind);
 
@@ -328,7 +342,7 @@ function showTab(which: Tab): void {
     if (!v) return;
     v.setTourMode(which === 'tour');
     v.onTitle = titled ? (x) => title.fade(x) : null;
-    if (titled && !v.attracting) await v.startAttract();
+    if (titled && !v.attracting) { await v.startAttract(); timing.mark('title'); }
     else if (!titled && v.attracting) v.stopAttract();
   });
   const q = new URLSearchParams(location.search);
@@ -353,6 +367,7 @@ debug.addInfo(() => {
 debug.addInfo(() => memory.line());
 debug.addInfo(() => sound.hearingLine());
 debug.addInfo(() => debug.fps());
+debug.addInfo(() => timing.arrivalLine());
 debug.add({ label: 'Copy the parameters as JSON', group: 'Habitat', run: () => { void navigator.clipboard?.writeText(JSON.stringify(lab.parameters, null, 2)); } });
 debug.add({ label: 'Log the parameters and the derived habitat', group: 'Habitat', run: () => console.log(lab.parameters, lab.habitat) });
 const view = (): InteriorView | null => insideSlot.view, outsideView = (): OutsideView | null => outsideSlot.view;
@@ -1411,6 +1426,7 @@ debug.add({ label: 'Free the caches now (as when memory runs short)', group: 'Me
 let last = performance.now();
 const frame = (t: number): void => {
   debug.frame(t - last);
+  timing.countFrame(t - last);
   rideAlong(Math.min(0.1, (t - last) / 1000));
   const eye = birdRide && view()?.eye();
   if (birdRide && eye && t < birdRide.until && apart(eye, birdRide.was) < RIDE_MOVED) birdRide.was = birdRide.float() ?? birdRide.was;
