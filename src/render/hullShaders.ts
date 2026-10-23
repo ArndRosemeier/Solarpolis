@@ -16,6 +16,7 @@ import {
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { GLINT_GAIN, GLINT_POWER, LOOK, SALT, type Columns, type Skin } from '../gen/skin';
+import { DENSITY, MEAN_SHADE, PORT_SALT, PORT_TINT, QUARTER, TOGGLE_HOURS, bandMean, litShare, type PortFace } from '../gen/portFace';
 import { DISPLAY_CAP, outside } from './skyShaders';
 import { MASK_WORDS, ROOT_SPAN, type CoverMask } from '../gen/detailTree';
 import { band, keepMean, lineAt, shows } from './shaderMath';
@@ -79,6 +80,13 @@ const hash32 = (x: Node<'uint'>): Node<'uint'> => hash32Fn(x) as unknown as Node
 /** `hash3i(seed, x, y, z)` from @futuremagic/core. */
 function hash3(seed: Node<'uint'>, x: Node<'uint'>, y: Node<'uint'>, z: number): Node<'uint'> {
   const hz = hash32(uint(Math.imul(z, 0x9e3779b1) >>> 0));
+  const hy = hash32(y.mul(uint(0x165667b1)).bitXor(hz));
+  return hash32(seed.bitXor(hash32(x.mul(uint(0x27d4eb2d)).bitXor(hy))));
+}
+
+/** `hash3i(seed, x, y, z)` with z worked out per pixel (a uint multiply wraps as Math.imul does). */
+function hash3z(seed: Node<'uint'>, x: Node<'uint'>, y: Node<'uint'>, z: Node<'uint'>): Node<'uint'> {
+  const hz = hash32(z.mul(uint(0x9e3779b1)));
   const hy = hash32(y.mul(uint(0x165667b1)).bitXor(hz));
   return hash32(seed.bitXor(hash32(x.mul(uint(0x27d4eb2d)).bitXor(hy))));
 }
@@ -355,7 +363,124 @@ export function radiatorColor(): Node<'vec3'> {
   const lines = seam(ring, 0.02).mul(seam(spoke, 0.02));
   const albedo = v3(RADIATOR).mul(strip).mul(mix(float(0.6), float(1), lines));
   const n = normalWorld, light = lightOn(n);
-  return albedo.mul(light.all).add(glint(n, light.sun, float(0.05))).mul(outside.exposure);
+  return albedo.mul(light.all).add(glint(n, light.sun, float(0.05))).mul(outside.exposure).add(portFaceGlow());
+}
+
+/** Bands of windows the port face's uniforms hold (gen/portFace.ts has at most this many). */
+export const PORT_BANDS = 3;
+
+/**
+ * The port face's windows and bearing ring as its mesh hands them to the shader (`mesh.userData.port`):
+ * `face` (the face's z, the bearing ring's inner and outer radius, its lamps), `clock` (window hours, the bearing's
+ * glow, the brightest band's glow), `seed` (the seed's two halves), and per band `g` (r0, r1, storey, pitch),
+ * `w` (sill, head, mullion, blocks built), `b` (block storeys, block windows, glow, share lit now), `t` (tint, mean now).
+ */
+export type PortUniforms = Record<string, Vector4>;
+
+const portKeys = ['face', 'clock', 'seed', ...Array.from({ length: PORT_BANDS }, (_, i) => ['g', 'w', 'b', 't'].map((k) => `${k}${i}`)).flat()];
+
+export function portUniforms(f: PortFace): PortUniforms {
+  const u: PortUniforms = {
+    face: new Vector4(f.z, f.bearingR0, f.bearingR1, f.bearingLamps),
+    clock: new Vector4(0, f.bearingGlow, Math.max(f.bearingGlow, ...f.bands.map((b) => b.glow)), 0),
+    seed: new Vector4(f.seed >>> 16, f.seed & 0xffff, f.bands.length, 0),
+  };
+  for (let i = 0; i < PORT_BANDS; i++) {
+    const b = f.bands[i];
+    u[`g${i}`] = b ? new Vector4(b.r0, b.r1, b.storey, b.pitch) : new Vector4(0, 0, 1, 1);
+    u[`w${i}`] = b ? new Vector4(b.sill, b.head, b.mullion, b.blocks) : new Vector4();
+    u[`b${i}`] = b ? new Vector4(b.blockStoreys, b.blockWindows, b.glow, 0) : new Vector4(1, 1, 0, 0);
+    u[`t${i}`] = b ? new Vector4(b.tint[0], b.tint[1], b.tint[2], 0) : new Vector4();
+  }
+  return u;
+}
+
+/** Set the window clock (`windowHours`) and how far into its night the habitat is (0 day, 1 night). */
+export function setPortClock(u: PortUniforms, f: PortFace, hours: number, night: number): void {
+  u.clock.x = hours;
+  f.bands.forEach((b, i) => {
+    u[`b${i}`].w = litShare(b, night);
+    u[`t${i}`].w = bandMean(b, night);
+  });
+}
+
+const noPort = portUniforms({ seed: 0, z: -1e30, bearingR0: 0, bearingR1: 0, bearingLamps: 1, bearingGlow: 0, bands: [] });
+const port: Record<string, Node<'vec4'>> = {};
+for (const k of portKeys) port[k] = uniform(new Vector4()).onObjectUpdate(({ object }) => ((object?.userData.port as PortUniforms | undefined) ?? noPort)[k]);
+
+/** The brightest window shows at this level once the eyes have opened for the dark (with the Sun out of view). */
+export const WINDOW_PEAK = 8;
+
+/**
+ * The port face's windows and its bearing ring, per pixel, exactly as `windowAt` and `windowLit` in gen/portFace.ts:
+ * which band, storey and window this is, whether its block is built and it is lit at this hour, its own shade. Where
+ * a storey or a window shrinks below a pixel, the band's mean light shows instead, so the rings of windows never
+ * shimmer and never vanish with distance. Lights in the dark are seen as the eyes see them there, as the lamps and the
+ * stars are (heroic, Arnd 2026-10-21): with the Sun out of view the brightest window shows at `WINDOW_PEAK`.
+ */
+function portFaceGlow(): Node<'vec3'> {
+  const p = positionLocal, r = length(p.xy), face = port.face, clock = port.clock;
+  const onFace = abs(p.z.sub(face.x)).lessThan(0.5);
+  const a = fract(atan(p.y, p.x).div(2 * Math.PI));
+  const seed = uint(port.seed.x).shiftLeft(uint(16)).bitOr(uint(port.seed.y));
+  // The band this pixel is in (the last one when none, which `inAny` then puts out).
+  const last = PORT_BANDS - 1;
+  let g = port[`g${last}`], w = port[`w${last}`], b = port[`b${last}`], t = port[`t${last}`], index = float(last) as Node<'float'>;
+  let inAny = r.greaterThanEqual(g.x).and(r.lessThan(g.y));
+  for (let i = last - 1; i >= 0; i--) {
+    const gi = port[`g${i}`], here = r.greaterThanEqual(gi.x).and(r.lessThan(gi.y));
+    g = select(here, gi, g) as Node<'vec4'>;
+    w = select(here, port[`w${i}`], w) as Node<'vec4'>;
+    b = select(here, port[`b${i}`], b) as Node<'vec4'>;
+    t = select(here, port[`t${i}`], t) as Node<'vec4'>;
+    index = select(here, float(i), index) as Node<'float'>;
+    inAny = inAny.or(here);
+  }
+  // Its storey, block row and quarter row; its window, block and quarter round the ring (`cellAt` in gen/portFace.ts).
+  // A block's storeys share their count round, so their windows stack.
+  const u = max(r.sub(g.x), 0).div(g.z), k = floor(u), fr = fract(u);
+  const kb = floor(k.div(b.x)), kq = floor(kb.div(QUARTER.rows));
+  const rq = g.x.add(kq.mul(QUARTER.rows).mul(b.x).mul(g.z));
+  const salt = (s: number): Node<'uint'> => uint(index.mul(8).add(s));
+  const stagger = toFloat(hash3z(seed, uint(kq), uint(0), salt(PORT_SALT.stagger)));
+  const qa = a.add(stagger).mul(max(floor(rq.mul(2 * Math.PI).div(g.w.mul(b.y).mul(QUARTER.blocks))), 1)), jq = floor(qa), fq = fract(qa);
+  const v = a.mul(max(floor(g.x.add(kb.mul(b.x).mul(g.z)).mul(2 * Math.PI).div(g.w)), 1)), j = floor(v), fj = fract(v), jb = floor(j.div(b.y));
+  const ku = uint(k), ju = uint(j);
+  const density = toFloat(hash3z(seed, uint(kq), uint(jq), salt(PORT_SALT.quarter))).mul(DENSITY.spread).add(DENSITY.least);
+  const builtShare = min(w.w.mul(density), 1);
+  // The avenue along each quarter's side, its edge smoothed over the pixel.
+  const dq = min(fwidth(qa), 0.5).mul(0.5), street = smoothstep(float(QUARTER.avenue).sub(dq), float(QUARTER.avenue).add(dq), fq);
+  const built = toFloat(hash3z(seed, uint(kb), uint(jb), salt(PORT_SALT.block))).lessThan(builtShare);
+  // The block's own share lit (`blockLit`): some buildings bright, some nearly dark.
+  const share = b.w, x = toFloat(hash3z(seed, uint(kb), uint(jb), salt(PORT_SALT.blockLit)));
+  const blockLit = share.add(x.sub(0.5).mul(min(share, share.oneMinus()).mul(2)));
+  // The window: glass between sill and head and between mullions, lit on its own schedule, at its own shade.
+  const du = fwidth(u).mul(0.5), dv = min(fwidth(v), 0.5).mul(0.5), m = w.z.mul(0.5);
+  const glass = band(fr, w.x.sub(du), w.x.add(du), w.y.sub(du), w.y.add(du)).mul(band(fj, m.sub(dv), m.add(dv), m.oneMinus().sub(dv), m.oneMinus().add(dv)));
+  const shade = toFloat(hash3z(seed, ku, ju, salt(PORT_SALT.shade))).mul(0.5).add(0.5);
+  const period = toFloat(hash3z(seed, ku, ju, salt(PORT_SALT.phase))).add(1).mul(TOGGLE_HOURS);
+  const slot = floor(clock.x.div(period).add(toFloat(hash3z(seed, ju, ku, salt(PORT_SALT.phase)))));
+  const lit = toFloat(hash3z(seed, ku.add(uint(slot).mul(uint(4096))), ju, salt(PORT_SALT.lit))).lessThan(blockLit);
+  const window = glass.mul(select(built.and(lit), shade, float(0))).mul(b.z);
+  // Too far for its windows but near enough for its storeys, a block shows its rows of glass lit by its share; too
+  // far for storeys, the block as a whole (`blockGlow`); too far for blocks, its quarter (`quarterGlow`); too far for
+  // quarters, the band's mean. Each level averages to the next, so none jumps.
+  const lamps = select(built, blockLit.mul(MEAN_SHADE).mul(b.z), float(0));
+  const rows = band(fr, w.x.sub(du), w.x.add(du), w.y.sub(du), w.y.add(du)).mul(w.z.oneMinus()).mul(lamps);
+  const block = w.y.sub(w.x).mul(w.z.oneMinus()).mul(lamps);
+  const quarter = w.y.sub(w.x).mul(w.z.oneMinus()).mul(builtShare).mul(share).mul(MEAN_SHADE).mul(b.z);
+  const near = mix(quarter, mix(block, mix(rows, window, shows(v)), shows(u)), shows(u.div(b.x)).mul(shows(v.div(b.y))));
+  const windows = select(inAny, mix(t.w, near.mul(street), shows(u.div(b.x.mul(QUARTER.rows))).mul(shows(qa))), float(0));
+  // The bearing ring: a lamp every few handrails, every other one dimmer, so the face's slow turn shows against the dock.
+  const inRing = r.greaterThanEqual(face.y).and(r.lessThan(face.z));
+  const q = a.mul(face.w), lamp = band(fract(q), 0.15, 0.3, 0.7, 0.85).mul(select(fract(floor(q).mul(0.5)).greaterThan(0.25), float(0.35), float(1)));
+  const ring = select(inRing, mix(float(0.55 * 0.675), lamp, shows(q)).mul(clock.y), float(0));
+  const glow = t.xyz.mul(windows).add(v3(PORT_TINT.bearing).mul(ring));
+  // Opened for the dark as the stars are, but never past showing the brightest window at its peak: lights keep their
+  // colour (a burnt-out window is only white) and their order of brightness, as the lamps do.
+  const peak = float(WINDOW_PEAK).div(max(clock.z, 1e-9));
+  const eyes = min(max(outside.exposure, min(outside.starExposure, peak)), peak);
+  return select(onFace, min(glow.mul(eyes), DISPLAY_CAP), vec3(0, 0, 0));
 }
 
 /** A torch's exhaust plume: its glowing length, how hard the drive thrusts (0–1), per mesh in `userData.flame`. */
