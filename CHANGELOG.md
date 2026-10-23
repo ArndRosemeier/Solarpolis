@@ -2,6 +2,11 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.161 — A capsule waits where you arrive
+
+- When you arrive, a capsule is already standing on its berth by the arrival terrace, ready to take you anywhere: click it to get in.
+- Called from further away, a parked capsule lifts off and flies over to you instead of answering "Still here".
+
 ## v0.160 — Capsules in the debug menu
 
 - The debug menu can stand you beside a waiting capsule's door ("Capsule: walk up to it"), and its capsule line shows how much memory the pod holds.
