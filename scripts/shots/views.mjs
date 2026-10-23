@@ -52,6 +52,13 @@ async function clickMiddle(page) {
   if (box) await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 }
 
+/** The arrival's timing line from the debug menu, into the report's console. */
+async function logArrival(page) {
+  await page.keyboard.press('Control+Shift+F12');
+  const text = await page.locator('.dbg-panel .dbg-info').innerText({ timeout: 3000 }).catch(() => '');
+  await page.locator('.dbg-panel .dbg-close').click().catch(() => {});
+  await page.evaluate((ls) => { for (const l of ls) console.warn(l); }, text.split('\n').filter((l) => l.startsWith('arrival') || l.startsWith('shaders') || l.startsWith('memory')));
+}
 async function logPeople(page) {
   await page.keyboard.press('Control+Shift+F12');
   const text = await page.locator('.dbg-panel .dbg-info').innerText({ timeout: 3000 }).catch(() => '');
@@ -127,6 +134,7 @@ export const views = {
     steps: [{ run: async (page) => page.click('.title-start') }, { wait: 5000 }, { shot: 'corridor' }, { wait: 14000 }, { shot: 'berth' }, { wait: 12000 }, { shot: 'bore' }, { wait: 8000 }, { shot: 'sleeve' }, { run: async (page) => page.waitForSelector('.arrival-card.welcoming', { timeout: 60000 }) }, { shot: 'welcome' }, { wait: 6500 }, { shot: 'reveal' }, { run: async (page) => page.waitForSelector('.arrival-card.arrived', { timeout: 30000 }) }, { wait: 3000 }, { shot: 'terrace' }, { run: logPeople }],
   },
   'flight-lights': { query: '', about: 'the lights outside (space/lights.ts) through the title flight and the arrival: the attract shots (-title-1 braking, -title-2 long lens, -title-3 alongside the drum), then after Start down the corridor to the port face (-corridor, -corridor-2 a moment later for the flashes, -corridor-3 nearer), at the berth (-berth) and as it latches (-latch)', steps: [{ wait: 6000 }, { shot: 'title-1' }, { wait: 12000 }, { shot: 'title-2' }, { wait: 14000 }, { shot: 'title-3' }, { run: async (page) => page.click('.title-start') }, { wait: 4000 }, { shot: 'corridor' }, { wait: 700 }, { shot: 'corridor-2' }, { wait: 6000 }, { shot: 'corridor-3' }, { wait: 8000 }, { shot: 'berth' }, { wait: 4000 }, { shot: 'latch' }] },
+  'arrival-timing': { query: '', about: 'the arrival as the loading screen (app/arrivalTiming.ts): Start straight from the title, as a player would; logs the arrival line (title after opening, interior and body after Start, whether the curtain waited, the flight\'s slowest frames and the shaders built while it flew) once the newcomer is out on the terrace (-out)', steps: [{ run: async (page) => page.click('.title-start') }, { run: async (page) => page.waitForSelector('.arrival-card.welcoming', { timeout: 120000 }) }, { wait: 3000 }, { shot: 'out' }, { run: logArrival }] },
   docking: { query: '', about: 'docking is mechanical (space/dock.ts, render/dock.ts): after Start down the corridor, the berth ahead with its floodlights and amber ring (-corridor); in the berth shot the nose coming in to the open clamps (-open), the clamps swinging shut (-clamps), the ring turned green with every clamp home (-green), the umbilical reeled out to the ship (-held)', steps: [{ run: async (page) => page.click('.title-start') }, { wait: 9000 }, { shot: 'corridor' }, { wait: 11000 }, { shot: 'open' }, { wait: 3000 }, { shot: 'clamps' }, { wait: 2500 }, { shot: 'green' }, { wait: 1800 }, { shot: 'held' }] },
   'bore-hall': { query: '', about: 'the bore as a hall (render/bore.ts): after Start, through the lock into the still part with its hoops of light, rails and chevrons (-in), nearing the bearing with its turning ring of lights (-bearing), past it in the sleeve (-sleeve), toward the Hub (-hub)', steps: [{ run: async (page) => page.click('.title-start') }, { wait: 30000 }, { shot: 'in' }, { wait: 4000 }, { shot: 'bearing' }, { wait: 3500 }, { shot: 'sleeve' }, { wait: 4000 }, { shot: 'hub' }] },
   'arrival-terrace': { query: 'view=inside', about: 'the port overlook and its usable connection to the Lift Stair', settle: 6000, steps: [memoryDetails, { debug: 'Arrival: reveal the port terrace' }, { wait: 5000 }, { shot: 'threshold' }, { wait: 7000 }, { shot: 'reveal' }, { wait: 7000 }, { shot: 'landed' }, { look: [300, 50] }, { wait: 1500 }, { shot: 'route' }, { run: logPeople }, heap('arrival-terrace')] },

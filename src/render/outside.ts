@@ -12,7 +12,7 @@
  * for eyes; the "night eyes" augmentation (debug menu) lets the eyes open much further.
  */
 import { Color, Mesh, PerspectiveCamera, Scene, SphereGeometry, Texture, type WebGPURenderer } from 'three/webgpu';
-import { Stage, createRenderer } from '@futuremagic/stage';
+import { Stage, createRenderer, type ShaderMonitor } from '@futuremagic/stage';
 import { Rng, deriveSeed, v3add, v3dot, v3len, v3scale, v3sub, v3norm, type Vec3 } from '@futuremagic/core';
 import type { Habitat } from '../blueprint';
 import { DAY, EARTH, MOON, REFERENCE_SPACE, SpaceFlyer, arrival, attractLoop, calendarOf, chooseStart, decodeStars, guestShip, julianDay, makeSpace, shipLightsOf, shipShape, skyFrom, type Arrival, type ArrivalFrame, type Cinema, type CinemaFrame, type HullLight, type Mat3, type ShipShape, type Space, type SkyView } from '../space';
@@ -123,6 +123,11 @@ export class OutsideView {
     const rng = new Rng(deriveSeed(this.space.params.seed, 'clouds'));
     outside.clouds.value.set(rng.range(0, 100), rng.range(0, 100), rng.range(0, 100));
     this.frameHabitat();
+  }
+
+  /** The shaders this view built and when (its Stage's monitor): the arrival's timing line watches them. */
+  get shaderLog(): ShaderMonitor {
+    return this.stage.monitor;
   }
 
   /** Make the view: throws `GraphicsUnavailable` where the browser has no WebGPU (the caller shows why). */
