@@ -1,0 +1,15 @@
+.vessel-launch { position:absolute; right:18px; top:18px; z-index:8; border:1px solid #9caf9d; background:#17322f; color:#eef0df; border-radius:24px; padding:11px 18px; cursor:pointer; font:13px system-ui; }
+.vessel-panel { position:absolute; top:18px; left:18px; z-index:9; width:295px; max-height:calc(100% - 95px); overflow:auto; box-sizing:border-box; padding:20px; border:1px solid #a3b5a366; border-radius:18px; background:#152c29f2; color:#e7e8da; box-shadow:0 12px 40px #0004; font:13px/1.55 system-ui; }
+.vessel-panel h2 { font:500 25px/1.2 Georgia,serif; margin:8px 0 14px; color:#f2e5c7; }
+.vessel-panel p { margin:10px 0; }
+.vessel-panel .vessel-eyebrow { font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:#b6cebe; }
+.vessel-welcome { font-style:italic; color:#c5d2c5; }
+.vessel-panel button,.vessel-panel select { font:inherit; border:1px solid #9eaf9d88; border-radius:8px; background:#304b42; color:#edf0e5; padding:9px 10px; cursor:pointer; width:100%; margin:4px 0; box-sizing:border-box; }
+.vessel-panel select option { background:#203c32; }
+.vessel-actions { display:flex; gap:7px; margin:14px 0; }
+.vessel-actions button:first-child { background:#d5d9bc; color:#243a2e; }
+.vessel-panel .vessel-status { font-size:11px; color:#c3d6cb; border-top:1px solid #78948655; padding-top:12px; }
+.vessel-panel .vessel-message { font-size:12px; color:#ebd2a0; }
+.vessel-help { position:absolute; z-index:9; left:0; right:0; bottom:0; padding:12px 20px; background:#152722; text-align:center; font:12px/1.4 system-ui; color:#e2e9d9; }
+.vessel-panel[hidden],.vessel-launch[hidden],.vessel-help[hidden] { display:none; }
+@media(max-width:700px) { .vessel-panel { width:245px; padding:12px; top:8px; left:8px; max-height:50%; } .vessel-panel h2 { font-size:20px; } .vessel-help { font-size:11px; } }

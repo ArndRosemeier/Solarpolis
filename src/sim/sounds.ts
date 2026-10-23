@@ -14,18 +14,24 @@ import { canopyOf, type Ecology } from '../gen/ecology';
 import { kept } from '../gen/kept';
 import { pathsOf } from '../gen/paths';
 import { placesOf } from '../gen/places';
-import { fromLake } from '../gen/plan';
+import { fromLake, planOf } from '../gen/plan';
 import { crossingsOf } from '../gen/crossings';
 import { landmarksOf } from '../gen/landmarks';
 import type { Terrain } from '../gen/terrain';
 import { emissionAt, sunlineEmission } from '../world/sunline';
 import { crownsOf } from './fauna';
 import { floorGap } from './walks';
+import type { Source } from './sources';
+import { ROOM_BEDS, roomAt, roomBedsAt, throughDeck, type Room } from './rooms';
 
 /** The beds: long sounds that loop, each mixed by its weight (files `bed/<name>` in public/sound). */
 export const BEDS = [
   'wind-soft', 'wind-open', 'wind-high', 'leaves-broad', 'leaves-conifer', 'grass',
   'river-riffle', 'river-slow', 'lake', 'falls', 'birds-wood', 'birds-meadow', 'birds-water', 'bees', 'crickets',
+  // The landmarks' own: water under the pavilion's piers, banners at the summit hut, the founders' grove's old oaks.
+  'piers', 'flags', 'oaks',
+  // Below the land (sim/rooms.ts): room tones and the halls' work.
+  ...ROOM_BEDS,
 ] as const;
 export type Bed = (typeof BEDS)[number];
 
@@ -65,6 +71,13 @@ export interface Hearing {
   feet: { theta: number; s: number; h: number; speed: number } | null;
   /** The gravity at the feet (m/s²), which sets the stride. */
   gravity: number;
+  /** How fast the body climbs (m/s along up; a jump starts fast upward) and flies through the air (m/s; 0 on foot). */
+  climb: number;
+  flight: number;
+  /** What is near enough to be heard: people, animals, drones, lift portals (sim/sources.ts). */
+  sources: Source[];
+  /** Riding a lift: whose (its court), how far along the ride (0 … 1), and whether it moves yet. */
+  lift: { court: number; share: number; moving: boolean } | null;
 }
 
 export interface Soundscape {
@@ -76,6 +89,10 @@ export interface Soundscape {
   light: number;
   /** How busy the birds are (0 … 1): highest as the light comes up (the dawn chorus), low through the day, none at night. */
   birds: number;
+  /** The echo of the room the listener is in (sim/rooms.ts; none on the open land). */
+  room: Room;
+  /** Below: how much of the land above comes down, muffled (0 … 1); the land's beds are already scaled by it. */
+  through: number;
 }
 
 /** A single call: what, where (world), and when it starts (clock s). */
@@ -98,6 +115,16 @@ const RIVER_REACH = 800;
 const FALL_STEEP = 0.3, SLOW_STEEP = 0.004, SLOW_WIDTH = 5;
 /** The light this many seconds ago tells rising light (dawn chorus) from falling light (evening crickets). */
 const LIGHT_LAG = 900;
+/** Half loudness this far (m) past the pavilion's deck (the water under its piers) and the summit hut (its banners). */
+const PIERS_HALF = 20, FLAGS_HALF = 25;
+/** How far from its centre the summit hut's timber deck and terrace reach (m). */
+const HUT_REACH = 30;
+
+/** How loud something is at a distance d (m) past its edge, half as loud at `at` m. */
+const falloff = (d: number, at: number): number => 1 / (1 + (Math.max(0, d) / at) ** 2);
+
+/** Orders things that happen by their clock time. */
+export const byTime = (a: { t: number }, b: { t: number }): number => a.t - b.t;
 
 /** Per habitat: the brightest the sunline's bright stretch gets (its peak at midday). */
 const peakOf = kept((h: Habitat): number => {
@@ -151,13 +178,12 @@ function waterNear(t: Terrain, l: Listener): { river: number; slow: number; fall
       if (d < river) { river = d; slow = rv.steep[k] < SLOW_STEEP && rv.halfWidth[k] > SLOW_WIDTH ? 1 : 0; }
     }
   }
-  const half = (d: number, at: number): number => 1 / (1 + (d / at) ** 2);
   const lakeAway = t.lake ? Math.hypot(Math.max(0, fromLake(t.lake, l.s)), l.h - t.lake.level) : Infinity;
   return {
-    river: half(river, RIVER_HALF),
+    river: falloff(river, RIVER_HALF),
     slow,
-    falls: half(falls, FALLS_HALF) * Math.min(1, fallWidth / 5),
-    lake: half(lakeAway, LAKE_HALF),
+    falls: falloff(falls, FALLS_HALF) * Math.min(1, fallWidth / 5),
+    lake: falloff(lakeAway, LAKE_HALF),
   };
 }
 
@@ -190,7 +216,17 @@ export function soundscapeAt(e: Ecology, t: number, l: Listener, buffer?: Float3
   const air = airAt(h, r);
   const light = lightAt(h, l.s, t, buffer), before = lightAt(h, l.s, t - LIGHT_LAG, buffer);
   const birds = birdsAt(light, light > before);
-  if (l.below) return { beds, air, light, birds };
+  const room = roomAt(terrain, l);
+  if (l.below) {
+    const rooms = roomBedsAt(terrain, l), through = throughDeck(terrain, l);
+    // Through a wellhead's light well, the court above: what one would hear standing on its floor.
+    if (through > 0) {
+      const ground = terrain.heightAt(l.theta, l.s), above = soundscapeAt(e, t, { ...l, below: false, h: ground + 1.7, ground, speed: 0 }, buffer);
+      for (const b of BEDS) beds[b] = above.beds[b] * through;
+    }
+    for (const b of ROOM_BEDS) beds[b] = rooms[b];
+    return { beds, air, light, birds, room, through };
+  }
 
   const high = smoothstep(0.15, 0.6, 1 - r / h.radius);
   const lift = smoothstep(2, 40, l.h - l.ground);
@@ -219,8 +255,33 @@ export function soundscapeAt(e: Ecology, t: number, l: Listener, buffer?: Float3
   beds['bees'] = warm * Math.max(orchard, meadow * open * 0.35) * low * (1 - lift);
   const evening = light < before ? smoothstep(0.02, 0.15, light) * (1 - smoothstep(0.3, 0.6, light)) : light < 0.04 ? 0.3 : 0;
   beds['crickets'] = evening * meadow * open * low * (1 - lift);
+  const marks = landmarksNear(terrain, l);
+  beds['piers'] = marks.piers;
+  beds['flags'] = marks.flags * windy;
+  // The grove's old oaks ring its lawn: heard all through it, the lawn in the middle too.
+  beds['oaks'] = marks.grove * windy;
   for (const b of BEDS) beds[b] = Math.min(1, beds[b] * air);
-  return { beds, air, light, birds };
+  return { beds, air, light, birds, room, through: 0 };
+}
+
+/**
+ * How near the landmarks with a sound of their own are (0 … 1): the pavilion (water slapping under its piers, heard
+ * from its deck and the lake round it), the summit hut (banners snapping in the wind), the founders' grove (old oaks
+ * creaking, all through the grove and fading at its edge).
+ */
+function landmarksNear(t: Terrain, l: Listener): { piers: number; flags: number; grove: number } {
+  const h = t.habitat, r = h.profile.at(l.s).r;
+  let piers = 0, flags = 0, grove = 0;
+  for (const m of landmarksOf(t)) {
+    const d = Math.hypot(floorGap(r, l.theta, l.s, m.theta, m.s), l.h - m.level);
+    if (m.kind === 'pavilion') piers = Math.max(piers, falloff(d - m.radius, PIERS_HALF));
+    else flags = Math.max(flags, falloff(d - HUT_REACH / 2, FLAGS_HALF));
+  }
+  for (const site of planOf(h).sites) {
+    if (site.kind !== 'founders-grove') continue;
+    grove = Math.max(grove, 1 - smoothstep(0.6 * site.size, site.size, floorGap(r, l.theta, l.s, site.theta, site.s)));
+  }
+  return { piers, flags, grove };
 }
 
 /** Calls are dealt in slots of this many seconds, per square cell of this side (m) round the listener, out to REACH. */
@@ -267,11 +328,8 @@ export function callsIn(e: Ecology, t0: number, t1: number, l: Listener): Call[]
       out.push({ kind, at: toWorld(h.profile, { theta, s, h: ground + up }), t: start });
     }
   }
-  return out.sort((a, b) => a.t - b.t);
+  return out.sort(byTime);
 }
-
-/** How far from its centre the summit hut's timber deck and terrace reach (m). */
-const HUT_REACH = 30;
 
 /** What the floor layers sound like under a foot. */
 const LAYER_STEP: Record<string, StepSurface> = { grass: 'grass', 'dry grass': 'grass', litter: 'litter', needles: 'litter', dirt: 'grass', gravel: 'gravel', sand: 'gravel', rock: 'stone' };

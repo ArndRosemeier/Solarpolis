@@ -2,6 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MATRIX } from '../src/blueprint';
 import { BEDS, callsIn, lightAt, soundscapeAt, stepSurfaceAt, strideAt, type Listener } from '../src/sim/sounds';
+import { landmarksOf } from '../src/gen/landmarks';
+import { ROOM_BEDS } from '../src/sim/rooms';
+import { planOf } from '../src/gen/plan';
 import { ecologyOf } from './worlds';
 
 const EYE = 1.7;
@@ -20,15 +23,17 @@ function lightRisenTo(e: ReturnType<typeof ecologyOf>, s: number, level: number)
 }
 
 for (const { name } of MATRIX) {
-  test(`sounds (${name}): every bed has a weight in 0 … 1, the same every time, and nothing of the land is heard below`, () => {
+  test(`sounds (${name}): every bed has a weight in 0 … 1, the same every time, and below only the rooms are heard`, () => {
     const e = ecologyOf(name), p = e.terrain.habitat.profile, s = (p.floorStart + p.floorEnd) / 2;
     const t = lightRisenTo(e, s, 0.5), l = standing(e, 1, s);
     const a = soundscapeAt(e, t, l), b = soundscapeAt(e, t, l);
     assert.deepEqual(a, b);
     for (const bed of BEDS) assert.ok(a.beds[bed] >= 0 && a.beds[bed] <= 1, `${bed} ${a.beds[bed]}`);
     assert.ok(BEDS.some((bed) => a.beds[bed] > 0.05), 'the land is heard by day');
+    // Below, only the rooms' beds (sim/rooms.ts), unless the land comes down through a light well.
     const under = soundscapeAt(e, t, { ...l, below: true });
-    for (const bed of BEDS) assert.equal(under.beds[bed], 0, bed);
+    if (under.through === 0) for (const bed of BEDS) if (!(ROOM_BEDS as readonly string[]).includes(bed)) assert.equal(under.beds[bed], 0, bed);
+    assert.ok(ROOM_BEDS.some((bed) => under.beds[bed] > 0), 'the room is heard below');
   });
 
   test(`sounds (${name}): the lake is heard on its shore and not far from it; the air thins toward the axis`, () => {
@@ -82,6 +87,23 @@ for (const { name } of MATRIX) {
     assert.equal(stepSurfaceAt(e, c.theta, c.s, t.heightAt(c.theta, c.s), false), 'stone');
   });
 }
+
+test('sounds: each landmark is heard at it and not far off: water under the pavilion, banners at the hut, the grove\'s oaks', () => {
+  for (const { name } of MATRIX) {
+    const e = ecologyOf(name), t = e.terrain, h = t.habitat, p = h.profile, noon = (h.params.day.length * h.params.day.daylight) / 2;
+    const at = (theta: number, s: number, feet = t.heightAt(theta, s)): Listener => ({ theta, s, h: feet + EYE, ground: feet, below: false, speed: 0 });
+    const away = at(1, p.floorStart + 0.5 * (p.floorEnd - p.floorStart));
+    for (const m of landmarksOf(t)) {
+      const near = soundscapeAt(e, noon, at(m.theta, m.s, m.level + 0.5));
+      if (m.kind === 'pavilion') assert.ok(near.beds.piers > 0.5 && soundscapeAt(e, noon, at(m.theta + Math.PI, m.s)).beds.piers < 0.05, `${name}: piers`);
+      else assert.ok(near.beds.flags > 0.2, `${name}: banners at the hut ${near.beds.flags}`);
+    }
+    const grove = planOf(h).sites.find((x) => x.kind === 'founders-grove');
+    if (grove) assert.ok(soundscapeAt(e, noon, at(grove.theta, grove.s)).beds.oaks > 0.1, `${name}: the grove's oaks`);
+    const far = soundscapeAt(e, noon, away);
+    assert.ok(far.beds.flags < 0.05 && (!grove || Math.abs(grove.s - away.s) < grove.size || far.beds.oaks === 0), `${name}: not heard from the floor's middle`);
+  }
+});
 
 test('sounds: strides lengthen and slow as gravity falls', () => {
   const floor = strideAt(1.4, 9.81);

@@ -56,6 +56,7 @@ import { GlassDeck, type GlassStage, type GlassWant } from './glassDeck';
 import { nearestExitCourt, type ExitCourt } from '../gen/exitCourt';
 import { underOf } from '../gen/under';
 import type { Hearing } from '../sim/sounds';
+import { liftsNear, stagesNear } from '../sim/sources';
 import { calledFrom, doorsAbove, doorsBelow, doorsHit, eyeInCabin, liftDoorsNear, outside, type LiftDoors } from '../gen/lifts';
 
 /** Running is this many times the walking speed. */
@@ -310,6 +311,14 @@ export class InteriorView {
       const f = fromWorld(h.profile, ...c.feet());
       feet = { theta: f.theta, s: f.s, h: f.h, speed };
     }
+    const sources = liftsNear(this.terrain, at.theta, at.s, this.below);
+    if (this.below) sources.push(...stagesNear(this.terrain, at.theta, at.s));
+    const ride = this.cabin?.ride;
+    this.people?.heard(view.eye, this.time, this.below, sources);
+    if (!this.below) {
+      for (const a of this.animals) a.heard(view.eye, this.time, sources);
+      this.drones?.heard(view.eye, sources);
+    }
     return {
       ecology: e,
       time: this.time,
@@ -317,6 +326,10 @@ export class InteriorView {
       eye: view.eye, look: view.look, up: view.up,
       feet,
       gravity: h.gravityAt(Math.hypot(view.eye[0], view.eye[1])),
+      climb: onFoot ? v3dot(v, view.up) : 0,
+      flight: this.flyer ? this.eyeSpeed : 0,
+      sources,
+      lift: ride?.aboard ? { court: this.cabin!.court, share: ride.elapsed / Math.max(ride.seconds, 1e-3), moving: !ride.waits } : null,
     };
   }
 
