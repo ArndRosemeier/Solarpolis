@@ -433,22 +433,32 @@ toAnimal('squirrels', 'Fly: beside the nearest squirrel', 1.2);
 toAnimal('squirrels', 'Fly: the nearest squirrel from 15 m', 15);
 toAnimal('deer', 'Fly: beside the nearest deer', 5);
 toAnimal('deer', 'Fly: the nearest deer from 60 m', 60);
-/** Beside the nearest bird out (not roosting) round the player, `back` m off its side, a little above, looking at it. */
-const toBird = (label: string, back: number, kind?: BirdKind, still = false): void => debug.add({
+/** Where a bird or a flock is, which way is up there and which way it faces. */
+type BirdFound = { at: Vec3; up: Vec3; fwd: Vec3 } | null | undefined;
+/** Beside a bird (or a flock) found round the player, `back` m off its side and `rise` × that above, looking at it. */
+const toBird = (label: string, back: number, find: (v: NonNullable<ReturnType<typeof view>>, eye: Vec3) => BirdFound, rise = 0.3): void => debug.add({
   label, group: 'Go', run: () => {
-    const v = view(), eye = v?.eye(), q = v && eye && v.birds?.nearest(eye, kind, still);
+    const v = view(), eye = v?.eye(), q = v && eye && find(v, eye);
     if (!v || !q) return;
     const side: Vec3 = [q.up[1] * q.fwd[2] - q.up[2] * q.fwd[1], q.up[2] * q.fwd[0] - q.up[0] * q.fwd[2], q.up[0] * q.fwd[1] - q.up[1] * q.fwd[0]];
-    const from: Vec3 = [q.at[0] + side[0] * back + q.up[0] * back * 0.3, q.at[1] + side[1] * back + q.up[1] * back * 0.3, q.at[2] + side[2] * back + q.up[2] * back * 0.3];
+    const from: Vec3 = [q.at[0] + side[0] * back + q.up[0] * back * rise, q.at[1] + side[1] * back + q.up[1] * back * rise, q.at[2] + side[2] * back + q.up[2] * back * rise];
     const d = Math.hypot(q.at[0] - from[0], q.at[1] - from[1], q.at[2] - from[2]);
     v.floatAt(from, [(q.at[0] - from[0]) / d, (q.at[1] - from[1]) / d, (q.at[2] - from[2]) / d]);
   },
 });
-toBird('Fly: beside the nearest bird', 0.8, undefined, true);
-toBird('Fly: the nearest bird from 4 m', 4, undefined, true);
-toBird('Fly: the nearest bird from 20 m', 20, undefined, true);
-toBird('Fly: beside the nearest lark', 1.5, 'lark');
-toBird('Fly: beside the nearest owl', 1.5, 'owl');
+/** The nearest bird out (not roosting), of a kind; with `still`, one sitting or feeding before one in the air. */
+const birdNear = (kind?: BirdKind, still = false) => (v: NonNullable<ReturnType<typeof view>>, eye: Vec3): BirdFound => v.birds?.nearest(eye, kind, still);
+toBird('Fly: beside the nearest bird', 0.8, birdNear(undefined, true));
+toBird('Fly: the nearest bird from 4 m', 4, birdNear(undefined, true));
+toBird('Fly: the nearest bird from 20 m', 20, birdNear(undefined, true));
+toBird('Fly: beside the nearest lark', 1.5, birdNear('lark'));
+toBird('Fly: beside the nearest owl', 1.5, birdNear('owl'));
+toBird('Fly: beside the nearest swallow', 1.2, birdNear('swallow'));
+toBird('Fly: beside the nearest swift', 2, birdNear('swift'));
+toBird('Fly: beside the nearest starling', 1.2, birdNear('starling', true));
+// A murmuration in the air: from the side and a little below it, against the sky.
+toBird('Fly: before the nearest murmuration from 300 m', 300, (v, eye) => v.birds?.murmuration(eye), -0.15);
+toBird('Fly: into the nearest murmuration', 15, (v, eye) => v.birds?.murmuration(eye), -0.15);
 /** Ground one can stand on (a terrace's ledge, not its wall). */
 const ledge = (eco: Ecology) => (pt: number, ps: number): boolean => slopeAt(eco, pt, ps, eco.terrain.heightAt(pt, ps), 2) < 0.2;
 toPlace('Into the nearest orchard', -10, (eco, t, s) => nearestPlace(eco.terrain, 'orchard', t, s, ledge(eco)));
@@ -1102,6 +1112,8 @@ debug.add({ label: 'Two hours later', group: 'Time', run: () => view()?.skip(720
 debug.add({ label: 'Five minutes later', group: 'Time', run: () => view()?.skip(300) });
 debug.add({ label: 'To the dawn chorus (the light coming up here)', group: 'Time', run: () => view()?.skipToLight(0.3, true) });
 debug.add({ label: 'To nightfall here (owls out)', group: 'Time', run: () => view()?.skipToLight(0.03, false) });
+debug.add({ label: "To the starlings' murmuration here (dusk)", group: 'Time', run: () => view()?.skipToLight(0.06, false, -900) });
+debug.add({ label: "To the swifts' dusk race at the Stair", group: 'Time', run: () => view()?.skipToLight(0.3, false, 1200) });
 debug.add({ label: 'Clouds: schedule → few → half → overcast → none', group: 'Time', run: () => { const v = view(); if (v) v.cloudCover = nextOf<number | null>([null, 0.15, 0.5, 0.85, 0], v.cloudCover); } });
 const toClouds = (label: string, share: number): void => debug.add({
   label, group: 'Go',

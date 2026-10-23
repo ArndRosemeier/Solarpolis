@@ -41,6 +41,7 @@ import { speckLook, standInHorizon, standInPose, unpack } from './crowdShaders';
 import { SPECK_ATTRIBUTES, SPECK_SHOWN, SPECK_STRIDE, STAND_IN_ATTRIBUTES, STAND_IN_STRIDE } from '../gen/standIn';
 import { FLIER_ATTRIBUTES, FLIER_STRIDE, flierPose } from './droneShaders';
 import { BIRD_ATTRIBUTES, BIRD_STRIDE, birdPattern, birdPose } from './birdShaders';
+import { PATTERN } from '../gen/birds';
 import { LIGHT_SCALE, VEIL_LIGHT } from '../gen/drone';
 import { boreColor, flameColor, hardwareColor, lampColor, radiatorColor, skinColor, skinDetailColor, skinShown } from './hullShaders';
 
@@ -959,11 +960,22 @@ export const BIRD = kind('bird', ['position', 'normal', 'birdFolded', 'birdPart'
   const m = new MeshBasicNodeMaterial({ side: DoubleSide });
   const pose = birdPose();
   m.positionNode = pose.position;
-  const marks = birdPattern(pose.rest, pose.pattern);
+  const marks = birdPattern(pose.rest, pose.pattern), normal = normalize(varying(pose.normal)).mul(faceDirection);
   const albedo = mix(mix(pose.albedo, pose.dark, marks.x.mul(pose.where)), pose.light, marks.y.mul(pose.where));
-  m.colorNode = personColor(albedo, normalize(varying(pose.normal)).mul(faceDirection), pose.horizon);
+  m.colorNode = personColor(albedo.add(birdSheen(normal, pose.gloss, pose.pattern)), normal, pose.horizon);
   return m;
 });
+
+/**
+ * A glossy bird's sheen (its look's `gloss`): its dark feathers catch the light along its outline as one looks across
+ * them, steel blue, or a starling's purple turning green as the angle closes. Added to its colour, so it is lit (and
+ * goes dark at night) as the rest of it is.
+ */
+function birdSheen(normal: Node<'vec3'>, gloss: Node<'float'>, pattern: Node<'float'>): Node<'vec3'> {
+  const facing = abs(dot(normal, normalize(cameraPosition.sub(positionWorld)))), rim = float(1).sub(facing).pow(2);
+  const steel = vec3(0.32, 0.4, 0.62), iridescent = mix(vec3(0.42, 0.16, 0.5), vec3(0.14, 0.46, 0.24), facing);
+  return select(abs(pattern.sub(PATTERN.starry)).lessThan(0.5), iridescent, steel).mul(gloss.mul(float(0.02).add(rim.mul(0.3))));
+}
 
 /** How wide a hazard stripe is (m, along the drone's x + y + z): a pair is twice this. */
 const HAZARD_STRIPE = 0.05;
