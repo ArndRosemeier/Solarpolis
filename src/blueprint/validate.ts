@@ -9,7 +9,7 @@ import { CULTURES, cultureOf } from './cultures';
 export type Severity = 'invalid' | 'unusual';
 
 export interface Finding {
-  id: 'spin' | 'hull' | 'hull-thick' | 'axis-air' | 'haze' | 'heat' | 'light' | 'layers' | 'population' | 'sunline' | 'relief' | 'day' | 'brims' | 'collectors' | 'climate' | 'clouds' | 'landmarks' | 'culture' | 'plan' | 'life' | 'under' | 'mind';
+  id: 'spin' | 'hull' | 'hull-thick' | 'axis-air' | 'haze' | 'heat' | 'light' | 'layers' | 'population' | 'sunline' | 'relief' | 'day' | 'brims' | 'collectors' | 'climate' | 'clouds' | 'landmarks' | 'culture' | 'plan' | 'life' | 'under' | 'mind' | 'wind';
   severity: Severity;
   message: string;
 }
@@ -109,6 +109,12 @@ export function validate(h: Habitat): Finding[] {
   const tk = lf.talk;
   if (!(tk.words > 0 && tk.dots >= tk.words && Number.isInteger(tk.parties) && tk.parties >= 0 && tk.read > 0 && tk.quiet >= 0))
     out.push({ id: 'life', severity: 'invalid', message: 'talk needs a distance for words > 0, one for bubbles at least that far, a whole number of parties ≥ 0, a reading pace > 0 and a quiet ≥ 0' });
+  const sl = lf.sailing;
+  if (!(sl.boats >= 0 && sl.outings >= 0 && sl.outings <= 1 && sl.stay > 0 && sl.stay < p.day.length * p.day.daylight))
+    out.push({ id: 'life', severity: 'invalid', message: 'sailing needs boats ≥ 0 per km² of water, a chance of going out from 0 to 1 and a stay > 0 within the daylight hours' });
+  const wd = p.air.wind;
+  if (!(Number.isFinite(wd.along) && Number.isFinite(wd.around) && wd.gust >= 0 && wd.gust <= 1 && wd.sun >= 0))
+    out.push({ id: 'wind', severity: 'invalid', message: 'the wind needs a finite breeze along and around, gusts from 0 to 1 of it and a sun breeze ≥ 0' });
   const u = p.under, us = u.stone;
   if (!(Number.isFinite(u.screen.width) && Number.isFinite(u.screen.height) && u.screen.width > 0 && u.screen.height > 0
     && u.screen.joint > 0 && u.screen.joint < Math.min(u.screen.width, u.screen.height) / 4))

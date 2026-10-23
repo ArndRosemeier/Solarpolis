@@ -20,6 +20,9 @@ export const EMISSION_SAMPLES = 256;
 /** Samples of the light integral in the shaders. */
 export const SUNLINE_STEPS = 8;
 
+/** Which day of the clock `t` (s) falls in: whole days since the clock's start. */
+export const dayNumber = (h: Habitat, t: number): number => Math.floor(t / h.params.day.length);
+
 /** Where in its day the habitat is at clock time `t` (s): 0 … 1, with 0 the start of daylight (dawn at the wild end). */
 export function dayPhase(h: Habitat, t: number): number {
   const f = t / h.params.day.length;
@@ -45,6 +48,15 @@ export function dayLevel(h: Habitat, phase: number): number {
 }
 
 /**
+ * Where the bright stretch's middle is at a phase of the day, as a share of the length from the wild wall: it runs from
+ * just behind the wild wall at dawn to just past the port wall at dusk (and stays there through the night).
+ */
+export function brightCentre(h: Habitat, phase: number): number {
+  const { peakWidth } = h.params.day;
+  return -peakWidth + daylightProgress(h, phase) * (1 + 2 * peakWidth);
+}
+
+/**
  * The emission profile along the axis at clock time `t` (s), per sample from the wild wall to the port wall. In daylight
  * a bright stretch travels from the wild end to the port end over the tube's even `base` glow; while all of the
  * stretch is inside the tube, the profile's mean over the length is the day's level (1 in full day). At night the
@@ -54,8 +66,7 @@ export function sunlineEmission(h: Habitat, t = h.params.day.length * h.params.d
   const { daylight, peakWidth, base } = h.params.day;
   const phase = dayPhase(h, t), level = dayLevel(h, phase);
   if (phase >= daylight) return out.fill(level);
-  // The stretch's centre runs from just behind the wild wall to just past the port wall.
-  const centre = -peakWidth + daylightProgress(h, phase) * (1 + 2 * peakWidth);
+  const centre = brightCentre(h, phase);
   // Scaled by the whole stretch's mean, so it gives the full day's light only when all of it is inside the tube: at
   // dawn it rises out of the wild wall, at dusk it sinks into the port wall.
   const peakMean = peakWidth * Math.sqrt(2 * Math.PI);

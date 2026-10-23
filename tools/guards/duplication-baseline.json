@@ -36,6 +36,50 @@
     "reason": "TSL arithmetic for unrelated water motion, terrain patterns and light coordinates; no shared formula to extract."
   },
   {
+    "key": "idiom: [.add .mul] in solarpolis/render/builtShaders.ts + solarpolis/render/groundShaders.ts + solarpolis/render/hamletSkies.ts",
+    "reason": "TSL shader node chains (`.add(…).mul(…)`) are how three's shading language writes arithmetic: unrelated colour and light terms in different materials, not a shared calculation. (Counted as rare only as the number of source files grows.)"
+  },
+  {
+    "key": "idiom: [.add .mul] in solarpolis/render/builtShaders.ts + solarpolis/render/groundShaders.ts + solarpolis/render/hamletSkies.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
+    "reason": "TSL shader node chains (`.add(…).mul(…)`) are how three's shading language writes arithmetic: unrelated colour and light terms in different materials, not a shared calculation. (Counted as rare only as the number of source files grows.)"
+  },
+  {
+    "key": "idiom: [.add .mul] in solarpolis/render/builtShaders.ts + solarpolis/render/groundShaders.ts + solarpolis/render/materials.ts",
+    "reason": "TSL shader node chains (`.add(…).mul(…)`) are how three's shading language writes arithmetic: unrelated colour and light terms in different materials, not a shared calculation. (Counted as rare only as the number of source files grows.)"
+  },
+  {
+    "key": "idiom: [.add .mul] in solarpolis/render/celestialShaders.ts + solarpolis/render/cloudShaders.ts + solarpolis/render/crowdShaders.ts + solarpolis/render/materials.ts",
+    "reason": "TSL shader node chains (`.add(…).mul(…)`) are how three's shading language writes arithmetic: unrelated colour and light terms in different materials, not a shared calculation. (Counted as rare only as the number of source files grows.)"
+  },
+  {
+    "key": "idiom: [.add .mul] in solarpolis/render/celestialShaders.ts + solarpolis/render/groundShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
+    "reason": "TSL shader node chains (`.add(…).mul(…)`) are how three's shading language writes arithmetic: unrelated colour and light terms in different materials, not a shared calculation. (Counted as rare only as the number of source files grows.)"
+  },
+  {
+    "key": "idiom: [.add .mul] in solarpolis/render/celestialShaders.ts + solarpolis/render/hamletSkies.ts + solarpolis/render/materials.ts",
+    "reason": "TSL shader node chains (`.add(…).mul(…)`) are how three's shading language writes arithmetic: unrelated colour and light terms in different materials, not a shared calculation. (Counted as rare only as the number of source files grows.)"
+  },
+  {
+    "key": "idiom: [.add .mul] in solarpolis/render/celestialShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
+    "reason": "TSL shader node chains (`.add(…).mul(…)`) are how three's shading language writes arithmetic: unrelated colour and light terms in different materials, not a shared calculation. (Counted as rare only as the number of source files grows.)"
+  },
+  {
+    "key": "idiom: [.add .mul] in solarpolis/render/celestialShaders.ts + solarpolis/render/materials.ts + solarpolis/render/vesselShaders.ts",
+    "reason": "TSL shader node chains (`.add(…).mul(…)`) are how three's shading language writes arithmetic: unrelated colour and light terms in different materials, not a shared calculation. (Counted as rare only as the number of source files grows.)"
+  },
+  {
+    "key": "idiom: [.add .mul] in solarpolis/render/hamletSkies.ts + solarpolis/render/hullShaders.ts + solarpolis/render/materials.ts",
+    "reason": "TSL shader node chains (`.add(…).mul(…)`) are how three's shading language writes arithmetic: unrelated colour and light terms in different materials, not a shared calculation. (Counted as rare only as the number of source files grows.)"
+  },
+  {
+    "key": "idiom: [.add .mul] in solarpolis/render/hamletSkies.ts + solarpolis/render/hullShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
+    "reason": "TSL shader node chains (`.add(…).mul(…)`) are how three's shading language writes arithmetic: unrelated colour and light terms in different materials, not a shared calculation. (Counted as rare only as the number of source files grows.)"
+  },
+  {
+    "key": "idiom: [.add .mul] in solarpolis/render/hamletSkies.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
+    "reason": "TSL shader node chains (`.add(…).mul(…)`) are how three's shading language writes arithmetic: unrelated colour and light terms in different materials, not a shared calculation. (Counted as rare only as the number of source files grows.)"
+  },
+  {
     "key": "idiom: [.all Promise] in solarpolis/render/actors/animator.ts + solarpolis/render/necklace.ts + solarpolis/render/terrain.ts",
     "reason": "Plain JavaScript: each waits for its own different loads at once (animation clips, stage meshes, streamed tiles). Nothing to fold; it surfaced when the plan's files raised the file count (the finder weighs names by how few files use them)."
   },

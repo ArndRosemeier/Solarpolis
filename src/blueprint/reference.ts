@@ -12,7 +12,7 @@ export const REFERENCE: HabitatParams = {
   floorGravity: 9.81,
   sunDistanceAu: 1,
   axisOrientation: 'side-on',
-  air: { floorPressure: 101325, temperature: 288, gasConstant: 287, hazeDistance: 60000 },
+  air: { floorPressure: 101325, temperature: 288, gasConstant: 287, hazeDistance: 60000, wind: { along: 4.5, around: 2, gust: 0.35, sun: 2.5 } },
   layers: { soilMin: 1, soilMax: 5, ceilingDeck: 3, living: 20, floorDeck: 2, service: 10, solarSkin: 0.5 },
   // Refined asteroid steel, as the design doc has it.
   hull: { density: 7800, strength: 1.5e9, safetyFactor: 1.5 },
@@ -50,7 +50,8 @@ export const REFERENCE: HabitatParams = {
   life: { outings: 0.35, stay: 9000, pause: 1800, parties: [0.5, 0.33, 0.09, 0.05, 0.02, 0.01], regulars: 0.6, sunwalk: 0.03, night: 0.04, shells: 0.15, minds: 0.3, walk: 1.3, reach: 1500,
     drones: { couriers: 1, tenders: 1, surveyors: 2, lifters: 6, gliders: 0.4, guardians: 0.2, cruise: 12, lane: 35, round: 1200, designs: 2, persons: 0.08, bodies: 6 },
     animals: { squirrels: 8, range: 25, out: 0.7, deer: 7, herd: 8, roam: 400 },
-    talk: { words: 15, dots: 40, parties: 4, read: 14, quiet: 30 } },
+    talk: { words: 15, dots: 40, parties: 4, read: 14, quiet: 30 },
+    sailing: { boats: 6, outings: 0.4, stay: 7200 } },
   age: 200,
   culture: 'reference',
   seed: 1,
@@ -69,6 +70,6 @@ const peopleFor = (radius: number, length: number): number => Math.round(DENSITY
 export const MATRIX: { name: string; params: HabitatParams }[] = [
   { name: 'reference', params: REFERENCE },
   { name: 'small', params: withParams({ radius: 200, length: 1500, hubRadius: 10, sunlineRadius: 3, relief: { hills: 8, ringLake: { width: 40, depth: 4 }, terraceStep: 20, massif: 25, rivers: { count: 2, width: 3, depth: 0.5 }, landforms: { ring: 0.08, ringEvery: 1.5, height: 0.2, heights: 1, works: 0.06, wild: 3, signature: 3, fall: 0.08 }, lakes: { great: { length: 0.9, width: 0.42 }, count: 1, size: 0.15, depth: 0.025 } }, clouds: null, landmarks: { size: 18, handrail: 1.1 }, plan: { valleys: 2, reserve: 0.25, districtPeople: 10000, entranceSpacing: 400, spiral: 0.6, pathWidth: { sunwalk: 6, way: 2, trail: 1 }, places: { orchard: 30, parcel: 40, hall: 30 } }, under: { ...REFERENCE.under, bay: 20 }, population: peopleFor(200, 1500), seed: 2 }) },
-  { name: 'large', params: withParams({ radius: 12000, length: 60000, hubRadius: 150, sunlineRadius: 40, relief: { hills: 150, ringLake: { width: 1500, depth: 25 }, terraceStep: 300, massif: 800, rivers: { count: 10, width: 30, depth: 3 }, landforms: { ring: 0.05, ringEvery: 0.7, height: 0.25, heights: 3, works: 0.02, wild: 3, signature: 3, fall: 0.08 }, lakes: { great: { length: 0.7, width: 0.3 }, count: 6, size: 0.06, depth: 0.012 } }, clouds: { base: 2500, thickness: 900, cover: 0.45, size: 1800, wind: { along: 9, around: -4 } }, landmarks: { size: 220, handrail: 1.1 }, plan: { valleys: 4, reserve: 0.2, districtPeople: 12000, entranceSpacing: 1500, spiral: 0.6, pathWidth: { sunwalk: 16, way: 4, trail: 1.5 }, places: { orchard: 160, parcel: 220, hall: 96 } }, under: { ...REFERENCE.under, bay: 36 }, population: peopleFor(12000, 60000), seed: 3 }) },
-  { name: 'long', params: withParams({ radius: 2000, length: 40000, hubRadius: 40, sunlineRadius: 10, relief: { hills: 30, ringLake: null, terraceStep: 100, massif: 150, rivers: null, landforms: { ring: 0.1, ringEvery: 2, height: 0.3, heights: 3, works: 0.06, wild: 3, signature: 3, fall: 0.08 }, lakes: { great: { length: 0.9, width: 0.42 }, count: 4, size: 0.12, depth: 0.02 } }, clouds: { base: 600, thickness: 250, cover: 0.25, size: 450, wind: { along: -6, around: 2 } }, landmarks: { size: 90, handrail: 1.1 }, population: peopleFor(2000, 40000), seed: 4 }) },
+  { name: 'large', params: withParams({ radius: 12000, length: 60000, hubRadius: 150, sunlineRadius: 40, relief: { hills: 150, ringLake: { width: 1500, depth: 25 }, terraceStep: 300, massif: 800, rivers: { count: 10, width: 30, depth: 3 }, landforms: { ring: 0.05, ringEvery: 0.7, height: 0.25, heights: 3, works: 0.02, wild: 3, signature: 3, fall: 0.08 }, lakes: { great: { length: 0.7, width: 0.3 }, count: 6, size: 0.06, depth: 0.012 } }, clouds: { base: 2500, thickness: 900, cover: 0.45, size: 1800, wind: { along: 9, around: -4 } }, air: { ...REFERENCE.air, wind: { along: 4, around: -2, gust: 0.4, sun: 3.5 } }, landmarks: { size: 220, handrail: 1.1 }, plan: { valleys: 4, reserve: 0.2, districtPeople: 12000, entranceSpacing: 1500, spiral: 0.6, pathWidth: { sunwalk: 16, way: 4, trail: 1.5 }, places: { orchard: 160, parcel: 220, hall: 96 } }, under: { ...REFERENCE.under, bay: 36 }, population: peopleFor(12000, 60000), seed: 3 }) },
+  { name: 'long', params: withParams({ radius: 2000, length: 40000, hubRadius: 40, sunlineRadius: 10, relief: { hills: 30, ringLake: null, terraceStep: 100, massif: 150, rivers: null, landforms: { ring: 0.1, ringEvery: 2, height: 0.3, heights: 3, works: 0.06, wild: 3, signature: 3, fall: 0.08 }, lakes: { great: { length: 0.9, width: 0.42 }, count: 4, size: 0.12, depth: 0.02 } }, clouds: { base: 600, thickness: 250, cover: 0.25, size: 450, wind: { along: -6, around: 2 } }, air: { ...REFERENCE.air, wind: { along: -2.5, around: 1, gust: 0.3, sun: 2 } }, landmarks: { size: 90, handrail: 1.1 }, population: peopleFor(2000, 40000), seed: 4 }) },
 ];

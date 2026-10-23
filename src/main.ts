@@ -2,6 +2,8 @@ import { HomeControls } from './app/homeControls';
 import { homePlan } from './gen/homeInterior';
 import { underHousesIn, bayFrame } from './gen/underMesh';
 import { neighboursAt } from './sim/neighbourhood';
+import { boatsNear, sailingOf } from './sim/sailing';
+import { windAt } from './world/wind';
 import { ExitMarker } from './app/exitMarker';
 import { SpeechBubbles } from './app/bubbles';
 import { ArrivalCard } from './app/arrivalCard';
@@ -796,6 +798,31 @@ debug.add({
   },
 });
 debug.addInfo(() => (mereSeen ? `lake: ${mereSeen}` : ''));
+/**
+ * The wind where the walker is (world/wind.ts) and the boats out on the water (sim/sailing.ts); the Go entry floats
+ * beside the nearest boat under sail, a few of its lengths off and above, looking at it.
+ */
+debug.addInfo(() => {
+  const v = view(), h = lab.habitat;
+  if (!v || !h) return '';
+  const { theta, s } = v.walker.at, w = windAt(h, v.time, theta, s), fleet = sailingOf(h);
+  const from = `${Math.abs(w.along) >= Math.abs(w.around) ? (w.along > 0 ? 'the wild end' : 'the port end') : w.around > 0 ? 'against the spin' : 'spinward'}`;
+  const out = boatsNear(h, v.time, theta, s, h.radius * 8).filter((b) => b.sailing).length;
+  return `wind: ${Math.hypot(w.along, w.around).toFixed(1)} m/s from ${from}; boats under sail: ${out} of ${fleet.boats.length}`;
+});
+debug.add({
+  label: 'Fly: beside the nearest boat under sail', group: 'Go', run: () => {
+    const v = view(), t = v?.ecology?.terrain, h = lab.habitat;
+    if (!v || !t || !h) return;
+    const { theta, s } = v.walker.at, boat = boatsNear(h, v.time, theta, s, h.radius * 20).find((b) => b.sailing);
+    if (!boat) return;
+    // Off its beam to windward, a few lengths out and up.
+    const R = h.radius, off = 6 * 12, side = boat.heading + (Math.PI / 2) * boat.tack;
+    const across = Math.sin(side) * off, along = Math.cos(side) * off;
+    const et = boat.theta + across / R, es = boat.s + along;
+    floatToward(toWorld(h.profile, { theta: et, s: es, h: boat.level + off * 0.4 }), toWorld(h.profile, { theta: boat.theta, s: boat.s, h: boat.level + 3 }));
+  },
+});
 /**
  * The districts' works (gen/works.ts): each press floats by the work of the next kind (in `WORK_KINDS` order) nearest
  * the eye, two of its radii off and half of one up, looking at its middle; a work that faces along the axis is seen
