@@ -3,6 +3,7 @@ import { homePlan } from './gen/homeInterior';
 import { underHousesIn, bayFrame } from './gen/underMesh';
 import { neighboursAt } from './sim/neighbourhood';
 import { BOAT_KINDS, BOAT_KIND_LIST, boatAt, boatsNear, sailingOf, type Boat } from './sim/sailing';
+import { crewsAt, crewsOf } from './sim/crews';
 import { HARBOUR } from './gen/harbours';
 import { windAt } from './world/wind';
 import { Link } from './app/link/link';
@@ -941,9 +942,24 @@ debug.addInfo(() => {
   if (!v || !h) return '';
   const { theta, s } = v.walker.at, w = windAt(h, v.time, theta, s), fleet = sailingOf(h);
   const from = `${Math.abs(w.along) >= Math.abs(w.around) ? (w.along > 0 ? 'the wild end' : 'the port end') : w.around > 0 ? 'against the spin' : 'spinward'}`;
-  const out = boatsNear(h, v.time, theta, s, h.radius * 8).filter((b) => b.sailing).length;
-  return `wind: ${Math.hypot(w.along, w.around).toFixed(1)} m/s from ${from}; boats under sail: ${out} of ${fleet.boats.length}`;
+  const out = boatsNear(h, v.time, theta, s, h.radius * 8).filter((b) => b.sailing).length, crews = crewsOf(h);
+  return `wind: ${Math.hypot(w.along, w.around).toFixed(1)} m/s from ${from}; boats under sail: ${out} of ${fleet.boats.length}; ${crews.sailors} residents crew them`;
 });
+/** Beside the nearest crew walking to their boat or home from it (sim/crews.ts), a few metres off and a little up. */
+let crewSeen = '';
+debug.add({
+  label: 'Fly: beside the nearest crew on their way to their boat', group: 'Go', run: () => {
+    const v = view(), t = v?.ecology?.terrain, h = lab.habitat;
+    if (!v || !t || !h) return;
+    const { theta, s } = v.walker.at, R = h.radius, gap = (p: Person): number => floorGap(R, theta, s, p.theta, p.s);
+    const p = crewsAt(h, v.time, undefined, t).filter((q) => !q.seat).sort((a, b) => gap(a) - gap(b))[0];
+    crewSeen = p ? `a crew of ${p.size} walking between their court and boat ${p.boat}` : 'no crew on their way now';
+    if (!p) return;
+    const side = p.heading + Math.PI / 2, ground = t.standAt(p.theta, p.s);
+    floatToward(toWorld(h.profile, { theta: p.theta + (Math.sin(side) * 7) / R, s: p.s + Math.cos(side) * 7, h: ground + 3 }), toWorld(h.profile, { theta: p.theta, s: p.s, h: ground + 1 }));
+  },
+});
+debug.addInfo(() => crewSeen);
 debug.add({
   label: 'Fly: beside the nearest boat under sail', group: 'Go', run: () => {
     const v = view(), t = v?.ecology?.terrain, h = lab.habitat;

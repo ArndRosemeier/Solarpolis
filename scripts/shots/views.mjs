@@ -250,6 +250,15 @@ export const views = {
     { debug: 'Onto the nearest harbour' }, { wait: 9000 }, { shot: 'on' }, { look: [700, 0] }, { wait: 1500 }, { shot: 'on-2' },
     { debug: 'Two hours later' }, { debug: 'Two hours later' }, { debug: 'Fly: over the nearest harbour' }, { wait: 12000 }, { shot: 'later' }, heap('harbours'),
   ] },
+  // The crews (sim/crews.ts): residents walking to their boat or home from it, then aboard a skiff and a cruiser under sail.
+  crews: { query: 'view=inside', about: 'the boats\' crews, three and four hours into the day: beside the nearest crew walking between their court and their boat (-walking, -walking-2 two hours on), then riding beside a skiff and a cruiser with their crews aboard (-skiff, -cruiser); a heap snapshot; logs the boats and crew lines', settle: 6000, steps: [
+    memoryDetails, { debug: 'Two hours later' }, { wait: 3000 },
+    { debug: 'Fly: beside the nearest crew on their way to their boat' }, { wait: 9000 }, { shot: 'walking' },
+    { debug: 'Two hours later' }, { debug: 'Fly: beside the nearest crew on their way to their boat' }, { wait: 9000 }, { shot: 'walking-2' },
+    { debug: 'Ride beside a boat: skiff → foiler → cruiser → off' }, { wait: 12000 }, { shot: 'skiff' },
+    { debug: 'Ride beside a boat: skiff → foiler → cruiser → off' }, { wait: 12000 }, { shot: 'foiler' },
+    { debug: 'Ride beside a boat: skiff → foiler → cruiser → off' }, { wait: 12000 }, { shot: 'cruiser' }, heap('crews'),
+  ] },
   // The districts' works (gen/works.ts): each press of the Go entry moves to the next kind, nearest the eye.
   works: { query: 'view=inside', about: 'the districts\' works, one kind after another, each from two of its radii off: pyramid, cone, sunken court, mesa, fold, dome, down, scarp, vale, bowl, stepwell, half-pipe, amphitheatre, ramp, drumlin, tor', settle: 6000, steps: [
     ...['pyramid', 'cone', 'sunken', 'mesa', 'fold', 'dome', 'down', 'scarp', 'vale', 'bowl', 'stepwell', 'halfpipe', 'amphitheatre', 'ramp', 'drumlin', 'tor'].flatMap((kind) => [{ debug: 'Fly: the next district work' }, { wait: 9000 }, { shot: kind }]),
