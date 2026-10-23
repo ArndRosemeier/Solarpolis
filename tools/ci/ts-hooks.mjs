@@ -4,12 +4,13 @@
  * with esbuild. It replaces `--import tsx` there because tsx names every function it compiles (esbuild `keepNames`: a
  * `__name` call, an `Object.defineProperty`, for every closure made, millions over the suite: over a second of the
  * 30 s budget) and answers each import from a worker thread. The browser build (Vite) never names them either, so the
- * tests run the code as the game does. Compiled files are kept under node_modules/.cache, by content.
+ * tests run the code as the game does. The project's TypeScript is compiled up front in parallel, and kept under
+ * node_modules/.cache by content.
  *
  * Node built-ins and esbuild only. Used as `node --import ./tools/ci/ts-hooks.mjs`.
  */
 import { registerHooks } from 'node:module';
-import { transformSync } from 'esbuild';
+import { transform, transformSync } from 'esbuild';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -36,16 +37,41 @@ function bundlerPath(specifier, parentURL) {
   return null;
 }
 
+const OPTIONS = (file) => ({
+  loader: file.endsWith('x') ? 'tsx' : 'ts', format: 'esm', target: `node${process.versions.node}`,
+  sourcemap: 'inline', sourcefile: file, tsconfigRaw: TSCONFIG,
+});
+const keyOf = (file, source) => createHash('sha1').update(file).update('\0').update(source).digest('hex');
+const keep = (key, code) => {
+  try { fs.mkdirSync(CACHE, { recursive: true }); fs.writeFileSync(path.join(CACHE, key + '.mjs'), code); } catch { /* a cache is only a cache */ }
+};
+
+/** Compiled up front, all at once: esbuild in parallel takes a third of the time it takes file by file (CI starts cold). */
+const ready = new Map();
+async function compileAhead() {
+  const dirs = ['src', 'test', ...fs.readdirSync(path.join(ROOT, 'vendor/assetgenerator/packages')).map((p) => `vendor/assetgenerator/packages/${p}/src`)];
+  const files = dirs.flatMap((d) => {
+    try { return fs.readdirSync(path.join(ROOT, d), { recursive: true }).map((f) => path.join(ROOT, d, String(f))); } catch { return []; }
+  }).filter((f) => TS.test(f) && !f.endsWith('.d.ts') && !f.includes(`${path.sep}slow${path.sep}`));
+  await Promise.all(files.map(async (file) => {
+    const source = fs.readFileSync(file, 'utf8'), key = keyOf(file, source);
+    let code;
+    try { code = fs.readFileSync(path.join(CACHE, key + '.mjs'), 'utf8'); } catch {
+      code = (await transform(source, OPTIONS(file))).code;
+      keep(key, code);
+    }
+    ready.set(file, { key, code });
+  }));
+}
+await compileAhead();
+
 function compile(file) {
-  const source = fs.readFileSync(file, 'utf8');
-  const key = createHash('sha1').update(file).update('\0').update(source).digest('hex');
-  const kept = path.join(CACHE, key + '.mjs');
-  try { return fs.readFileSync(kept, 'utf8'); } catch { /* not compiled yet */ }
-  const { code } = transformSync(source, {
-    loader: file.endsWith('x') ? 'tsx' : 'ts', format: 'esm', target: `node${process.versions.node}`,
-    sourcemap: 'inline', sourcefile: file, tsconfigRaw: TSCONFIG,
-  });
-  try { fs.mkdirSync(CACHE, { recursive: true }); fs.writeFileSync(kept, code); } catch { /* a cache is only a cache */ }
+  const source = fs.readFileSync(file, 'utf8'), key = keyOf(file, source), done = ready.get(file);
+  ready.delete(file);
+  if (done?.key === key) return done.code;
+  try { return fs.readFileSync(path.join(CACHE, key + '.mjs'), 'utf8'); } catch { /* not compiled yet */ }
+  const { code } = transformSync(source, OPTIONS(file));
+  keep(key, code);
   return code;
 }
 
