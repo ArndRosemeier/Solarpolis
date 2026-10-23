@@ -244,7 +244,7 @@ export class CapsuleView {
     this.alight();
   }
 
-  /** The player was taken away (a jump elsewhere): the pod, empty, goes. */
+  /** The player was taken out of it (a jump elsewhere while aboard): the pod, empty, goes. */
   letGo(): void {
     if (this.phase === 'idle') return;
     this.ask();

@@ -1012,7 +1012,8 @@ export class InteriorView {
 
   private stand(theta: number, s: number, heading?: number): void {
     if (this.cabin) this.cabin.ride = null;
-    this.caps?.letGo();
+    // Taken out of a capsule one is in, it leaves empty; one waiting or on its way stays for the player to come back to.
+    if (this.caps?.carrying) this.caps.letGo();
     this.flyer = null;
     this.physics?.removeCharacter();
     this.character = null;
