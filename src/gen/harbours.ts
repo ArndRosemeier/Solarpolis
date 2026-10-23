@@ -47,8 +47,11 @@ export interface Basin {
   radius: number;
   /** How far out from its shore its harbours reach (m): boats under sail keep further off. */
   moorings: number;
-  /** The ring lake: half its width, and half the length round from the pavilion's one side to its other (m). */
-  half?: { across: number; around: number };
+  /**
+   * The ring lake: half its water's width (to its waterline), half the length round from the pavilion's one side to its
+   * other, half the width it is dug (m), and how far its land at the dug edge stands over its water (m; gen/plan.ts).
+   */
+  half?: { across: number; around: number; dug: number; bank: number };
   /** A lake on the floor. */
   mere?: Mere;
 }
@@ -94,7 +97,7 @@ export function offShore(b: Basin, u: number, v: number): number {
 export function depthAt(b: Basin, u: number, v: number): number {
   const off = offShore(b, u, v);
   if (off <= 0) return 0;
-  if (b.half) return b.depth * Math.sqrt(smoothstep(0, 0.6, off / b.half.across));
+  if (b.half) return Math.max(0, b.depth * Math.sqrt(smoothstep(0, 0.6, 1 - Math.abs(v) / b.half.dug)) - b.half.bank);
   return b.depth * Math.sqrt(smoothstep(0, 1, mereDeep(b.mere!, -off)));
 }
 
@@ -178,10 +181,17 @@ const MIX: Record<Basin['kind'], Record<BoatKind, number>> = {
 };
 
 /** The habitat's sailing water, its harbours and its boats, laid out once per habitat and kept. */
-export const fleetOf: (h: Habitat) => Fleet = kept(makeFleet);
+export const fleetOf: (h: Habitat) => Fleet = kept(layFleet);
 
-/** The handrail a habitat's harbours are sized by: its landmarks', else its hull parts'. */
-export const harbourRail = (h: Habitat): number => h.params.landmarks?.handrail ?? h.params.exterior.parts.handrail;
+/** The handrail a habitat's harbours are sized by (its landmarks'), or null: without, its boats lie at buoys. */
+export const harbourRail = (h: Habitat): number | null => h.params.landmarks?.handrail ?? null;
+
+/** Where in from its dug edge (a share of its half width) the ring lake's bed comes down to its water: depth·√smoothstep(0, 0.6, k) = bank. */
+function waterline(share: number): number {
+  let lo = 0, hi = 0.6;
+  for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; if (Math.sqrt(smoothstep(0, 0.6, mid)) < share) lo = mid; else hi = mid; }
+  return hi;
+}
 
 function basinsOf(h: Habitat, plan: Plan): Basin[] {
   const R = h.radius, basins: Basin[] = [], lake = plan.lake;
@@ -189,9 +199,11 @@ function basinsOf(h: Habitat, plan: Plan): Basin[] {
     // Cut where the Sunwalk crosses on the pavilion's bridges: the frame's middle is round the far side from them.
     const pavilion = siteOf(plan, 'lake-pavilion'), cut = pavilion ? pavilion.theta : 0;
     const clear = pavilion ? pavilion.size * 1.5 : 0, around = Math.PI * R - clear;
+    // The land at the edge it is dug from (its room's floor) stands over its water: its waterline lies in from there.
+    const bank = Math.max(0, plan.roomAt(0, lake.s) - lake.level), across = lake.halfWidth * (1 - waterline(bank / lake.depth));
     basins.push({
       id: basins.length, kind: 'ring', theta: cut + Math.PI, s: lake.s, level: lake.level, depth: lake.depth, radius: R, moorings: 0,
-      width: lake.halfWidth * 2, length: around * 2, area: lake.halfWidth * 2 * around * 2, half: { across: lake.halfWidth, around },
+      width: across * 2, length: around * 2, area: across * 2 * around * 2, half: { across, around, dug: lake.halfWidth, bank },
     });
   }
   for (const m of plan.meres) {
@@ -201,7 +213,7 @@ function basinsOf(h: Habitat, plan: Plan): Basin[] {
   return basins;
 }
 
-function makeFleet(h: Habitat): Fleet {
+function layFleet(h: Habitat): Fleet {
   const plan = planOf(h), basins = basinsOf(h, plan), spec = h.params.life.sailing, boats: Boat[] = [], harbours: Harbour[] = [];
   const near = pathFinder(h, plan);
   for (const b of basins) {
@@ -299,7 +311,9 @@ interface Spot {
  * without (its boats lie at buoys).
  */
 function placeHarbours(h: Habitat, plan: Plan, b: Basin, groups: BoatKind[][], near: (theta: number, s: number) => number, firstId: number): Harbour[] {
-  const hr = harbourRail(h), spots = shoreSpots(b, near), out: Harbour[] = [];
+  const hr = harbourRail(h), out: Harbour[] = [];
+  if (hr === null) return out;
+  const spots = shoreSpots(b, near);
   if (!spots.length) return out;
   const taken: Harbour[] = [];
   let boat = 0;
@@ -362,7 +376,7 @@ function layHarbour(h: Habitat, plan: Plan, b: Basin, spot: Spot, kinds: readonl
   // A point of its frame in the basin's (as floorAt, unrolled at the basin's radius).
   const k = b.radius / h.profile.at(frame.s).r, c = Math.cos(frame.heading), sn = Math.sin(frame.heading);
   const at = (x: number, y: number): { u: number; v: number } => ({ u: spot.u + (x * sn + y * c) * k, v: spot.v + x * c - y * sn });
-  const wet = (x: number, y: number, by: number): boolean => { const q = at(x, y); return offShore(b, q.u, q.v) > by; };
+  const wetAt = (x: number, y: number, by: number): boolean => { const q = at(x, y); return offShore(b, q.u, q.v) > by; };
   const deep = (x: number, y: number, need: number): boolean => { const q = at(x, y); return depthAt(b, q.u, q.v) >= need; };
   // The berths along the pontoon, fingers between them; the pier comes in at the middle.
   const gap = HARBOUR.beside * hr, finger = HARBOUR.finger * hr, widths = kinds.map((k) => BOAT_KINDS[k].beam + 2 * gap + finger);
@@ -378,13 +392,13 @@ function layHarbour(h: Habitat, plan: Plan, b: Basin, spot: Spot, kinds: readonl
   // Out along the pier until the pontoon floats in water deep enough at both its ends and its berths, every boat in water.
   const most = Math.min(b.width * 0.25, 60 * hr);
   for (let x = 2 * hr; x <= most; x += hr) {
-    if (!wet(x, y0, hr) || !wet(x, y1, hr) || !deep(x + wide, y0, under) || !deep(x + wide, y1, under)) continue;
+    if (!wetAt(x, y0, hr) || !wetAt(x, y1, hr) || !deep(x + wide, y0, under) || !deep(x + wide, y1, under)) continue;
     const hb: Harbour = { id, basin: b.id, seed: deriveSeed(h.seed, 'harbour', id), handrail: hr, frame, pontoon: x, y0, y1, berths, fingers, reach: 0 };
     let ok = true, reach = 0;
     kinds.forEach((k, i) => {
       const s = BOAT_KINDS[k], bx = berthX(hb, k), by = berths[i].y, half = s.beam / 2 + gap;
       for (const [cx, cy] of [[bx - s.length / 2, by - half], [bx - s.length / 2, by + half], [bx + s.length / 2, by - half], [bx + s.length / 2, by + half]]) {
-        if (!wet(cx, cy, gap) || !deep(cx, cy, s.draft + under)) ok = false;
+        if (!wetAt(cx, cy, gap) || !deep(cx, cy, s.draft + under)) ok = false;
       }
       reach = Math.max(reach, bx + s.length / 2);
       // Its way out: straight on from its bow, in water a beam wide, until it is out in the sailing water.

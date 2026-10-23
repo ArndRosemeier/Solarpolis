@@ -24,6 +24,7 @@ import { standThrough } from './standing';
 import { courtSites } from './courts';
 import { crossingKeepsClear, crossingSites } from './crossings';
 import { hallKeepsClear, hallSites } from './grownHall';
+import { harbourKeepsClear, harbourSites } from './harbourBuild';
 
 /** A bridge along the axis from the deck's edge (`from`, m from the centre) to the shore (`to`), `end` m over the water there. */
 export interface Bridge {
@@ -248,6 +249,13 @@ const near = (f: Place, l: Landmark, p: Vec3, margin: number): boolean => {
 };
 
 /**
+ * Every kind of thing at sites on the floor (gen/siteTiles.ts) by the name its tiles are asked for in the worker (a
+ * `TiledPart`); and as a list, for what people stand on and the physics touches there.
+ */
+export const SITE_PARTS = { courts: courtSites, crossings: crossingSites, halls: hallSites, harbours: harbourSites } as const;
+export const SITE_KINDS = Object.values(SITE_PARTS);
+
+/**
  * Whether plants keep off a point: under a landmark or the Lift Stair, or by a bridge's landing (a few handrails
  * around it), so nothing grows through the deck or the steps or blocks the way onto them.
  */
@@ -260,6 +268,8 @@ export function keptClear(t: Terrain, theta: number, s: number): boolean {
   if (crossingKeepsClear(t, theta, s)) return true;
   // A grown hall's table, hearth and dais (gen/grownHall.ts).
   if (hallKeepsClear(t, theta, s)) return true;
+  // A harbour, its landing and its berths (gen/harbourBuild.ts): no reeds where the boats lie.
+  if (harbourKeepsClear(t, theta, s)) return true;
   for (const l of landmarksOf(t)) {
     if (l.kind === 'hut') {
       // Its whole box, a few handrails out: on the face of the rock the ground runs up past it, not under it.
@@ -287,8 +297,8 @@ export function keptClear(t: Terrain, theta: number, s: number): boolean {
 export function landmarkTopAt(t: Terrain, theta: number, s: number): number | null {
   const h = t.habitat, stair = stairStandAt(h, theta, s);
   if (stair !== null) return stair;
-  // The things at sites on the floor: the entrance courts, the river crossings, the grown halls' daises.
-  for (const kind of [courtSites, crossingSites, hallSites]) {
+  // The things at sites on the floor: the entrance courts, the river crossings, the grown halls' daises, the harbours.
+  for (const kind of SITE_KINDS) {
     const top = kind.topAt(t, theta, s);
     if (top !== null) return top;
   }

@@ -3,6 +3,7 @@ import { homePlan } from './gen/homeInterior';
 import { underHousesIn, bayFrame } from './gen/underMesh';
 import { neighboursAt } from './sim/neighbourhood';
 import { BOAT_KINDS, BOAT_KIND_LIST, boatAt, boatsNear, sailingOf, type Boat } from './sim/sailing';
+import { HARBOUR } from './gen/harbours';
 import { windAt } from './world/wind';
 import { ExitMarker } from './app/exitMarker';
 import { SpeechBubbles } from './app/bubbles';
@@ -715,6 +716,26 @@ byCrossing('Fly: by the nearest stone arch bridge', 'arch');
 byCrossing('Fly: by the nearest timber bridge', 'timber');
 byCrossing('Fly: by the nearest stepping stones', 'stepping');
 byCrossing('Fly: by the nearest log across a river', 'log');
+/** Stand on the nearest harbour's pontoon (gen/harbourBuild.ts), by the pier, looking out past the boats in their berths. */
+debug.add({
+  label: 'Onto the nearest harbour', group: 'Go', run: () => {
+    const f = nearestOnFloor((t) => sailingOf(t.habitat).harbours), h = lab.habitat;
+    if (!f || !h) return;
+    const hb = f.x, at = floorAt(h, hb.frame, hb.pontoon + HARBOUR.pontoon * hb.handrail * 0.6, HARBOUR.pier * hb.handrail);
+    f.v.goTo(at.theta, at.s, -hb.frame.heading);
+  },
+});
+/** Float off the nearest harbour, out over the water to one side and above it, looking back at the pier and its berths. */
+debug.add({
+  label: 'Fly: over the nearest harbour', group: 'Go', run: () => {
+    const f = nearestOnFloor((t) => sailingOf(t.habitat).harbours), h = lab.habitat;
+    if (!f || !h) return;
+    const hb = f.x, size = Math.max(hb.reach, hb.y1 - hb.y0);
+    const eye = floorPoint(h, hb.frame, [hb.reach + size * 0.5, hb.y1 + size * 0.4, size * 0.35]), at = floorPoint(h, hb.frame, [hb.reach * 0.45, 0, 0]);
+    const d = Math.hypot(at[0] - eye[0], at[1] - eye[1], at[2] - eye[2]);
+    f.v.floatAt(eye, [(at[0] - eye[0]) / d, (at[1] - eye[1]) / d, (at[2] - eye[2]) / d]);
+  },
+});
 /** The grown hall (gen/planted.ts, gen/grownHall.ts) nearest the walker. */
 const nearestHall = (): { v: InteriorView; hall: Hall } | null => {
   const f = nearestOnFloor((t) => plantingsOf(t).halls);
