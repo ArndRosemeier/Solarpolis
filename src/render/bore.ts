@@ -129,6 +129,8 @@ export function boreShapes(h: Habitat): BoreGeometry {
       const tip = (n + 0.5) * pitch - (C.long * r) / 2;
       if (tip < lo + r * 0.1) continue;
       for (const a of [Math.PI / 8, Math.PI + Math.PI / 8]) {
+        // Not on the window's glass.
+        if (skip(Math.floor(a / step), Math.min(rows - 1, Math.floor((tip - lo) / dz)))) continue;
         const p = (s: number, z: number): Vec3 => wallPoint(a + s / cr, z, cr), hw = C.wide * r, L = C.long * r, T = C.thick * r, n0 = inward(a);
         lamps.quad(p(-hw, tip + L), p(-hw, tip + L + T), p(0, tip + T), p(0, tip), n0, chev);
         lamps.quad(p(0, tip), p(0, tip + T), p(hw, tip + L + T), p(hw, tip + L), n0, chev);
