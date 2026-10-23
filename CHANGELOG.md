@@ -2,6 +2,14 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.132 — The land can be heard
+
+- Sound, starting with your first click: wind, leaves and grass, rivers, the lake and the falls, birds, bees and crickets, each where it really is on the land. The dawn chorus rolls along the cylinder with the light.
+- Single birds sing from trees around you, an owl at night, larks over the meadows.
+- Your footsteps change with the ground (grass, leaves, gravel, stone, timber, snow, water, the floors below). Near the axis, where gravity is low, the steps come slower and the air is thinner and quieter.
+- The title has music: an epic, hopeful theme that carries the docking flight and fades as you arrive.
+- A "Sound on / Sound off" switch next to What's new.
+
 ## v0.131 — The worlds beyond the habitat
 
 - The Outside view now contains all eight planets, the five dwarf planets, their catalogued moons, tilted ring systems and a sparse procedural asteroid background at real scale.
