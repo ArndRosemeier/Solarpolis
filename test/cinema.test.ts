@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { v3add, v3dot, v3len, v3norm, v3scale, v3sub } from '@futuremagic/core';
 import { MATRIX, exteriorDistance, fromWorld } from '../src/blueprint';
-import { ARRIVAL, ARRIVAL_SHOTS, SPIN_UP, LIT_FROM, LIT_TO, LOOP, REFERENCE_SPACE, SHOTS, TORCH_SHIP, arrival, attractLoop, hubView, chooseStart, makeSpace, shipAt, skyFrom, torchShip } from '../src/space';
+import { ARRIVAL, ARRIVAL_SHOTS, arrivalScore, captionAt, MIND_LINES, SPIN_UP, LIT_FROM, LIT_TO, LOOP, REFERENCE_SPACE, SHOTS, TORCH_SHIP, arrival, attractLoop, hubView, chooseStart, makeSpace, shipAt, skyFrom, torchShip } from '../src/space';
 
 const DEG = 180 / Math.PI;
 
@@ -114,6 +114,23 @@ for (const { name, params } of MATRIX) {
       }
     }
     assert.ok(berthed, 'it latches in shot 5');
+    // What is heard of it: the thrusters burn while the ship coasts in, pulse on its final creep, the berth when it latches.
+    const m = a.moments, phase = (e: number) => shipAt(h, g, a.at(e)!.clock)!.phase;
+    for (let e = 0.25; e < m.through; e += 0.5) assert.equal(m.burns.some(([x, y]) => e >= x && e < y), phase(e) === 'coast', `${name} ${e} s: burning`);
+    for (const e of m.pulses) assert.ok(e >= 0 && e < m.through && ['turn', 'final'].includes(phase(e)), `${name}: a pulse at ${e} s, ${phase(e)}`);
+    assert.ok(m.pulses.some((e) => e >= ARRIVAL_SHOTS[0]), 'trims on the final creep in');
+    assert.ok(phase(m.berth - 0.05) === 'final' && phase(m.berth + 0.05) === 'berthed', 'the berth when it latches');
+    assert.ok(m.through < m.bearing && m.bearing < ARRIVAL);
+    const sc = arrivalScore(m, g.ship.seed);
+    assert.deepEqual(sc.cues, arrivalScore(m, g.ship.seed).cues);
+    for (const c of sc.cues) assert.match(c.sound, /^ship\//);
+    assert.ok(sc.cues.some((c) => c.sound === 'ship/contact' && c.t === m.berth));
+    assert.ok(sc.beds(5)['ship/cabin'] > 0 && sc.beds(m.through + 1)['ship/cabin'] === 0 && sc.beds(m.bearing)['ship/bearing'] > sc.beds(m.through + 1)['ship/bearing']);
+    assert.ok(sc.beds(m.bearing + 5)['body/rush'] > 0 && sc.beds(ARRIVAL)['ship/bearing'] === 0);
+    // The ship's Mind, as text: each line once, in order, the second before the berth, the last in the bore.
+    const shown = [...new Set(Array.from({ length: ARRIVAL * 4 }, (_, k) => captionAt(sc, k / 4)).filter(Boolean))];
+    assert.deepEqual(shown, [...MIND_LINES]);
+    assert.ok(sc.captions[1].to <= m.berth + 1 && sc.captions[2].from > m.through);
   });
 }
 

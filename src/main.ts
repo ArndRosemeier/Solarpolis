@@ -32,7 +32,7 @@ import { talksWithHands } from './render/people';
 import { speckMark } from './render/crowdShaders';
 import { OutsideView } from './render/outside';
 import { VoyageComputer } from './app/voyageComputer';
-import { hubView } from './space';
+import { arrivalScore, captionAt, hubView, type ArrivalScore } from './space';
 import { fromWorld, toWorld, type DebrisSpec, type Habitat, type Vec3 } from './blueprint';
 import { levelRunOf, nearestOf, onRow, plantsOf, slopeAt, type Level } from './gen/scatter';
 import { frameOf, landmarksOf, type Hut, type Pavilion } from './gen/landmarks';
@@ -189,6 +189,9 @@ async function startArrival(): Promise<void> {
   arriving = true;
   try { await flyIn(v); } finally {
     arriving = false;
+    v.onArrival = null;
+    title.caption(null);
+    sound.arrival(null);
     // The title theme carries the flight and the first look, then fades into the land.
     sound.music(null);
   }
@@ -198,6 +201,13 @@ let arriving = false;
 async function flyIn(v: OutsideView): Promise<void> {
   title.arriving();
   v.onTitle = null;
+  // The flight's sounds under the title theme, and the ship's Mind's lines on screen.
+  let score: ArrivalScore | null = null;
+  v.onArrival = (elapsed, a) => {
+    score ??= arrivalScore(a.moments, a.guest.ship.seed);
+    sound.arrival(score, elapsed);
+    title.caption(captionAt(score, elapsed));
+  };
   starting = (starting ?? Promise.resolve()).then(() => insideSlot.show());
   await v.arrive();
   if (tab !== 'title') return;
@@ -220,7 +230,7 @@ async function flyIn(v: OutsideView): Promise<void> {
   }
   await drawCurtain(false);
 }
-outsideSlot.box.append(title.root);
+outsideSlot.box.append(title.root, title.mind);
 
 type Tab = 'title' | 'lab' | 'inside' | 'outside' | 'tour';
 let tab: Tab = 'title';
