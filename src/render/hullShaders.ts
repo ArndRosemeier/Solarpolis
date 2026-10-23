@@ -527,20 +527,32 @@ export function hardwareColor(lighting: (n: Node<'vec3'>) => Light = lightOn): N
 }
 
 /**
- * The light inside the spindle's bore (relative to full sunlight, about 400 lux): its lamp strips run along the tube
- * at BORE_LAMPS angles around it, and the pale walls pass their light around.
+ * The light inside the spindle's bore (relative to full sunlight, about 400 lux on average): its lamp strips run along
+ * the tube at BORE_LAMPS angles around it, and its hoops of light (render/bore.ts) stand across it every
+ * `boreHoopPitch` m from the bearing, each throwing a pool of light on the walls round it; the pale walls pass the
+ * light around.
  */
 export const BORE_LIGHT = 0.004;
 export const BORE_LAMPS = 4;
 /** A lamp strip's own luminance, as a share of BORE_LIGHT's white paper. */
 export const LAMP_GLOW = 12;
+/**
+ * The walls' light along the bore: `base` everywhere, `pool` more under a hoop, falling off over `reach` of the pitch.
+ * Together they average to 1, so the bore's mean light (the exposure meter's) is BORE_LIGHT.
+ */
+export const BORE_POOLS = { base: 0.55, pool: 0.75, reach: 0.35 } as const;
+/** How far apart the bore's hoops stand (m; set by render/bore.ts for the habitat drawn). */
+export const boreHoopPitch = uniform(1);
 
-/** Hardware lit from inside the bore (the BORE kind): brightest under the strips, half as bright between them. */
+/** Hardware lit from inside the bore (the BORE kind): brightest under the strips and round the hoops. */
 export function boreColor(): Node<'vec3'> {
   return hardwareColor(() => {
     // The strips at angles 2πk / BORE_LAMPS around the axis (render/bore.ts lays them there).
     const around = atan(positionLocal.y, positionLocal.x).mul(BORE_LAMPS);
-    return { sun: float(0), all: float(BORE_LIGHT).mul(around.cos().mul(0.25).add(0.75)) };
+    // The nearest hoop: the bore is built from the bearing (z = 0), the hoops every pitch from there.
+    const off = fract(positionLocal.z.div(boreHoopPitch).add(0.5)).sub(0.5).div(BORE_POOLS.reach);
+    const pools = float(BORE_POOLS.base).add(off.mul(off).negate().exp().mul(BORE_POOLS.pool));
+    return { sun: float(0), all: float(BORE_LIGHT).mul(around.cos().mul(0.25).add(0.75)).mul(pools) };
   });
 }
 

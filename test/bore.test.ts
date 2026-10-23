@@ -2,7 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MATRIX, derive } from '../src/blueprint';
-import { BoreMeshes, boreShapes } from '../src/render/bore';
+import { BORE_HALL, BoreMeshes, boreShapes, boreWindow } from '../src/render/bore';
+import { BORE_POOLS } from '../src/render/hullShaders';
 import { BORE, LAMP } from '../src/render/materials';
 
 for (const { name, params } of MATRIX) {
@@ -22,10 +23,21 @@ for (const { name, params } of MATRIX) {
     check(s.still.lamps, b.bearing, b.to);
     check(s.turning.lamps, b.from, b.bearing);
     assert.ok(s.still.lamps.vertices > 0 && s.turning.lamps.vertices > 0);
-    // The window: the sleeve leaves wall panels out where the still part has all of them per row.
-    const rows = (z0: number, z1: number): number => Math.max(1, Math.round((z1 - z0) / b.radius));
-    const panels = (shape: typeof s.still.walls): number => shape.idx.length;
-    assert.ok(panels(s.turning.walls) / rows(b.from, b.bearing) < panels(s.still.walls) / rows(b.bearing, b.to), `${name}: no window`);
+    // The window: nothing of the sleeve's wall in front of it, while the still part's wall is whole at its angle.
+    const win = boreWindow(h), am = (win.a0 + win.a1) / 2, zm = (win.z0 + win.z1) / 2;
+    const covers = (shape: typeof s.still.walls, z: number): boolean => {
+      for (let t = 0; t < shape.idx.length; t += 3) {
+        const v = [0, 1, 2].map((k) => shape.idx[t + k] * 3), p = [0, 1, 2].map((c) => v.reduce((n, i) => n + shape.pos[i + c], 0) / 3);
+        const a = Math.atan2(p[1], p[0]);
+        if (Math.hypot(p[0], p[1]) > b.radius * 0.98 && Math.abs(a - am) < (win.a1 - win.a0) * 0.3 && Math.abs(p[2] - z) < (win.z1 - win.z0) * 0.7) return true;
+      }
+      return false;
+    };
+    assert.ok(!covers(s.turning.walls, zm), `${name}: no window`);
+    assert.ok(covers(s.still.walls, (b.to - b.bearing) / 2), `${name}: the still part's wall has a hole`);
+    // A hall, not a pipe: hoops of light along both parts.
+    const hoops = (shape: typeof s.still.lamps): number => new Set(Array.from({ length: shape.vertices }, (_, v) => shape.pos[v * 3 + 2]).filter((z) => Math.abs(Math.round(z / (BORE_HALL.pitch * b.radius)) * BORE_HALL.pitch * b.radius - z) < b.radius * 0.03).map((z) => Math.round(z / (BORE_HALL.pitch * b.radius)))).size;
+    assert.ok(hoops(s.still.lamps) >= Math.floor((b.to - b.bearing) / (BORE_HALL.pitch * b.radius)) - 1, `${name}: hoops along the still part`);
   });
 }
 
@@ -35,4 +47,11 @@ test('bore: each mesh carries exactly its kind\'s attributes (anything else is a
     const kind = m.material === LAMP.material ? LAMP : BORE;
     assert.deepEqual(Object.keys(m.geometry.attributes).sort(), [...kind.attributes].sort(), m.name);
   }
+});
+
+test('bore: the hoops\' pools of light average to the bore\'s light, so the exposure meter sees it as before', () => {
+  const n = 2000, { base, pool, reach } = BORE_POOLS;
+  let sum = 0;
+  for (let k = 0; k < n; k++) sum += base + pool * Math.exp(-((((k + 0.5) / n - 0.5) / reach) ** 2));
+  assert.ok(Math.abs(sum / n - 1) < 0.01, `mean ${sum / n}`);
 });

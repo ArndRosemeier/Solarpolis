@@ -64,10 +64,6 @@
     "reason": "Independent camera controls clamp pitch to their own allowed angles; extracting these few assignments would hide input conventions."
   },
   {
-    "key": "idiom: [.max .min .pitch Math] in solarpolis/render/outside.ts + solarpolis/render/vesselVisit.ts + solarpolis/space/flyer.ts",
-    "reason": "Independent camera controls clamp pitch to their own allowed angles; extracting these few assignments would hide input conventions."
-  },
-  {
     "key": "idiom: [.message .textContent String] in solarpolis/app/voyageComputer.ts + solarpolis/lab/blueprintLab.ts + solarpolis/main.ts",
     "reason": "Displaying a caught Error as status text is a short DOM error-reporting idiom, not shared application behavior."
   },
@@ -1317,10 +1313,6 @@
   },
   {
     "key": "same name: solarpolis/gen/birds.ts#at + solarpolis/gen/hullDetail.ts#at",
-    "reason": "Short local helper names (a vertex, a ring, a triangle, a fade, a draw from the seed) in unrelated builders and shaders; each does different work."
-  },
-  {
-    "key": "same name: solarpolis/gen/birds.ts#at + solarpolis/render/bore.ts#at",
     "reason": "Short local helper names (a vertex, a ring, a triangle, a fade, a draw from the seed) in unrelated builders and shaders; each does different work."
   },
   {
