@@ -758,6 +758,26 @@ export const BUILT = kind('built', ['position', 'normal', 'color', 'uv', 'finish
 const NO_ROOF = new Vector4(0, 0, 0, 0);
 
 /**
+ * A capsule's glass and its fans' blur (gen/capsules.ts; the shapes BUILT draws, `finish` here the veil: how much of
+ * what lies behind the surface it keeps out, by scattering its own colour back). Clear glass mirrors the sky's haze and
+ * the sunline tube more toward grazing (Schlick, as a boat's coat does), so it reads as glass over the land seen
+ * through it; from inside, seen from its back, the same. Premultiplied: what it adds, and what it lets through.
+ */
+export const CAP_GLASS = kind('capsule glass', ['position', 'normal', 'color', 'uv', 'finish'], { cast: false, receive: false }, () => {
+  const m = new MeshBasicNodeMaterial({ side: DoubleSide, transparent: true, depthWrite: false, premultipliedAlpha: true, forceSinglePass: true });
+  const veil = attribute<'float'>('finish', 'float');
+  const ray = normalize(positionWorld.sub(cameraPosition)), n = normalize(normalWorld).mul(faceDirection);
+  const facing = clamp(dot(n, ray.negate()), 0, 1), mirror = float(0.04).add(float(0.96).mul(pow(float(1).sub(facing), 5)));
+  const scattered = vertexColor().rgb.mul(sunlit(vec2(OPEN_SKY, OPEN_SKY), n, 0, float(1), true, true)).mul(veil);
+  const reflected = air.haze.mul(air.skyLight.mul(light.mean).add(0.35)).add(tubeLight(tubeGlint(worldPosition(), ray, n))).mul(mirror);
+  const alpha = float(1).sub(float(1).sub(veil).mul(float(1).sub(mirror)));
+  const { kept, glow } = airBetween();
+  m.colorNode = scattered.add(reflected).mul(kept).add(glow.mul(alpha)).mul(view.exposure);
+  m.opacityNode = alpha;
+  return m;
+});
+
+/**
  * The Understorey's light and air (gen/underMesh.ts; set per habitat by `setBelow`): the lamps' light on the floor
  * mid-bay, as a share of the open land's daylight (`under.lamp`), their warm colour, and the mist below (extinction
  * per metre: a quarter of the light left over `under.mist`).
@@ -1173,5 +1193,5 @@ export function animalEyeMaterial(): Material {
 
 /** Every kind, for the Stage's warm-up. */
 export function allKinds(): readonly Kind[] {
-  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS, STONE, BUILT, VAULT, PROP, CROWD, SPECK, DRONE, DRONE_VEIL, BIRD, BOAT, BOAT_WAKE, CLOUDS_FAR, CLOUDS_NEAR];
+  return [GROUND, WATER, SUNLINE, BALL, BARK, LEAF, HULL, GRASS, STONE, BUILT, CAP_GLASS, VAULT, PROP, CROWD, SPECK, DRONE, DRONE_VEIL, BIRD, BOAT, BOAT_WAKE, CLOUDS_FAR, CLOUDS_NEAR];
 }

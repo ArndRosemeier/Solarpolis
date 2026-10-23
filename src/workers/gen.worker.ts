@@ -38,6 +38,8 @@ import { nestsNear, type Nest } from '../sim/birds';
 import { flocksNear, type Flock } from '../sim/flocks';
 import type { VoyageRequest } from './voyage';
 import type { VoyagePlan } from '../space/voyage';
+import { buildCapsule, landingNear, type CapPad } from '../gen/capsules';
+import { planFlight, type Flight, type FlightEnds } from '../world/capFlight';
 
 /** The built things that stream in tiles. */
 export type TiledPart = 'stair' | 'under' | keyof typeof SITE_PARTS;
@@ -77,7 +79,13 @@ export type GenRequest =
   /** A boat design, both levels and its wake (gen/boat.ts). */
   | { kind: 'boat'; boat: BoatKind }
   /** Every boat's sailing on a day, planned ahead (sim/sailing.ts `planDay`). */
-  | { kind: 'sailing'; params: HabitatParams; day: number };
+  | { kind: 'sailing'; params: HabitatParams; day: number }
+  /** A transport capsule's shapes (gen/capsules.ts `buildCapsule`): its body, glass, and its door's. */
+  | { kind: 'capsule'; params: HabitatParams }
+  /** Where a capsule can set down near (θ, s): within `reach` m, no nearer than `least` (gen/capsules.ts `landingNear`). */
+  | { kind: 'capPad'; params: HabitatParams; theta: number; s: number; reach: number; least: number }
+  /** A capsule's flight between two ends (world/capFlight.ts `planFlight`). */
+  | { kind: 'capFlight'; params: HabitatParams; ends: FlightEnds };
 export type GenAnswer =
   | { kind: 'voyage'; plan: VoyagePlan }
   | { kind: 'tile'; tile: TileMesh }
@@ -103,6 +111,9 @@ export type GenAnswer =
   | { kind: 'bird'; body: BirdBody }
   | { kind: 'boat'; design: BoatDesign }
   | { kind: 'sailing'; day: number; outings: (Outing | null)[] }
+  | { kind: 'capsule'; body: MappedArrays; glass: MappedArrays; doorBody: MappedArrays; doorGlass: MappedArrays }
+  | { kind: 'capPad'; pad: CapPad | null }
+  | { kind: 'capFlight'; flight: Flight }
   | { error: string };
 
 /** Every typed array's buffer in an answer, to transfer rather than copy. */
@@ -194,6 +205,11 @@ self.onmessage = async (e: MessageEvent<GenRequest>) => {
       post({ kind: 'sailing', day: req.day, outings: planDay(habitatFor(req.params), req.day) });
       return;
     }
+    if (req.kind === 'capsule') {
+      const c = buildCapsule(habitatFor(req.params));
+      post({ kind: 'capsule', body: c.body.mappedArrays(), glass: c.glass.mappedArrays(), doorBody: c.doorBody.mappedArrays(), doorGlass: c.doorGlass.mappedArrays() });
+      return;
+    }
     if (req.kind === 'coats') {
       // The pack's files come over the network (from the browser's cache once the figures have loaded them).
       void coatsOf(req.ask, async (url) => { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.arrayBuffer(); })
@@ -220,6 +236,14 @@ self.onmessage = async (e: MessageEvent<GenRequest>) => {
     if (req.kind === 'tiled') {
       const p = req.part;
       post({ kind: 'tiled', part: p, built: p === 'stair' ? buildStairTile(terrain.habitat, req.key) : p === 'under' ? buildUnderTile(terrain, req.key) : SITE_PARTS[p].buildTile(terrain, req.key) });
+      return;
+    }
+    if (req.kind === 'capPad') {
+      post({ kind: 'capPad', pad: landingNear(ecology, plants, req.theta, req.s, req.reach, req.least) });
+      return;
+    }
+    if (req.kind === 'capFlight') {
+      post({ kind: 'capFlight', flight: planFlight(terrain, req.ends) });
       return;
     }
     if (req.kind === 'squirrels') {

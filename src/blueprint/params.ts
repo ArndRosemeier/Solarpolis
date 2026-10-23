@@ -296,6 +296,30 @@ export interface Life {
   talk: Talking;
   /** The boats sailed on the habitat's water (sim/sailing.ts). */
   sailing: Sailing;
+  /** The transport capsules anyone calls through the neural link (world/capFlight.ts, gen/capsules.ts). */
+  caps: Caps;
+}
+
+/**
+ * The transport capsules (Arnd 2026-10-23: call a cap through the neural link, choose where to go, no steering): small
+ * glass pods flown by tiny minds on four ducted fans. A called cap comes from about `call` m away and sets down on open
+ * ground within `reach` m of the one who called it (or of where they go). Along its way it keeps at most `cruise` m/s,
+ * `climb` m/s up from a pad and down onto one, at most `accel` m/s² along its way and `turn` m/s² across it, at least
+ * `over` m over the ground and the crowns, and at least `axis` (a share of the radius) from the axis and the sunline on
+ * it. It flies as fast as is comfortable: what its passenger feels stays under `comfort` times the floor's gravity
+ * (flying spinward makes one heavier), and its floor banks into what they feel by at most `tilt` radians from true up.
+ */
+export interface Caps {
+  cruise: number;
+  climb: number;
+  accel: number;
+  turn: number;
+  over: number;
+  axis: number;
+  comfort: number;
+  tilt: number;
+  call: number;
+  reach: number;
 }
 
 /**

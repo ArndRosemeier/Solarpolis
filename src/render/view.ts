@@ -12,7 +12,7 @@ import { Color, CylinderGeometry, Group, Mesh, PerspectiveCamera, Scene, SphereG
 import { Stage, createRenderer } from '@futuremagic/stage';
 import { deriveSeed, smoothstep, v3dot, v3madd, v3norm, v3scale } from '@futuremagic/core';
 import { fromWorld, toView, toWorld, type Habitat, type Vec3 } from '../blueprint';
-import type { Sighting } from '../link';
+import type { LinkLine, LinkService, Sighting } from '../link';
 import { toScreenOrEdge } from './screen';
 import { makeTerrain, type Terrain } from '../gen/terrain';
 import { EYE_HEIGHT, VIEW_FOV, Walker, type View } from '../world/walker';
@@ -22,7 +22,7 @@ import { gravityReading, type GravityReading } from '../world/motion';
 import { arrivalTerraceOf, revealAt, REVEAL_SECONDS } from '../world/arrival';
 import type { ArrivalTerrace } from '../gen/arrivalTerrace';
 import { HUMAN, type Character } from '../physics/character';
-import { Figure, castAsWorn, type MoveState } from './actors/figure';
+import { Figure, castAsWorn, type AnimState, type MoveState } from './actors/figure';
 import { playerLook } from './actors/looks';
 import { addLights, dayOverhead, key, shineBelow, shineOn, sky } from './lights';
 import { BELOW_MAKES_UP, adapt, glareOf, insideExposure, insideRayLuminance, landAlbedo, meterRays, underCrowns, type InsideMeterable } from './exposure';
@@ -56,6 +56,7 @@ import type { Whereabouts } from '../system';
 import { AnimalView, DEER, SQUIRRELS } from './animals';
 import { BirdView } from './birds';
 import { CabinView } from './lift';
+import { CapsuleLink, CapsuleView, type Passenger } from './capsules';
 import { GLASS, SKIES, skyOverBay } from '../gen/skies';
 import { GlassDeck, type GlassStage, type GlassWant } from './glassDeck';
 import { nearestExitCourt, type ExitCourt } from '../gen/exitCourt';
@@ -140,6 +141,12 @@ export class InteriorView {
   /** The glass deck's views of the land above, while a hamlet with it is near (render/glassDeck.ts). */
   private glass: GlassDeck | null = null;
   private cabinMaking = false;
+  /** The transport capsule the player calls through their link (render/capsules.ts), and their look round from its seat. */
+  private caps: CapsuleView | null = null;
+  private rideLook = { yaw: 0, pitch: 0 };
+  /** The capsules' part of the player's link (main.ts serves it), and the lines their Minds say through it. */
+  readonly capsules: LinkService = new CapsuleLink(() => this.caps, () => (this.loop.running ? { feet: this.walker.feetAt(), below: this.below } : null));
+  onLine: ((line: LinkLine) => void) | null = null;
   /** The people up on the land around the player. */
   private people: PeopleView | null = null;
   /** Everyone up on the land beyond them, as specks. */
@@ -169,7 +176,7 @@ export class InteriorView {
   onArrival: ((progress: number, nearby: boolean) => void) | null = null;
   private readonly loop = new FrameLoop((dt) => this.frame(dt), (e) => {
     if (this.arrivalReveal && !e.ctrlKey && !e.altKey && !e.metaKey) { this.finishArrivalReveal(); return; }
-    if (e.code === 'KeyF' && !e.repeat && !this.cabin?.aboard) this.toggleFlying();
+    if (e.code === 'KeyF' && !e.repeat && !this.cabin?.aboard && !this.caps?.carrying) this.toggleFlying();
     if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) this.jump = true; }
   });
   /** Travel speed multiplier from the debug menu. */
@@ -309,7 +316,7 @@ export class InteriorView {
 
   /** Bytes of geometry this view holds (memory watchdog). */
   bytes(): number {
-    return (this.tiles?.bytes() ?? 0) + (this.plants?.bytes() ?? 0) + (this.landmarks?.bytes() ?? 0) + (this.stair?.bytes() ?? 0) + (this.courts?.bytes() ?? 0) + (this.crossings?.bytes() ?? 0) + (this.halls?.bytes() ?? 0) + (this.harbours?.bytes() ?? 0) + (this.under?.bytes() ?? 0) + (this.cabin?.bytes() ?? 0) + (this.glass?.bytes() ?? 0) + (this.homes?.bytes() ?? 0);
+    return (this.tiles?.bytes() ?? 0) + (this.plants?.bytes() ?? 0) + (this.landmarks?.bytes() ?? 0) + (this.stair?.bytes() ?? 0) + (this.courts?.bytes() ?? 0) + (this.crossings?.bytes() ?? 0) + (this.halls?.bytes() ?? 0) + (this.harbours?.bytes() ?? 0) + (this.under?.bytes() ?? 0) + (this.cabin?.bytes() ?? 0) + (this.caps?.bytes() ?? 0) + (this.glass?.bytes() ?? 0) + (this.homes?.bytes() ?? 0);
   }
 
   /** Give memory back (memory watchdog): drop every cached tile and plant cell not on screen. */
@@ -337,7 +344,7 @@ export class InteriorView {
     const e = this.ecology;
     if (!e || !this.loop.running) return null;
     const view = this.current(), h = this.habitat, at = fromWorld(h.profile, ...view.eye), c = this.character;
-    const onFoot = !!c && !this.flyer && !this.cabin?.aboard && !this.arrivalReveal;
+    const onFoot = !!c && !this.flyer && !this.cabin?.aboard && !this.caps?.carrying && !this.arrivalReveal;
     const v = onFoot ? c.velocity : [0, 0, 0] as Vec3;
     const along = v3madd(v, view.up, -v3dot(v, view.up)), speed = Math.hypot(...along);
     let feet: Hearing['feet'] = null;
@@ -375,7 +382,7 @@ export class InteriorView {
     const a = this.flyer ? fromWorld(this.habitat.profile, ...this.flyer.eye) : this.walker.at;
     const c = this.character, g = this.habitat.gravityAt(Math.hypot(...this.current().eye.slice(0, 2) as [number, number]));
     const where = this.below ? `below the land${this.skyLine(a.theta, a.s)}, ` : '', ride = this.cabin?.ride;
-    const mode = ride?.aboard ? `in a lift, ${ride.waits ? 'waiting for the floor below' : ride.to > ride.from ? 'going up' : 'going down'}` : where + (this.flyer ? `flying ${this.flyer.clearance().toFixed(0)} m up`
+    const mode = ride?.aboard ? `in a lift, ${ride.waits ? 'waiting for the floor below' : ride.to > ride.from ? 'going up' : 'going down'}` : this.caps?.carrying ? `in a capsule (${this.caps.phase})` : where + (this.flyer ? `flying ${this.flyer.clearance().toFixed(0)} m up`
       : !c ? 'on foot (waiting for the physics)' : `on foot, ${c.swimming ? 'swimming' : c.grounded ? 'standing' : 'in the air'}, gravity ${(g / 9.81).toFixed(2)} g`);
     return [
       this.stage.hudLine(),
@@ -398,6 +405,7 @@ export class InteriorView {
       ...(this.animals.length ? this.animals.map((a) => a.info()) : ['animals: none']),
       this.birds?.info() ?? 'birds: none',
       this.boats?.info() ?? 'boats: none',
+      this.caps?.info() ?? 'capsule: none',
       `θ ${(a.theta * 180 / Math.PI).toFixed(1)}°, s ${(a.s / 1000).toFixed(2)} of ${(this.habitat.profile.length / 1000).toFixed(2)} km, ground ${this.standOn(a.theta, a.s).toFixed(1)} m, ${mode}, eyes ×${this.exposure.toFixed(2)}`,
     ].join('\n');
   }
@@ -589,6 +597,7 @@ export class InteriorView {
     if (this.harbours) { this.scene.remove(this.harbours.group); this.harbours.dispose(); }
     if (this.under) { this.scene.remove(this.under.group); this.under.dispose(); }
     if (this.cabin) { this.scene.remove(this.cabin.group); this.cabin.dispose(); }
+    this.caps?.dispose();
     this.glass?.dispose();
     this.homes?.dispose();
     this.people?.dispose();
@@ -645,6 +654,8 @@ export class InteriorView {
     this.scene.add(this.homes.group);
     this.cabin = new CabinView(this.terrain, this.stage);
     this.scene.add(this.cabin.group);
+    this.caps = new CapsuleView(h, this.terrain, this.stage, this.pool, (line) => this.onLine?.(line));
+    this.scene.add(this.caps.group);
     this.glass = new GlassDeck(this.renderer, this.scene, this.camera);
     this.people = new PeopleView(h, this.terrain, this.stage, this.camera, (theta, s) => landmarkTopAt(this.terrain, theta, s));
     this.scene.add(this.people.group);
@@ -725,6 +736,7 @@ export class InteriorView {
     const rideFrom = this.cabin?.aboard ? this.cabin.place(0) : null;
     this.under?.follow(v.eye, rideFrom ? eyeInCabin(this.habitat, rideFrom, EYE_HEIGHT) : v.eye);
     this.cabin?.poseAt(v.eye);
+    this.caps?.poseAt(v.eye);
     this.exitClock += this.frameDt;
     if (this.onExit && (!this.below || this.exitClock >= 0.1)) {
       this.exitClock = 0;

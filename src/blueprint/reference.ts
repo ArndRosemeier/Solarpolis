@@ -52,7 +52,9 @@ export const REFERENCE: HabitatParams = {
     animals: { squirrels: 8, range: 25, out: 0.7, deer: 7, herd: 8, roam: 400 },
     birds: { woods: 4, territory: 30, larks: 0.4, owls: 4, swallows: 8, swifts: 40, starlings: 2500 },
     talk: { words: 15, dots: 40, parties: 4, read: 14, quiet: 30 },
-    sailing: { boats: 6, outings: 0.4, stay: 7200 } },
+    sailing: { boats: 6, outings: 0.4, stay: 7200 },
+    // Capsules: quick over the land but easy on their passengers, a minute or so away when called.
+    caps: { cruise: 70, climb: 5, accel: 1.5, turn: 2.5, over: 30, axis: 0.12, comfort: 1.3, tilt: 0.35, call: 900, reach: 60 } },
   age: 200,
   culture: 'reference',
   seed: 1,
