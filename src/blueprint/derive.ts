@@ -95,6 +95,8 @@ export interface Habitat {
   gravityAt(r: number): number;
   /** Air pressure at radius r (Pa), in the rotating, isothermal atmosphere. */
   pressureAt(r: number): number;
+  /** Air density at radius r (kg/m³): the pressure over the gas constant and temperature (an ideal gas). */
+  airDensityAt(r: number): number;
   /** How far antispinward something dropped from height h above the floor lands from the point straight below (m). */
   dropOffset(h: number): number;
 }
@@ -150,6 +152,8 @@ export function derive(p: HabitatParams): Habitat {
   const profile = makeProfile(R, L, p.hubRadius, p.endcaps);
   const exterior = makeExterior({ length: L, outer, stack: outer - surface, hubRadius: p.hubRadius, spin, radiatorArea, shape: p.exterior });
   const Rs = p.air.gasConstant, Tair = p.air.temperature, p0 = p.air.floorPressure;
+  // dp/dr = ρ ω² r with ρ = p / (Rs T): p(r) = p0 exp(−ω² (R² − r²) / (2 Rs T)).
+  const pressureAt = (r: number): number => p0 * Math.exp((-spin * spin * (R * R - r * r)) / (2 * Rs * Tair));
 
   return {
     params: p,
@@ -181,8 +185,8 @@ export function derive(p: HabitatParams): Habitat {
     profile,
     exterior,
     gravityAt: (r) => spin * spin * r,
-    // dp/dr = ρ ω² r with ρ = p / (Rs T): p(r) = p0 exp(−ω² (R² − r²) / (2 Rs T)).
-    pressureAt: (r) => p0 * Math.exp((-spin * spin * (R * R - r * r)) / (2 * Rs * Tair)),
+    pressureAt,
+    airDensityAt: (r) => pressureAt(r) / (Rs * Tair),
     dropOffset: (h) => {
       if (!(h > 0)) return 0;
       const hh = Math.min(h, R * (1 - 1e-9)); // from the axis itself it never lands

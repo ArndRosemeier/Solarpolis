@@ -9,7 +9,7 @@ import { MATRIX, toWorld, type Vec3 } from '../src/blueprint';
 import { buildPatch } from '../src/gen/patch';
 import { coast, feltGravity, spinwardAt, upAt } from '../src/world/motion';
 import { PhysicsWorld, PHYSICS_STEP } from '../src/physics/world';
-import { JUMP_SPEED, afterMove } from '../src/physics/character';
+import { HUMAN_DRAG, JUMP_SPEED, afterMove } from '../src/physics/character';
 import { RUN, around, rise } from './runs';
 import { flatOf } from './worlds';
 
@@ -59,7 +59,7 @@ for (const { name } of MATRIX) {
       rise(world, c, t, () => around(c, sign), speed, 0.3);
       const from = c.feet(), up = upAt(from)!, d = around(c, sign);
       const r0 = Math.hypot(from[0], from[1]);
-      const expect = coast(h, from, [d[0] * speed + up[0] * JUMP_SPEED, d[1] * speed + up[1] * JUMP_SPEED, 0], 30, 1 / 480, (p, v) => v[0] * up[0] + v[1] * up[1] < 0 && Math.hypot(p[0], p[1]) >= r0);
+      const expect = coast(h, from, [d[0] * speed + up[0] * JUMP_SPEED, d[1] * speed + up[1] * JUMP_SPEED, 0], 30, 1 / 480, (p, v) => v[0] * up[0] + v[1] * up[1] < 0 && Math.hypot(p[0], p[1]) >= r0, HUMAN_DRAG);
       c.stride.jump = true;
       let air = 0;
       for (let i = 0; i < 30 / PHYSICS_STEP; i++) {

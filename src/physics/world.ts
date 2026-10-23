@@ -11,7 +11,7 @@
 import type RAPIER_NS from '@dimforge/rapier3d-compat';
 import type { Habitat, Vec3 } from '../blueprint';
 import type { GroundPatch } from '../gen/patch';
-import { apparentAcceleration } from '../world/motion';
+import { airDrag, apparentAcceleration } from '../world/motion';
 import { TRUNK_PIECE } from '../gen/trunks';
 import { Character, uprightRotation, type WaterDepth } from './character';
 
@@ -20,9 +20,9 @@ type Rapier = typeof RAPIER_NS;
 /** Fixed physics step (s) and the most steps one frame may take. */
 export const PHYSICS_STEP = 1 / 120;
 const MAX_STEPS = 8;
-/** Rolling resistance of grass and soil, as angular damping (1/s), and air drag on a ball, as linear damping (1/s). */
+/** Rolling resistance of grass and soil, as angular damping (1/s), and a ball's drag coefficient in the air. */
 const ROLLING_DAMPING = 1.5;
-const AIR_DAMPING = 0.01;
+export const BALL_DRAG = 0.47;
 /** Bark: how it grips and how much a ball bounces off it. */
 const BARK_FRICTION = 0.7;
 const BARK_BOUNCE = 0.2;
@@ -37,6 +37,11 @@ export interface BodyState {
   radius: number;
 }
 
+/** A ball's drag area over its mass (m²/kg): Cd · π r² over its mass at `density` (kg/m³). */
+export function ballDrag(radius: number, density: number): number {
+  return (BALL_DRAG * Math.PI * radius * radius) / (density * (4 / 3) * Math.PI * radius ** 3);
+}
+
 export class PhysicsWorld {
   private readonly world: RAPIER_NS.World;
   private ground: RAPIER_NS.Collider | null = null;
@@ -45,7 +50,8 @@ export class PhysicsWorld {
   private patch: GroundPatch | null = null;
   /** The bubble's origin in the habitat (float64). */
   private origin: Vec3 = [0, 0, 0];
-  private readonly bodies = new Map<number, { body: RAPIER_NS.RigidBody; radius: number }>();
+  /** Each ball, its radius and its drag area over its mass (`airDrag`). */
+  private readonly bodies = new Map<number, { body: RAPIER_NS.RigidBody; radius: number; drag: number }>();
   private next = 1;
   private carry = 0;
   private character: Character | null = null;
@@ -116,13 +122,12 @@ export class PhysicsWorld {
     const body = this.world.createRigidBody(R.RigidBodyDesc.dynamic()
       .setTranslation(position[0] - this.origin[0], position[1] - this.origin[1], position[2] - this.origin[2])
       .setLinvel(velocity[0], velocity[1], velocity[2])
-      // Grass and soil resist rolling; a little air drag.
+      // Grass and soil resist rolling; the air's drag is a force each step (`advance`).
       .setAngularDamping(ROLLING_DAMPING)
-      .setLinearDamping(AIR_DAMPING)
       .setCcdEnabled(true));
     this.world.createCollider(R.ColliderDesc.ball(radius).setDensity(density).setFriction(0.8).setRestitution(0.3), body);
     const id = this.next++;
-    this.bodies.set(id, { body, radius });
+    this.bodies.set(id, { body, radius, drag: ballDrag(radius, density) });
     return id;
   }
 
@@ -150,15 +155,18 @@ export class PhysicsWorld {
     this.bodies.delete(id);
   }
 
-  /** Advance by a frame's time in fixed steps, applying the turning frame's forces before each. */
+  /** Advance by a frame's time in fixed steps, applying the turning frame's forces and the air's drag before each. */
   advance(dt: number): void {
     this.carry = Math.min(this.carry + dt, PHYSICS_STEP * MAX_STEPS);
     while (this.carry >= PHYSICS_STEP) {
-      for (const { body } of this.bodies.values()) {
-        const t = body.translation(), v = body.linvel(), m = body.mass();
-        const a = apparentAcceleration(this.habitat, [t.x + this.origin[0], t.y + this.origin[1], t.z + this.origin[2]], [v.x, v.y, v.z]);
+      for (const { body, drag } of this.bodies.values()) {
+        const t = body.translation(), lv = body.linvel(), m = body.mass();
+        const p: Vec3 = [t.x + this.origin[0], t.y + this.origin[1], t.z + this.origin[2]], v: Vec3 = [lv.x, lv.y, lv.z];
+        const a = apparentAcceleration(this.habitat, p, v), d = airDrag(this.habitat, p, v, drag);
+        // The drag of one step never more than stops a light, fast ball.
+        const stop = Math.min(1, Math.hypot(...v) / (Math.hypot(...d) * PHYSICS_STEP || 1));
         body.resetForces(false);
-        body.addForce({ x: a[0] * m, y: a[1] * m, z: a[2] * m }, true);
+        body.addForce({ x: (a[0] + d[0] * stop) * m, y: (a[1] + d[1] * stop) * m, z: (a[2] + d[2] * stop) * m }, true);
       }
       this.character?.step(PHYSICS_STEP, this.origin);
       this.world.step();
