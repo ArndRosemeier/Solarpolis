@@ -13,3 +13,6 @@ looks-out/
 
 # Real-GPU screenshots (scripts/shots)
 /.render/
+
+# Raw takes from OpenRouter (scripts/sound)
+/.sound-raw/

@@ -22,6 +22,8 @@ button { font: inherit; color: inherit; }
 .top-sub { color: var(--quiet); }
 .wn-button { margin-left: auto; background: none; border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; color: var(--quiet); }
 .wn-button:hover { color: var(--ink); border-color: var(--quiet); }
+.sound-button { margin-left: 8px; background: none; border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; color: var(--quiet); }
+.sound-button:hover { color: var(--ink); border-color: var(--quiet); }
 
 /* ---- what's new ---- */
 .wn-backdrop { position: fixed; inset: 0; z-index: 40; background: #000a; display: flex; align-items: center; justify-content: center; padding: 16px; }

@@ -1,0 +1,318 @@
+/**
+ * What can be heard where (design "Solarpolis: how it sounds"): the land's beds of sound and how loud each is at a
+ * listener, the single bird calls placed on the land by seed and clock, the ground under a footstep, and the stride
+ * that times the steps. The player (`audio/sound.ts`) plays what this says; nothing here knows of Web Audio. Pure.
+ *
+ * Every weight follows from what the habitat already knows: crowns and meadow from the ecology, the lake and the rivers
+ * from the terrain, the light from the sunline's bright stretch at the listener's place along the axis (so the dawn
+ * chorus rolls from the wild end to the port end with the light), and the air's density from the blueprint (thinner
+ * toward the axis, so everything there is a little quieter). Nothing is placed by hand and nothing uses `Math.random`.
+ */
+import { clamp, deriveSeed, hash3i, hashToFloat, smoothstep } from '@futuremagic/core';
+import { toWorld, type Habitat } from '../blueprint';
+import { canopyOf, type Ecology } from '../gen/ecology';
+import { kept } from '../gen/kept';
+import { pathsOf } from '../gen/paths';
+import { placesOf } from '../gen/places';
+import { fromLake } from '../gen/plan';
+import { crossingsOf } from '../gen/crossings';
+import { landmarksOf } from '../gen/landmarks';
+import type { Terrain } from '../gen/terrain';
+import { emissionAt, sunlineEmission } from '../world/sunline';
+import { crownsOf } from './fauna';
+import { floorGap } from './walks';
+
+/** The beds: long sounds that loop, each mixed by its weight (files `bed/<name>` in public/sound). */
+export const BEDS = [
+  'wind-soft', 'wind-open', 'wind-high', 'leaves-broad', 'leaves-conifer', 'grass',
+  'river-riffle', 'river-slow', 'lake', 'falls', 'birds-wood', 'birds-meadow', 'birds-water', 'bees', 'crickets',
+] as const;
+export type Bed = (typeof BEDS)[number];
+
+/** What a footstep can land on (files `step/<name>-1 … 4`). */
+export const STEP_SURFACES = ['grass', 'litter', 'gravel', 'stone', 'timber', 'snow', 'water', 'floor'] as const;
+export type StepSurface = (typeof STEP_SURFACES)[number];
+
+/** The single calls (files `call/<name>`): the woods' birds, the meadow's lark, the owl at night. */
+export const CALLS = ['blackbird', 'robin', 'wren', 'thrush', 'woodpecker', 'pigeon', 'lark', 'owl'] as const;
+export type CallKind = (typeof CALLS)[number];
+
+/** Who is listening, and where: the eye on the profile, the ground under it, below the land or not, how fast it goes. */
+export interface Listener {
+  theta: number;
+  s: number;
+  /** The eye's height above the profile (m). */
+  h: number;
+  /** The height of what it stands on or flies over (m above the profile). */
+  ground: number;
+  below: boolean;
+  /** Speed through the air (m/s): flying, falling or running adds wind. */
+  speed: number;
+}
+
+/**
+ * What the player's ears get from the Inside view each frame (`InteriorView.hearing`): the land, the clock, the
+ * listener on it, the eye's pose in the world (for placing calls), and how the feet move (for the steps).
+ */
+export interface Hearing {
+  ecology: Ecology;
+  time: number;
+  listener: Listener;
+  eye: [number, number, number];
+  look: [number, number, number];
+  up: [number, number, number];
+  /** On foot on the ground: where the feet are (θ, s, height above the profile) and their speed along it (m/s). */
+  feet: { theta: number; s: number; h: number; speed: number } | null;
+  /** The gravity at the feet (m/s²), which sets the stride. */
+  gravity: number;
+}
+
+export interface Soundscape {
+  /** Each bed's weight (0 … 1, an amplitude). */
+  beds: Record<Bed, number>;
+  /** The air's carrying factor at the eye (1 on the floor): the square root of its density over the floor's. */
+  air: number;
+  /** How much of the day's light reaches the listener's place along the axis (0 night … 1 the bright stretch over it). */
+  light: number;
+  /** How busy the birds are (0 … 1): highest as the light comes up (the dawn chorus), low through the day, none at night. */
+  birds: number;
+}
+
+/** A single call: what, where (world), and when it starts (clock s). */
+export interface Call {
+  kind: CallKind;
+  at: [number, number, number];
+  t: number;
+}
+
+/** Tree forms that are conifers: their crowns sigh rather than rustle. */
+const CONIFERS = new Set(['pine', 'stone-pine', 'cypress', 'juniper']);
+
+/** How far round the listener the crowns and meadow are sampled (m), and in how many spots on that ring. */
+const AROUND = 25, SPOTS = 6;
+/** How far the water is heard: half loudness at these distances (m) for a river, the lake and a fall. */
+const RIVER_HALF = 12, LAKE_HALF = 25, FALLS_HALF = 150;
+/** River samples farther than this along the axis are not looked at (m). */
+const RIVER_REACH = 800;
+/** A river stretch falling this steeply (m per m) is a fall; one this flat and wide flows slowly. */
+const FALL_STEEP = 0.3, SLOW_STEEP = 0.004, SLOW_WIDTH = 5;
+/** The light this many seconds ago tells rising light (dawn chorus) from falling light (evening crickets). */
+const LIGHT_LAG = 900;
+
+/** Per habitat: the brightest the sunline's bright stretch gets (its peak at midday). */
+const peakOf = kept((h: Habitat): number => {
+  const e = sunlineEmission(h, (h.params.day.length * h.params.day.daylight) / 2);
+  return Math.max(1e-6, ...e);
+});
+
+/** Per ecology: each biome's share of its crown cover that is conifers. */
+const conifersOf = kept((e: Ecology): Float32Array => Float32Array.from(e.climate.biomes, (b) => {
+  let all = 0, cone = 0;
+  for (const p of b.plants) {
+    if (p.height[1] < 6) continue;
+    const c = (p.height[0] + p.height[1]) / 2 / p.spacing;
+    all += c;
+    if (CONIFERS.has(p.form)) cone += c;
+  }
+  return all > 0 ? cone / all : 0;
+}));
+
+const crownsKept = kept((e: Ecology) => crownsOf(e));
+const canopyKept = kept((e: Ecology) => e.climate.biomes.map((b) => canopyOf(b).cover));
+
+/** The share of the day's light over a point along the axis at clock time t (0 … 1). */
+export function lightAt(h: Habitat, s: number, t: number, buffer?: Float32Array<ArrayBuffer>): number {
+  const e = sunlineEmission(h, t, buffer);
+  return Math.min(1, emissionAt(e, h.params.length, h.profile.at(s).z) / peakOf(h));
+}
+
+/** How busy the birds are at a light that is rising or falling: a chorus as it comes up, quieter through the day. */
+function birdsAt(light: number, rising: boolean): number {
+  if (light < 0.04) return 0;
+  const day = 0.35 * smoothstep(0.04, 0.3, light);
+  const chorus = rising ? Math.exp(-(((light - 0.3) / 0.22) ** 2)) : 0;
+  return Math.min(1, day + chorus);
+}
+
+/** The air's carrying factor at a distance r from the axis: √(ρ(r) / ρ(floor)), from the blueprint. */
+export function airAt(h: Habitat, r: number): number {
+  return Math.sqrt(h.airDensityAt(r) / h.airDensityAt(h.radius));
+}
+
+/** Where water is near the listener: the nearest river (and how slow), the nearest fall, the lake. */
+function waterNear(t: Terrain, l: Listener): { river: number; slow: number; falls: number; lake: number } {
+  let river = Infinity, slow = 0, falls = Infinity, fallWidth = 0;
+  for (const rv of t.rivers) {
+    const k0 = Math.max(0, Math.floor((l.s - RIVER_REACH - rv.s0) / rv.step)), k1 = Math.min(rv.count - 1, Math.ceil((l.s + RIVER_REACH - rv.s0) / rv.step));
+    for (let k = k0; k <= k1; k++) {
+      const s = rv.s0 + k * rv.step, across = floorGap(rv.radius[k], l.theta, l.s, rv.theta[k], s);
+      const d = Math.max(0, Math.hypot(across, l.h - rv.surface[k]) - rv.halfWidth[k]);
+      if (rv.steep[k] >= FALL_STEEP) { if (d < falls) { falls = d; fallWidth = rv.halfWidth[k]; } continue; }
+      if (d < river) { river = d; slow = rv.steep[k] < SLOW_STEEP && rv.halfWidth[k] > SLOW_WIDTH ? 1 : 0; }
+    }
+  }
+  const half = (d: number, at: number): number => 1 / (1 + (d / at) ** 2);
+  const lakeAway = t.lake ? Math.hypot(Math.max(0, fromLake(t.lake, l.s)), l.h - t.lake.level) : Infinity;
+  return {
+    river: half(river, RIVER_HALF),
+    slow,
+    falls: half(falls, FALLS_HALF) * Math.min(1, fallWidth / 5),
+    lake: half(lakeAway, LAKE_HALF),
+  };
+}
+
+/** The crowns (0 … 1), how much of them are conifers, and how much of the ground is meadow, round a point. */
+function coverNear(e: Ecology, l: Listener): { wood: number; conifer: number; meadow: number } {
+  const t = e.terrain, h = t.habitat, crowns = crownsKept(e), cones = conifersOf(e), covers = canopyKept(e);
+  const shares = new Float32Array(cones.length), colour = new Float32Array(3), floor = new Uint8Array(8);
+  const r = Math.max(1, h.profile.at(l.s).r);
+  let wood = 0, conifer = 0, coverSum = 0, meadow = 0;
+  for (let i = 0; i <= SPOTS; i++) {
+    const a = (2 * Math.PI * i) / SPOTS, d = i === 0 ? 0 : AROUND;
+    const theta = l.theta + (d * Math.cos(a)) / r, s = clamp(l.s + d * Math.sin(a), 0, h.profile.length);
+    const ground = t.heightAt(theta, s);
+    wood += crowns(theta, s, ground);
+    e.biomesAt(theta, s, ground, 0, shares);
+    for (let b = 0; b < shares.length; b++) { conifer += shares[b] * covers[b] * cones[b]; coverSum += shares[b] * covers[b]; }
+    e.colorAt(theta, s, ground, 0, colour, 0, undefined, floor);
+    meadow += (floor[0] + floor[1]) / 255;
+  }
+  const n = SPOTS + 1;
+  return { wood: Math.min(1, wood / n), conifer: coverSum > 0 ? conifer / coverSum : 0, meadow: Math.min(1, meadow / n) };
+}
+
+/** Everything heard at a listener at clock time t. `buffer` is a scratch for the sunline's emission (any length). */
+export function soundscapeAt(e: Ecology, t: number, l: Listener, buffer?: Float32Array<ArrayBuffer>): Soundscape {
+  const terrain = e.terrain, h = terrain.habitat;
+  const beds = {} as Record<Bed, number>;
+  for (const b of BEDS) beds[b] = 0;
+  const eye = toWorld(h.profile, { theta: l.theta, s: l.s, h: l.h }), r = Math.hypot(eye[0], eye[1]);
+  const air = airAt(h, r);
+  const light = lightAt(h, l.s, t, buffer), before = lightAt(h, l.s, t - LIGHT_LAG, buffer);
+  const birds = birdsAt(light, light > before);
+  if (l.below) return { beds, air, light, birds };
+
+  const high = smoothstep(0.15, 0.6, 1 - r / h.radius);
+  const lift = smoothstep(2, 40, l.h - l.ground);
+  const raised = smoothstep(0, 0.03 * h.radius, l.ground);
+  const { wood, conifer, meadow } = coverNear(e, l);
+  const open = 1 - wood, low = 1 - high;
+  const windy = Math.min(1, 0.35 + raised * 0.4 + lift * 0.4 + l.speed / 30);
+  beds['wind-soft'] = (0.25 + 0.75 * open) * low * 0.6;
+  beds['wind-open'] = Math.min(1, raised * open * 0.7 + lift * 0.6 + l.speed / 30) * (1 - 0.5 * high);
+  beds['wind-high'] = high;
+  beds['leaves-broad'] = wood * (1 - conifer) * windy * low;
+  beds['leaves-conifer'] = wood * conifer * windy * low;
+  beds['grass'] = open * meadow * windy * low * (1 - lift);
+
+  const w = waterNear(terrain, l);
+  beds['river-riffle'] = w.river * (1 - w.slow);
+  beds['river-slow'] = w.river * w.slow;
+  beds['falls'] = w.falls;
+  beds['lake'] = w.lake;
+
+  beds['birds-wood'] = wood * birds * low;
+  beds['birds-meadow'] = open * meadow * birds * low;
+  beds['birds-water'] = Math.max(w.lake, w.river * 0.6) * birds * low;
+  const orchard = placesOf(terrain).placeAt(l.theta, l.s)?.kind === 'orchard' ? 1 : 0;
+  const warm = smoothstep(0.5, 0.9, light);
+  beds['bees'] = warm * Math.max(orchard, meadow * open * 0.35) * low * (1 - lift);
+  const evening = light < before ? smoothstep(0.02, 0.15, light) * (1 - smoothstep(0.3, 0.6, light)) : light < 0.04 ? 0.3 : 0;
+  beds['crickets'] = evening * meadow * open * low * (1 - lift);
+  for (const b of BEDS) beds[b] = Math.min(1, beds[b] * air);
+  return { beds, air, light, birds };
+}
+
+/** Calls are dealt in slots of this many seconds, per square cell of this side (m) round the listener, out to REACH. */
+const SLOT = 3, CELL = 30, REACH = 3;
+/** The chance a cell's slot holds a call at full activity, in a full wood. */
+const CALL_CHANCE = 0.03;
+const WOOD_CALLS: readonly [CallKind, number][] = [['blackbird', 0.25], ['robin', 0.2], ['wren', 0.15], ['thrush', 0.15], ['woodpecker', 0.08], ['pigeon', 0.17]];
+
+const callSeed = kept((h: Habitat): number => deriveSeed(h.params.seed, 'calls'));
+
+/**
+ * The single calls that start between clock times t0 and t1 round a listener: per cell of the floor and slot of time,
+ * a seeded draw decides whether a bird calls there (more often in woods and at the dawn chorus; larks over meadows by
+ * day, the owl in the woods at night), which bird, from where and when. The same place and time always give the same
+ * calls, whoever asks.
+ */
+export function callsIn(e: Ecology, t0: number, t1: number, l: Listener): Call[] {
+  const out: Call[] = [];
+  if (l.below || t1 <= t0) return out;
+  const terrain = e.terrain, h = terrain.habitat, seed = callSeed(h), crowns = crownsKept(e);
+  const R = h.radius, around = Math.max(1, Math.round((2 * Math.PI * R) / CELL)), dTheta = (2 * Math.PI) / around;
+  const ci = Math.floor(l.theta / dTheta), cj = Math.floor(l.s / CELL);
+  const light = lightAt(h, l.s, t0), birds = birdsAt(light, light > lightAt(h, l.s, t0 - LIGHT_LAG));
+  const night = light < 0.04;
+  for (let slot = Math.floor(t0 / SLOT); slot * SLOT < t1; slot++) {
+    for (let di = -REACH; di <= REACH; di++) for (let dj = -REACH; dj <= REACH; dj++) {
+      const i = (((ci + di) % around) + around) % around, j = cj + dj;
+      if (j < 0 || j * CELL > h.profile.length) continue;
+      const u = (k: number): number => hashToFloat(hash3i(seed, i * 65536 + j, slot, k));
+      if (u(0) > CALL_CHANCE * (night ? 0.15 : birds)) continue;
+      const theta = (i + u(1)) * dTheta, s = Math.min(h.profile.length, (j + u(2)) * CELL), start = slot * SLOT + u(3) * SLOT;
+      if (start < t0 || start >= t1) continue;
+      if (fromLake(terrain.lake, s) < 0) continue; // over the lake
+      const ground = terrain.heightAt(theta, s);
+      const wood = crowns(theta, s, ground);
+      let kind: CallKind | null = null, up = 3 + 9 * u(5);
+      if (night) kind = wood > 0.5 && u(4) < 0.5 ? 'owl' : null;
+      else if (wood > 0.3 && u(4) < wood) {
+        let pick = u(6);
+        for (const [k, p] of WOOD_CALLS) { pick -= p; if (pick <= 0) { kind = k; break; } }
+        kind ??= 'blackbird';
+      } else if (wood < 0.2 && u(4) < 0.4) { kind = 'lark'; up = 25 + 35 * u(5); }
+      if (!kind) continue;
+      out.push({ kind, at: toWorld(h.profile, { theta, s, h: ground + up }), t: start });
+    }
+  }
+  return out.sort((a, b) => a.t - b.t);
+}
+
+/** How far from its centre the summit hut's timber deck and terrace reach (m). */
+const HUT_REACH = 30;
+
+/** What the floor layers sound like under a foot. */
+const LAYER_STEP: Record<string, StepSurface> = { grass: 'grass', 'dry grass': 'grass', litter: 'litter', needles: 'litter', dirt: 'grass', gravel: 'gravel', sand: 'gravel', rock: 'stone' };
+
+/**
+ * What a foot at (θ, s) lands on, standing `feet` m above the profile: the Understorey's floor below; water when it is
+ * in the lake or a river; a built thing's deck (timber on the pavilion, the hut and timber or log crossings; stone on
+ * the rest: courts, the Lift Stair, arches); snow above the snow line; a path's laid surface; else the floor's
+ * strongest layer.
+ */
+export function stepSurfaceAt(e: Ecology, theta: number, s: number, feet: number, below: boolean): StepSurface {
+  if (below) return 'floor';
+  const t = e.terrain, h = t.habitat, ground = t.heightAt(theta, s), lake = t.lake && fromLake(t.lake, s) < 0 ? t.lake : null;
+  if (lake && feet < lake.level + 0.3) return 'water';
+  const river = t.riverAt(theta, s);
+  if (river && feet < river.surface + 0.3) return 'water';
+  if (feet > ground + 0.25) {
+    // Over the lake, the only deck is the pavilion's and its bridges'; the summit hut is timber too.
+    if (lake) return 'timber';
+    for (const l of landmarksOf(t)) if (l.kind === 'hut' && floorGap(h.profile.at(l.s).r, theta, s, l.theta, l.s) < HUT_REACH) return 'timber';
+    for (const c of crossingsOf(t)) {
+      if (floorGap(h.profile.at(c.frame.s).r, theta, s, c.frame.theta, c.frame.s) < c.half + 2) return c.kind === 'timber' || c.kind === 'log' ? 'timber' : 'stone';
+    }
+    return 'stone';
+  }
+  if (t.courtAt(theta, s)) return 'stone';
+  if (e.snowAt(theta, s, ground) > 0.5) return 'snow';
+  const path = pathsOf(h).pathAt(theta, s, 0);
+  if (path && path.distance <= path.width / 2) return LAYER_STEP[path.layer] ?? 'gravel';
+  const colour = new Float32Array(3), floor = new Uint8Array(8);
+  e.colorAt(theta, s, ground, 0, colour, 0, undefined, floor);
+  let best = 0;
+  for (let k = 1; k < floor.length; k++) if (floor[k] > floor[best]) best = k;
+  return LAYER_STEP[['grass', 'dry grass', 'litter', 'needles', 'dirt', 'gravel', 'sand', 'rock'][best]] ?? 'grass';
+}
+
+/**
+ * How far apart footsteps fall (m) at a walking speed (m/s) under a gravity (m/s²). A leg swings like a pendulum, so
+ * the cadence goes with √g: on the floor about two steps a second at a walk; near the axis slower, longer strides.
+ */
+export function strideAt(speed: number, gravity: number): number {
+  const cadence = (1.5 + 0.3 * Math.min(speed, 6)) * Math.sqrt(Math.max(gravity, 0.05) / 9.81);
+  return Math.max(0.3, speed / Math.max(cadence, 0.2));
+}

@@ -36,8 +36,8 @@
     "reason": "Plain JavaScript: each waits for its own different loads at once (animation clips, stage meshes, streamed tiles). Nothing to fold; it surfaced when the plan's files raised the file count (the finder weighs names by how few files use them)."
   },
   {
-    "key": "idiom: [.at .max .profile .r .s Math] in solarpolis/gen/water.ts + solarpolis/sim/air.ts + solarpolis/sim/fauna.ts + solarpolis/sim/herds.ts + solarpolis/sim/population.ts",
-    "reason": "Profile radius with a singularity guard is the same coordinate conversion idiom in water geometry and moving agents, not duplicated behaviour."
+    "key": "idiom: [.at .max .profile .r .s Math] in solarpolis/gen/water.ts + solarpolis/sim/air.ts + solarpolis/sim/fauna.ts + solarpolis/sim/herds.ts + solarpolis/sim/population.ts + solarpolis/sim/sounds.ts",
+    "reason": "Profile radius with a singularity guard is the same coordinate conversion idiom in water geometry and moving agents, not duplicated behaviour. The soundscape (sim/sounds.ts) samples the crowns round the listener with it too."
   },
   {
     "key": "idiom: [.at .max .profile .r .s Math] in solarpolis/gen/water.ts + solarpolis/sim/herds.ts + solarpolis/sim/population.ts",
