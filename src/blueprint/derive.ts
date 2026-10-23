@@ -13,6 +13,11 @@ import { makeExterior, type Exterior } from './exterior';
 export const SOLAR_CONSTANT = 1361;
 /** Share of sunlight's power in the visible band (400–700 nm), the part the sunline delivers. */
 export const SUNLIGHT_VISIBLE = 0.43;
+/** A linear RGB colour scaled to luminance 1 (Rec. 709), so a separate intensity alone sets how bright a light is. */
+export function toLuminance1(c: readonly [number, number, number]): [number, number, number] {
+  const y = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  return [c[0] / y, c[1] / y, c[2] / y];
+}
 /** Stefan–Boltzmann constant (W/(m² K⁴)). */
 export const STEFAN_BOLTZMANN = 5.670374419e-8;
 

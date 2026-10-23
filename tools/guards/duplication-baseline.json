@@ -20,6 +20,10 @@
     "reason": "The leaf atlas (ported from Scale's getLeafAtlas) draws each cell with its own little leaf recipe: the twig cells share drawTwigCell and differ only in their numbers (shape, size, colour). That data reads best one recipe per cell, as in Scale."
   },
   {
+    "key": "idiom: [.profile .s .theta] in solarpolis/gen/capsules.ts + solarpolis/gen/shapes.ts + solarpolis/gen/underMesh.ts + solarpolis/main.ts + solarpolis/render/birds.ts + solarpolis/render/lights.ts + solarpolis/render/talk.ts + solarpolis/render/view.ts + solarpolis/sim/flocks.ts + solarpolis/sim/sounds.ts + solarpolis/world/clouds.ts + solarpolis/world/flyer.ts",
+    "reason": "Reading a point's (theta, s) and the habitat's profile together is how every interior layer places things; it crossed the finder's rarity bar only because a new file (gen/portFace.ts) changed the file count, with no new copy."
+  },
+  {
     "key": "idiom: [.acos .max .min Math] in solarpolis/render/solar.ts + solarpolis/space/voyage.ts + solarpolis/world/flyer.ts",
     "reason": "Clamping a dot product to the acos domain is a local floating-point safety idiom in unrelated geometry and attitude calculations."
   },

@@ -14,7 +14,9 @@ import { exteriorDistance, type Habitat } from '../blueprint';
 import { columnsOf, makeSkin, skinFlux, type Columns, type Skin } from '../gen/skin';
 import { apply, hullLightsOf, lampHidden, mul, rotZ, sunlightFrom, transpose, type HullLight, type Mat3, type PlacedHabitat, type SkyView, type Space, type Visit } from '../space';
 import { HARDWARE, RADIATOR, SKIN, STARS } from './materials';
-import { hideUnder, skinUniforms, type SkinUniforms } from './hullShaders';
+import { hideUnder, portUniforms, setPortClock, skinUniforms, type PortUniforms, type SkinUniforms } from './hullShaders';
+import { portFaceOf, windowHours, type PortFace } from '../gen/portFace';
+import { dayLevel, dayPhase } from '../world/sunline';
 import { hullGeometry } from './hull';
 import { arraysGeometry, dropUploaded, freeMesh, pointsChanged, pointsGeometry, posedMesh, setPoint, setPose } from './geometry';
 import { HullDetailView, type Frames } from './hullDetail';
@@ -51,6 +53,9 @@ interface Drawn {
   skin: Skin;
   cols: Columns;
   uniforms: SkinUniforms;
+  /** The port face's windows (gen/portFace.ts) and the radiators' uniforms for them. */
+  port: PortFace;
+  portUniforms: PortUniforms;
   /** Size across, for the switch to meshes (m). */
   span: number;
   meshes: { skin: Mesh; radiators: Mesh; mast: Mesh; spindle: Mesh; drones: DroneMesh; pieces: { id: string; frame: PartFrame; origin: Vec3; mesh: Mesh }[]; bore: BoreMeshes | null; lamps: { lights: HullLight[]; points: LampPoints } } | null;
@@ -89,7 +94,8 @@ export class NecklaceView {
     this.drawn = space.habitats.map((placed) => {
       const habitat = placed.habitat, skin = makeSkin(habitat), cols = columnsOf(skin), x = habitat.exterior;
       const span = Math.max(x.spindle.to - x.mast.from, 2 * Math.max(x.radius, ...x.brims.map((b) => b.tip)));
-      return { placed, habitat, skin, cols, uniforms: skinUniforms(skin, cols), span, meshes: null, building: false, parts: detailParts(habitat, skin), detail: null, traffic: null, axes: [1, 0, 0, 0, 1, 0, 0, 0, 1], spindleAxes: [1, 0, 0, 0, 1, 0, 0, 0, 1], origin: [0, 0, 0], center: [0, 0, 0] };
+      const port = portFaceOf(habitat, skin);
+      return { placed, habitat, skin, cols, uniforms: skinUniforms(skin, cols), port, portUniforms: portUniforms(port), span, meshes: null, building: false, parts: detailParts(habitat, skin), detail: null, traffic: null, axes: [1, 0, 0, 0, 1, 0, 0, 0, 1], spindleAxes: [1, 0, 0, 0, 1, 0, 0, 0, 1], origin: [0, 0, 0], center: [0, 0, 0] };
     });
     // One quad per neighbour, drawn as stars are (STARS): their light spread over a few pixels, hidden behind Earth.
     const pts = pointsGeometry(this.drawn.length - 1);
@@ -140,7 +146,9 @@ export class NecklaceView {
     const bore = d === this.drawn[0] ? new BoreMeshes(d.habitat, d.placed.id) : null;
     // Its beacons, strobes and running lights (space/lights.ts).
     const lights = hullLightsOf(d.habitat), lamps = { lights, points: new LampPoints(lights.length, `${d.placed.id} lights`) };
-    const meshes = { skin: mesh(g.skin, SKIN, 'skin'), radiators: mesh(g.radiators, RADIATOR, 'radiators'), mast: mesh(g.mast, HARDWARE, 'mast'), spindle: mesh(g.spindle, HARDWARE, 'spindle'), drones, pieces, bore, lamps };
+    const radiators = mesh(g.radiators, RADIATOR, 'radiators');
+    radiators.userData.port = d.portUniforms;
+    const meshes = { skin: mesh(g.skin, SKIN, 'skin'), radiators, mast: mesh(g.mast, HARDWARE, 'mast'), spindle: mesh(g.spindle, HARDWARE, 'spindle'), drones, pieces, bore, lamps };
     this.poseMeshes(d, meshes);
     const traffic = new TrafficView(this.stage, this.space, d.placed, this.far);
     await Promise.all([traffic.start(), lamps.points.enter(this.stage), ...[meshes.skin, meshes.radiators, meshes.mast, meshes.spindle, drones.mesh, drones.points, ...pieces.map((x) => x.mesh), ...(bore?.all ?? [])].map((m) => this.stage.add(m))]);
@@ -165,6 +173,9 @@ export class NecklaceView {
 
   private poseMeshes(d: Drawn, m: NonNullable<Drawn['meshes']>): void {
     for (const k of ['skin', 'radiators', 'mast'] as const) setPose(m[k], d.axes, d.origin);
+    // The port face's windows by the hour: more of the town's lit in the habitat's night.
+    const h = d.habitat, level = dayLevel(h, dayPhase(h, this.time)), low = h.params.day.night;
+    setPortClock(d.portUniforms, d.port, windowHours(this.time), low < 1 ? (1 - level) / (1 - low) : 0);
     d.spindleAxes = mul(d.axes, rotZ(-d.placed.spinAt(this.time)));
     setPose(m.spindle, d.spindleAxes, d.origin);
     m.bore?.poseIn(d.axes, d.spindleAxes, d.origin);
