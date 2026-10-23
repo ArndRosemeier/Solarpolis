@@ -105,7 +105,7 @@ const HEAD_PARTS = /^(teeth|tongue|eyes|eyelashes|brows-.*|hair-.*|.*-hat|.*glas
  * From the eyes, the body stands this far back (m, for a person of `HUMAN.height`), so the eyes are just in front of
  * the face and chest: looking down one sees their front, not the inside of the neck.
  */
-const FIRST_PERSON_BACK = 0.24;
+const FIRST_PERSON_BACK = 0.2;
 /** How far (in handrails) one steps out of a lift's doors on arriving (`outside`). */
 const STEP_OUT = 1.5;
 /** The glass deck's views: how far over the tallest trees' height (×). */
@@ -769,7 +769,9 @@ export class InteriorView {
     const v = this.walker.view(), cabin = this.cabin?.aboard ? this.cabin.place() : null;
     // In a lift: standing in the cabin, looking round as on foot.
     if (cabin) return { eye: eyeInCabin(this.habitat, cabin, EYE_HEIGHT), look: v.look, up: cabin.ez };
-    return this.behind(v, this.chase);
+    // From the eyes, at the body's own eye height (it differs from person to person), so one looks down at its front.
+    const f = this.figure, own = f && this.character ? (f.eyeHeight - EYE_HEIGHT) * Math.max(0, 1 - this.chase / HEAD_CLEAR) : 0;
+    return this.behind(own ? { ...v, eye: v3madd(v.eye, v.up, own) } : v, this.chase);
   }
 
   /** The arrival's walk at this moment, while it runs. */
