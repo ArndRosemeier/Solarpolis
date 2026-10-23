@@ -30,7 +30,7 @@ import { ROLES, airBytes, fleetOf, flierAt, footingOf, talkerAt, type Flier } fr
 import type { WorkerPool } from '../workers/pool';
 import { DRONE, DRONE_VEIL, FLIER_LAYOUT, layInstances, roomForInstances } from './materials';
 import { drawSpecks, ownSpecks, pxPerMetre, roomForSpecks, type OwnSpecks } from './specks';
-import { turnFor, type Aloft } from './people';
+import { turnFor, type Aloft, type Speaker } from './people';
 import { FLIER_STRIDE, writeFlier } from './droneShaders';
 import { drawnAnywhere, dropUploaded, freeMesh, instancedOf, meshGeometry, sendInstances } from './geometry';
 
@@ -103,6 +103,8 @@ export class FlierView {
   private readonly persons = new Map<number, One>();
   /** Whom of them this frame drew (`personKey`): the far specks leave them out. */
   readonly near: number[] = [];
+  /** Who in a party speaks (the people's view's, so a drone person nods on their turn in a conversation). */
+  speaker: Speaker = talkerAt;
   private readonly screen = new Vector2();
   private frameNo = 0;
   private holes = 0;
@@ -200,7 +202,7 @@ export class FlierView {
         id: -1, role: 'person', design: a.resident.design, theta: p.theta, s: p.s, h: foot.h, heading: p.heading,
         speed: p.moving ? p.speed : 0, climb: 0, doing: p.moving ? 'fly' : 'work',
       }, one.flier ? dt : 0);
-      const talking = !p.moving && p.act === 'talk' && talkerAt(p, t) === p.member;
+      const talking = !p.moving && p.act === 'talk' && this.speaker(p, t) === p.member;
       this.write(one, d, frame, talking ? NOD * Math.sin((2 * Math.PI * (t + one.phase)) / NOD_EVERY) : 0);
       this.near.push(a.key);
       here.add(a.key);

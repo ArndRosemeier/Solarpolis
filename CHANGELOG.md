@@ -2,6 +2,27 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.138 — A passenger voyage through the solar system
+
+- A new Ship Tour tab lets you choose planets and their moons in an expandable, searchable tree. Your ship Mind handles the journey, two observation laps, and the return to the cylinder.
+- Voyages start in real time, with a HUD clock to pause or accelerate. Fusion burns provide 1 g; turnovers and fuel-saving coasts are freefall. The complete return trip keeps a finite propellant reserve.
+- The voyage computer offers views in all directions, optical magnification, labelled close-up reconstructions, nearby worlds, an itinerary and route map. You can also visit the passenger decks while the ship flies.
+- The long-range tour ship uses the reusable exploration-ship recipe. Wider ships now keep their rounded tank shoulders clear of passenger rooms.
+
+## v0.137 — People talk in speech bubbles
+
+- Parties who stop to talk now hold real conversations, shown in quiet speech bubbles over whoever speaks: greetings, how their day is going, and what they care about, from orchards and pottery to letters that take hours to cross the light-lag. Nobody speaks aloud.
+- Every resident has a name, a temperament and pursuits that come from the land around their home. Drone persons and people in shells talk too.
+- Up close you read the words; farther out a small "…" shows who is speaking. The figures' talking gestures follow the conversation.
+- The lines come from Arnd's conversation engine (Conversations v0.1.0).
+
+## v0.136 — The Understorey can be heard
+
+- Every room echoes as big as it really is: a long stone echo in the pillar forest and the cisterns, shorter in the halls, short at home, a little in the entrance courts. The echo is worked out from each room's size, so a bigger habitat's halls sound bigger.
+- The Understorey has its own sounds: the Dim's quiet and its drips, water in the cisterns, far machines under the reserve, and each hall at its work: kitchens, baths, workshops, the minds' calm halls. Stages play music.
+- At a wellhead the court above comes down muffled through the light well.
+- A lift hums as it rides, your ears close for a moment as the pressure changes, and each hamlet's lift chimes its own note when the doors open.
+
 ## v0.135 — The things around you can be heard
 
 - People are heard by what they do, never by voice: their footsteps, the clink of a picnic, a ball landing in someone's hands, a saw or a mallet at the makers' commons, a rustle as someone sits down.

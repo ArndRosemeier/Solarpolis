@@ -23,6 +23,7 @@ import { chorusAt, lightAt, songsIn, LIGHT_LAG, type Nest } from './birds';
 import { crownsOf } from './fauna';
 import { floorGap } from './walks';
 import type { Source } from './sources';
+import { ROOM_BEDS, roomAt, roomBedsAt, throughDeck, type Room } from './rooms';
 
 /** The beds: long sounds that loop, each mixed by its weight (files `bed/<name>` in public/sound). */
 export const BEDS = [
@@ -30,6 +31,8 @@ export const BEDS = [
   'river-riffle', 'river-slow', 'lake', 'falls', 'birds-wood', 'birds-meadow', 'birds-water', 'bees', 'crickets',
   // The landmarks' own: water under the pavilion's piers, banners at the summit hut, the founders' grove's old oaks.
   'piers', 'flags', 'oaks',
+  // Below the land (sim/rooms.ts): room tones and the halls' work.
+  ...ROOM_BEDS,
 ] as const;
 export type Bed = (typeof BEDS)[number];
 
@@ -74,6 +77,8 @@ export interface Hearing {
   flight: number;
   /** What is near enough to be heard: people, animals, drones, lift portals (sim/sources.ts). */
   sources: Source[];
+  /** Riding a lift: whose (its court), how far along the ride (0 … 1), and whether it moves yet. */
+  lift: { court: number; share: number; moving: boolean } | null;
   /** The birds round the listener (the view's; their songs are the calls). */
   birds: readonly Nest[];
 }
@@ -87,6 +92,10 @@ export interface Soundscape {
   light: number;
   /** How busy the birds are (0 … 1): highest as the light comes up (the dawn chorus), low through the day, none at night. */
   birds: number;
+  /** The echo of the room the listener is in (sim/rooms.ts; none on the open land). */
+  room: Room;
+  /** Below: how much of the land above comes down, muffled (0 … 1); the land's beds are already scaled by it. */
+  through: number;
 }
 
 /** A single call: what, where (world), and when it starts (clock s). */
@@ -190,7 +199,17 @@ export function soundscapeAt(e: Ecology, t: number, l: Listener, buffer?: Float3
   const air = airAt(h, r);
   const light = lightAt(h, l.s, t, buffer), before = lightAt(h, l.s, t - LIGHT_LAG, buffer);
   const birds = chorusAt(light, light > before);
-  if (l.below) return { beds, air, light, birds };
+  const room = roomAt(terrain, l);
+  if (l.below) {
+    const rooms = roomBedsAt(terrain, l), through = throughDeck(terrain, l);
+    // Through a wellhead's light well, the court above: what one would hear standing on its floor.
+    if (through > 0) {
+      const ground = terrain.heightAt(l.theta, l.s), above = soundscapeAt(e, t, { ...l, below: false, h: ground + 1.7, ground, speed: 0 }, buffer);
+      for (const b of BEDS) beds[b] = above.beds[b] * through;
+    }
+    for (const b of ROOM_BEDS) beds[b] = rooms[b];
+    return { beds, air, light, birds, room, through };
+  }
 
   const high = smoothstep(0.15, 0.6, 1 - r / h.radius);
   const lift = smoothstep(2, 40, l.h - l.ground);
@@ -225,7 +244,7 @@ export function soundscapeAt(e: Ecology, t: number, l: Listener, buffer?: Float3
   // The grove's old oaks ring its lawn: heard all through it, the lawn in the middle too.
   beds['oaks'] = marks.grove * windy;
   for (const b of BEDS) beds[b] = Math.min(1, beds[b] * air);
-  return { beds, air, light, birds };
+  return { beds, air, light, birds, room, through: 0 };
 }
 
 /**

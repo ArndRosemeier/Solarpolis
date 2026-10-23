@@ -26,6 +26,7 @@
     "@dimforge/rapier3d-compat": "0.19.3",
     "@futuremagic/core": "file:vendor/assetgenerator/packages/core",
     "@futuremagic/stage": "file:vendor/assetgenerator/packages/stage",
+    "solarpolis-dialogue": "https://github.com/ArndRosemeier/Conversations/releases/download/v0.1.0/solarpolis-dialogue-0.1.0.tgz",
     "three": "^0.186.1"
   },
   "devDependencies": {

@@ -285,6 +285,8 @@ export interface Life {
   animals: Animals;
   /** The birds of the land (sim/birds.ts). */
   birds: Birds;
+  /** How people talk: silent speech bubbles over those near (src/talk). */
+  talk: Talking;
 }
 
 /**
@@ -302,6 +304,24 @@ export interface Birds {
   larks: number;
   /** Tawny owls per km² of woods. */
   owls: number;
+}
+
+/**
+ * How people talk (design "Speech bubbles: how people talk in Solarpolis", Arnd 2026-10-23: no voices, no murmur,
+ * speech bubbles). A party that stops to talk holds a conversation; its words show over the speaker near the eye, a
+ * small bubble farther out says someone is speaking, and beyond that the gestures carry it.
+ */
+export interface Talking {
+  /** How far from the eye a speaker's words show (m). */
+  words: number;
+  /** How far a bubble without words still shows that someone speaks (m; at least `words`). */
+  dots: number;
+  /** How many parties show their words at once, the nearest first. */
+  parties: number;
+  /** How fast people read (characters per second): a bubble stays as long as it takes, within bounds. */
+  read: number;
+  /** How long a party falls quiet between two conversations, on average (s). */
+  quiet: number;
 }
 
 /**

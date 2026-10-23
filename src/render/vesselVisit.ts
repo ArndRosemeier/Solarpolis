@@ -8,6 +8,8 @@ import type { FlyInput } from '../space/flyer';
 import { VesselMeshes } from './vessel';
 import './vessel.css';
 
+export interface VesselFlight { origin: Vec3; axes: Mat3; acceleration: number; fuel: number; speed: number }
+
 export class VesselVisit {
   readonly element = document.createElement('section');
   readonly launch = document.createElement('button');
@@ -28,7 +30,9 @@ export class VesselVisit {
   private openFloor = false;
   private updateTime = 0;
   private loading = false;
-  private readonly axes: Mat3 = [0, 1, 0, 0, 0, 1, 1, 0, 0];
+  private flight: VesselFlight | null = null;
+  private leave = document.createElement('button');
+  private axes: Mat3 = [0, 1, 0, 0, 0, 1, 1, 0, 0];
   private readonly berth: Vec3 = [5000000, 0, 0];
 
   constructor(private stage: Stage, private onEnter: () => void, private onLeave: () => void, recipe: VesselRecipe = EXPLORER) {
@@ -43,7 +47,7 @@ export class VesselVisit {
     const hello = document.createElement('p'); hello.className = 'vessel-welcome'; hello.textContent = `“${recipe.greeting}”`;
     const actions = document.createElement('div'); actions.className = 'vessel-actions';
     this.enter.textContent = 'Enter airlock'; this.enter.addEventListener('click', () => { this.inside = !this.inside; this.refresh(); });
-    const leave = document.createElement('button'); leave.textContent = 'Return to habitat'; leave.addEventListener('click', () => this.close()); actions.append(this.enter, leave);
+    this.leave.textContent = 'Return to habitat'; this.leave.addEventListener('click', () => this.close()); actions.append(this.enter, this.leave);
     this.deckSelect.setAttribute('aria-label', 'Ship deck');
     recipe.decks.forEach((d, i) => { const o = document.createElement('option'); o.value = String(i); o.textContent = `${i + 1} · ${d.name}`; this.deckSelect.append(o); });
     const lift = document.createElement('button'); lift.textContent = 'Take central lift';
@@ -61,7 +65,7 @@ export class VesselVisit {
     this.element.append(eyebrow, title, hello, actions, this.insideControls, burn, this.status, this.message);
     this.refresh();
   }
-  private async open(): Promise<void> {
+  async open(): Promise<void> {
     if (this.loading) return;
     this.loading = true; this.launch.disabled = true; this.launch.textContent = 'Preparing your visit…';
     try {
@@ -84,17 +88,26 @@ export class VesselVisit {
   step(dt: number, input: FlyInput, brake: boolean): void {
     if (!this.active) return;
     this.elapsed += dt;
-    const burn = Math.min(dt, this.burnLeft);
+    const burn = this.flight ? 0 : Math.min(dt, this.burnLeft);
     if (burn > 0) { this.drive.advance(burn); this.burnLeft -= burn; }
     if (this.burnLeft <= 0) this.drive.burning = false;
-    this.drive.advance(dt - burn);
+    if (!this.flight) this.drive.advance(dt - burn);
     if (!this.drive.burning) this.drive.acceleration = 0;
+    if (this.flight) { this.drive.acceleration = this.flight.acceleration; this.drive.fuel = this.flight.fuel; this.drive.speed = this.flight.speed; this.drive.burning = this.flight.acceleration > .001; }
     if (this.inside) this.passenger.step(input, dt, this.drive.acceleration, this.meshes.fittings, brake);
     this.meshes.updateRooms(dt, this.elapsed, this.passenger.liftFloor, this.passenger.eye);
     this.updateTime += dt;
     if (this.updateTime > .2) { this.updateTime = 0; this.refresh(); }
   }
-  private origin(): Vec3 { return v3add(this.berth, apply(this.axes, [this.drive.distance, 0, 0])); }
+  setFlight(flight: VesselFlight | null): void {
+    if (this.flight && !flight) {
+      this.drive.fuel = this.plan.recipe.drive.propellant; this.drive.speed = 0; this.drive.distance = 0;
+      this.drive.acceleration = 0; this.drive.burning = false;
+    }
+    this.flight = flight;
+    this.axes = flight?.axes ?? [0, 1, 0, 0, 0, 1, 1, 0, 0];
+  }
+  private origin(): Vec3 { return this.flight?.origin ?? v3add(this.berth, apply(this.axes, [this.drive.distance, 0, 0])); }
   meterHull(eye: Vec3): { center: Vec3; axis: Vec3; radius: number; halfLength: number; albedo: number } {
     const length = this.plan.shape.params.length;
     return { center: v3sub(v3add(this.origin(), apply(this.axes, [length / 2, 0, 0])), eye), axis: apply(this.axes, [1, 0, 0]), radius: this.plan.recipe.radius, halfLength: length / 2, albedo: .5 };
@@ -112,12 +125,13 @@ export class VesselVisit {
   place(eye: Vec3): void { if (this.active) this.meshes.pose(this.axes, v3sub(this.origin(), eye), this.drive.burning ? 1 : 0); }
   private refresh(): void {
     this.show(true); this.insideControls.hidden = !this.inside;
+    this.leave.textContent = this.flight ? 'Return to voyage computer' : 'Return to habitat';
     this.enter.textContent = this.inside ? 'Observe exterior' : 'Enter airlock';
     const d = this.plan.decks[this.passenger.deck]; this.deckInfo.textContent = `${d.recipe.name} · ${d.recipe.description}`
       + (d.recipe.use === 'arrival' ? ` ${this.plan.recipe.companions.map(c => `${c.name}: ${c.role}${c.person ? ' (a person)' : ''}`).join('; ')}.` : '');
     const gravity = this.drive.acceleration / 9.80665;
-    this.status.textContent = `${this.drive.burning ? `${gravity.toFixed(2)} g · thrust toward bow` : '0 g · coasting'} · ${this.drive.speed.toFixed(1)} m/s gained · ${(this.drive.fuel / 1000).toFixed(1)} t reaction mass`;
-    const burn = this.element.querySelector('.vessel-burn'); if (burn) burn.textContent = this.drive.burning ? `Cut thrust · ${Math.ceil(this.burnLeft)} s left` : 'Try a 20-second departure burn';
+    this.status.textContent = `${this.drive.burning ? `${gravity.toFixed(2)} g · thrust toward bow` : '0 g · coasting'} · ${this.drive.speed.toFixed(1)} m/s ${this.flight ? 'heliocentric' : 'gained'} · ${(this.drive.fuel / 1000).toFixed(1)} t reaction mass`;
+    const burn = this.element.querySelector<HTMLButtonElement>('.vessel-burn'); if (burn) { burn.hidden = !!this.flight; burn.textContent = this.drive.burning ? `Cut thrust · ${Math.ceil(this.burnLeft)} s left` : 'Try a 20-second departure burn'; }
     this.help.textContent = this.inside ? 'Hold right mouse to look · WASD to move · E / Q to rise or descend · B to stop drift · central lift connects every deck' : 'Hold right mouse to orbit · scroll to approach · enter through the airlock to explore the decks';
   }
 }

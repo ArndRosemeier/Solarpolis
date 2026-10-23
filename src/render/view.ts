@@ -48,6 +48,7 @@ import { snowFieldOf } from '../gen/snow';
 import { PeopleView } from './people';
 import { SpeckView, type Measured } from './specks';
 import { FlierView } from './fliers';
+import { TalkView, type Bubble } from './talk';
 import { AnimalView, DEER, SQUIRRELS } from './animals';
 import { BirdView } from './birds';
 import { CabinView } from './lift';
@@ -56,7 +57,7 @@ import { GlassDeck, type GlassStage, type GlassWant } from './glassDeck';
 import { nearestExitCourt, type ExitCourt } from '../gen/exitCourt';
 import { underOf } from '../gen/under';
 import type { Hearing } from '../sim/sounds';
-import { liftsNear } from '../sim/sources';
+import { liftsNear, stagesNear } from '../sim/sources';
 import { lightAt } from '../sim/birds';
 import { calledFrom, doorsAbove, doorsBelow, doorsHit, eyeInCabin, liftDoorsNear, outside, type LiftDoors } from '../gen/lifts';
 
@@ -138,6 +139,8 @@ export class InteriorView {
   private specks: SpeckView | null = null;
   /** The drones that work the land. */
   private drones: FlierView | null = null;
+  /** Who says what in the parties near the eye: the speech bubbles (render/talk.ts). */
+  private talk: TalkView | null = null;
   /** A resident's measured size and colours for the far specks (their look's, or their drone body's), once known. */
   private readonly measured: Measured = (id, design) => {
     if (design >= 0) return this.drones?.measured(design) ?? null;
@@ -162,6 +165,8 @@ export class InteriorView {
   boost = 1;
   /** Called each frame with the gravity the player feels (the page's gravity meter), smoothed over a fraction of a second. */
   onExit: ((exit: ExitCourt | null, eye: Vec3, forward: Vec3, up: Vec3) => void) | null = null;
+  /** The speech bubbles this frame, for the page to draw over the view (app/bubbles.ts). */
+  onTalk: ((bubbles: readonly Bubble[]) => void) | null = null;
   private exitClock = 0;
   onGravity: ((r: GravityReading) => void) | null = null;
   /** Walking and running speed on foot (m/s), for the gravity meter's explanation. */
@@ -258,6 +263,11 @@ export class InteriorView {
     return (this.people?.bytes() ?? 0) + (this.specks?.bytes() ?? 0);
   }
 
+  /** Bytes the conversations near the player hold: their lines and the residents met (memory watchdog). */
+  talkBytes(): number {
+    return this.talk?.bytes() ?? 0;
+  }
+
   /** Bytes the drones hold: their designs on the GPU, their instances (memory watchdog). */
   droneBytes(): number {
     return this.drones?.bytes() ?? 0;
@@ -289,6 +299,7 @@ export class InteriorView {
     this.halls?.shed();
     this.under?.shed();
     this.people?.shed();
+    this.talk?.shed();
     this.homes?.shed();
     this.glass?.dropAtlas();
   }
@@ -310,6 +321,8 @@ export class InteriorView {
       feet = { theta: f.theta, s: f.s, h: f.h, speed };
     }
     const sources = liftsNear(this.terrain, at.theta, at.s, this.below);
+    if (this.below) sources.push(...stagesNear(this.terrain, at.theta, at.s));
+    const ride = this.cabin?.ride;
     this.people?.heard(view.eye, this.time, this.below, sources);
     if (!this.below) {
       for (const a of this.animals) a.heard(view.eye, this.time, sources);
@@ -325,6 +338,7 @@ export class InteriorView {
       climb: onFoot ? v3dot(v, view.up) : 0,
       flight: this.flyer ? this.eyeSpeed : 0,
       sources,
+      lift: ride?.aboard ? { court: this.cabin!.court, share: ride.elapsed / Math.max(ride.seconds, 1e-3), moving: !ride.waits } : null,
       birds: this.below ? [] : this.birds?.nests ?? [],
     };
   }
@@ -352,6 +366,7 @@ export class InteriorView {
       this.people?.info() ?? 'people: none',
       this.specks?.info() ?? 'specks: none',
       this.drones?.info() ?? 'drones: none',
+      this.talk?.info() ?? 'talk: none',
       ...(this.animals.length ? this.animals.map((a) => a.info()) : ['animals: none']),
       this.birds?.info() ?? 'birds: none',
       `θ ${(a.theta * 180 / Math.PI).toFixed(1)}°, s ${(a.s / 1000).toFixed(2)} of ${(this.habitat.profile.length / 1000).toFixed(2)} km, ground ${this.standOn(a.theta, a.s).toFixed(1)} m, ${mode}, eyes ×${this.exposure.toFixed(2)}`,
@@ -603,6 +618,8 @@ export class InteriorView {
     this.scene.add(this.specks.group);
     this.drones = new FlierView(h, this.terrain, this.stage, this.camera, this.pool);
     this.scene.add(this.drones.group);
+    this.talk = new TalkView(h, this.terrain);
+    this.people.speaker = this.drones.speaker = this.talk.speaker;
     this.animals = [new AnimalView(SQUIRRELS, h, this.terrain, this.stage, this.camera, this.pool), new AnimalView(DEER, h, this.terrain, this.stage, this.camera, this.pool)];
     for (const a of this.animals) this.scene.add(a.group);
     this.birds = new BirdView(h, this.terrain, this.stage, this.camera, this.pool);
@@ -684,6 +701,8 @@ export class InteriorView {
     this.physics?.setFurniture(this.homes?.bodies ?? []);
     this.people?.follow(v.eye, this.time, this.frameDt, this.below, this.homes?.intent);
     this.drones?.follow(v.eye, this.time, this.frameDt, this.people?.aloft, this.below);
+    if (this.talk && this.people) this.talk.bubblesAt(this.people, v.eye, this.time, this.camera, this.canvas.clientWidth, this.canvas.clientHeight);
+    this.onTalk?.(this.talk?.bubbles ?? []);
     this.specks?.follow(this.time, this.frameDt, [...(this.people?.near ?? []), ...(this.drones?.near ?? [])], this.measured);
     for (const a of this.animals) a.follow(v.eye, this.time, this.frameDt);
     this.birds?.follow(v.eye, this.time, this.frameDt, this.below);

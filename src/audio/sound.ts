@@ -21,6 +21,7 @@
  */
 import { hash3i, hashToFloat } from '@futuremagic/core';
 import { BEDS, byTime, callsIn, soundscapeAt, stepSurfaceAt, strideAt, type Bed, type Call, type Hearing, type Soundscape } from '../sim/sounds';
+import { ROOM_BEDS, type Room } from '../sim/rooms';
 import { cuesOf, humOf, type Cue, type Hum, type Source } from '../sim/sources';
 import type { MemoryWatchdog } from '../app/memory';
 import { readSetting, writeSetting } from '../persist/settings';
@@ -50,7 +51,17 @@ const MIX: Record<Bed, number> = {
   'wind-soft': 0.5, 'wind-open': 0.6, 'wind-high': 0.6, 'leaves-broad': 0.6, 'leaves-conifer': 0.55, grass: 0.4,
   'river-riffle': 0.7, 'river-slow': 0.6, lake: 0.6, falls: 0.9, 'birds-wood': 0.5, 'birds-meadow': 0.45, 'birds-water': 0.45,
   bees: 0.35, crickets: 0.4, piers: 0.6, flags: 0.5, oaks: 0.6,
+  dim: 0.6, cistern: 0.6, works: 0.4, kitchen: 0.5, bath: 0.5, workshop: 0.5, minds: 0.35, home: 0.4,
 };
+const ROOM_BED = new Set<Bed>(ROOM_BEDS);
+/** Below the land, what comes down from it through a light well is this muffled (low-pass, Hz). */
+const DECK_MUFFLE = 600;
+/** The longest echo laid (s): past it a tail is below hearing anyway. A new echo is made when the room's T60 changes by this share. */
+const ECHO_MOST = 6, ECHO_CHANGE = 0.2;
+/** How fast the echo follows the room (time constant, s). */
+const ECHO_GLIDE = 0.5;
+/** In a lift: the cabin's hum, and how far the ears close as the pressure changes midway (low-pass at the middle, Hz). */
+const CABIN_HUM = 0.35, EARS_SHUT = 1500;
 const STEP_GAIN = 0.45, CALL_GAIN = 0.8, MUSIC_GAIN = 0.7;
 /** How the music fades in and out (s). */
 const MUSIC_IN = 2, MUSIC_OUT = 8;
@@ -116,6 +127,15 @@ export class Sound {
   private land!: GainNode;
   private air!: BiquadFilterNode;
   private steps!: GainNode;
+  /** What is heard near, in the room (cues, hums, the room's beds): not through the air's or the deck's low-pass. */
+  private near!: GainNode;
+  /** The room's echo: what is heard goes to it as well; two convolvers, so a new room's echo crossfades in. */
+  private echoIn!: GainNode;
+  private echoes: { conv: ConvolverNode; gain: GainNode; t60: number }[] = [];
+  private echoBytes = 0;
+  /** The ears: a low-pass the pressure change in a lift closes for a moment. */
+  private ears!: BiquadFilterNode;
+  private wasInLift: number | null = null;
   private musicGain!: GainNode;
   private index: Index | null = null;
   private readonly takes = new Map<string, Take>();
@@ -199,7 +219,7 @@ export class Sound {
   decodedBytes(): number {
     let n = 0;
     for (const t of this.takes.values()) n += t.bytes;
-    return n;
+    return n + this.echoBytes;
   }
 
   /** A line for the debug menu. */
@@ -208,8 +228,9 @@ export class Sound {
     const loud = this.scape ? BEDS.map((b) => [b, this.scape!.beds[b]] as const).filter(([, w]) => w > 0.02).sort((a, b) => b[1] - a[1]).slice(0, 5) : [];
     const beds = loud.map(([b, w]) => `${b} ${w.toFixed(2)}`).join(', ') || 'none';
     const air = this.scape ? `, air ×${this.scape.air.toFixed(2)}, light ${this.scape.light.toFixed(2)}, birds ${this.scape.birds.toFixed(2)}` : '';
-    const near = `${this.sourcesHeard} near, ${this.hums.size} hums, ${this.cuesPlaying} cues${this.party ? `, party music ${this.party.sound}` : ''}`;
-    return `sound${this.muted ? ' (muted)' : ''}: ${(this.decodedBytes() / MB).toFixed(1)} MB decoded, ${this.beds.size} beds, ${this.callsPlaying} calls · ${beds}${air} · ${near} · steps on ${this.lastSurface || '-'} (${this.stepCount})`;
+    const room = this.scape?.room.wet ? ` · echo ${this.scape.room.t60.toFixed(1)} s ×${this.scape.room.wet.toFixed(2)}` : '';
+    const near = `${room} · ${this.sourcesHeard} near, ${this.hums.size} hums, ${this.cuesPlaying} cues${this.party ? `, party music ${this.party.sound}` : ''}`;
+    return `sound${this.muted ? ' (muted)' : ''}: ${(this.decodedBytes() / MB).toFixed(1)} MB decoded, ${this.beds.size} beds, ${this.callsPlaying} calls · ${beds}${air}${near} · steps on ${this.lastSurface || '-'} (${this.stepCount})`;
   }
 
   private openContext(): void {
@@ -219,7 +240,17 @@ export class Sound {
     this.ctx = ctx;
     this.master = ctx.createGain();
     this.master.gain.value = this.muted ? 0 : 1;
-    this.master.connect(ctx.destination);
+    this.ears = ctx.createBiquadFilter();
+    this.ears.type = 'lowpass';
+    this.ears.frequency.value = ctx.sampleRate / 2;
+    this.master.connect(this.ears).connect(ctx.destination);
+    this.echoIn = ctx.createGain();
+    this.echoes = [0, 1].map(() => {
+      const conv = ctx.createConvolver(), gain = ctx.createGain();
+      gain.gain.value = 0;
+      this.echoIn.connect(conv).connect(gain).connect(this.master);
+      return { conv, gain, t60: 0 };
+    });
     this.air = ctx.createBiquadFilter();
     this.air.type = 'lowpass';
     this.air.frequency.value = ctx.sampleRate / 2;
@@ -228,6 +259,9 @@ export class Sound {
     this.land.connect(this.air);
     this.steps = ctx.createGain();
     this.steps.connect(this.master);
+    this.near = ctx.createGain();
+    this.near.connect(this.master);
+    for (const bus of [this.air, this.steps, this.near]) bus.connect(this.echoIn);
     this.musicGain = ctx.createGain();
     this.musicGain.gain.value = 0;
     this.musicGain.connect(this.master);
@@ -270,7 +304,9 @@ export class Sound {
     const scape = soundscapeAt(h.ecology, h.time, h.listener);
     this.scape = scape;
     // The air thins toward the axis: less of the high end carries (a gentle tilt; the bed for thin wind does the rest).
-    this.air.frequency.setTargetAtTime(Math.min(this.ctx!.sampleRate / 2, 2000 + 14000 * scape.air ** 4), now, GLIDE);
+    // Below, the land's beds come only through a light well: muffled.
+    this.air.frequency.setTargetAtTime(h.listener.below ? DECK_MUFFLE : Math.min(this.ctx!.sampleRate / 2, 2000 + 14000 * scape.air ** 4), now, GLIDE);
+    this.echo(scape.room, now);
     for (const b of BEDS) {
       const want = scape.beds[b] * MIX[b];
       let v = this.beds.get(b);
@@ -286,6 +322,7 @@ export class Sound {
       this.callsUntil = until;
     }
     this.hearNear(h, now);
+    this.ride(h, now);
   }
 
   /** A bed's voice: its gain and two chains panned apart, once its take is decoded. */
@@ -296,7 +333,7 @@ export class Sound {
     if (!take) { void this.decodeTake(file); return null; }
     const ctx = this.ctx!, gain = ctx.createGain();
     gain.gain.value = 0;
-    gain.connect(this.land);
+    gain.connect(ROOM_BED.has(b) ? this.near : this.land);
     // The second chain starts half a take in and a little slower, so the two never cross their seams together.
     const chains = [-0.45, 0.45].map((p, k) => {
       const pan = ctx.createStereoPanner();
@@ -402,7 +439,7 @@ export class Sound {
       const ctx = this.ctx!, gain = ctx.createGain(), skip = hashToFloat(hash3i(key.length, key.charCodeAt(key.length - 1), this.hums.size, 0));
       gain.gain.value = 0;
       const panner = at ? spot(ctx, at, 6) : null;
-      if (panner) gain.connect(panner).connect(this.land); else gain.connect(this.steps);
+      if (panner) gain.connect(panner).connect(this.near); else gain.connect(this.steps);
       v = { sound: hum.sound, gain, panner, chain: { out: gain, rate: hum.pitch, skip, next: now + 0.05, playing: [], first: true }, file, heard: now };
       this.hums.set(key, v);
     }
@@ -431,7 +468,7 @@ export class Sound {
       media.loop = true;
       const node = ctx.createMediaElementSource(media), gain = ctx.createGain(), panner = spot(ctx, want.at, 10);
       gain.gain.value = 0;
-      node.connect(gain).connect(panner).connect(this.land);
+      node.connect(gain).connect(panner).connect(this.near);
       void media.play().catch(() => undefined);
       this.party = { key: want.key, sound: want.sound, media, node, gain, panner };
     }
@@ -451,7 +488,7 @@ export class Sound {
     src.buffer = take.buffer;
     src.playbackRate.value = c.pitch;
     g.gain.value = c.gain * air;
-    src.connect(g).connect(panner).connect(this.land);
+    src.connect(g).connect(panner).connect(this.near);
     this.cuesPlaying++;
     src.onended = () => { this.cuesPlaying--; panner.disconnect(); };
     src.start(when);
@@ -513,8 +550,44 @@ export class Sound {
     src.start();
   }
 
+  /**
+   * Follow the room's echo: a new impulse response when its T60 has changed enough (laid in the quieter convolver, then
+   * crossfaded), and the wet share gliding to the room's.
+   */
+  private echo(room: Room, now: number): void {
+    const [a, b] = this.echoes, ctx = this.ctx!;
+    if (room.wet > 0.01 && Math.abs(room.t60 - a.t60) > ECHO_CHANGE * Math.max(a.t60, 0.1)) {
+      b.conv.buffer = impulse(ctx, room);
+      b.t60 = room.t60;
+      this.echoBytes = (b.conv.buffer.length * 2 + (a.conv.buffer?.length ?? 0) * 2) * 4;
+      a.gain.gain.setTargetAtTime(0, now, ECHO_GLIDE);
+      this.echoes = [b, a];
+    }
+    this.echoes[0].gain.gain.setTargetAtTime(room.wet, now, ECHO_GLIDE);
+  }
+
+  /**
+   * Riding a lift: the cabin's hum while it moves, the ears closing for a moment as the pressure changes midway, and
+   * the doors' chime (each hamlet's own note) and their sigh as they open at the end.
+   */
+  private ride(h: Hearing, now: number): void {
+    const lift = h.lift;
+    if (lift) {
+      if (lift.moving) this.hum('body:lift', { sound: 'lift/hum', gain: CABIN_HUM, pitch: 1 }, null, now, 1);
+      const shut = lift.moving ? Math.sin(Math.PI * Math.min(1, Math.max(0, lift.share))) : 0;
+      this.ears.frequency.setTargetAtTime(this.ctx!.sampleRate / 2 - (this.ctx!.sampleRate / 2 - EARS_SHUT) * shut ** 2, now, 0.3);
+    } else if (this.wasInLift !== null) {
+      this.ears.frequency.setTargetAtTime(this.ctx!.sampleRate / 2, now, 0.3);
+      // Each hamlet's lift chimes its own note: a step of a pentatonic scale, by its court.
+      const note = [0, 2, 4, 7, 9][this.wasInLift % 5];
+      this.oneShot('lift/chime', 0.5, 2 ** (note / 12));
+      this.oneShot('lift/doors', 0.5);
+    }
+    this.wasInLift = lift ? lift.court : null;
+  }
+
   /** A sound of the body itself (not placed: in the head), now. */
-  private oneShot(sound: string, gain: number): void {
+  private oneShot(sound: string, gain: number, pitch = 1): void {
     const file = this.index?.sounds[sound]?.files[0];
     if (!file) return;
     const take = this.takes.get(file);
@@ -522,6 +595,7 @@ export class Sound {
     const ctx = this.ctx!, src = ctx.createBufferSource(), g = ctx.createGain();
     take.used = ctx.currentTime;
     src.buffer = take.buffer;
+    src.playbackRate.value = pitch;
     g.gain.value = gain * (this.scape?.air ?? 1);
     src.connect(g).connect(this.steps);
     src.onended = () => g.disconnect();
@@ -591,4 +665,28 @@ function spot(ctx: AudioContext, at: readonly number[], ref: number): PannerNode
     panningModel: 'HRTF', distanceModel: 'inverse', refDistance: ref, rolloffFactor: 1, maxDistance: 1000,
     positionX: at[0], positionY: at[1], positionZ: at[2],
   });
+}
+
+/**
+ * A room's impulse response, made from its T60 and first delay (never recorded): stereo noise, each side its own,
+ * decaying 60 dB over T60, its highs dying faster than its lows (a one-pole low-pass closing along the tail), after a
+ * short silence for the first reflections to come back.
+ */
+function impulse(ctx: BaseAudioContext, room: Room): AudioBuffer {
+  const rate = ctx.sampleRate, t60 = Math.min(ECHO_MOST, Math.max(0.1, room.t60));
+  const n = Math.ceil((room.delay + t60) * rate), lead = Math.floor(room.delay * rate);
+  const buf = ctx.createBuffer(2, n, rate);
+  for (let ch = 0; ch < 2; ch++) {
+    const x = buf.getChannelData(ch);
+    let seed = 0x9e3779b9 ^ (ch * 0x85ebca6b) ^ Math.round(t60 * 1000), y = 0;
+    for (let i = lead; i < n; i++) {
+      seed = (Math.imul(seed ^ (seed >>> 15), 0x2c1b3c6d) + 0x6d2b79f5) | 0;
+      const white = ((seed >>> 0) / 4294967296) * 2 - 1, t = (i - lead) / rate;
+      // The low-pass closes from 8 kHz toward 1 kHz along the tail.
+      const cut = 1000 + 7000 * Math.exp((-3 * t) / t60), k = 1 - Math.exp((-2 * Math.PI * cut) / rate);
+      y += k * (white - y);
+      x[i] = y * Math.exp((-6.91 * t) / t60);
+    }
+  }
+  return buf;
 }
