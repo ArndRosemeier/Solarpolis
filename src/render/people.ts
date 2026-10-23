@@ -125,6 +125,19 @@ const STANDING_WORK = [{ clip: CMU.saw.clip }, { clip: 'chop wood' }];
 /** In a court, someone standing about waves to someone coming up now and then: every so often (s), this often. */
 const WAVE = { every: 40, share: 0.25, dur: CMU.wave.seconds };
 
+/** Someone in a talking party near the eye (`PeopleView.talkers`). */
+export interface Talker {
+  person: Person;
+  resident: Resident;
+  feet: Vec3 | null;
+  up: Vec3;
+  height: number;
+  deck: number | null;
+}
+
+/** Who in someone's party speaks at clock time t (their `member`), or −1: `talkerAt`, or a conversation's turns. */
+export type Speaker = (p: Person, t: number) => number;
+
 /** Someone in a drone body, followed here and drawn by the drones' view: who, where now, and what is built under them. */
 export interface Aloft {
   key: number;
@@ -196,6 +209,8 @@ export class PeopleView {
   private disposed = false;
   private below = false;
   private readonly props: ActivityProps;
+  /** Who in a party speaks at a moment: the conversation's speaker where one is held near (render/talk.ts), else `talkerAt`. */
+  speaker: Speaker = talkerAt;
 
   constructor(private readonly habitat: Habitat, private readonly terrain: Terrain, private readonly stage: Stage, private readonly camera: Camera, private readonly deckOf: (theta: number, s: number) => number | null) {
     this.group.name = 'people';
@@ -256,7 +271,7 @@ export class PeopleView {
         one.person = p;
         if (fresh) timed(() => this.stand(one)); else if (!still) this.stand(one);
         // A figure in a talking party: the turn to speak moves on while they stand still.
-        else if (one.figure && !one.doing.swim) one.doing.anim = animOf(p, one.resident, t);
+        else if (one.figure && !one.doing.swim) one.doing.anim = animOf(p, one.resident, t, this.speaker);
       }
       if (!one.dress && one.resident.body !== 'drone' && spent <= NEW_BUDGET) timed(() => { one.dress = r.dressOf(one.resident); if (one.dress) one.bands = speckBands(one.dress.colors); });
     }
@@ -306,7 +321,7 @@ export class PeopleView {
     // A drone body is placed by the drones' view (render/fliers.ts), from the same footing.
     if (one.resident.body === 'drone') { one.placed = true; return; }
     const foot = footingOf(this.terrain, p, one.deck, one.dress?.height ?? MEAN_HEIGHT);
-    const doing = doingOf(p, one.resident, foot, this.time);
+    const doing = doingOf(p, one.resident, foot, this.time, this.speaker);
     const feet = toWorld(profile, { theta: p.theta, s: p.s, h: foot.h });
     const r = Math.hypot(feet[0], feet[1]) || 1, up: Vec3 = [-feet[0] / r, -feet[1] / r, 0];
     one.turn = turnFor(profile, p.s, p.heading);
@@ -431,7 +446,7 @@ export class PeopleView {
     const props: PropPerson[] = [];
     for (const one of this.people.values()) if (one.placed && one.dress && (one.person.act === 'catch' || one.person.act === 'work')) props.push({
       person: one.person, feet: one.feet, up: one.up, front: one.front, height: one.dress.height,
-      figure: one.figure?.figure ?? null, anim: animOf(one.person, one.resident, t),
+      figure: one.figure?.figure ?? null, anim: animOf(one.person, one.resident, t, this.speaker),
     });
     this.props.update(props, eye);
     this.drawn = n;
@@ -450,6 +465,20 @@ export class PeopleView {
     this.data = new Float32Array(Math.max(need, this.data.length * 2));
     // The instance attributes are set again on the new buffer (the old one is let go with them).
     this.buffer = layInstances(this.mesh!.geometry, this.data, STAND_IN_LAYOUT);
+  }
+
+  /**
+   * Everyone placed here who is in a party that talks now (standing still at its place, on a `talk` beat), with where
+   * their feet are (world; null for a drone body, which the drones' view places) and how tall they stand: the speech
+   * bubbles' people (render/talk.ts).
+   */
+  talkers(out: Talker[]): void {
+    out.length = 0;
+    for (const one of this.people.values()) {
+      const p = one.person;
+      if (!one.placed || p.moving || p.act !== 'talk' || p.size < 2) continue;
+      out.push({ person: p, resident: one.resident, feet: one.resident.body === 'drone' ? null : one.feet, up: one.up, height: one.dress?.height ?? MEAN_HEIGHT, deck: one.deck });
+    }
   }
 
   /** The measured looks, once loaded (the far specks take the colours of those already measured). */
@@ -506,13 +535,13 @@ export class PeopleView {
 }
 
 /** What someone is doing at clock time t, as both levels show it. */
-function doingOf(p: Person, who: Resident, foot: Footing, t: number): Doing {
+function doingOf(p: Person, who: Resident, foot: Footing, t: number, speaker: Speaker): Doing {
   if (foot.swim) return { pose: foot.pose, swim: true, anim: { move: 'swim' } };
-  return { pose: foot.pose, swim: false, anim: animOf(p, who, t) };
+  return { pose: foot.pose, swim: false, anim: animOf(p, who, t, speaker) };
 }
 
 /** A figure's animation at clock time t (out of the water): walking, getting down or up, or the beat they are in. */
-function animOf(p: Person, who: Resident, t: number): AnimState {
+function animOf(p: Person, who: Resident, t: number, speaker: Speaker): AnimState {
   if (p.moving) return { move: 'walk' };
   const seat = p.activity === 'bench', changing = changeOf(p, seat);
   if (changing) return changing;
@@ -523,7 +552,7 @@ function animOf(p: Person, who: Resident, t: number): AnimState {
     case 'talk': {
       if (p.size < 2 || p.posture === POSE.lie) return held;
       if (talksWithHands(p)) return paired(p, PAIRED.talk)!;
-      const speaks = talkerAt(p, t) === p.member;
+      const speaks = speaker(p, t) === p.member;
       if (p.posture === POSE.kneel) {
         // Seated, the speaker talks with their hands (on the seat its own clip, on the grass over the kneel).
         if (!speaks) return held;
@@ -567,7 +596,7 @@ function animOf(p: Person, who: Resident, t: number): AnimState {
 
 /** The tool in someone's hands at work: the saw at a bench, else the mallet (chopping, or tapping a chisel kneeling). */
 function toolOf(p: Person, who: Resident, t: number): Tool {
-  return animOf(p, who, t).pose?.clip === CMU.saw.clip ? 'saw' : 'mallet';
+  return animOf(p, who, t, talkerAt).pose?.clip === CMU.saw.clip ? 'saw' : 'mallet';
 }
 
 /** Whether a pair standing and talking both talk with their hands (half of such pairs; the party's choice, so both make it). */
