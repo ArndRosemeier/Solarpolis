@@ -242,6 +242,13 @@ export const views = {
     { debug: 'Ride beside a boat: skiff → foiler → cruiser → off' }, { debug: 'Fly: beside the nearest boat under sail' }, { wait: 10000 }, { shot: 'sailing' },
     { debug: 'Fly: the next lake' }, { wait: 12000 }, { shot: 'lake' }, heap('boats'),
   ] },
+  // The harbours (gen/harbours.ts, gen/harbourBuild.ts): from off the nearest one over the water, then standing on its
+  // pontoon looking out past the boats in their berths; then four hours on, when some are out and others come back in.
+  harbours: { query: 'view=inside', about: 'the nearest harbour from off it over the water (pier, pontoon, fingers, piles, boats in their berths), then standing on its pontoon (-on, -on-2 turned along it); four hours into the day again (-later); a heap snapshot', settle: 6000, steps: [
+    memoryDetails, { debug: 'Fly: over the nearest harbour' }, { wait: 12000 }, { shot: 'over' },
+    { debug: 'Onto the nearest harbour' }, { wait: 9000 }, { shot: 'on' }, { look: [700, 0] }, { wait: 1500 }, { shot: 'on-2' },
+    { debug: 'Two hours later' }, { debug: 'Two hours later' }, { debug: 'Fly: over the nearest harbour' }, { wait: 12000 }, { shot: 'later' }, heap('harbours'),
+  ] },
   // The districts' works (gen/works.ts): each press of the Go entry moves to the next kind, nearest the eye.
   works: { query: 'view=inside', about: 'the districts\' works, one kind after another, each from two of its radii off: pyramid, cone, sunken court, mesa, fold, dome, down, scarp, vale, bowl, stepwell, half-pipe, amphitheatre, ramp, drumlin, tor', settle: 6000, steps: [
     ...['pyramid', 'cone', 'sunken', 'mesa', 'fold', 'dome', 'down', 'scarp', 'vale', 'bowl', 'stepwell', 'halfpipe', 'amphitheatre', 'ramp', 'drumlin', 'tor'].flatMap((kind) => [{ debug: 'Fly: the next district work' }, { wait: 9000 }, { shot: kind }]),

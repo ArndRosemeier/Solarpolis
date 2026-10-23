@@ -1,15 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MATRIX, derive, fromWorld, toWorld, withParams } from '../src/blueprint';
-import { makeTerrain } from '../src/gen/terrain';
+import { MATRIX, fromWorld, toWorld } from '../src/blueprint';
 import { buildPatch } from '../src/gen/patch';
 import { coast } from '../src/world/motion';
 import { PhysicsWorld } from '../src/physics/world';
+import { flatOf } from './worlds';
 
-for (const { name, params } of MATRIX) {
-  // Flat ground, so the landing spot is only the turning frame's doing.
-  const h = derive(withParams({ relief: { hills: 0, ringLake: null, terraceStep: params.relief.terraceStep, massif: 0, rivers: null } }, params));
-  const t = makeTerrain(h);
+for (const { name } of MATRIX) {
+  // Flat ground (shared with the other tests that want it), so the landing spot is only the turning frame's doing.
+  const t = flatOf(name), h = t.habitat;
   const s = (h.profile.floorStart + h.profile.floorEnd) / 2;
   const height = Math.min(50, h.radius * 0.2);
   // Away from the entrance courts (the terrain digs them however flat the land): the first angle with none near.

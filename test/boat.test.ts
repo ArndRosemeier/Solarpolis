@@ -31,6 +31,7 @@ for (const kind of BOAT_KIND_LIST) {
     assert.ok(Math.abs(hi[1] - spec.mast) < 0.1, `masthead ${hi[1].toFixed(2)} m`);
     assert.ok(lo[1] < 0, 'below the waterline');
     if (spec.foil) assert.ok(lo[1] < -spec.foil.lift, 'its foils still in the water when it flies');
+    assert.ok(-lo[1] <= spec.draft, `no deeper than its draft (${(-lo[1]).toFixed(2)} m)`);
     // Every finish known; a livery hull, glass where a design has it, lights.
     const f = finishes(d.body);
     for (const x of f) assert.ok((Object.values(BOAT_FINISH) as number[]).includes(x), `finish ${x}`);

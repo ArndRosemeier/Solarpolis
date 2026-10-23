@@ -39,7 +39,7 @@ import { freeMesh } from './geometry';
 import { cloudClearings, cloudSpan, cloudsAt } from '../world/clouds';
 import { setCloudClearings, setCloudSpan, setCloudState } from './cloudShaders';
 import { LandmarkView } from './landmarks';
-import { TiledView, courtSource, crossingSource, hallSource, stairSource, underSource } from './tiled';
+import { TiledView, courtSource, crossingSource, hallSource, harbourSource, stairSource, underSource } from './tiled';
 import { underStandAt, underHousesIn } from '../gen/underMesh';
 import { hallAt } from '../gen/halls';
 import { landmarkTopAt, landmarksOf } from '../gen/landmarks';
@@ -122,6 +122,7 @@ export class InteriorView {
   private courts: TiledView | null = null;
   private crossings: TiledView | null = null;
   private halls: TiledView | null = null;
+  private harbours: TiledView | null = null;
   /** The Understorey's pillar forest, drawn around the eye while it is below the land. */
   private under: TiledView | null = null;
   /**
@@ -293,7 +294,7 @@ export class InteriorView {
 
   /** Bytes of geometry this view holds (memory watchdog). */
   bytes(): number {
-    return (this.tiles?.bytes() ?? 0) + (this.plants?.bytes() ?? 0) + (this.landmarks?.bytes() ?? 0) + (this.stair?.bytes() ?? 0) + (this.courts?.bytes() ?? 0) + (this.crossings?.bytes() ?? 0) + (this.halls?.bytes() ?? 0) + (this.under?.bytes() ?? 0) + (this.cabin?.bytes() ?? 0) + (this.glass?.bytes() ?? 0) + (this.homes?.bytes() ?? 0);
+    return (this.tiles?.bytes() ?? 0) + (this.plants?.bytes() ?? 0) + (this.landmarks?.bytes() ?? 0) + (this.stair?.bytes() ?? 0) + (this.courts?.bytes() ?? 0) + (this.crossings?.bytes() ?? 0) + (this.halls?.bytes() ?? 0) + (this.harbours?.bytes() ?? 0) + (this.under?.bytes() ?? 0) + (this.cabin?.bytes() ?? 0) + (this.glass?.bytes() ?? 0) + (this.homes?.bytes() ?? 0);
   }
 
   /** Give memory back (memory watchdog): drop every cached tile and plant cell not on screen. */
@@ -305,6 +306,7 @@ export class InteriorView {
     this.courts?.shed();
     this.crossings?.shed();
     this.halls?.shed();
+    this.harbours?.shed();
     this.under?.shed();
     this.people?.shed();
     this.talk?.shed();
@@ -370,6 +372,7 @@ export class InteriorView {
       this.courts?.info() ?? 'entrance courts: none',
       this.crossings?.info() ?? 'river crossings: none',
       this.halls?.info() ?? 'grown halls: none',
+      this.harbours?.info() ?? 'harbours: none',
       this.under?.info() ?? 'understorey: none',
       this.homes?.info() ?? 'home furniture: none',
       this.glass?.info() ?? 'glass deck: none',
@@ -568,6 +571,7 @@ export class InteriorView {
     if (this.courts) { this.scene.remove(this.courts.group); this.courts.dispose(); }
     if (this.crossings) { this.scene.remove(this.crossings.group); this.crossings.dispose(); }
     if (this.halls) { this.scene.remove(this.halls.group); this.halls.dispose(); }
+    if (this.harbours) { this.scene.remove(this.harbours.group); this.harbours.dispose(); }
     if (this.under) { this.scene.remove(this.under.group); this.under.dispose(); }
     if (this.cabin) { this.scene.remove(this.cabin.group); this.cabin.dispose(); }
     this.glass?.dispose();
@@ -618,6 +622,8 @@ export class InteriorView {
     this.scene.add(this.crossings.group);
     this.halls = new TiledView(hallSource(this.terrain), h, this.stage, this.pool);
     this.scene.add(this.halls.group);
+    this.harbours = new TiledView(harbourSource(this.terrain), h, this.stage, this.pool);
+    this.scene.add(this.harbours.group);
     this.under = new TiledView(underSource(this.terrain), h, this.stage, this.pool);
     this.scene.add(this.under.group);
     this.homes = new HomesView(this.terrain, this.stage);
@@ -699,6 +705,7 @@ export class InteriorView {
     this.courts?.follow(v.eye);
     this.crossings?.follow(v.eye);
     this.halls?.follow(v.eye);
+    this.harbours?.follow(v.eye);
     // In a lift the floor below is wanted all the way (from the shaft the eye is above the vaults, and wants none).
     const rideFrom = this.cabin?.aboard ? this.cabin.place(0) : null;
     this.under?.follow(v.eye, rideFrom ? eyeInCabin(this.habitat, rideFrom, EYE_HEIGHT) : v.eye);
@@ -729,7 +736,7 @@ export class InteriorView {
    * the frame (and the shadow map), and the background is the mist's.
    */
   private showLand(on: boolean): void {
-    for (const g of [this.tiles?.group, this.plants?.group, this.landmarks?.group, this.stair?.group, this.courts?.group, this.crossings?.group, this.halls?.group, this.specks?.group, this.sunline, this.clouds, this.birds?.group, this.boats?.group, ...this.animals.map((a) => a.group)]) if (g) g.visible = on;
+    for (const g of [this.tiles?.group, this.plants?.group, this.landmarks?.group, this.stair?.group, this.courts?.group, this.crossings?.group, this.halls?.group, this.harbours?.group, this.specks?.group, this.sunline, this.clouds, this.birds?.group, this.boats?.group, ...this.animals.map((a) => a.group)]) if (g) g.visible = on;
   }
 
   /** Where the eye is now (world). */
