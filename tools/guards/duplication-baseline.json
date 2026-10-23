@@ -84,18 +84,6 @@
     "reason": "Each is a call of the one seam for the ground's height (`terrain.heightAt(theta, s)`) at a point its caller holds; there is nothing left to fold."
   },
   {
-    "key": "idiom: [.level .pow Math] in solarpolis/gen/detailTree.ts + solarpolis/gen/liftStairMesh.ts + solarpolis/gen/siteTiles.ts",
-    "reason": "Existing detail-tree clients calculate their own level dimensions with powers of two; the shared tree already owns selection and handover."
-  },
-  {
-    "key": "idiom: [.level .pow Math] in solarpolis/gen/detailTree.ts + solarpolis/gen/liftStairMesh.ts + solarpolis/gen/siteTiles.ts + solarpolis/gen/underMesh.ts",
-    "reason": "Existing detail-tree clients calculate their own level dimensions with powers of two; the shared tree already owns selection and handover."
-  },
-  {
-    "key": "idiom: [.level .pow Math] in solarpolis/gen/hullDetail.ts + solarpolis/gen/liftStairMesh.ts + solarpolis/gen/underMesh.ts",
-    "reason": "Existing detail-tree clients calculate their own level dimensions with powers of two; the shared tree already owns selection and handover."
-  },
-  {
     "key": "idiom: [.levelAt .s .theta] in solarpolis/gen/lifts.ts + solarpolis/gen/underMesh.ts + solarpolis/sim/rooms.ts",
     "reason": "Each is a call of the one seam for the Understorey's levels (`levelsOf(t).levelAt(theta, s)`) at a point its caller holds; there is nothing left to fold."
   },

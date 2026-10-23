@@ -294,6 +294,19 @@ export interface Life {
   birds: Birds;
   /** How people talk: silent speech bubbles over those near (src/talk). */
   talk: Talking;
+  /** The boats sailed on the habitat's water (sim/sailing.ts). */
+  sailing: Sailing;
+}
+
+/**
+ * The boats on the habitat's water (Arnd 2026-10-23: sail boats, slick and futuristic, on the lakes and the ring lake):
+ * how many per km² of water, the chance a boat goes out on a day (fewer in a calm or a gale), and how long it is out on
+ * average (s).
+ */
+export interface Sailing {
+  boats: number;
+  outings: number;
+  stay: number;
 }
 
 /**
@@ -415,6 +428,12 @@ export interface HabitatParams {
      * A designed habitat filters its air far cleaner than a city's; the far side then reads clearly across the axis.
      */
     hazeDistance: number;
+    /**
+     * The breeze over the floor (world/wind.ts): the habitat's own ventilation, a prevailing wind along the axis and
+     * around it (m/s, around positive spinward), how much it gusts (a share of its mean, 0 … 1), and how strongly the
+     * land under the sunline's bright stretch draws the air along the axis toward it as it warms (m/s at the most).
+     */
+    wind: { along: number; around: number; gust: number; sun: number };
   };
   layers: LayerDepths;
   hull: HullMaterial;
