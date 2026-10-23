@@ -2,6 +2,13 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.184 — First Light: the title starts at once
+
+- The game opens on space within a second: Earth below, the stars, and the habitats of the ring catching the Sun like a necklace of lights, drawn by a small renderer of its own while the game loads behind it.
+- After seven seconds it cuts to the title flight, which is ready by then, with no black screen and no wait.
+- The name and the line under it are on screen from the first moment.
+- The debug menu's arrival line tells when the first light came and how smoothly the opening ran.
+
 ## v0.183 — The link opens with N
 
 - Your neural link now opens with the N key (or the ring in the top left corner). Tab is kept free for targeting later.
