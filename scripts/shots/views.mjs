@@ -270,7 +270,7 @@ export const views = {
     { wait: 2000 }, heap('exploration-ship'),
   ] },
   'solar-system': { query: 'view=outside', about: 'Real-scale planetary observer: inner worlds, rings, major moons and the outer system', settle: 6000, steps: [
-    { run: async page => { await page.locator('.solar-controls summary').click(); } },
+    { run: async page => { await page.locator('.solar-controls > summary').click(); } },
     ...['sun', 'mercury', 'venus', 'earth', 'moon', 'mars', 'moon-401', 'jupiter', 'saturn', 'moon-606', 'uranus', 'neptune', 'moon-801', 'pluto', 'moon-901', 'haumea', 'makemake', 'eris'].flatMap(id => [
       { run: async page => { await page.getByLabel('Celestial body', { exact: true }).selectOption(id); await page.getByRole('button', { name: 'Observe', exact: true }).click(); } },
       { wait: 4500 }, { shot: id },
@@ -278,6 +278,19 @@ export const views = {
     { run: async page => { await page.getByLabel('Outside clock speed').selectOption('86400'); } }, { wait: 2000 },
     { run: async page => { await page.getByLabel('Outside clock speed').selectOption('0'); await page.getByRole('button', { name: 'Return to habitat', exact: true }).click(); } },
     { wait: 4000 }, { shot: 'home' }, heap('solar-system')
+  ] },
+  // The system's habitats (render/habitatLights.ts): the panel, then the thousands about Mars and Saturn, Velloran Reach, and home.
+  'system-habitats': { query: 'view=outside', about: 'the system\'s habitats as points of light with overlay names: the Habitats panel, Mars and Saturn with their thousands, Velloran Reach, home', settle: 6000, steps: [
+    { run: async page => { await page.locator('.solar-controls > summary').click(); await page.locator('.solar-habitats summary').click(); } },
+    { wait: 3000 }, { shot: 'panel' },
+    ...['mars', 'saturn'].flatMap(id => [
+      { run: async page => { await page.getByLabel('Celestial body', { exact: true }).selectOption(id); await page.getByRole('button', { name: 'Observe', exact: true }).click(); } },
+      { wait: 6000 }, { shot: id },
+    ]),
+    { run: async page => { await page.getByLabel('Polity', { exact: true }).selectOption('velloran'); await page.getByRole('button', { name: 'Observe its world', exact: true }).click(); } },
+    { wait: 4000 }, { look: [300, 0] }, { wait: 2000 }, { shot: 'velloran' },
+    { run: async page => { await page.locator('.solar-controls').getByRole('button', { name: 'Return to habitat', exact: true }).click(); } },
+    { wait: 5000 }, { shot: 'home' }, heap('system-habitats'),
   ] },
   'outside-earth': { query: 'view=outside', about: 'looking at Earth (key 2)', steps: [{ key: 'Digit2' }, { wait: 3000 }] },
   'outside-moon': { query: 'view=outside', about: 'looking at the Moon (key 3)', steps: [{ key: 'Digit3' }, { wait: 3000 }] },
