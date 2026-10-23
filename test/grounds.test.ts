@@ -76,7 +76,11 @@ for (const { name, params } of MATRIX) {
         // No nearer than its clearance, or than its own ends (an entrance at a Height's foot).
         const from = (i: number): number => Math.hypot(wrap(q[i] - g.theta) * R, q[i + 1] - g.s);
         const keep = Math.min(g.radius * WAY_CLEAR, from(0), from(last)) - swing - 1e-6;
-        for (let i = 0; i < q.length; i += 2) assert.ok(from(i) >= keep, `a way ${from(i).toFixed(0)} m from a Height reaching ${g.radius.toFixed(0)} m`);
+        for (let i = 0; i < q.length; i += 2) {
+          // (The message only on a miss: the ways have thousands of points.)
+          const d = from(i);
+          if (!(d >= keep)) assert.fail(`a way ${d.toFixed(0)} m from a Height reaching ${g.radius.toFixed(0)} m`);
+        }
       }
     }
     const walk = plan.paths.find((p) => p.kind === 'sunwalk')!.points;
@@ -94,18 +98,19 @@ for (const { name, params } of MATRIX) {
     }
     // And it goes round every court but its ends' (nobody walks down into another court, over its well).
     if (!params.landmarks) return;
-    const cell = params.plan.entranceSpacing, rows = new Map<number, ReturnType<typeof entrancesOf>>();
-    for (const e of entrancesOf(plan)) { const r = Math.floor(e.s / cell); rows.set(r, [...(rows.get(r) ?? []), e]); }
+    // (Each entrance's key and clearance once: the ways have thousands of pieces.)
+    const cell = params.plan.entranceSpacing, rows = new Map<number, { e: ReturnType<typeof entrancesOf>[number]; key: string; clear: number }[]>();
     const clear = (e: { size: number }): number => e.size + COURT.clear * params.landmarks!.handrail + params.plan.pathWidth.way;
+    for (const e of entrancesOf(plan)) { const r = Math.floor(e.s / cell); rows.set(r, [...(rows.get(r) ?? []), { e, key: key(e.theta, e.s), clear: clear(e) }]); }
     for (const w of ways) {
       const q = w.points, ends = [key(q[0], q[1]), key(q[q.length - 2], q[q.length - 1])];
       for (let i = 0; i + 3 < q.length; i += 2) {
         const r = Math.floor(q[i + 1] / cell);
-        for (const e of [-1, 0, 1].flatMap((d) => rows.get(r + d) ?? [])) {
-          if (ends.includes(key(e.theta, e.s))) continue;
+        for (let d = -1; d <= 1; d++) for (const { e, key: k, clear: c } of rows.get(r + d) ?? []) {
+          if (ends.includes(k)) continue;
           const pu = wrap(q[i + 2] - q[i]) * R, pv = q[i + 3] - q[i + 1], eu = wrap(e.theta - q[i]) * R, ev = e.s - q[i + 1];
-          const k = Math.min(1, Math.max(0, (eu * pu + ev * pv) / Math.max(pu * pu + pv * pv, 1e-9)));
-          assert.ok(Math.hypot(eu - pu * k, ev - pv * k) >= clear(e) - 1e-6, 'a way through another court');
+          const f = Math.min(1, Math.max(0, (eu * pu + ev * pv) / Math.max(pu * pu + pv * pv, 1e-9)));
+          assert.ok(Math.hypot(eu - pu * f, ev - pv * f) >= c - 1e-6, 'a way through another court');
         }
       }
     }

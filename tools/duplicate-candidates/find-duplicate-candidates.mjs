@@ -1705,17 +1705,23 @@ export function resolveIgnoreList(args = {}) {
   return DEFAULT_IGNORED_NAMES.slice();
 }
 
-function main() {
+/**
+ * The CLI over `argv` (without node and the script), writing to `io.out` / `io.err` and resolving paths from `io.cwd`.
+ * Returns the exit code. In-process, so the tests run it without starting a process per case.
+ */
+export function runCli(argv, io = {}) {
+  const cwd = io.cwd ?? process.cwd();
+  const out = io.out ?? ((s) => process.stdout.write(s));
+  const err = io.err ?? ((s) => process.stderr.write(s));
   let args;
   try {
-    args = parseArgs(process.argv.slice(2));
-  } catch (err) {
-    console.error(`error: ${err.message}`);
-    process.exitCode = 1;
-    return;
+    args = parseArgs(argv);
+  } catch (e) {
+    err(`error: ${e.message}\n`);
+    return 1;
   }
   if (args.help) {
-    console.log([
+    out([
       'Usage: node tools/duplicate-candidates/find-duplicate-candidates.mjs [options]',
       '',
       'Options:',
@@ -1734,17 +1740,16 @@ function main() {
       '',
       'The ubiquitous-name filter only affects the default stdout listing: ignored',
       'pairs are counted in the summary and always written to the report.',
-    ].join('\n'));
-    return;
+    ].join('\n') + '\n');
+    return 0;
   }
 
-  const srcRoot = path.resolve(args.src || DEFAULT_SRC);
-  const reportPath = path.resolve(args.report || DEFAULT_REPORT);
+  const srcRoot = path.resolve(cwd, args.src || DEFAULT_SRC);
+  const reportPath = path.resolve(cwd, args.report || DEFAULT_REPORT);
 
   if (!fs.existsSync(srcRoot)) {
-    console.error(`error: source root not found: ${srcRoot}`);
-    process.exitCode = 1;
-    return;
+    err(`error: source root not found: ${srcRoot}\n`);
+    return 1;
   }
 
   let result;
@@ -1753,10 +1758,9 @@ function main() {
       displayBase: path.dirname(srcRoot),
       extensions: resolveExtensions(args),
     });
-  } catch (err) {
-    console.error(`error: scan failed: ${err && err.stack ? err.stack : err}`);
-    process.exitCode = 1;
-    return;
+  } catch (e) {
+    err(`error: scan failed: ${e && e.stack ? e.stack : e}\n`);
+    return 1;
   }
 
   const tiers = groupCandidates(result.functions, { ignoreList: resolveIgnoreList(args) });
@@ -1765,7 +1769,7 @@ function main() {
     displayBase: path.dirname(srcRoot),
     maxPrint: Number.isFinite(parsedMax) && parsedMax > 0 ? parsedMax : undefined,
   });
-  process.stdout.write(text);
+  out(text);
 
   try {
     fs.mkdirSync(path.dirname(reportPath), { recursive: true });
@@ -1777,14 +1781,17 @@ function main() {
       }),
       'utf8',
     );
-  } catch (err) {
-    console.error(`error: could not write report ${reportPath}: ${err.message}`);
-    process.exitCode = 1;
-    return;
+  } catch (e) {
+    err(`error: could not write report ${reportPath}: ${e.message}\n`);
+    return 1;
   }
 
   // Finding candidates is success, not failure.
-  process.exitCode = 0;
+  return 0;
+}
+
+function main() {
+  process.exitCode = runCli(process.argv.slice(2));
 }
 
 const invokedDirectly =

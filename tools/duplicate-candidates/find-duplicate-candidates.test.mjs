@@ -36,10 +36,18 @@ import {
   resolveExtensions,
   normaliseExtensions,
   skipSuffixesFor,
+  runCli,
 } from './find-duplicate-candidates.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TOOL = path.join(HERE, 'find-duplicate-candidates.mjs');
+
+/** The CLI run in this process (as `spawnSync` would report it): one case spawns the real script, the rest stay here. */
+function cli(args, cwd) {
+  let stdout = '', stderr = '';
+  const status = runCli(args, { cwd, out: (s) => { stdout += s; }, err: (s) => { stderr += s; } });
+  return { status, stdout, stderr };
+}
 
 // ---------------------------------------------------------------------------
 // Name helpers
@@ -456,11 +464,7 @@ test('end-to-end: ubiquitous-name filter CLI (default, --no-ignore, --ignore)', 
 
     const run = (args) => {
       const report = path.join(dir, `report-${args.join('_') || 'default'}.md`);
-      const res = spawnSync(
-        process.execPath,
-        [TOOL, '--src', srcDir, '--report', report, ...args],
-        { cwd: dir, encoding: 'utf8' },
-      );
+      const res = cli(['--src', srcDir, '--report', report, ...args], dir);
       assert.equal(res.status, 0, `expected exit 0 for ${args.join(' ')}; stderr: ${res.stderr}`);
       return { stdout: res.stdout, markdown: fs.readFileSync(report, 'utf8') };
     };
@@ -512,11 +516,7 @@ test('end-to-end: two runs over the same tree are byte-identical (no wall-clock 
     // its own filename, and the only thing that may vary between runs is nothing.
     const runReport = (name, extraArgs = []) => {
       const report = path.join(dir, name);
-      const res = spawnSync(
-        process.execPath,
-        [TOOL, '--src', srcDir, '--report', report, ...extraArgs],
-        { cwd: dir, encoding: 'utf8' },
-      );
+      const res = cli(['--src', srcDir, '--report', report, ...extraArgs], dir);
       assert.equal(res.status, 0, `expected exit 0 for ${name}; stderr: ${res.stderr}`);
       return fs.readFileSync(report, 'utf8');
     };
@@ -559,11 +559,7 @@ test('end-to-end: the two de-duplication strategies ship in stdout and in the re
     );
 
     const report = path.join(dir, 'out.md');
-    const res = spawnSync(
-      process.execPath,
-      [TOOL, '--src', srcDir, '--report', report],
-      { cwd: dir, encoding: 'utf8' },
-    );
+    const res = cli(['--src', srcDir, '--report', report], dir);
     assert.equal(res.status, 0, `expected exit 0; stderr: ${res.stderr}`);
     const markdown = fs.readFileSync(report, 'utf8');
 
@@ -654,11 +650,7 @@ test('portability: no source-project specifics in the tool, its docs or its outp
       'export function sharedThing(value: number) { return value + 2; }\n',
     );
     const report = path.join(dir, 'out.md');
-    const res = spawnSync(
-      process.execPath,
-      [TOOL, '--src', srcDir, '--report', report],
-      { cwd: dir, encoding: 'utf8' },
-    );
+    const res = cli(['--src', srcDir, '--report', report], dir);
     assert.equal(res.status, 0, `expected exit 0; stderr: ${res.stderr}`);
     sources['(generated stdout)'] = res.stdout;
     sources['(generated report)'] = fs.readFileSync(report, 'utf8');
@@ -759,11 +751,7 @@ test('end-to-end: scans .js/.mjs/.cjs, skips their tests/specs and Vue/Svelte', 
     fs.writeFileSync(path.join(srcDir, 'view.svelte'), '<div>hi</div>\n');
 
     const report = path.join(dir, 'out.md');
-    const res = spawnSync(
-      process.execPath,
-      [TOOL, '--src', srcDir, '--report', report],
-      { cwd: dir, encoding: 'utf8' },
-    );
+    const res = cli(['--src', srcDir, '--report', report], dir);
     assert.equal(res.status, 0, `expected exit 0; stderr: ${res.stderr}`);
 
     // Exactly the 4 supported sources: the two test files and the two
@@ -786,11 +774,7 @@ test('end-to-end: scans .js/.mjs/.cjs, skips their tests/specs and Vue/Svelte', 
     );
 
     // --ext REPLACES the set: only .mjs remains, and its test is still skipped.
-    const onlyMjs = spawnSync(
-      process.execPath,
-      [TOOL, '--src', srcDir, '--report', path.join(dir, 'mjs.md'), '--ext', '.mjs'],
-      { cwd: dir, encoding: 'utf8' },
-    );
+    const onlyMjs = cli(['--src', srcDir, '--report', path.join(dir, 'mjs.md'), '--ext', '.mjs'], dir);
     assert.equal(onlyMjs.status, 0, `expected exit 0; stderr: ${onlyMjs.stderr}`);
     assert.match(onlyMjs.stdout, /Scan: 1 files scanned/);
   } finally {
@@ -835,11 +819,7 @@ test('end-to-end: scans .tsx/.jsx, collects property arrows, invents nothing fro
     );
 
     const report = path.join(dir, 'out.md');
-    const res = spawnSync(
-      process.execPath,
-      [TOOL, '--src', srcDir, '--report', report],
-      { cwd: dir, encoding: 'utf8' },
-    );
+    const res = cli(['--src', srcDir, '--report', report], dir);
     assert.equal(res.status, 0, `expected exit 0; stderr: ${res.stderr}`);
 
     assert.match(res.stdout, /Scan: 3 files scanned/);
