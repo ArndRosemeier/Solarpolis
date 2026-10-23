@@ -2,6 +2,11 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.168 — The Mind's eyes: camera drones
+
+- Small round camera drones now hang a while over the places people go, then drift on: one big lens with a lit ring in their front, nothing else on them. They are how the habitat's Mind sees everything, and why the guardians are already on their way when you step off an edge.
+- Debug menu, Go: "Fly: beside the nearest watcher (the Mind's camera drone)" and "the nearest watcher from 20 m".
+
 ## v0.167 — Nobody falls far: guardians catch you
 
 - Fall from anywhere high enough to hurt and the habitat's Mind sees it coming: two guardian drones leave their posts on the nearest brink, fly in beside you, take hold, brake you gently, carry you back to where you stepped off and set you on your feet.
