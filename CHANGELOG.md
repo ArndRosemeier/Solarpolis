@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.174 — The arrival measures its own warm-up
+
+- The debug menu has a new arrival line. It shows how long the title took to appear, when the interior and your body were ready after Start, whether the curtain had to wait for the land, and whether the flight stuttered while the interior was built behind it.
+
 ## v0.173 — The umbilical
 
 - Once the seal holds after docking, a ribbed umbilical hose reels out from under the berth's collar and runs to a port on the ship's nose, where its yellow connector head sits on the hull. Before a ship leaves, it reels back in as the collar's lights turn amber.
