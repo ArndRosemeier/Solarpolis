@@ -60,7 +60,31 @@ export interface FlightShaders {
   blocked: number;
 }
 
+/** A script that ran in a long frame (a Long Animation Frame entry's script, as the browser names it). */
+export interface LongScript {
+  /** What called it: an event, a callback, a resolved promise. */
+  invoker: string;
+  sourceURL: string;
+  sourceFunctionName: string;
+  /** Where in the source the function starts (characters; maps to the code through the build's source map). */
+  sourceCharPosition: number;
+  duration: number;
+}
+
+/** A frame that took long, and the scripts that made it long (Chrome's Long Animation Frames). */
+export interface LongFrame {
+  startTime: number;
+  duration: number;
+  scripts: readonly LongScript[];
+}
+
+/** The longest frames kept from the flight, and the scripts kept per frame. */
+const KEPT_FRAMES = 12;
+const KEPT_SCRIPTS = 3;
+
 export class ArrivalTiming {
+  /** The flight's longest frames, longest first. */
+  readonly longFrames: LongFrame[] = [];
   private readonly marks = new Map<ArrivalMark, number>();
   private readonly frames: FlightFrames = { count: 0, ms: 0, slowest: 0, stutters: 0 };
   private readonly logs: { name: string; log: () => ShaderLog | null }[] = [];
@@ -91,6 +115,24 @@ export class ArrivalTiming {
     f.ms += ms;
     f.slowest = Math.max(f.slowest, ms);
     if (ms > STUTTER_MS) f.stutters++;
+  }
+
+  /** A long frame the browser reported: kept while the flight is under way, the longest few. */
+  longFrame(frame: LongFrame): void {
+    const from = this.marks.get('start'), to = this.marks.get('closed') ?? Infinity;
+    if (from === undefined || frame.startTime < from || frame.startTime > to) return;
+    const scripts = [...frame.scripts].sort((a, b) => b.duration - a.duration).slice(0, KEPT_SCRIPTS);
+    this.longFrames.push({ startTime: frame.startTime, duration: frame.duration, scripts });
+    this.longFrames.sort((a, b) => b.duration - a.duration);
+    this.longFrames.length = Math.min(this.longFrames.length, KEPT_FRAMES);
+  }
+
+  /** The debug menu's line on the flight's longest frames: when after Start, how long, and the scripts that ran in them. */
+  stutterLine(): string {
+    const start = this.marks.get('start');
+    if (start === undefined || !this.longFrames.length) return '';
+    const file = (url: string): string => url.slice(url.lastIndexOf('/') + 1) || '?';
+    return `arrival's long frames: ${this.longFrames.map((f) => `${((f.startTime - start) / 1000).toFixed(1)} s ${f.duration.toFixed(0)} ms [${f.scripts.map((x) => `${x.invoker} ${x.sourceFunctionName || '?'} ${file(x.sourceURL)}@${x.sourceCharPosition} ${x.duration.toFixed(0)} ms`).join('; ')}]`).join(' · ')}`;
   }
 
   /** Watch a view's shader builds (`log` returns null until the view exists). */
