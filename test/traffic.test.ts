@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { v3add, v3dot, v3len, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
 import { MATRIX, exteriorDistance } from '../src/blueprint';
-import { DOCK_SPEED, FINAL_LENGTHS, SHIP_DESIGN, beforeBerth, berthOf, deriveShip, guestShip, guestVisit, shipAt, shipShape, slotLength, trafficAt, visitIn, visitsAt, type ShipNow } from '../src/space';
+import { DOCK_SPEED, FINAL_LENGTHS, SHIP_DESIGN, beforeBerth, berthOf, deriveShip, guestShip, guestVisit, partSpan, shipAt, shipShape, slotLength, trafficAt, visitIn, visitsAt, type ShipNow } from '../src/space';
 import { spaceOf } from './worlds';
 
 for (const { name } of MATRIX) {
@@ -109,7 +109,7 @@ test('ships: torch ships and sail freighters, every size from the berth, shapes 
       assert.deepEqual(deriveShip(k, berth), p);
       assert.ok(p.drive === 'sail' ? p.thrust === 0 && s.plumeLength === 0 : p.thrust > 5 && s.plumeLength > p.length);
       for (const q of s.parts) {
-        const [a, b] = q.shape === 'box' ? [q.center[0] - q.half[0], q.center[0] + q.half[0]] : [q.from, q.to];
+        const { x0: a, x1: b } = partSpan(q);
         assert.ok(a >= -1e-9 && b <= p.length + 1e-9, `${p.drive} part ${q.role} from ${a} to ${b} of ${p.length}`);
       }
     }

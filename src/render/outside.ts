@@ -165,7 +165,7 @@ export class OutsideView {
 
   /** Bytes this view holds (memory watchdog): the surface maps with their mipmaps, the star field, the skin's detail tiles. */
   bytes(): number {
-    return this.textureBytes + this.starBytes + (this.necklace?.detailBytes() ?? 0) + (this.solar?.bytes() ?? 0) + (this.habitatLights?.bytes() ?? 0) + (this.vessel?.meshes.bytes() ?? 0) + (this.voyage?.bytes() ?? 0);
+    return this.textureBytes + this.starBytes + (this.necklace?.detailBytes() ?? 0) + (this.necklace?.trafficBytes() ?? 0) + (this.ship?.bytes ?? 0) + (this.solar?.bytes() ?? 0) + (this.habitatLights?.bytes() ?? 0) + (this.vessel?.meshes.bytes() ?? 0) + (this.voyage?.bytes() ?? 0);
   }
 
   /** Give memory back (memory watchdog): Earth's day map drops to half resolution, detail tiles out of sight go. */
@@ -429,7 +429,7 @@ export class OutsideView {
     if (!this.ship) {
       const ship = new ShipMeshes(this.shipShape, 'torch ship');
       const lights = shipLightsOf(this.shipShape), lamps = { lights, points: new LampPoints(lights.length, 'torch ship lights') };
-      await Promise.all([ship.addTo(this.stage), lamps.points.enter(this.stage)]);
+      await Promise.all([ship.addTo(this.stage, true), lamps.points.enter(this.stage)]);
       this.ship = ship;
       this.shipLamps = lamps;
     }

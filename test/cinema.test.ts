@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { v3add, v3dot, v3len, v3norm, v3scale, v3sub } from '@futuremagic/core';
 import { MATRIX, exteriorDistance, fromWorld } from '../src/blueprint';
-import { ARRIVAL, ARRIVAL_SHOTS, arrivalScore, captionAt, MIND_LINES, SPIN_UP, LIT_FROM, LIT_TO, LOOP, SHOTS, TORCH_SHIP, arrival, attractLoop, hubView, chooseStart, shipAt, skyFrom, torchShip } from '../src/space';
+import { ARRIVAL, ARRIVAL_SHOTS, arrivalScore, captionAt, MIND_LINES, SPIN_UP, LIT_FROM, LIT_TO, LOOP, SHOTS, TORCH_SHIP, arrival, attractLoop, hubView, chooseStart, partSpan, shipAt, skyFrom, torchShip } from '../src/space';
 import { spaceOf } from './worlds';
 
 const DEG = 180 / Math.PI;
@@ -74,10 +74,9 @@ test('torch ship: every part within its length and beam, wings edge-on to the ex
       if (q.shape === 'box') {
         assert.ok(q.center[0] - q.half[0] >= 0 && q.center[0] + q.half[0] <= p.length);
         if (q.role === 'radiator') assert.ok(q.half[1] < q.half[2] / 10, 'thin across, wide out from the spine');
-      } else {
+      } else if (q.shape !== 'strut' && q.shape !== 'shell') {
         assert.ok(q.from >= 0 && q.to <= p.length && q.from < q.to);
-        const r = q.shape === 'cone' ? Math.max(q.r0, q.r1) : q.radius + Math.hypot(...(q.offset ?? [0, 0]));
-        assert.ok(r <= p.beam / 2 + 1e-9);
+        assert.ok(partSpan(q).radius <= p.beam / 2 + 1e-9);
       }
     }
     assert.equal(s.plumeLength, p.plume * p.length);
