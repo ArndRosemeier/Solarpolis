@@ -2,6 +2,11 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.163 — Murmurations you can see from afar
+
+- A starling murmuration now packs its birds as real starlings fly, about a metre apart, so the flock is a dark, shifting cloud over the lake from a few hundred metres off rather than a thin sprinkle you only noticed from inside it.
+- A far-off flying bird now covers as much of the view as its beating wings do, so distant swallows, swifts and starlings no longer fade to nothing.
+
 ## v0.162 — More of 3026's clothes
 
 - Residents dress from the whole new Commonwear range: comet flares, cocoon pants, courtyard culottes, glowing lightstream leggings and drift shorts, the arc vest, the solstice bolero and the memory sash.
