@@ -115,7 +115,7 @@ export type GenAnswer =
   | { kind: 'bird'; body: BirdBody }
   | { kind: 'boat'; design: BoatDesign }
   | { kind: 'sailing'; day: number; outings: (Outing | null)[] }
-  | { kind: 'capsule'; body: MappedArrays; glass: MappedArrays; doorBody: MappedArrays; doorGlass: MappedArrays }
+  | { kind: 'capsule'; body: MappedArrays; glass: MappedArrays; doorBody: MappedArrays; doorGlass: MappedArrays; rotor: MappedArrays; blur: MappedArrays }
   | { kind: 'capPad'; pad: CapPad | null }
   | { kind: 'capFlight'; flight: Flight }
   | { kind: 'catch'; plan: CatchPlan | null }
@@ -212,7 +212,7 @@ self.onmessage = async (e: MessageEvent<GenRequest>) => {
     }
     if (req.kind === 'capsule') {
       const c = buildCapsule(habitatFor(req.params));
-      post({ kind: 'capsule', body: c.body.mappedArrays(), glass: c.glass.mappedArrays(), doorBody: c.doorBody.mappedArrays(), doorGlass: c.doorGlass.mappedArrays() });
+      post({ kind: 'capsule', body: c.body.mappedArrays(), glass: c.glass.mappedArrays(), doorBody: c.doorBody.mappedArrays(), doorGlass: c.doorGlass.mappedArrays(), rotor: c.rotor.mappedArrays(), blur: c.blur.mappedArrays() });
       return;
     }
     if (req.kind === 'coats') {

@@ -35,8 +35,11 @@ test('capsule: the pod is whole and finite, its parts within its reach, the door
 for (const { name } of MATRIX) {
   test(`capsule (${name}): the seat inside the shell, the door's sill on the cabin floor, its step on the ground beside it`, () => {
     const h = habitatOf(name), lay = capLayout(h), hr = handrailOf(h);
-    assert.ok(Math.abs(lay.seat.feet[0]) < (CAP.length / 2) * hr && Math.abs(lay.seat.feet[1]) < (CAP.width / 2) * hr, 'seat inside');
-    assert.equal(lay.seat.feet[2], lay.floor);
+    assert.ok(Math.abs(lay.seat.hips[0]) < (CAP.length / 2) * hr && Math.abs(lay.seat.hips[1]) < (CAP.width / 2) * hr, 'seat inside');
+    assert.equal(lay.seat.hips[2], lay.floor);
+    // Seated, the hips rest on the bench (between its front edge and its back), not in the air in front of it.
+    const behindEdge = -CAP.seatEdge * hr - lay.seat.hips[0];
+    assert.ok(behindEdge > 0.15 && behindEdge < CAP.seatDeep * hr - 0.1, `hips on the bench (${behindEdge.toFixed(2)} m behind its edge)`);
     assert.equal(lay.door.inside[2], lay.floor);
     assert.equal(lay.door.outside[2], 0);
     assert.ok(lay.door.outside[1] < -lay.halfWidth, 'the step clear of the fans');
@@ -50,18 +53,20 @@ for (const { name } of MATRIX) {
     const start: Vec3 = [0.5, lay.halfWidth + 4 * hr, 0];
     const via: Vec3[] = [[lay.halfLength + 0.7, lay.halfWidth + 0.7, 0], [lay.halfLength + 0.7, -lay.halfWidth - 0.7, 0]];
     const steps = boarding(lay.seat, lay.door, start, 1.3, via), total = stepsSeconds(steps);
-    let was = mountPose(steps, 0).feet;
-    for (let k = 1; k <= 200; k++) {
-      const p = mountPose(steps, (total * k) / 200);
-      assert.ok(apart(p.feet, was) < 0.3, 'no jump');
+    // The eyes (they go with the hips: the body's place moves under them as it sits down) never jump.
+    const eyes = (p: ReturnType<typeof mountPose>): Vec3 => [p.feet[0] - p.front[0] * p.back, p.feet[1] - p.front[1] * p.back, p.feet[2] + p.eye];
+    let seen = eyes(mountPose(steps, 0));
+    for (let k = 1; k <= 400; k++) {
+      const p = mountPose(steps, (total * k) / 400);
+      assert.ok(apart(eyes(p), seen) < 0.15, `the eyes do not jump (${apart(eyes(p), seen).toFixed(2)} m, ${p.posture})`);
+      seen = eyes(p);
       const inside = Math.abs(p.feet[0]) < lay.halfLength && Math.abs(p.feet[1]) < lay.halfWidth;
       // Inside its footprint only on the cabin floor (stepping up into the doorway and after).
       if (inside && p.feet[2] < lay.floor * 0.5) assert.ok(Math.abs(p.feet[0]) < CAP.door * hr && p.feet[1] < 0, 'only through the doorway');
-      was = p.feet;
     }
     const end = mountPose(steps, total + 1);
     assert.equal(end.posture, 'sit');
-    assert.deepEqual(end.feet, lay.seat.feet);
+    assert.deepEqual(end.feet, lay.seat.hips);
     const out = alighting(lay.seat, lay.door, 1.3), last = mountPose(out, stepsSeconds(out) + 1);
     assert.deepEqual(last.feet, lay.door.outside);
     assert.equal(last.posture, 'stand');
@@ -95,6 +100,9 @@ for (const { name } of MATRIX) {
   });
 }
 
+/** The quickest the pod's floor swings or it turns (rad/s), and what its passenger feels changes (floor gravities a second). */
+const SWING = 0.35, JOLT = 0.35;
+
 for (const name of ['small', 'reference']) {
   test(`capsule flight (${name}): off one pad, over the land, onto the other, as fast as the passenger is comfortable, banked into what they feel`, () => {
     const t = terrainOf(name), h = t.habitat, caps = h.params.life.caps, stops = capStopsOf(t);
@@ -117,6 +125,16 @@ for (const name of ['small', 'reference']) {
       if (off > 2 * rise) assert.ok(at.h > ground + caps.over * 0.5, `over the land (${(at.h - ground).toFixed(0)} m)`);
     }
     assert.ok(f.heaviest <= caps.comfort * floor * 1.08);
+    // Smooth all the way (Arnd 2026-10-23: manoeuvres need to be smooth, always): the pod never swings its floor or
+    // turns about its up faster than SWING, nor does what the passenger feels change faster than JOLT.
+    const dt = 0.2;
+    let was = flightAt(h, f, 0);
+    for (let s = dt; s <= f.seconds; s += dt) {
+      const now = flightAt(h, f, s), turn = (a: Vec3, b: Vec3): number => Math.acos(Math.min(1, v3dot(a, b))) / dt;
+      assert.ok(turn(now.place.ez, was.place.ez) <= SWING && turn(now.place.ex, was.place.ex) <= SWING, `smooth at ${s.toFixed(1)} s of ${f.seconds.toFixed(0)}: ${turn(now.place.ez, was.place.ez).toFixed(2)} rad/s`);
+      assert.ok(Math.hypot(...v3sub(now.felt, was.felt)) / dt <= JOLT * floor, `no jolt at ${s.toFixed(1)} s`);
+      was = now;
+    }
   });
 }
 

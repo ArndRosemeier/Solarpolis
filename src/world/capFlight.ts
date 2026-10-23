@@ -12,14 +12,14 @@
  * Its speed along the way: at most `cruise`, `climb` near the pads, no faster round a bend than `turn` allows, and never
  * so fast that what the passenger feels passes `comfort` times the floor's gravity: flying spinward along the floor one
  * goes round faster than the floor does and weighs more ((ωr + v)²/r, world/motion.ts `feltGravity`), against the spin
- * less. It speeds up and slows down by at most `accel`.
+ * less. It speeds up and slows down by at most `accel`, and eases into every change of that over `ease` s (`eased`).
  *
  * What the passenger feels is the turning frame's apparent acceleration (centrifugal and Coriolis) less the pod's own
  * acceleration along its way (`flightAt`): the pod's floor banks into it, as a fan-lifted craft must (its thrust is
  * along its up), by at most `tilt` from true up. Pitching nose down to speed up, banking into a bend, leaning sideways
  * as the Coriolis force pushes on a climb toward the axis: all from the same sum.
  */
-import { smoothstep, v3cross, v3dot, v3norm, v3sub, type Vec3 } from '@futuremagic/core';
+import { smoothstep, v3cross, v3dot, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
 import { apart, fromWorld, toWorld, type Habitat } from '../blueprint';
 import { tallestCrown, type CapPad } from '../gen/capsules';
 import { landmarkTopAt } from '../gen/landmarks';
@@ -70,10 +70,24 @@ const HEIGHTS = 6;
 /** The way is resampled every this many m (at least), at most this many samples. */
 const STEP = 2;
 const MOST = 3000;
-/** Speeds and accelerations are read over this much time either side of a moment (s), so the pod's bank is smooth. */
-const SPAN = 0.5;
+/**
+ * Speeds and accelerations are read over this much time either side of a moment (s), and over at least `SPAN_STEPS`
+ * samples of the way when it goes slowly, so the pod's bank is smooth.
+ */
+const SPAN = 1;
+const SPAN_STEPS = 3;
+/**
+ * Off a pad the pod goes straight up this share of the climb's height (clear of the crowns beside it), then curves onto
+ * the way across, which it meets this many times the climb's height along it.
+ */
+const STRAIGHT = 0.6;
+const CORNER = 4;
 /** Below this speed over the floor (m/s along the way) the pod turns from the pad's heading to its way's. */
 const TURNING = 0.25;
+/** The quickest the pod turns about its up over a pad (rad/s): it turns gently, never swings round. */
+const YAW = 0.2;
+/** How much of the floor's weight the fans hold the pod toward level with, beyond what its passenger feels. */
+const LEVEL = 0.3;
 
 const cyl = (p: Vec3): { theta: number; z: number; rho: number } => ({ theta: Math.atan2(p[1], p[0]), z: p[2], rho: Math.hypot(p[0], p[1]) });
 const fromCyl = (theta: number, z: number, rho: number): Vec3 => [rho * Math.cos(theta), rho * Math.sin(theta), z];
@@ -99,18 +113,34 @@ export function planFlight(t: Terrain, ends: FlightEnds): Flight {
     const rough = acrossAt(A1, B1, rho, ROUGH), seconds = timed(h, rough, ends, rise, false).seconds;
     if (seconds < quickest) { quickest = seconds; best = rho; }
   }
-  const across = overTheLand(t, acrossAt(A1, B1, best, ACROSS), rise, rhoMin);
-  const way: Vec3[] = [];
+  const across = overTheLand(t, acrossAt(A1, B1, best, ACROSS), rise, rhoMin, (caps.cruise * caps.ease) / 2);
+  // Straight up off the pad to most of the climb's height, then one long smooth curve onto the way across, leaving
+  // the column straight up and meeting the way along it (no corner where the two join), and so down onto the other.
   const column = (a: Vec3, b: Vec3): Vec3[] => { const n = Math.max(1, Math.ceil(apart(a, b) / STEP)); return Array.from({ length: n }, (_, i) => madd(a, v3sub(b, a), i / n)); };
-  if (!ends.airborneStart) way.push(...column(A0, A1));
-  way.push(...across);
-  if (!ends.airborneEnd) way.push(...column(B1, B0).slice(1), B0);
-  const fixed = (i: number): boolean => {
-    // The pads' columns stay straight up and down to most of their height; the corners above them round off.
-    const a = !ends.airborneStart && apart(way[i], A0) < rise * 0.6, b = !ends.airborneEnd && apart(way[i], B0) < rise * 0.6;
-    return i === 0 || i === way.length - 1 || a || b;
+  // From the top of a pad's straight column (leaving it along `up`) to a point of the way across (arriving along its
+  // way), each end's pull as long as the curve, so it bends gently all along.
+  const curve = (a: Vec3, up: Vec3, b: Vec3, along: Vec3): Vec3[] => {
+    const L = apart(a, b), n = Math.max(2, Math.ceil((1.5 * L) / STEP));
+    return Array.from({ length: n }, (_, k) => cubic(a, v3scale(up, L), b, v3scale(along, L), k / n));
   };
-  for (let pass = 0; pass < 8; pass++) for (let i = 1; i < way.length - 1; i++) if (!fixed(i)) way[i] = smoothed(way, i);
+  const runs = [0];
+  for (let i = 1; i < across.length; i++) runs.push(runs[i - 1] + apart(across[i - 1], across[i]));
+  const len = runs[runs.length - 1], reach = Math.min(rise * CORNER, len / 3), last = across.length - 1;
+  const tangentAt = (i: number): Vec3 => v3norm(v3sub(across[Math.min(last, i + 1)], across[Math.max(0, i - 1)]));
+  let e0 = 0, e1 = last;
+  if (!ends.airborneStart) while (e0 < last - 2 && runs[e0] < reach) e0++;
+  if (!ends.airborneEnd) while (e1 > e0 + 2 && len - runs[e1] < reach) e1--;
+  const way: Vec3[] = [];
+  if (!ends.airborneStart) {
+    const S = madd(A0, ends.from.ez, rise * STRAIGHT);
+    way.push(...column(A0, S), ...curve(S, ends.from.ez, across[e0], tangentAt(e0)));
+  }
+  way.push(...across.slice(e0, e1 + 1));
+  if (!ends.airborneEnd) {
+    // The same curve as off a pad, flown the other way.
+    const T = madd(B0, ends.to.ez, rise * STRAIGHT), back = curve(T, ends.to.ez, across[e1], v3scale(tangentAt(e1), -1)).reverse();
+    way.push(...back.slice(0, -1), ...column(T, B0), B0);
+  }
   return timed(h, resample(way), ends, rise, true);
 }
 
@@ -135,9 +165,10 @@ const smoothed = (w: readonly Vec3[], i: number): Vec3 => [0, 1, 2].map((k) => 0
 
 /**
  * Keep a way across over the land (the ground, the water, anything built: `rise` m over it) and off the axis (`rhoMin`,
- * or as near as an end lies plus how far it has come from it), smoothing between; its ends stay where they are.
+ * or as near as an end lies plus how far it has come from it), smoothing between; its ends stay where they are. It
+ * rises over the land as a smooth swell over `swell` m (about what the pod goes at cruise while it eases into a change).
  */
-function overTheLand(t: Terrain, way: Vec3[], rise: number, rhoMin: number): Vec3[] {
+function overTheLand(t: Terrain, way: Vec3[], rise: number, rhoMin: number, swell: number): Vec3[] {
   const h = t.habitat, { profile } = h, n = way.length - 1, ra = cyl(way[0]).rho, rb = cyl(way[n]).rho;
   let length = 0;
   for (let i = 1; i <= n; i++) length += apart(way[i - 1], way[i]);
@@ -151,6 +182,20 @@ function overTheLand(t: Terrain, way: Vec3[], rise: number, rhoMin: number): Vec
     if (c.rho < lo) p = fromCyl(c.theta, c.z, lo);
     way[i] = p;
   };
+  // Over hills and valleys in one long, smooth swell, not following each bump (a bump taken at speed is a lurch): how
+  // much each point must rise, as an envelope that never dips under it, over about `swell` m either way.
+  const need = new Float64Array(n + 1), ups: Vec3[] = [];
+  for (let i = 0; i <= n; i++) {
+    const p = way[i], q = fromWorld(profile, ...p), ground = t.standAt(q.theta, q.s);
+    const built = q.h < ground + rise + 60 ? landmarkTopAt(t, q.theta, q.s) : null, under = Math.max(ground, built ?? -Infinity);
+    need[i] = i === 0 || i === n ? 0 : Math.max(0, under + rise - q.h);
+    ups.push(upAt(p) ?? [0, 0, 0]);
+  }
+  // Shorter toward the ends, which stay where they are (over the pads).
+  const far = Math.max(1, Math.round(swell / Math.max(1e-6, length / n))), reach = new Int32Array(n + 1);
+  for (let i = 0; i <= n; i++) reach[i] = Math.max(0, Math.min(far, Math.floor((Math.min(i, n - i) - 1) / 3)));
+  const raised = envelope(need, reach, 1);
+  for (let i = 1; i < n; i++) way[i] = madd(way[i], ups[i], raised[i]);
   for (let pass = 0; pass < 4; pass++) {
     for (let i = 1; i < n; i++) keep(i);
     for (let k = 0; k < 6; k++) for (let i = 1; i < n; i++) way[i] = smoothed(way, i);
@@ -159,7 +204,13 @@ function overTheLand(t: Terrain, way: Vec3[], rise: number, rhoMin: number): Vec
   return way;
 }
 
-/** A polyline resampled evenly by its length (every `STEP` m or more, at most `MOST` samples). */
+/** The cubic from a (leaving it along da) to b (arriving along db), at a share f of the way (Hermite). */
+function cubic(a: Vec3, da: Vec3, b: Vec3, db: Vec3, f: number): Vec3 {
+  const f2 = f * f, f3 = f2 * f;
+  return madd(madd(madd(v3scale(a, 2 * f3 - 3 * f2 + 1), da, f3 - 2 * f2 + f), b, -2 * f3 + 3 * f2), db, f3 - f2);
+}
+
+/** A polyline resampled evenly by its length (every `STEP` m or more, at most `MOST` samples), as a smooth curve through its points. */
 function resample(way: readonly Vec3[]): Vec3[] {
   const run = [0];
   for (let i = 1; i < way.length; i++) run.push(run[i - 1] + apart(way[i - 1], way[i]));
@@ -168,8 +219,14 @@ function resample(way: readonly Vec3[]): Vec3[] {
   for (let k = 0, j = 0; k <= n; k++) {
     const d = (total * k) / n;
     while (j < way.length - 2 && run[j + 1] < d) j++;
-    const seg = run[j + 1] - run[j], f = seg > 0 ? (d - run[j]) / seg : 0;
-    out.push(madd(way[j], v3sub(way[j + 1], way[j]), Math.min(1, Math.max(0, f))));
+    const seg = run[j + 1] - run[j], f = Math.min(1, Math.max(0, seg > 0 ? (d - run[j]) / seg : 0));
+    // A cubic through the points, its slope at each from its neighbours, so the way bends smoothly between them and
+    // has no corner at any (a corner, however slight, is a jolt at speed).
+    const slope = (i: number): Vec3 => {
+      const a = Math.max(0, i - 1), b = Math.min(way.length - 1, i + 1), span = run[b] - run[a];
+      return span > 0 ? v3scale(v3sub(way[b], way[a]), seg / span) : [0, 0, 0];
+    };
+    out.push(cubic(way[j], slope(j), way[j + 1], slope(j + 1), f));
   }
   return out;
 }
@@ -205,26 +262,77 @@ function timed(h: Habitat, way: readonly Vec3[], ends: FlightEnds, rise: number,
     v[i] = top;
     felt = Math.max(felt, feels(top));
   }
-  v[0] = 0;
-  v[n] = 0;
+  // From rest and to rest gently: the push builds up over `ease` (at most accel/ease m/s³ more each second), so going
+  // `d` m from rest it is no faster than that jerk allows (v = j t²/2 after d = j t³/6).
+  const jerk = caps.accel / caps.ease, fromRest = (d: number): number => (jerk / 2) * Math.pow((6 * Math.max(0, d)) / jerk, 2 / 3);
+  for (let i = 0; i <= n; i++) v[i] = Math.min(v[i], fromRest(run[i]), fromRest(total - run[i]));
   for (let i = 0; i < n; i++) v[i + 1] = Math.min(v[i + 1], Math.sqrt(v[i] * v[i] + 2 * caps.accel * (run[i + 1] - run[i])));
   for (let i = n; i > 0; i--) v[i - 1] = Math.min(v[i - 1], Math.sqrt(v[i] * v[i] + 2 * caps.accel * (run[i] - run[i - 1])));
+  eased(v, run, caps.ease);
   const times = new Float64Array(n + 1);
-  for (let i = 0; i < n; i++) times[i + 1] = times[i] + (run[i + 1] - run[i]) / Math.max(1e-3, (v[i] + v[i + 1]) / 2);
+  // Off rest and onto it the push builds up evenly (the way goes as the time cubed, positionAt): that takes three
+  // times the distance over the end's speed; elsewhere the speed changes evenly.
+  for (let i = 0; i < n; i++) {
+    const ds = run[i + 1] - run[i], still = v[i] === 0 || v[i + 1] === 0;
+    times[i + 1] = times[i] + (still ? (3 * ds) / Math.max(1e-3, v[i] + v[i + 1]) : ds / Math.max(1e-3, (v[i] + v[i + 1]) / 2));
+  }
   const points = new Float64Array(3 * (n + 1));
   let nearest = Infinity;
   way.forEach((p, i) => { points.set(p, 3 * i); nearest = Math.min(nearest, Math.hypot(p[0], p[1])); });
   return {
-    points, times, speeds: v, headings: full ? headingsOf(way, ends) : new Float64Array(0), seconds: times[n],
+    points, times, speeds: v, headings: full ? headingsOf(way, ends, times) : new Float64Array(0), seconds: times[n],
     length: total, nearest, heaviest: felt, from: ends.from, to: ends.to,
   };
 }
 
 /**
- * Which way the pod faces over the floor along its way: along the way where it moves over the floor; going straight up
- * off a pad (or down onto one), turning from the pad's heading to the way's as it climbs.
+ * Ease every change of the pod's acceleration in over about `ease` s, so it never lurches from speeding up to slowing
+ * down (or into a bend's slowing) at once: the squared speed, whose slope along the way is the acceleration, is taken
+ * as the least within twice the reach and then averaged twice over the reach, the reach being the way the pod goes in
+ * half `ease` there. That keeps it under every limit it had (the average of what is no faster than anywhere near is no
+ * faster than here) and its slope under the acceleration's; a last minimum with the limits catches what the reach's
+ * changing from place to place lets through. Both ends stay at rest. In place.
  */
-function headingsOf(way: readonly Vec3[], ends: FlightEnds): Float64Array {
+function eased(v: Float64Array, run: Float64Array, ease: number): void {
+  const n = v.length - 1, total = run[n];
+  if (n < 4 || total <= 0) return;
+  const ds = total / n, sq = Float64Array.from(v, (u) => u * u), reach = new Int32Array(n + 1);
+  // The reach in samples, short enough near the ends that the least never takes the ends' rest.
+  for (let i = 0; i <= n; i++) reach[i] = Math.max(0, Math.min(Math.round((ease * v[i]) / 2 / ds), Math.floor((Math.min(i, n - i) - 1) / 3)));
+  const cur = envelope(sq, reach, -1);
+  for (let i = 0; i <= n; i++) v[i] = Math.min(v[i], Math.sqrt(cur[i]));
+}
+
+/**
+ * A smooth envelope of values (samples evenly spaced) that never crosses them: over them (`side` 1) or under them (−1).
+ * Each is taken as the most (or least) within twice its reach, then averaged twice over its reach (the average of what
+ * is over everything near is over what is here). Its slope is never steeper than theirs.
+ */
+function envelope(values: Float64Array, reach: Int32Array, side: 1 | -1): Float64Array {
+  const n = values.length - 1;
+  let cur = new Float64Array(n + 1);
+  for (let i = 0; i <= n; i++) {
+    let m = values[i];
+    for (let k = Math.max(0, i - 2 * reach[i]); k <= Math.min(n, i + 2 * reach[i]); k++) m = side > 0 ? Math.max(m, values[k]) : Math.min(m, values[k]);
+    cur[i] = m;
+  }
+  for (let pass = 0; pass < 2; pass++) {
+    const sum = new Float64Array(n + 2), next = new Float64Array(n + 1);
+    for (let i = 0; i <= n; i++) sum[i + 1] = sum[i] + cur[i];
+    for (let i = 0; i <= n; i++) {
+      const a = Math.max(0, i - reach[i]), b = Math.min(n, i + reach[i]);
+      next[i] = (sum[b + 1] - sum[a]) / (b - a + 1);
+    }
+    cur = next;
+  }
+  return cur;
+}
+
+/**
+ * Which way the pod faces over the floor along its way: along the way where it moves over the floor; going straight up
+ * off a pad (or down onto one), turning from the pad's heading to the way's as it climbs, evenly in time.
+ */
+function headingsOf(way: readonly Vec3[], ends: FlightEnds, times: Float64Array): Float64Array {
   const n = way.length - 1, out = new Float64Array(3 * (n + 1)), known: boolean[] = [];
   for (let i = 0; i <= n; i++) {
     const tangent = v3norm(v3sub(way[Math.min(n, i + 1)], way[Math.max(0, i - 1)])), up = upAt(way[i]) ?? ends.from.ez;
@@ -237,11 +345,34 @@ function headingsOf(way: readonly Vec3[], ends: FlightEnds): Float64Array {
     for (let i = 0; i <= n; i++) out.set(ends.from.ex, 3 * i);
     return out;
   }
-  const blend = (a: Vec3, b: Vec3, w: number): Vec3 => v3norm(madd(a, v3sub(b, a), smoothstep(0, 1, w)));
-  for (let i = 0; i < first; i++) out.set(blend(ends.from.ex, at3(out, first), i / first), 3 * i);
-  for (let i = n; i > last; i--) out.set(blend(ends.to.ex, at3(out, last), (n - i) / Math.max(1, n - last)), 3 * i);
   for (let i = first + 1; i < last; i++) if (!known[i]) out.set(at3(out, i - 1), 3 * i);
+  for (let i = 0; i < first; i++) out.set(at3(out, first), 3 * i);
+  for (let i = n; i > last; i--) out.set(at3(out, last), 3 * i);
+  // Turning from a pad's heading to the way's (and at the end back to the pad's) gently in time: over the climb (or
+  // the descent), longer where the turn is large, at most YAW rad/s at its quickest. Round its up (a half turn too).
+  const T = times[n];
+  const turn = (pad: Place, from: number, ease: (i: number) => number, inside: (i: number) => boolean): void => {
+    const way0 = at3(out, from), angle = Math.atan2(Math.hypot(...v3cross(pad.ex, way0)), v3dot(pad.ex, way0));
+    const over = Math.max(1e-6, ease(from), (1.5 * angle) / YAW);
+    for (let i = 0; i <= n; i++) if (inside(i) && ease(i) < over) out.set(rotateToward(pad.ex, at3(out, i), pad.ez, smoothstep(0, 1, ease(i) / over)), 3 * i);
+  };
+  turn(ends.from, first, (i) => times[i], () => true);
+  turn(ends.to, last, (i) => T - times[i], () => true);
   return out;
+}
+
+/** a turned toward b by a share w of the angle between them, round `up` when they point opposite ways (unit vectors). */
+function rotateToward(a: Vec3, b: Vec3, up: Vec3, w: number): Vec3 {
+  const c = v3dot(a, b);
+  let side = madd(b, a, -c), k = Math.hypot(...side);
+  const th = Math.atan2(k, c) * w;
+  if (k < 1e-6) {
+    if (c > 0) return a;
+    side = v3cross(up, a);
+    k = Math.hypot(...side);
+    if (k < 1e-9) return a;
+  }
+  return v3norm(madd(v3scale(a, Math.cos(th)), side, Math.sin(th) / k));
 }
 
 /** Where along its way the pod is at time t (world), and which sample it is past. */
@@ -252,8 +383,9 @@ function positionAt(f: Flight, t: number): { p: Vec3; i: number } {
   let lo = 0, hi = n;
   while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (f.times[mid] <= t) lo = mid; else hi = mid; }
   const a = at3(f.points, lo), b = at3(f.points, lo + 1), ds = apart(a, b), v0 = f.speeds[lo], v1 = f.speeds[lo + 1];
-  const acc = ds > 0 ? (v1 * v1 - v0 * v0) / (2 * ds) : 0, tau = t - f.times[lo];
-  const d = Math.min(ds, Math.max(0, v0 * tau + 0.5 * acc * tau * tau));
+  const acc = ds > 0 ? (v1 * v1 - v0 * v0) / (2 * ds) : 0, tau = t - f.times[lo], T = Math.max(1e-6, f.times[lo + 1] - f.times[lo]), u = Math.min(1, tau / T);
+  // From rest (or to it) the way goes as the time cubed, so the push grows from nothing (timed); else evenly.
+  const d = Math.min(ds, Math.max(0, v0 === 0 && v1 > 0 ? ds * u * u * u : v1 === 0 && v0 > 0 ? ds * (1 - Math.pow(1 - u, 3)) : v0 * tau + 0.5 * acc * tau * tau));
   return { p: ds > 0 ? madd(a, v3sub(b, a), d / ds) : a, i: lo };
 }
 
@@ -267,14 +399,19 @@ export function flightAt(h: Habitat, f: Flight, t: number): FlightState {
     const place = t <= 0 ? f.from : f.to, felt = apparentAcceleration(h, place.at, [0, 0, 0]);
     return { place, velocity: [0, 0, 0], felt, weight: Math.hypot(...felt), share: t <= 0 ? 0 : 1 };
   }
-  const here = positionAt(f, t), tm = Math.max(0, t - SPAN), tp = Math.min(f.seconds, t + SPAN);
+  const here = positionAt(f, t), slow = Math.max(f.speeds[here.i], f.speeds[here.i + 1] ?? 0, 0.5);
+  // Before the flight and after it the pod stands on its pads (positionAt), so lifting off and setting down ease in too.
+  const span = Math.min(3, Math.max(SPAN, (SPAN_STEPS * STEP) / slow)), tm = t - span, tp = t + span;
   const before = positionAt(f, tm).p, after = positionAt(f, tp).p, p = here.p;
   const velocity: Vec3 = [0, 1, 2].map((k) => (after[k] - before[k]) / Math.max(1e-6, tp - tm)) as Vec3;
   const acc: Vec3 = t - tm > 1e-6 && tp - t > 1e-6
     ? [0, 1, 2].map((k) => (2 * ((after[k] - p[k]) / (tp - t) - (p[k] - before[k]) / (t - tm))) / (tp - tm)) as Vec3 : [0, 0, 0];
   const felt = v3sub(apparentAcceleration(h, p, velocity), acc), weight = Math.hypot(...felt);
   const trueUp = upAt(p) ?? f.from.ez;
-  let up = weight > 1e-6 ? v3norm([-felt[0], -felt[1], -felt[2]]) : trueUp;
+  // Its fans hold it a little toward level (`LEVEL` of the floor's weight): where one weighs next to nothing (fast
+  // against the spin), what little one feels swings round quickly, and the pod does not swing with it.
+  const level = LEVEL * h.gravityAt(h.radius), tu = v3norm(trueUp);
+  let up = v3norm([level * tu[0] - felt[0], level * tu[1] - felt[1], level * tu[2] - felt[2]]);
   // Banked by at most the tilt from true up.
   const tilt = h.params.life.caps.tilt, cos = v3dot(up, trueUp);
   if (cos < Math.cos(tilt)) {

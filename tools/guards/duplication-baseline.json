@@ -1932,18 +1932,6 @@
     "reason": "pool.job({ kind, params: habitat.params, ... }) is the one way to ask the worker pool for a job (workers/pool.ts); each view asks for its own kind of job."
   },
   {
-    "key": "same name: solarpolis/render/activityProps.ts#dispose + solarpolis/render/capsules.ts#dispose",
-    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
-  },
-  {
-    "key": "same name: solarpolis/render/animals.ts#dispose + solarpolis/render/capsules.ts#dispose",
-    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
-  },
-  {
-    "key": "same name: solarpolis/render/birds.ts#dispose + solarpolis/render/capsules.ts#dispose",
-    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
-  },
-  {
     "key": "same name: solarpolis/render/boats.ts#dispose + solarpolis/render/capsules.ts#dispose",
     "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
   },
@@ -1972,31 +1960,7 @@
     "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
   },
   {
-    "key": "same name: solarpolis/render/capsules.ts#dispose + solarpolis/render/fliers.ts#dispose",
-    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
-  },
-  {
-    "key": "same name: solarpolis/render/capsules.ts#dispose + solarpolis/render/homes.ts#dispose",
-    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
-  },
-  {
-    "key": "same name: solarpolis/render/capsules.ts#dispose + solarpolis/render/landmarks.ts#dispose",
-    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
-  },
-  {
-    "key": "same name: solarpolis/render/capsules.ts#dispose + solarpolis/render/people.ts#dispose",
-    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
-  },
-  {
-    "key": "same name: solarpolis/render/capsules.ts#dispose + solarpolis/render/specks.ts#dispose",
-    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
-  },
-  {
     "key": "same name: solarpolis/render/capsules.ts#info + solarpolis/render/outside.ts#info",
-    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
-  },
-  {
-    "key": "same name: solarpolis/render/capsules.ts#step + solarpolis/render/vesselVisit.ts#step",
     "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
   },
   {
@@ -2057,10 +2021,6 @@
   },
   {
     "key": "same name: solarpolis/render/animals.ts#info + solarpolis/render/guardians.ts#info",
-    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
-  },
-  {
-    "key": "same name: solarpolis/render/capsules.ts#dispose + solarpolis/render/guardians.ts#dispose",
     "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
   },
   {
@@ -2177,10 +2137,6 @@
   },
   {
     "key": "same name: solarpolis/render/capsules.ts#dispose + solarpolis/render/notice.ts#dispose",
-    "reason": "The views' own interface (load, poseAt, bytes for the memory watchdog, dispose), which InteriorView calls on each of them; NoticeView (render/notice.ts) is one more such view, holding the notice to newcomers at the port door."
-  },
-  {
-    "key": "same name: solarpolis/render/capsules.ts#poseAt + solarpolis/render/notice.ts#poseAt",
     "reason": "The views' own interface (load, poseAt, bytes for the memory watchdog, dispose), which InteriorView calls on each of them; NoticeView (render/notice.ts) is one more such view, holding the notice to newcomers at the port door."
   },
   {
@@ -2406,5 +2362,17 @@
   {
     "key": "idiom: [.profile .s .theta] in solarpolis/gen/underMesh.ts + solarpolis/render/view.ts + solarpolis/sim/sources.ts",
     "reason": "Each is a call of the one seam for a point's place in the world (`toWorld(habitat.profile, { theta, s, h })`) at a point its caller holds; there is nothing left to fold."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/animal.ts#dispose + solarpolis/render/capsules.ts#dispose",
+    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
+  },
+  {
+    "key": "same name: solarpolis/render/actors/slots.ts#dispose + solarpolis/render/capsules.ts#dispose",
+    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
+  },
+  {
+    "key": "same name: solarpolis/render/capsules.ts#dispose + solarpolis/render/solar.ts#dispose",
+    "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
   }
 ]

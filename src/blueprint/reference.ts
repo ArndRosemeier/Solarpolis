@@ -54,7 +54,7 @@ export const REFERENCE: HabitatParams = {
     talk: { words: 15, dots: 40, parties: 4, read: 14, quiet: 30 },
     sailing: { boats: 6, outings: 0.4, stay: 7200 },
     // Capsules: quick over the land but easy on their passengers, a minute or so away when called.
-    caps: { cruise: 70, climb: 5, accel: 1.5, turn: 2.5, over: 30, axis: 0.12, comfort: 1.3, tilt: 0.35, call: 900, reach: 60 },
+    caps: { cruise: 140, climb: 10, accel: 4, ease: 5, turn: 5, over: 30, axis: 0.12, comfort: 1.3, tilt: 0.35, call: 900, reach: 60 },
     guard: { harm: 9, water: 2.5, brake: 2, speed: 45, thrust: 30, carry: 6, posts: 40, hands: 2, late: 0.08, bag: 15, cushion: 6 } },
   age: 200,
   culture: 'reference',

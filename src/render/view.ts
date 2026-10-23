@@ -848,12 +848,20 @@ export class InteriorView {
     return this.behind(own ? { ...v, eye: v3madd(v.eye, v.up, own) } : v, this.chase);
   }
 
-  /** The view from a capsule passenger's eyes: over their feet at their eye height (seated, back over the hips), looking as turned from their facing. */
+  /** How far (m) the body stands back of the eyes with the camera `chase` behind them (from the eyes: in front of the face). */
+  private firstPersonBack(chase: number): number {
+    return FIRST_PERSON_BACK * ((this.figure?.height ?? HUMAN.height) / HUMAN.height) * Math.max(0, 1 - chase / HEAD_CLEAR);
+  }
+
+  /**
+   * The view from a capsule passenger's eyes: over their place at their eye height (seated, a little in front of the
+   * hips; from the eyes, in front of the face as on foot), looking as turned from their facing.
+   */
   private riderView(r: Passenger): View {
     const scale = this.figure ? this.figure.eyeHeight / EYE_HEIGHT : 1, right = v3cross(r.front, r.up);
     const cy = Math.cos(this.rideLook.yaw), sy = Math.sin(this.rideLook.yaw), cp = Math.cos(this.rideLook.pitch), sp = Math.sin(this.rideLook.pitch);
     const flat = v3madd(v3scale(r.front, cy), right, sy), look = v3norm(v3madd(v3scale(flat, cp), r.up, sp));
-    return { eye: v3madd(v3madd(r.feet, r.front, -r.pose.back), r.up, r.pose.eye * scale), look, up: r.up };
+    return { eye: v3madd(v3madd(r.feet, r.front, this.firstPersonBack(this.chase) - r.pose.back), r.up, r.pose.eye * scale), look, up: r.up };
   }
 
   /** The arrival's walk at this moment, while it runs. */
@@ -982,9 +990,9 @@ export class InteriorView {
       front = v3norm(speed > 0.5 && chase >= HEAD_CLEAR ? flat : ahead);
       move = ch.swimming ? 'swim' : !ch.grounded ? (v3dot(v, up) > 0.5 ? 'jump' : 'fall') : speed < 0.3 ? 'idle' : speed < 2.5 ? 'walk' : speed < 5.5 ? 'run' : 'sprint';
     }
-    // From the eyes the body sits as far back as it stands, seated too: its head leans forward of the hips, and the
-    // first renders on real WebGPU showed it from behind, inside the hair.
-    const back = FIRST_PERSON_BACK * (f.height / HUMAN.height) * Math.max(0, 1 - chase / HEAD_CLEAR);
+    // From the eyes the body stands back of them, so one looks down at its front; a passenger's body stays where it is
+    // (on its seat), its eyes go forward instead (riderView).
+    const back = rider ? 0 : this.firstPersonBack(chase);
     f.update({ feet: toView(eye, v3madd(feet, front, -back)), up, front, speed, anim: anim ?? { move } }, this.frameDt, this.time);
   }
 

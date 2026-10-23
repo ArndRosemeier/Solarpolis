@@ -15,9 +15,9 @@
  * uploaded once and their CPU copies let go. Nothing is random: where a pod comes from is seeded by the habitat and
  * how many calls came before.
  */
-import { Group, type Mesh } from 'three/webgpu';
+import { Group, type Material, type Mesh } from 'three/webgpu';
 import type { Stage } from '@futuremagic/stage';
-import { deriveSeed, hash3i, hashToFloat, v3dot, v3norm, v3sub, type Vec3 } from '@futuremagic/core';
+import { deriveSeed, hash3i, hashToFloat, smoothstep, v3dot, v3norm, v3sub, type Vec3 } from '@futuremagic/core';
 import { fromWorld, toView, type Habitat } from '../blueprint';
 import { capDestinations, capLayout, capStopsOf, doorPlace, overFloor, type CapDestination, type CapLayout, type CapPad } from '../gen/capsules';
 import { intoPlace, mappedBytes, outOfPlace, type MappedArrays, type Place } from '../gen/shapes';
@@ -62,6 +62,14 @@ const STOP_WALK = 5;
 const CLEAR_WALK = 0.7;
 /** The capsule's own small Mind, as it speaks in the link. */
 const MIND = 'Capsule';
+/**
+ * Its fans spin up from rest (and down to it) over this long (s): it lifts off once they are up to speed, and they
+ * run down after it sets down. At full speed the blades are seen turning this fast (rad/s: the eye sees a blur and a
+ * slower turning, never the strobing of the real speed), and their blur shows from this share of it.
+ */
+const SPOOL = 2.5;
+const FAN_SEEN = 9;
+const BLUR_FROM = 0.45;
 /** A capsule's state on the CPU: its flight plan's samples (bytes each), besides its meshes. */
 const SAMPLE_BYTES = 8 * 3 * 2 + 8 * 2;
 
@@ -70,6 +78,9 @@ interface Drawn {
   glass: Mesh;
   doorBody: Mesh;
   doorGlass: Mesh;
+  /** Each fan's blades and their blur (one geometry each, shared by the four). */
+  rotors: Mesh[];
+  blurs: Mesh[];
   bytes: number;
 }
 
@@ -87,6 +98,9 @@ export class CapsuleView {
   private pad: CapPad | null = null;
   private flight: Flight | null = null;
   private elapsed = 0;
+  /** How fast its fans run (0 at rest, 1 flying) and how far round their blades have turned (rad). */
+  private spin = 0;
+  private turned = 0;
   /** The door's opening (0 shut, 1 open) and where it is going. */
   private door = 0;
   private doorWant = 0;
@@ -194,6 +208,8 @@ export class CapsuleView {
     this.flight = f;
     this.elapsed = 0;
     this.door = this.doorWant = 0;
+    // Coming in from the air, its fans are already running; from a pad they spin up first.
+    if (!onPad) this.spin = 1;
     this.phase = 'coming';
     this.say({ from: MIND, text: `On my way. ${seconds(f.seconds)}.` });
   }
@@ -281,10 +297,13 @@ export class CapsuleView {
   /** Move on by `dt` real seconds (the pod keeps its own pace whatever the clock's). Returns where the passenger stands once out. */
   step(dt: number): Out | null {
     this.door = this.doorWant > this.door ? Math.min(this.doorWant, this.door + dt / DOOR_SECONDS) : Math.max(this.doorWant, this.door - dt / DOOR_SECONDS);
-    const f = this.flight;
-    if ((this.phase === 'coming' || this.phase === 'riding' || this.phase === 'leaving') && f) {
-      // A ride waits for its door to shut.
-      if (this.phase !== 'riding' || this.door <= 0) this.elapsed += dt;
+    const f = this.flight, flying = this.phase === 'coming' || this.phase === 'riding' || this.phase === 'leaving';
+    // The fans run while it flies (or is about to), and run down once it stands.
+    this.spin = flying ? Math.min(1, this.spin + dt / SPOOL) : Math.max(0, this.spin - dt / SPOOL);
+    this.turned = (this.turned + dt * FAN_SEEN * smoothstep(0, 1, this.spin)) % (2 * Math.PI);
+    if (flying && f) {
+      // It lifts off once its fans are up to speed (and, with a passenger, its door is shut).
+      if (this.elapsed > 0 || (this.spin >= 1 && (this.phase !== 'riding' || this.door <= 0))) this.elapsed += dt;
       if (this.elapsed >= f.seconds) {
         this.elapsed = f.seconds;
         if (this.phase === 'coming') { this.phase = 'waiting'; this.doorWant = 1; this.say({ from: MIND, text: 'Here. Click me to get in.' }); }
@@ -360,6 +379,17 @@ export class CapsuleView {
     const doorAxes = axesOf(door), doorAt = toView(eye, door.at);
     setPose(d.doorBody, doorAxes, doorAt);
     setPose(d.doorGlass, doorAxes, doorAt);
+    // Each fan turned about its axis (the pod's up), neighbours the other way; the blur only at speed.
+    const fast = this.spin > BLUR_FROM;
+    this.layout.fans.forEach((fan, k) => {
+      const a = fan.turn * this.turned, c = Math.cos(a), sn = Math.sin(a);
+      const ex: Vec3 = [p.ex[0] * c + p.ey[0] * sn, p.ex[1] * c + p.ey[1] * sn, p.ex[2] * c + p.ey[2] * sn];
+      const ey: Vec3 = [p.ey[0] * c - p.ex[0] * sn, p.ey[1] * c - p.ex[1] * sn, p.ey[2] * c - p.ex[2] * sn];
+      const fanAxes = axesOf({ ex, ey, ez: p.ez }), at = toView(eye, outOfPlace(p, fan.at));
+      setPose(d.rotors[k], fanAxes, at);
+      setPose(d.blurs[k], fanAxes, at);
+      d.blurs[k].visible = fast;
+    });
   }
 
   /** What the link shows of it now: the pod coming, waiting, the ride under way. */
@@ -400,7 +430,11 @@ export class CapsuleView {
     this.ask();
     const d = this.drawn;
     this.drawn = null;
-    if (d) for (const m of [d.body, d.glass, d.doorBody, d.doorGlass]) freeMesh(m);
+    if (d) {
+      for (const m of [d.body, d.glass, d.doorBody, d.doorGlass]) freeMesh(m);
+      // The fans share one geometry each: freed with the last.
+      for (const set of [d.rotors, d.blurs]) set.forEach((m, k) => freeMesh(m, k === set.length - 1 ? 'all' : 'none'));
+    }
     this.group.removeFromParent();
   }
 
@@ -462,12 +496,27 @@ export class CapsuleView {
         return x;
       };
       const all = [meshOf(a.body, false, 'capsule'), meshOf(a.glass, true, 'capsule glass'), meshOf(a.doorBody, false, 'capsule door'), meshOf(a.doorGlass, true, 'capsule door glass')];
-      const bytes = [a.body, a.glass, a.doorBody, a.doorGlass].reduce((n, m) => n + mappedBytes(m), 0);
-      await Promise.all(all.map((m) => uploadStatic(this.stage, m)));
-      if (this.disposed) { for (const m of all) freeMesh(m); return null; }
-      for (const m of all) { m.visible = true; this.group.add(m); }
+      // One fan's blades and blur, uploaded once and drawn four times (each fan posed and turned on its own).
+      const rotor = meshOf(a.rotor, false, 'capsule fan'), blur = meshOf(a.blur, true, 'capsule fan blur');
+      const bytes = [a.body, a.glass, a.doorBody, a.doorGlass, a.rotor, a.blur].reduce((n, m) => n + mappedBytes(m), 0);
+      await Promise.all([...all, rotor, blur].map((m) => uploadStatic(this.stage, m)));
+      const copies = (m: Mesh, glass: boolean): Mesh[] => this.layout.fans.map((_, k) => {
+        if (k === 0) return m;
+        const x = posedMesh(m.geometry, m.material as Material, `${m.name} ${k}`);
+        x.frustumCulled = false;
+        x.castShadow = !glass;
+        if (glass) x.renderOrder = 2;
+        return x;
+      });
+      const rotors = copies(rotor, false), blurs = copies(blur, true);
+      if (this.disposed) {
+        for (const m of all) freeMesh(m);
+        for (const set of [rotors, blurs]) set.forEach((m, k) => freeMesh(m, k === set.length - 1 ? 'all' : 'none'));
+        return null;
+      }
+      for (const m of [...all, ...rotors, ...blurs]) { m.visible = true; this.group.add(m); }
       const [body, glass, doorBody, doorGlass] = all;
-      this.drawn = { body, glass, doorBody, doorGlass, bytes };
+      this.drawn = { body, glass, doorBody, doorGlass, rotors, blurs, bytes };
       return this.drawn;
     })();
     return this.building;
