@@ -32,6 +32,46 @@
     "reason": "TSL arithmetic for unrelated water motion, terrain patterns and light coordinates; no shared formula to extract."
   },
   {
+    "key": "idiom: [.add .mul] in solarpolis/render/builtShaders.ts + solarpolis/render/groundShaders.ts + solarpolis/render/hamletSkies.ts",
+    "reason": "TSL shader arithmetic (a.add(b).mul(c)) is how node materials are written; it surfaced here only because new files changed how rare the finder rates these names (its weights count files), not because any shader changed."
+  },
+  {
+    "key": "idiom: [.add .mul] in solarpolis/render/builtShaders.ts + solarpolis/render/groundShaders.ts + solarpolis/render/hamletSkies.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
+    "reason": "TSL shader arithmetic (a.add(b).mul(c)) is how node materials are written; it surfaced here only because new files changed how rare the finder rates these names (its weights count files), not because any shader changed."
+  },
+  {
+    "key": "idiom: [.add .mul] in solarpolis/render/builtShaders.ts + solarpolis/render/groundShaders.ts + solarpolis/render/materials.ts",
+    "reason": "TSL shader arithmetic (a.add(b).mul(c)) is how node materials are written; it surfaced here only because new files changed how rare the finder rates these names (its weights count files), not because any shader changed."
+  },
+  {
+    "key": "idiom: [.add .mul] in solarpolis/render/celestialShaders.ts + solarpolis/render/cloudShaders.ts + solarpolis/render/crowdShaders.ts + solarpolis/render/materials.ts",
+    "reason": "TSL shader arithmetic (a.add(b).mul(c)) is how node materials are written; it surfaced here only because new files changed how rare the finder rates these names (its weights count files), not because any shader changed."
+  },
+  {
+    "key": "idiom: [.add .mul] in solarpolis/render/celestialShaders.ts + solarpolis/render/groundShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
+    "reason": "TSL shader arithmetic (a.add(b).mul(c)) is how node materials are written; it surfaced here only because new files changed how rare the finder rates these names (its weights count files), not because any shader changed."
+  },
+  {
+    "key": "idiom: [.add .mul] in solarpolis/render/celestialShaders.ts + solarpolis/render/hamletSkies.ts + solarpolis/render/materials.ts",
+    "reason": "TSL shader arithmetic (a.add(b).mul(c)) is how node materials are written; it surfaced here only because new files changed how rare the finder rates these names (its weights count files), not because any shader changed."
+  },
+  {
+    "key": "idiom: [.add .mul] in solarpolis/render/celestialShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
+    "reason": "TSL shader arithmetic (a.add(b).mul(c)) is how node materials are written; it surfaced here only because new files changed how rare the finder rates these names (its weights count files), not because any shader changed."
+  },
+  {
+    "key": "idiom: [.add .mul] in solarpolis/render/hamletSkies.ts + solarpolis/render/hullShaders.ts + solarpolis/render/materials.ts",
+    "reason": "TSL shader arithmetic (a.add(b).mul(c)) is how node materials are written; it surfaced here only because new files changed how rare the finder rates these names (its weights count files), not because any shader changed."
+  },
+  {
+    "key": "idiom: [.add .mul] in solarpolis/render/hamletSkies.ts + solarpolis/render/hullShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
+    "reason": "TSL shader arithmetic (a.add(b).mul(c)) is how node materials are written; it surfaced here only because new files changed how rare the finder rates these names (its weights count files), not because any shader changed."
+  },
+  {
+    "key": "idiom: [.add .mul] in solarpolis/render/hamletSkies.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
+    "reason": "TSL shader arithmetic (a.add(b).mul(c)) is how node materials are written; it surfaced here only because new files changed how rare the finder rates these names (its weights count files), not because any shader changed."
+  },
+  {
     "key": "idiom: [.all Promise] in solarpolis/render/actors/animator.ts + solarpolis/render/necklace.ts + solarpolis/render/terrain.ts",
     "reason": "Plain JavaScript: each waits for its own different loads at once (animation clips, stage meshes, streamed tiles). Nothing to fold; it surfaced when the plan's files raised the file count (the finder weighs names by how few files use them)."
   },
@@ -496,10 +536,6 @@
     "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; each view does its own work in each."
   },
   {
-    "key": "same name: solarpolis/render/animals.ts#place + solarpolis/render/view.ts#place",
-    "reason": "The views' and figures' shared lifecycle (start, follow or update each frame, place, show, bytes for the memory watchdog, info for the debug menu, load, dispose): one name per step on purpose; the squirrels' view (render/animals.ts) and an animal's figure (render/actors/animal.ts) do their own work in each."
-  },
-  {
     "key": "same name: solarpolis/render/animals.ts#rescan + solarpolis/render/people.ts#rescan",
     "reason": "The squirrels' view follows the people's view's steps (rescan in a worker, figures for the nearest, loadFigure compiling every level first) with its own rules: who gets a figure (size on screen, not distance), what a figure is (AnimalFigure, not a person's Figure), what the worker answers. Their shared part, one figure loading at a time into a slot handed over when drawn, is one seam: FigureLoads (render/actors/slots.ts)."
   },
@@ -630,6 +666,10 @@
   {
     "key": "same name: solarpolis/render/homes.ts#bytes + solarpolis/space/solarSystem.ts#bytes",
     "reason": "Independent resource owners report their own retained allocations to the memory watchdog; no shared allocation to extract."
+  },
+  {
+    "key": "same name: solarpolis/render/homes.ts#bytes + solarpolis/talk/conversations.ts#bytes",
+    "reason": "Everything holding memory reports it through a bytes() method the memory watchdog reads (CLAUDE.md rule 12); each counts its own buffers."
   },
   {
     "key": "same name: solarpolis/render/homes.ts#dispose + solarpolis/render/hullDetail.ts#dispose",
@@ -792,11 +832,19 @@
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
+    "key": "same name: solarpolis/render/hullDetail.ts#shed + solarpolis/render/talk.ts#shed",
+    "reason": "Everything that can give memory back does so through a shed() method the memory watchdog calls (CLAUDE.md rule 12); each sheds its own buffers."
+  },
+  {
     "key": "same name: solarpolis/render/hullDetail.ts#shed + solarpolis/render/terrain.ts#shed",
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
     "key": "same name: solarpolis/render/hullDetail.ts#shed + solarpolis/render/tiled.ts#shed",
+    "reason": "Everything that can give memory back does so through a shed() method the memory watchdog calls (CLAUDE.md rule 12); each sheds its own buffers."
+  },
+  {
+    "key": "same name: solarpolis/render/hullDetail.ts#shed + solarpolis/talk/conversations.ts#shed",
     "reason": "Everything that can give memory back does so through a shed() method the memory watchdog calls (CLAUDE.md rule 12); each sheds its own buffers."
   },
   {
@@ -814,6 +862,10 @@
   {
     "key": "same name: solarpolis/render/landmarks.ts#bytes + solarpolis/space/solarSystem.ts#bytes",
     "reason": "Independent view/model lifecycle owners: these methods account for, prepare, update or release their own resources through the existing Stage and geometry seams; no common resource ownership can be extracted."
+  },
+  {
+    "key": "same name: solarpolis/render/landmarks.ts#bytes + solarpolis/talk/conversations.ts#bytes",
+    "reason": "Everything holding memory reports it through a bytes() method the memory watchdog reads (CLAUDE.md rule 12); each counts its own buffers."
   },
   {
     "key": "same name: solarpolis/render/landmarks.ts#dispose + solarpolis/render/people.ts#dispose",
@@ -896,8 +948,16 @@
     "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
   },
   {
+    "key": "same name: solarpolis/render/necklace.ts#shed + solarpolis/render/talk.ts#shed",
+    "reason": "Everything that can give memory back does so through a shed() method the memory watchdog calls (CLAUDE.md rule 12); each sheds its own buffers."
+  },
+  {
     "key": "same name: solarpolis/render/outside.ts#bytes + solarpolis/render/solar.ts#bytes",
     "reason": "Independent view/model lifecycle owners: these methods account for, prepare, update or release their own resources through the existing Stage and geometry seams; no common resource ownership can be extracted."
+  },
+  {
+    "key": "same name: solarpolis/render/outside.ts#bytes + solarpolis/talk/conversations.ts#bytes",
+    "reason": "Everything holding memory reports it through a bytes() method the memory watchdog reads (CLAUDE.md rule 12); each counts its own buffers."
   },
   {
     "key": "same name: solarpolis/render/outside.ts#frame + solarpolis/render/view.ts#frame",
@@ -952,12 +1012,20 @@
     "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
   },
   {
+    "key": "same name: solarpolis/render/people.ts#shed + solarpolis/render/talk.ts#shed",
+    "reason": "Everything that can give memory back does so through a shed() method the memory watchdog calls (CLAUDE.md rule 12); each sheds its own buffers."
+  },
+  {
     "key": "same name: solarpolis/render/people.ts#shed + solarpolis/render/terrain.ts#shed",
     "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
   },
   {
     "key": "same name: solarpolis/render/people.ts#shed + solarpolis/render/tiled.ts#shed",
     "reason": "The views' own interface (follow, bytes, info, shed, dispose), which InteriorView and the memory watchdog call on each of them; PeopleView (render/people.ts) is one more such view, with bodies of its own: it follows the simulation's people, not streamed tiles, so it does not use StreamCache."
+  },
+  {
+    "key": "same name: solarpolis/render/people.ts#shed + solarpolis/talk/conversations.ts#shed",
+    "reason": "Everything that can give memory back does so through a shed() method the memory watchdog calls (CLAUDE.md rule 12); each sheds its own buffers."
   },
   {
     "key": "same name: solarpolis/render/people.ts#start + solarpolis/render/solar.ts#start",
@@ -1016,6 +1084,10 @@
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
+    "key": "same name: solarpolis/render/plants.ts#shed + solarpolis/render/talk.ts#shed",
+    "reason": "Everything that can give memory back does so through a shed() method the memory watchdog calls (CLAUDE.md rule 12); each sheds its own buffers."
+  },
+  {
     "key": "same name: solarpolis/render/plants.ts#shed + solarpolis/render/terrain.ts#shed",
     "reason": "The streamed views (TerrainView, PlantView) share their machinery in render/streamed.ts (StreamCache); what is left with the same names is that seam's interface (make, free, id) and the views' own (follow, bytes, shed, dispose), with bodies of their own."
   },
@@ -1024,12 +1096,28 @@
     "reason": "Everything that can give memory back does so through a shed() method the memory watchdog calls (CLAUDE.md rule 12); each sheds its own buffers."
   },
   {
+    "key": "same name: solarpolis/render/plants.ts#shed + solarpolis/talk/conversations.ts#shed",
+    "reason": "Everything that can give memory back does so through a shed() method the memory watchdog calls (CLAUDE.md rule 12); each sheds its own buffers."
+  },
+  {
+    "key": "same name: solarpolis/render/solar.ts#bytes + solarpolis/render/talk.ts#bytes",
+    "reason": "Everything holding memory reports it through a bytes() method the memory watchdog reads (CLAUDE.md rule 12); each counts its own buffers."
+  },
+  {
     "key": "same name: solarpolis/render/solar.ts#bytes + solarpolis/space/solarSystem.ts#bytes",
     "reason": "Independent view/model lifecycle owners: these methods account for, prepare, update or release their own resources through the existing Stage and geometry seams; no common resource ownership can be extracted."
   },
   {
+    "key": "same name: solarpolis/render/solar.ts#bytes + solarpolis/talk/conversations.ts#bytes",
+    "reason": "Everything holding memory reports it through a bytes() method the memory watchdog reads (CLAUDE.md rule 12); each counts its own buffers."
+  },
+  {
     "key": "same name: solarpolis/render/specks.ts#bytes + solarpolis/space/solarSystem.ts#bytes",
     "reason": "Independent view/model lifecycle owners: these methods account for, prepare, update or release their own resources through the existing Stage and geometry seams; no common resource ownership can be extracted."
+  },
+  {
+    "key": "same name: solarpolis/render/specks.ts#bytes + solarpolis/talk/conversations.ts#bytes",
+    "reason": "Everything holding memory reports it through a bytes() method the memory watchdog reads (CLAUDE.md rule 12); each counts its own buffers."
   },
   {
     "key": "same name: solarpolis/render/streamed.ts#bytes + solarpolis/render/terrain.ts#bytes",
@@ -1038,6 +1126,18 @@
   {
     "key": "same name: solarpolis/render/streamed.ts#bytes + solarpolis/render/tiled.ts#bytes",
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
+  },
+  {
+    "key": "same name: solarpolis/render/talk.ts#shed + solarpolis/render/terrain.ts#shed",
+    "reason": "Everything that can give memory back does so through a shed() method the memory watchdog calls (CLAUDE.md rule 12); each sheds its own buffers."
+  },
+  {
+    "key": "same name: solarpolis/render/talk.ts#shed + solarpolis/render/tiled.ts#shed",
+    "reason": "Everything that can give memory back does so through a shed() method the memory watchdog calls (CLAUDE.md rule 12); each sheds its own buffers."
+  },
+  {
+    "key": "same name: solarpolis/render/talk.ts#shed + solarpolis/talk/conversations.ts#shed",
+    "reason": "Everything that can give memory back does so through a shed() method the memory watchdog calls (CLAUDE.md rule 12); each sheds its own buffers."
   },
   {
     "key": "same name: solarpolis/render/terrain.ts#bytes + solarpolis/render/tiled.ts#bytes",
@@ -1088,12 +1188,20 @@
     "reason": "Everything that can give memory back does so through a shed() method the memory watchdog calls (CLAUDE.md rule 12); each sheds its own buffers."
   },
   {
+    "key": "same name: solarpolis/render/terrain.ts#shed + solarpolis/talk/conversations.ts#shed",
+    "reason": "Everything that can give memory back does so through a shed() method the memory watchdog calls (CLAUDE.md rule 12); each sheds its own buffers."
+  },
+  {
     "key": "same name: solarpolis/render/tiled.ts#follow + solarpolis/render/traffic.ts#follow",
     "reason": "The streamed views (TerrainView, PlantView, HullDetailView, TiledView) share their machinery in render/streamed.ts (StreamCache) and gen/detailTree.ts (coverOf); what is left with the same names is that seam's interface (make, free, id, pinned, job) and the views' own (follow, bytes, info, shed, dispose), with bodies of their own."
   },
   {
     "key": "same name: solarpolis/render/tiled.ts#info + solarpolis/render/traffic.ts#info",
     "reason": "info() is a view's lines for the one debug menu (CLAUDE.md rule 14); each reports its own state."
+  },
+  {
+    "key": "same name: solarpolis/render/tiled.ts#shed + solarpolis/talk/conversations.ts#shed",
+    "reason": "Everything that can give memory back does so through a shed() method the memory watchdog calls (CLAUDE.md rule 12); each sheds its own buffers."
   },
   {
     "key": "same name: solarpolis/sim/neighbourhood.ts#placeOf + solarpolis/sim/population.ts#placeOf",
@@ -1110,5 +1218,9 @@
   {
     "key": "same name: solarpolis/space/flyer.ts#turn + solarpolis/world/walker.ts#turn",
     "reason": "Each camera turns by pointer movement in its own frame (walker: heading on the curved floor; flyer outside: yaw around the ecliptic pole)."
+  },
+  {
+    "key": "same name: solarpolis/space/solarSystem.ts#bytes + solarpolis/talk/conversations.ts#bytes",
+    "reason": "Everything holding memory reports it through a bytes() method the memory watchdog reads (CLAUDE.md rule 12); each counts its own buffers."
   }
 ]
