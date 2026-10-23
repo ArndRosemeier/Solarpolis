@@ -2,6 +2,19 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.120 — The code checks work on Windows too
+
+- The duplication checker now uses the same file names on Windows and Linux, so Windows path separators no longer make existing findings appear to be new copies.
+
+## v0.119 — A name for the sample habitat's Mind
+
+- The sample habitat's steward Mind is A Little More Room Than Strictly Necessary. Solarpolis remains the wider setting; this habitat is the blueprint for more cultures to come.
+
+## v0.118 — The ceiling skies show their screen panels
+
+- Skies above the living quarters now have visible rectangular panel joints and slight differences in brightness between panels, so the ceiling reads as a display rather than an opening through the land.
+- The panel grid stays on the ceiling as you walk, including where the screen shows a live view of the habitat above.
+
 ## v0.117 — The air drags, and the feet feel your weight
 
 - The air turns with the habitat, so anything moving through it is slowed: a ball thrown hard curves down sooner, a long fall tops out at a skydiver's speed, and the air is thinner (less drag) toward the axis.
