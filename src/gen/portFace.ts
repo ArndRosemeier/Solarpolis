@@ -66,7 +66,7 @@ export interface PortFace {
 }
 
 /** The hash's third argument for the port face, past the skin's own (`SALT` in gen/skin.ts); each band its own four. */
-export const PORT_SALT = { block: 32, lit: 33, phase: 34, shade: 35 } as const;
+export const PORT_SALT = { block: 32, lit: 33, phase: 34, shade: 35, blockLit: 36 } as const;
 const bandSalt = (salt: number, band: number): number => salt + band * 8;
 
 /** A storey, in handrails: tall rooms (as gen/homes.ts). */
@@ -90,7 +90,7 @@ export const PORT_TINT: Record<PortBandKind | 'bearing', Vec3> = {
  * lit by day and by night. Shares, not sizes: every size comes from the habitat.
  */
 const BANDS: { kind: PortBandKind; from: { hub: number; outer: number }; to: { hub: number; outer: number }; storeys: number; pitch: number; sill: number; head: number; mullion: number; blockStoreys: number; blockWindows: number; blocks: number; light: number; litDay: number; litNight: number }[] = [
-  { kind: 'docks', from: { hub: 1.25, outer: 0 }, to: { hub: 4, outer: 0 }, storeys: 2.5, pitch: 0.6, sill: 0.12, head: 0.88, mullion: 0.06, blockStoreys: 1, blockWindows: 5, blocks: 0.85, light: 0.5, litDay: 0.85, litNight: 0.8 },
+  { kind: 'docks', from: { hub: 1.25, outer: 0 }, to: { hub: 4, outer: 0 }, storeys: 2.5, pitch: 0.6, sill: 0.4, head: 0.85, mullion: 0.06, blockStoreys: 1, blockWindows: 5, blocks: 0.7, light: 0.5, litDay: 0.75, litNight: 0.7 },
   { kind: 'town', from: { hub: 6, outer: 0 }, to: { hub: 6, outer: 0.15 }, storeys: 1, pitch: 0.8, sill: 0.3, head: 0.78, mullion: 0.18, blockStoreys: 3, blockWindows: 8, blocks: 0.55, light: 0.25, litDay: 0.25, litNight: 0.7 },
   { kind: 'galleries', from: { hub: 0, outer: 0.88 }, to: { hub: 0, outer: 0.96 }, storeys: 1.5, pitch: 0.7, sill: 0.18, head: 0.86, mullion: 0.05, blockStoreys: 1, blockWindows: 24, blocks: 0.7, light: 0.12, litDay: 0.35, litNight: 0.85 },
 ];
@@ -173,10 +173,25 @@ export function windowLit(f: PortFace, w: PortWindow, hours: number, share: numb
 /** A window's glass: the share of its storey and of its pitch that is glazed. */
 const glazed = (b: PortBand): number => (b.head - b.sill) * (1 - b.mullion);
 
+/** A window's mean shade (`PortWindow.shade` runs evenly over 0.5–1). */
+export const MEAN_SHADE = 0.75;
+
+/**
+ * A block's light seen from too far to tell its windows apart, but near enough to tell the blocks (outside units):
+ * its glass at the mean shade, lit by its own share around the band's (as many above as below it, so the blocks keep
+ * the band's mean), and none for a block left out. The face reads as buildings, some brighter, some dark, not paint.
+ */
+export function blockGlow(f: PortFace, band: number, kb: number, jb: number, share: number): number {
+  const b = f.bands[band];
+  if (hashToFloat(hash3i(f.seed, kb, jb, bandSalt(PORT_SALT.block, band))) >= b.blocks) return 0;
+  const spread = 2 * Math.min(share, 1 - share), x = hashToFloat(hash3i(f.seed, kb, jb, bandSalt(PORT_SALT.blockLit, band)));
+  return glazed(b) * (share + (x - 0.5) * spread) * MEAN_SHADE * b.glow;
+}
+
 /**
  * The face's mean luminance over a band (outside units), its windows' light spread over it: what the face shows from
  * too far for one window to be told apart, and what the shader fades to before the windows would alias.
  */
 export function bandMean(b: PortBand, night: number): number {
-  return glazed(b) * b.blocks * litShare(b, night) * b.glow * 0.75;
+  return glazed(b) * b.blocks * litShare(b, night) * b.glow * MEAN_SHADE;
 }

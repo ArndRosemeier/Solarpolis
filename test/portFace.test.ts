@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { Rng } from '@futuremagic/core';
 import { MATRIX } from '../src/blueprint';
 import { makeSkin } from '../src/gen/skin';
-import { WINDOW_CLOCK_WRAP, bandMean, litShare, portFaceOf, windowAt, windowHours, windowLit, windowsRound } from '../src/gen/portFace';
+import { WINDOW_CLOCK_WRAP, bandMean, blockGlow, litShare, portFaceOf, windowAt, windowHours, windowLit, windowsRound } from '../src/gen/portFace';
 import { habitatOf } from './worlds';
 
 for (const { name } of MATRIX) {
@@ -39,6 +39,14 @@ for (const { name } of MATRIX) {
         assert.ok(sum > 0, `${b.kind} shows some light`);
         if (blocks >= 40) assert.ok(Math.abs(sum / n - mean) < 0.25 * mean, `${b.kind} at night ${night}: ${sum / n} vs ${mean}`);
       }
+    }
+    // Seen as blocks, the band keeps its mean light, and no block is lit past its glass.
+    for (const [i, b] of f.bands.entries()) {
+      const share = litShare(b, 1);
+      let sum = 0, most = 0;
+      for (let kb = 0; kb < 60; kb++) for (let jb = 0; jb < 60; jb++) { const g = blockGlow(f, i, kb, jb, share); sum += g; most = Math.max(most, g); }
+      assert.ok(Math.abs(sum / 3600 - bandMean(b, 1)) < 0.1 * bandMean(b, 1), `${b.kind} blocks keep the mean`);
+      assert.ok(most <= b.glow);
     }
     const town = f.bands.find((b) => b.kind === 'town')!;
     assert.ok(litShare(town, 1) > 2 * litShare(town, 0));

@@ -16,7 +16,7 @@ import {
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { GLINT_GAIN, GLINT_POWER, LOOK, SALT, type Columns, type Skin } from '../gen/skin';
-import { PORT_SALT, PORT_TINT, TOGGLE_HOURS, bandMean, litShare, type PortFace } from '../gen/portFace';
+import { MEAN_SHADE, PORT_SALT, PORT_TINT, TOGGLE_HOURS, bandMean, litShare, type PortFace } from '../gen/portFace';
 import { DISPLAY_CAP, outside } from './skyShaders';
 import { MASK_WORDS, ROOT_SPAN, type CoverMask } from '../gen/detailTree';
 import { band, keepMean, lineAt, shows } from './shaderMath';
@@ -450,13 +450,21 @@ function portFaceGlow(): Node<'vec3'> {
   const slot = floor(clock.x.div(period).add(toFloat(hash3z(seed, ju, ku, salt(PORT_SALT.phase)))));
   const lit = toFloat(hash3z(seed, ku.add(uint(slot).mul(uint(4096))), ju, salt(PORT_SALT.lit))).lessThan(b.w);
   const window = glass.mul(select(built.and(lit), shade, float(0))).mul(b.z);
-  const windows = select(inAny, mix(t.w, window, shows(u).mul(shows(v))), float(0));
+  // Too far for its windows, a block shows as its own share lit (`blockGlow`); too far for blocks, the band's mean.
+  const share = b.w, x = toFloat(hash3z(seed, uint(kb), uint(floor(j.div(b.y))), salt(PORT_SALT.blockLit)));
+  const blockLit = share.add(x.sub(0.5).mul(min(share, share.oneMinus()).mul(2)));
+  const block = select(built, w.y.sub(w.x).mul(w.z.oneMinus()).mul(blockLit).mul(MEAN_SHADE).mul(b.z), float(0));
+  const blocks = shows(u.div(b.x)).mul(shows(v.div(b.y)));
+  const windows = select(inAny, mix(t.w, mix(block, window, shows(u).mul(shows(v))), blocks), float(0));
   // The bearing ring: a lamp every few handrails, every other one dimmer, so the face's slow turn shows against the dock.
   const inRing = r.greaterThanEqual(face.y).and(r.lessThan(face.z));
   const q = a.mul(face.w), lamp = band(fract(q), 0.15, 0.3, 0.7, 0.85).mul(select(fract(floor(q).mul(0.5)).greaterThan(0.25), float(0.35), float(1)));
   const ring = select(inRing, mix(float(0.55 * 0.675), lamp, shows(q)).mul(clock.y), float(0));
   const glow = t.xyz.mul(windows).add(v3(PORT_TINT.bearing).mul(ring));
-  const eyes = max(outside.exposure, min(outside.starExposure, float(WINDOW_PEAK).div(max(clock.z, 1e-9))));
+  // Opened for the dark as the stars are, but never past showing the brightest window at its peak: lights keep their
+  // colour (a burnt-out window is only white) and their order of brightness, as the lamps do.
+  const peak = float(WINDOW_PEAK).div(max(clock.z, 1e-9));
+  const eyes = min(max(outside.exposure, min(outside.starExposure, peak)), peak);
   return select(onFace, min(glow.mul(eyes), DISPLAY_CAP), vec3(0, 0, 0));
 }
 
