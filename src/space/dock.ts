@@ -56,6 +56,14 @@ export const SEALED = 2.85;
 export const RELEASE = 4;
 
 /**
+ * The umbilical (power, air and data to the berthed ship): a hose that reels out of the arm just behind the collar,
+ * on its underside (`angle` round from the arm's side, rad), and runs to a port on the ship's nose `port` arm widths
+ * out from the collar's face. It starts out `from` s after contact (once the seal holds) and takes `takes` s to reach
+ * the ship; before the ship leaves it reels in, done as the lights turn amber. Its radius, a share of the arm's width.
+ */
+export const UMBILICAL = { from: SEALED + 0.35, takes: 2.4, angle: -Math.PI / 2, port: 0.75, radius: 0.04 } as const;
+
+/**
  * The ring of signals round the collar's face: how many, how bright each one's lamp is (cd: dim enough that a point of
  * it keeps its colour from afar), how fast the amber runs round it (s a turn), and each one's lit panel on the face (as
  * shares of the ring's radius in and out, of its share of the way round, and its luminance, relative to white paper in
@@ -73,6 +81,8 @@ export interface DockNow {
   signal: Signal;
   /** Whether the floodlights are on. */
   flood: boolean;
+  /** How far the umbilical is out, 0 (reeled in) to 1 (on the ship's port). */
+  umbilical: number;
 }
 
 /** A berth's collar in the spindle's frame: its face's middle, the arm's outward direction, its width (m). */
@@ -177,10 +187,10 @@ const landing = (x: number): number => {
  */
 export function dockAt(h: Habitat, visit: Visit | null, closed: number, t: number): DockNow {
   const open = (): number[] => new Array<number>(CLAMPS).fill(DOCK.open);
-  if (!visit) return { swing: open(), signal: 'idle', flood: false };
+  if (!visit) return { swing: open(), signal: 'idle', flood: false, umbilical: 0 };
   const a = approachOf(h, visit.ship), out = a.final + a.turn;
-  if (t < visit.docked) return { swing: open(), signal: t >= visit.docked - out ? 'approach' : 'idle', flood: t >= visit.docked - out };
-  if (t > visit.undocked) return { swing: open(), signal: t <= visit.undocked + out ? 'approach' : 'idle', flood: t <= visit.undocked + out };
+  if (t < visit.docked) return { swing: open(), signal: t >= visit.docked - out ? 'approach' : 'idle', flood: t >= visit.docked - out, umbilical: 0 };
+  if (t > visit.undocked) return { swing: open(), signal: t <= visit.undocked + out ? 'approach' : 'idle', flood: t <= visit.undocked + out, umbilical: 0 };
   const since = t - visit.docked, before = visit.undocked - t;
   const swing = CLAMP_CLUNKS.map((clunk, k) => {
     const shut = landing((since - (clunk - CLAMP_SWING)) / CLAMP_SWING);
@@ -188,7 +198,8 @@ export function dockAt(h: Habitat, visit: Visit | null, closed: number, t: numbe
     const from = RELEASE - 0.6 - (CLAMPS - 1 - k) * CLAMP_SWING, opened = smooth((from - before) / (1.5 * CLAMP_SWING));
     return DOCK.open + (closed - DOCK.open) * shut * (1 - opened);
   });
-  return { swing, signal: since >= SEALED && before > RELEASE ? 'latched' : 'contact', flood: true };
+  const U = UMBILICAL, umbilical = smooth((since - U.from) / U.takes) * (1 - smooth((RELEASE + U.takes - before) / U.takes));
+  return { swing, signal: since >= SEALED && before > RELEASE ? 'latched' : 'contact', flood: true, umbilical };
 }
 
 const STEADY: Blink = { period: 0, on: 0, phase: 0 };
@@ -236,6 +247,24 @@ export function dockLightsAt(b: Berth, now: DockNow, eye: Vec3): HullLight[] {
     }
   }
   return out;
+}
+
+/**
+ * `n` points along the umbilical's run, from where it leaves the arm to the ship's port, relative to the collar (spindle
+ * axes): the whole run, or the share `upTo` of it that is out.
+ */
+export function umbilicalPath(b: Berth, shape: ShipShape | null, n: number, upTo = 1): Vec3[] {
+  const w = b.width, R = b.radial, U = UMBILICAL, around: Vec3 = [-R[1], R[0], 0];
+  const S = v3add(v3scale(around, Math.cos(U.angle)), v3scale([0, 0, 1], Math.sin(U.angle)));
+  const d = U.port * w, rho = (shape ? reachAt(shape, shape.params.length - d) : DOCK.ring * w * 0.6) + U.radius * w * 1.2;
+  const onRun = (along: number, out: number): Vec3 => v3add(v3scale(R, along), v3scale(S, out));
+  // Out of the arm under the ring, out and round, then onto the port square to the hull.
+  const p0 = onRun(-(DOCK.deep + 0.15) * w, (DOCK.ring - 0.2) * w), p1 = onRun(-(DOCK.deep + 0.15) * w, (DOCK.ring + 0.55) * w);
+  const p3 = onRun(d, rho), p2 = onRun(d, rho + 0.7 * w);
+  return Array.from({ length: n }, (_, k) => {
+    const u = (upTo * k) / (n - 1), v = 1 - u;
+    return v3add(v3add(v3scale(p0, v * v * v), v3scale(p1, 3 * v * v * u)), v3add(v3scale(p2, 3 * v * u * u), v3scale(p3, u * u * u)));
+  });
 }
 
 /** Whether a berth is worth drawing clamps at from this far (m): they are at least a tenth of a pixel. */

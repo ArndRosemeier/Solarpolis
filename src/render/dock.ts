@@ -7,9 +7,9 @@
  */
 import { Mesh, type BufferGeometry } from 'three/webgpu';
 import type { Stage } from '@futuremagic/stage';
-import { v3add, v3scale, type Vec3 } from '@futuremagic/core';
+import { v3add, v3cross, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
 import type { Habitat } from '../blueprint';
-import { CLAMPS, DOCK, SIGNALS, apply, berthDockOf, clampPose, closedSwing, dockAt, dockLightsAt, dockShows, mul, shineAt, signalBlink, signalColour, transpose, type Berth, type DockNow, type Mat3, type ShipNow, type ShipShape, type Visit } from '../space';
+import { CLAMPS, DOCK, SIGNALS, apply, berthDockOf, clampPose, closedSwing, dockAt, dockLightsAt, dockShows, mul, shineAt, signalBlink, signalColour, transpose, umbilicalPath, UMBILICAL, type Berth, type DockNow, type Mat3, type ShipNow, type ShipShape, type Visit } from '../space';
 import { ShapeBuilder, axesOf, freeMesh, geometryBytes, meshGeometry, posedMesh, setPose, type RGB } from './geometry';
 import { HARDWARE, LAMP } from './materials';
 import { LampPoints } from './lamps';
@@ -18,6 +18,10 @@ import { LampPoints } from './lamps';
 const PAINT: RGB = [0.46, 0.34, 0.08];
 const PAD: RGB = [0.05, 0.05, 0.055];
 const KNUCKLE: RGB = [0.3, 0.3, 0.31];
+/** The umbilical's hose and its connector head; points along it and sides round it. */
+const HOSE: RGB = [0.07, 0.07, 0.08];
+const HOSE_POINTS = 28;
+const HOSE_SIDES = 8;
 
 /** One clamp in its own frame (m): the hinge at the origin, its arm along +x, its jaw turned toward +z, its hinge pin along y. */
 function clampGeometry(w: number): BufferGeometry {
@@ -49,12 +53,24 @@ function signalGeometry(b: Berth): BufferGeometry {
   return meshGeometry(idx, { position: [pos, 3], color: [new Float32Array(n * 12), 3] });
 }
 
+/** The umbilical as far as it is out (`points` along it, relative to the collar): a ribbed hose and the connector at its head. */
+function hoseShape(points: readonly Vec3[], w: number): ShapeBuilder {
+  const b = new ShapeBuilder(HOSE_SIDES, true), r = UMBILICAL.radius * w;
+  b.curvedTube(points, points.map((_, k) => r * (k % 2 ? 1.12 : 1)), HOSE_SIDES, HOSE);
+  const n = points.length, end = points[n - 1], t = v3norm(v3sub(end, points[n - 2]));
+  const side = v3norm(v3cross(Math.abs(t[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0], t)), up = v3cross(t, side);
+  b.block(v3sub(end, v3scale(t, r * 1.2)), side, up, t, [r * 1.7, r * 1.7, r * 1.2], PAINT);
+  return b;
+}
+
 export class DockView {
   private readonly berths: Berth[];
   private readonly geometry: BufferGeometry;
   private readonly clamps: Mesh[] = [];
   /** Each berth's signal panels. */
   private readonly signals: Mesh[];
+  /** Each berth's umbilical, and how far out it was last drawn (for which visit). */
+  private readonly hoses: { mesh: Mesh; out: number; visit: string }[];
   private readonly lamps: LampPoints;
   /** Each visit's clamps' closed swing (its ship's nose), while it is at the port. */
   private readonly closed = new Map<string, number>();
@@ -73,11 +89,18 @@ export class DockView {
       m.frustumCulled = false;
       return m;
     });
+    // Each hose's arrays keep one size however far it is out: rewritten in place as it reels.
+    this.hoses = this.berths.map((b, i) => {
+      const m = posedMesh(hoseShape(umbilicalPath(b, null, HOSE_POINTS), b.width).build(), HARDWARE.material, `${name} berth ${i} umbilical`);
+      m.frustumCulled = false;
+      m.visible = false;
+      return { mesh: m, out: 0, visit: '' };
+    });
     this.lamps = new LampPoints(arms * (SIGNALS.lights + CLAMPS), `${name} dock lights`);
   }
 
   async enter(stage: Stage): Promise<void> {
-    await Promise.all([...this.clamps.map((m) => stage.add(m)), ...this.signals.map((m) => stage.add(m)), this.lamps.enter(stage)]);
+    await Promise.all([...this.clamps.map((m) => stage.add(m)), ...this.signals.map((m) => stage.add(m)), ...this.hoses.map((x) => stage.add(x.mesh)), this.lamps.enter(stage)]);
   }
 
   /**
@@ -97,6 +120,8 @@ export class DockView {
       }
       const now = dockAt(this.h, visit, closed, t), shows = dockShows(b, eye, pixelsPerRadian);
       this.lightSignals(this.signals[i], now, t, shows);
+      this.reel(i, b, visit, visit ? shapeOf(visit) : null, now.umbilical, shows);
+      if (this.hoses[i].mesh.visible) setPose(this.hoses[i].mesh, spindleAxes, v3add(origin, apply(spindleAxes, b.collar)));
       if (shows) setPose(this.signals[i], spindleAxes, v3add(origin, apply(spindleAxes, b.collar)));
       for (let k = 0; k < CLAMPS; k++) {
         const m = this.clamps[i * CLAMPS + k];
@@ -109,6 +134,21 @@ export class DockView {
     }
     for (const id of this.closed.keys()) if (!here.has(id)) this.closed.delete(id);
     this.lamps.send();
+  }
+
+  /** A berth's umbilical as far out as it is, its arrays rewritten only when that changes. */
+  private reel(i: number, b: Berth, visit: Visit | null, shape: ShipShape | null, out: number, shows: boolean): void {
+    const hose = this.hoses[i], id = visit?.id ?? '';
+    hose.mesh.visible = shows && out > 0.01;
+    if (!hose.mesh.visible || (Math.abs(out - hose.out) < 1e-4 && id === hose.visit)) return;
+    hose.out = out;
+    hose.visit = id;
+    const a = hoseShape(umbilicalPath(b, shape, HOSE_POINTS, out), b.width).arrays(), g = hose.mesh.geometry;
+    for (const [name, data] of [['position', a.positions], ['normal', a.normals], ['color', a.colors!]] as const) {
+      const attr = g.getAttribute(name);
+      (attr.array as Float32Array).set(data);
+      attr.needsUpdate = true;
+    }
   }
 
   /** Colour a berth's signal panels for its state at clock time t (written only when they change). */
@@ -129,13 +169,13 @@ export class DockView {
 
   /** The bytes the clamps' one geometry and the signal panels hold. */
   bytes(): number {
-    return [this.geometry, ...this.signals.map((m) => m.geometry)].reduce((n, g) => n + geometryBytes(g), 0);
+    return [this.geometry, ...this.signals.map((m) => m.geometry), ...this.hoses.map((x) => x.mesh.geometry)].reduce((n, g) => n + geometryBytes(g), 0);
   }
 
   leave(stage: Stage): void {
     // They share one geometry: the last one gives it up.
     this.clamps.forEach((m, k) => { stage.remove(m); freeMesh(m, k === this.clamps.length - 1 ? 'all' : 'none'); });
-    for (const m of this.signals) { stage.remove(m); freeMesh(m); }
+    for (const m of [...this.signals, ...this.hoses.map((x) => x.mesh)]) { stage.remove(m); freeMesh(m); }
     this.lamps.leave(stage);
   }
 }

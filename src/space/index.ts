@@ -15,5 +15,5 @@ export { torchShip, sailShip, shipShape, deriveShip, partSpan, SHIP_DESIGN, TORC
 export { approachOf, berthOf, shipAt, trafficAt, guestShip, guestVisit, arrivalTime, beforeBerth, slotLength, visitIn, visitsAt, DOCK_SPEED, FINAL_LENGTHS, TORCH_SHOWN, TURN, type Approach, type Phase, type ShipNow, type TrafficParams, type Visit } from './traffic';
 export { hullLightsOf, shipLightsOf, lampHidden, shineAt, lampFlux, LIGHTS, LIGHT_COLOUR, SUN_LUX, type Blink, type HullLight, type LightFrame } from './lights';
 export { arrivalScore, captionAt, MIND_LINES, SHIP_BEDS, type ArrivalScore, type Caption, type ScoreCue, type ShipBed } from './arrivalScore';
-export { CLAMPS, CLAMP_CLUNKS, CLAMP_SWING, DOCK, FLOODS, RELEASE, SEALED, SIGNALS, berthDockOf, clampPose, closedSwing, dockAt, dockLightsAt, dockShows, reachAt, signalBlink, signalColour, signalSpoke, type Berth, type DockNow, type Signal } from './dock';
+export { CLAMPS, CLAMP_CLUNKS, CLAMP_SWING, DOCK, FLOODS, RELEASE, SEALED, SIGNALS, berthDockOf, clampPose, closedSwing, dockAt, dockLightsAt, dockShows, reachAt, signalBlink, signalColour, signalSpoke, umbilicalPath, UMBILICAL, type Berth, type DockNow, type Signal } from './dock';
 export { INSPECTORS, INSPECTOR_SIZE, TUG_HOLD, TUG_TRANSIT, craftAt, craftShape, inspectorsAt, tugCradle, tugLength, tugsAt, type CraftKind, type CraftNow } from './portCraft';
