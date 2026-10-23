@@ -118,7 +118,12 @@ const SWOOP: [number, number] = [30, 3.5];
 /** Swifts' parties: how many, the step of their race (s), the gap between birds in one (s), how high over the face (m). */
 const PARTIES = 5;
 const RACE = 3.2;
-/** How long they take to gather at the Stair from where they feed (s). */
+/**
+ * When they race: from the evening light falling through 60 %, or the last hour before dark where the evening is long
+ * (the floor far from the port end), so the parties scream round the Stair in the sunset's light, not in the dark; and
+ * how long they take to gather there from where they feed (s).
+ */
+const RACE_BEFORE = 3600;
 const GATHER = 900;
 const TRAIL = 0.35;
 const PARTY_HIGH: [number, number] = [8, 22];
@@ -359,12 +364,12 @@ function lightTime(h: Habitat, s: number, day: number, x: number, rising: boolea
   return at;
 }
 
-/** The day's moments a flock lives by (clock s): its light rising through 10 % and 12 %, falling through 30 %, 10 %, 6 % and 4 %. */
+/** The day's moments a flock lives by (clock s): its light rising through 10 % and 12 %, falling through 60 %, 10 %, 6 % and 4 %. */
 interface Moments {
   day: number;
   rise10: number;
   rise12: number;
-  fall30: number;
+  fall60: number;
   fall10: number;
   fall06: number;
   fall04: number;
@@ -377,7 +382,7 @@ function momentsOf(h: Habitat, flock: Flock, day: number): Moments {
   const known = moments.get(flock);
   if (known && known.day === day) return known;
   const when = (x: number, rising: boolean): number => lightTime(h, flock.s, day, x, rising);
-  const m = { day, rise10: when(0.1, true), rise12: when(0.12, true), fall30: when(0.3, false), fall10: when(0.1, false), fall06: when(0.06, false), fall04: when(0.04, false) };
+  const m = { day, rise10: when(0.1, true), rise12: when(0.12, true), fall60: when(0.6, false), fall10: when(0.1, false), fall06: when(0.06, false), fall04: when(0.04, false) };
   moments.set(flock, m);
   return m;
 }
@@ -523,7 +528,7 @@ function swiftAt(h: Habitat, flock: Flock, m: number, time: number): Where {
   const a = (time * NIGHT_SPEED) / NIGHT_CIRCLE + TURN * unit(own, 10, 0, 0);
   const night = airPoint(h, over.theta, over.s, circle * Math.cos(a), circle * Math.sin(a), nightUp);
   const climb = Math.max(60, (nightUp - flock.top - SWIFT_HIGH[0]) / CLIMB);
-  const { fall30: dusk, fall04: dark, rise10: dawn } = momentsOf(h, flock, day);
+  const { fall60, fall04: dark, rise10: dawn } = momentsOf(h, flock, day), dusk = Math.max(fall60, dark - RACE_BEFORE);
   const wParty = smootherstep(dusk, dusk + GATHER, time), wNight = Math.max(1 - smootherstep(dawn, dawn + climb, time), smootherstep(dark, dark + climb, time));
   const at = v3add(v3add(high, v3scale(v3sub(racing, high), wParty)), v3scale(v3sub(night, v3add(high, v3scale(v3sub(racing, high), wParty))), wNight));
   return { air: true, at, open: 1, doing: 'fly' };

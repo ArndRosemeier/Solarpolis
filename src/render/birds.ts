@@ -118,6 +118,9 @@ interface FlockOne {
   ground: [number, number];
 }
 
+/** A bird (or a murmuration's middle) found for the debug menu: where it is, its up and forward, and where it is now. */
+export interface BirdSeen { at: Vec3; up: Vec3; fwd: Vec3; track: () => { at: Vec3; up: Vec3; fwd: Vec3 } }
+
 export class BirdView {
   readonly group = new Group();
   private drawn: Map<BirdKind, Drawn> | null = null;
@@ -389,44 +392,47 @@ export class BirdView {
    * before birds at roost; with `still`, birds sitting, singing or feeding on the ground before birds in the air (one
    * stays in sight a while). The flocks' birds count too, as placed this frame.
    */
-  nearest(eye: Vec3, kind?: BirdKind, still = false): { at: Vec3; up: Vec3; fwd: Vec3; length: number } | null {
+  nearest(eye: Vec3, kind?: BirdKind, still = false): BirdSeen | null {
     const rank = (doing: BirdDoing): number => (doing === 'roost' ? 2 : still && AIRBORNE.has(doing) ? 1 : 0);
-    let best: BirdNow | null = null, bestRank = 3, bestAway = Infinity;
-    const offer = (b: BirdNow): void => {
-      const r = rank(b.doing), d = away(b.at, eye);
-      if (r < bestRank || (r === bestRank && d < bestAway)) { best = b; bestRank = r; bestAway = d; }
+    let best: { doing: BirdDoing; track: () => BirdNow } | null = null, bestRank = 3, bestAway = Infinity;
+    const offer = (doing: BirdDoing, at: Vec3, track: () => BirdNow): void => {
+      const r = rank(doing), d = away(at, eye);
+      if (r < bestRank || (r === bestRank && d < bestAway)) { best = { doing, track }; bestRank = r; bestAway = d; }
     };
-    for (const one of this.ones.values()) if (one.now && (!kind || one.now.kind === kind)) offer(one.now);
+    for (const one of this.ones.values()) {
+      const b = one.now;
+      if (b && (!kind || b.kind === kind)) offer(b.doing, b.at, () => one.now ?? b);
+    }
     for (const fo of this.flocks.values()) {
       if (kind && fo.flock.kind !== kind) continue;
-      // The flock's nearest bird as placed this frame, posed.
-      let m0 = -1, d0 = Infinity;
+      // Each bird where it is now (not where it was last drawn: a far one is placed only now and then).
       for (let m = 0; m < fo.flock.count; m++) {
-        const d = Math.hypot(fo.at[m * 3] - eye[0], fo.at[m * 3 + 1] - eye[1], fo.at[m * 3 + 2] - eye[2]);
-        if (d < d0) { d0 = d; m0 = m; }
+        const w = memberWhere(this.terrain, fo.flock, m, this.lastTime);
+        offer(w.doing, w.at, () => memberAt(this.terrain, fo.flock, m, this.lastTime));
       }
-      if (m0 >= 0) offer(memberAt(this.terrain, fo.flock, m0, this.lastTime));
     }
-    const b = best as BirdNow | null;
-    return b && { at: b.at, up: b.up, fwd: b.fwd, length: b.length };
+    const found = best as { track: () => BirdNow } | null;
+    if (!found) return null;
+    const track = (): { at: Vec3; up: Vec3; fwd: Vec3 } => { const b = found.track(); return { at: b.at, up: b.up, fwd: b.fwd }; };
+    return { ...track(), track };
   }
 
   /**
-   * The nearest murmuration in the air (debug menu: fly to it): the middle of the starlings flying (at least a third of
-   * the flock), its up and a way along the axis; or none.
+   * The nearest murmuration in the air (debug menu: fly to it): its middle, its up and a way along the axis, and how to
+   * keep up with it; or none.
    */
-  murmuration(eye: Vec3): { at: Vec3; up: Vec3; fwd: Vec3 } | null {
-    let best: Vec3 | null = null;
+  murmuration(eye: Vec3): BirdSeen | null {
+    let best: Flock | null = null, bestAway = Infinity;
     for (const fo of this.flocks.values()) {
-      if (fo.flock.kind !== 'starling') continue;
-      let n = 0;
-      const mid: Vec3 = [0, 0, 0];
-      for (let m = 0; m < fo.flock.count; m++) if (fo.air[m]) { n++; mid[0] += fo.at[m * 3]; mid[1] += fo.at[m * 3 + 1]; mid[2] += fo.at[m * 3 + 2]; }
-      if (n < fo.flock.count / 3) continue;
-      const at: Vec3 = [mid[0] / n, mid[1] / n, mid[2] / n];
-      if (!best || away(at, eye) < away(best, eye)) best = at;
+      const f = fo.flock;
+      if (f.kind !== 'starling' || flockNoise(this.habitat, f, this.lastTime).wings <= 0) continue;
+      const d = away(murmurAt(this.habitat, f, this.lastTime)!.at, eye);
+      if (d < bestAway) { best = f; bestAway = d; }
     }
-    return best && { at: best, up: upOf(best), fwd: [0, 0, 1] };
+    const f = best as Flock | null;
+    if (!f) return null;
+    const track = (): { at: Vec3; up: Vec3; fwd: Vec3 } => { const at = murmurAt(this.habitat, f, this.lastTime)!.at; return { at, up: upOf(at), fwd: [0, 0, 1] }; };
+    return { ...track(), track };
   }
 
   /**

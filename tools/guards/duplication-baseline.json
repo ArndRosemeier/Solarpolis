@@ -208,10 +208,6 @@
     "reason": "Local wrapper maps an arrival porch block through the curved ramp frame; courts use their own portal frame."
   },
   {
-    "key": "same name: solarpolis/gen/courts.ts#frame + solarpolis/main.ts#frame",
-    "reason": "Different things that share a short name: a SiteKind member (gen/siteTiles.ts) and an unrelated local helper."
-  },
-  {
     "key": "same name: solarpolis/gen/crossings.ts#at + solarpolis/gen/grownHall.ts#at",
     "reason": "The members of a SiteKind (gen/siteTiles.ts): each kind of thing at sites on the floor (courts, crossings, grown halls) says its frame, build, at and top under the seam's own names; siteParts does everything else once."
   },
@@ -1434,10 +1430,6 @@
   {
     "key": "same name: solarpolis/gen/skin.ts#u + solarpolis/sim/birds.ts#u",
     "reason": "Short local helper names (a vertex, a ring, a triangle, a fade, a draw from the seed) in unrelated builders and shaders; each does different work."
-  },
-  {
-    "key": "same name: solarpolis/gen/under.ts#nearest + solarpolis/render/birds.ts#nearest",
-    "reason": "The views' shared lifecycle (start, follow each frame, rescan, room, nearest, bytes for the memory watchdog, info for the debug menu, dispose): one name per step on purpose; the birds' view (render/birds.ts) does its own work in each."
   },
   {
     "key": "same name: solarpolis/render/activityProps.ts#dispose + solarpolis/render/birds.ts#dispose",
