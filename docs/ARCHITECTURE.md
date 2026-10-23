@@ -18,7 +18,8 @@ Each row is a question you will have while coding, and the one place that answer
 | How much of the skin pipes light in, and how much makes power? | `habitat.collectorShare` (`derive.ts`): light collectors sized to the piped light (`pipedLight`, `collectorEfficiency`, `SUNLIGHT_VISIBLE`); the rest of the skin is solar cells (`solarPower`). |
 | Is this habitat buildable, and what is odd about it? | `validate(habitat)` → findings `invalid` / `unusual`; `isValid` (`validate.ts`). |
 | How do a habitat's people like to shape their land? | Its culture: `CULTURES` / `cultureOf(name)` (`cultures.ts`), named by `HabitatParams.culture` (an unknown name is an invalid habitat): the district styles (`DISTRICT_STYLES`, `StyleSpec` with the care each is at home in), and what each style makes of its land in any climate (`STYLE_LAND`: crown cover, patch grain, wetness, how strongly it holds to them; read by `gen/ecology.ts`). |
-| Which habitats do tests run on? | `MATRIX` and `REFERENCE`, `withParams` (`reference.ts`). One terrain and ecology per habitat for the whole run: `terrainOf(name, params?)` / `ecologyOf` (`test/worlds.ts`); a test of being the same every time builds its own. |
+| Which habitats do tests run on? | `MATRIX` and `REFERENCE`, `withParams` (`reference.ts`). One terrain and ecology per habitat for the whole run: `terrainOf(name, params?)` / `ecologyOf` / `flatOf`, and the ring of habitats round one `spaceOf(name)` (`test/worlds.ts`); a test of being the same every time builds its own, on the small habitats where it can. |
+| How does the fast suite run TypeScript? | `node --import ./tools/ci/ts-hooks.mjs` (`npm test`): Node's synchronous module hooks resolve imports as the bundler does and strip types with esbuild, without tsx's per-closure `__name` calls (over a second of the budget). Scripts and `test:slow` keep `tsx`. |
 
 ## Generating the habitat (`src/gen`, pure)
 
