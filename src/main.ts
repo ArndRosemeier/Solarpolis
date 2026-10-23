@@ -7,7 +7,7 @@ import { crewsAt, crewsOf } from './sim/crews';
 import { HARBOUR } from './gen/harbours';
 import { windAt } from './world/wind';
 import { footingOf } from './world/fall';
-import { postsNear } from './world/posts';
+import { postsNear, type Post } from './world/posts';
 import { Link } from './app/link/link';
 import { Ways } from './app/link/ways';
 import type { LinkChoice } from './link/service';
@@ -1234,12 +1234,13 @@ dropHere('drop from 8 m here (the bag)', 8);
 dropHere('drop from 50 m here', 50);
 dropHere('drop from 300 m here', 300);
 debug.add({
-  label: 'Fall: walk to the brink of the nearest drop (step off it yourself)', group: 'Physics', run: () => {
+  label: 'Fall: walk to the brink of the deepest drop within 1.5 km (step off it yourself)', group: 'Physics', run: () => {
     const f = inView((t) => t), h = lab.habitat;
     if (!f || !h) return;
     const { theta, s } = f.v.walker.at, footing = footingOf(f.x);
-    const post = postsNear(h, footing, theta, s, 600)[0];
-    if (!post) { console.info('No drop that would hurt within 600 m.'); return; }
+    // The deepest, not the nearest: the nearest is often a bank a few metres high, which one slides down rather than falls.
+    const post = postsNear(h, footing, theta, s, 1500).reduce<Post | null>((a, q) => (!a || q.drop > a.drop ? q : a), null);
+    if (!post) { console.info('No drop that would hurt within 1.5 km.'); return; }
     // A few steps back from the post, facing the way the ground falls away (the walker's heading turns the other way round the axis).
     const back = 2.5, r = Math.max(1, h.profile.at(post.s).r);
     f.v.goTo(post.theta - (back * Math.sin(post.toward)) / r, post.s - back * Math.cos(post.toward), -post.toward);

@@ -2176,14 +2176,6 @@
     "reason": "The views' and systems' common API (bytes for the memory watchdog, dispose, info for the debug menu, step to move on): each its own object's, alike only in name and shape."
   },
   {
-    "key": "idiom: [.eye .profile] in solarpolis/render/animals.ts + solarpolis/render/birds.ts + solarpolis/render/homes.ts",
-    "reason": "Each view reads the eye's place on the profile (fromWorld(h.profile, eye)) for its own culling; the finder only surfaced it when new files changed its word weights (PR threshold touched none of them)."
-  },
-  {
-    "key": "idiom: [.eye .profile] in solarpolis/render/animals.ts + solarpolis/render/birds.ts + solarpolis/render/homes.ts",
-    "reason": "Each view asks where the eye is on the habitat's profile (fromWorld(habitat.profile, ...eye)) for its own range test; the call is the seam already."
-  },
-  {
     "key": "same name: solarpolis/app/voyageComputer.ts#bytes + solarpolis/render/notice.ts#bytes",
     "reason": "The views' own interface (load, poseAt, bytes for the memory watchdog, dispose), which InteriorView calls on each of them; NoticeView (render/notice.ts) is one more such view, holding the notice to newcomers at the port door."
   },
