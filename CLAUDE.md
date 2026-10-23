@@ -1,6 +1,6 @@
 # Working on Solarpolis
 
-Solarpolis is a detailed 3D simulation set about 1000 years from now, starting inside a mature O'Neill cylinder in Earth orbit (TypeScript, three.js on WebGPU, Vite). The vision and Arnd's decisions are in [docs/design/README.md](docs/design/README.md). Read them before starting anything.
+Solarpolis is a detailed 3D simulation set about 1000 years from now, starting inside a mature O'Neill cylinder in Earth orbit (TypeScript, three.js on WebGPU, Vite). The vision and Arnd's decisions are in [docs/design/README.md](docs/design/README.md), the whole setting in his [world bible](docs/world-bible.md). Read them before starting anything.
 
 1. **Nothing about the habitat is hardcoded.** The cylinder is a parametric blueprint (`src/blueprint`) that will later fill the whole solar system. Every size, rate and count comes from `HabitatParams` through `derive()`. Figures like 8 × 30 km are example values. Every geometry test runs over the whole `MATRIX` (small, reference, large, long), so a hidden constant fails there.
 2. **Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (the seam index) before writing any helper.** Use the one way it names. A new seam gets its row in the same PR. Rows marked *planned* name the seam to build; do not invent a different one.
