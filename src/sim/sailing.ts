@@ -36,50 +36,13 @@ import { kept } from '../gen/kept';
 import { MERE, planOf, siteOf, type Mere } from '../gen/plan';
 import { dayNumber } from '../world/sunline';
 import { breezeAt, windAt } from '../world/wind';
+import { BOAT_KINDS, BOAT_KIND_LIST, type BoatKind, type BoatSpec } from '../gen/boat';
 
 const TURN = 2 * Math.PI;
 const DEG = Math.PI / 180;
 
-export type BoatKind = 'skiff' | 'foiler' | 'cruiser';
-
-/** A design of boat: its size, how close to the wind it sails, how fast, how it turns. */
-export interface BoatSpec {
-  /** Hull length, beam over all hulls, mast or wing height (m). */
-  length: number;
-  beam: number;
-  mast: number;
-  /** The closest it points to the wind (rad from dead upwind); it beats a little freer, at `beat`. */
-  noGo: number;
-  beat: number;
-  /** The deepest it sails downwind (rad from dead upwind; π: dead downwind). */
-  deep: number;
-  /** Its speed at its best reach as a share of the true wind, in a moderate breeze. */
-  reach: number;
-  /** The most it goes in standard gravity (m/s): the power its hulls and crew can hold (grows with √g). */
-  top: number;
-  /** A foiler: its take-off speed in standard gravity (m/s) and how much faster it goes once flying. */
-  foil: { takeoff: number; lift: number } | null;
-  /** How long a tack or gybe takes (s), sailing at `TURNING` of its speed. */
-  turn: number;
-  /** How far it heels at the most (rad), in a gust on a reach. */
-  heel: number;
-  /** How many sail it, at least and at the most. */
-  crew: [number, number];
-  /** How much room it needs: the narrowest water it is sailed on, in its own lengths. */
-  room: number;
-}
-
-/**
- * The designs. The skiff: a planing two-hander with a soft wing, quick to tack. The foiler: a trimaran on hydrofoils
- * with a rigid wing, slow until it lifts out, then twice as fast as the wind. The cruiser: a catamaran with a glass
- * deckhouse, a rotating wing mast, a dozen friends aboard and no hurry.
- */
-export const BOAT_KINDS: Readonly<Record<BoatKind, BoatSpec>> = {
-  skiff: { length: 4.6, beam: 1.9, mast: 7.5, noGo: 40 * DEG, beat: 44 * DEG, deep: 155 * DEG, reach: 0.95, top: 8, foil: null, turn: 5, heel: 22 * DEG, crew: [1, 2], room: 8 },
-  foiler: { length: 9.5, beam: 6.8, mast: 13, noGo: 35 * DEG, beat: 40 * DEG, deep: 145 * DEG, reach: 1.15, top: 16, foil: { takeoff: 3.8, lift: 1.8 }, turn: 9, heel: 8 * DEG, crew: [2, 3], room: 16 },
-  cruiser: { length: 12.5, beam: 6.4, mast: 15, noGo: 46 * DEG, beat: 50 * DEG, deep: 180 * DEG, reach: 0.75, top: 7.5, foil: null, turn: 14, heel: 3 * DEG, crew: [2, 12], room: 10 },
-};
-const KINDS = Object.keys(BOAT_KINDS) as BoatKind[];
+export { BOAT_KINDS, BOAT_KIND_LIST, type BoatKind, type BoatSpec };
+const KINDS = BOAT_KIND_LIST;
 
 /** The wind angle (rad from upwind) a boat goes fastest at for its wind. */
 const BEST = 106 * DEG;
@@ -281,17 +244,49 @@ export function legsOf(o: Outing): Leg[] {
   return out;
 }
 
-/** The outings sailed, kept by boat and day, up to `KEEP` bytes of legs (an outing is a few kB) and `KEEP_DAYS` entries. */
-const KEEP = 2 << 20, KEEP_DAYS = 4096;
+/**
+ * The outings sailed, kept by boat and day, up to `KEEP` bytes of legs (an outing is a few kB; a day of the large
+ * habitat's fleet about 1 MB, and two days are kept: today's and tomorrow's) and `KEEP_DAYS` entries.
+ */
+const KEEP = 4 << 20, KEEP_DAYS = 4096;
 const outings = new WeakMap<Habitat, { byKey: Map<number, Outing | null>; bytes: number }>();
+
+/** The kept outings of a habitat. */
+function keptOf(h: Habitat): { byKey: Map<number, Outing | null>; bytes: number } {
+  let kept = outings.get(h);
+  if (!kept) { kept = { byKey: new Map(), bytes: 0 }; outings.set(h, kept); }
+  return kept;
+}
 
 /** Boat `boat`'s outing on day `day` (whole days of the clock), or null if it stays moored. */
 export function outingOf(h: Habitat, boat: Boat, day: number): Outing | null {
-  let kept = outings.get(h);
-  if (!kept) { kept = { byKey: new Map(), bytes: 0 }; outings.set(h, kept); }
-  const { byKey } = kept, key = boat.id * 1e6 + day;
-  if (byKey.has(key)) return byKey.get(key)!;
+  const key = boat.id * 1e6 + day, known = keptOf(h).byKey;
+  if (known.has(key)) return known.get(key)!;
   const o = sailDay(h, boat, day);
+  keepOuting(h, key, o);
+  return o;
+}
+
+/**
+ * Every boat's outing on day `day`, by boat id, sailed afresh and not kept (a worker plans a day ahead with it, so the
+ * frame never waits for a day's sailing: `keepDay` takes its answer).
+ */
+export const planDay = (h: Habitat, day: number): (Outing | null)[] => sailingOf(h).boats.map((boat) => sailDay(h, boat, day));
+
+/** A day planned elsewhere (`planDay`), kept as if sailed here. */
+export function keepDay(h: Habitat, day: number, planned: readonly (Outing | null)[]): void {
+  const known = keptOf(h).byKey;
+  planned.forEach((o, id) => { if (!known.has(id * 1e6 + day)) keepOuting(h, id * 1e6 + day, o); });
+}
+
+/** Whether day `day`'s sailing of every boat is known already. */
+export const dayKnown = (h: Habitat, day: number): boolean => sailingOf(h).boats.every((b) => keptOf(h).byKey.has(b.id * 1e6 + day));
+
+/** Bytes the kept outings hold (memory watchdog). */
+export const sailingBytes = (h: Habitat): number => outings.get(h)?.bytes ?? 0;
+
+function keepOuting(h: Habitat, key: number, o: Outing | null): void {
+  const kept = keptOf(h), { byKey } = kept;
   byKey.set(key, o);
   kept.bytes += o ? o.legs.byteLength : 0;
   // The oldest given up first.
@@ -300,7 +295,6 @@ export function outingOf(h: Habitat, boat: Boat, day: number): Outing | null {
     byKey.delete(k);
     kept.bytes -= old ? old.legs.byteLength : 0;
   }
-  return o;
 }
 
 /** How good a day's breeze is for going out: none in a calm, most in a fresh breeze, fewer in a gale. */

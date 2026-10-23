@@ -234,6 +234,14 @@ export const views = {
     ...['great', 'lake-1', 'lake-2', 'lake-3'].flatMap((name) => [{ debug: 'Fly: the next lake' }, { wait: 12000 }, { shot: name }]),
     { debug: 'To the next lake\'s shore' }, { wait: 12000 }, { shot: 'shore' },
   ] },
+  // The boats (gen/boat.ts, render/boats.ts): four hours into the day, riding beside each design in turn (under sail if
+  // one is out), twice a few seconds apart; then beside the nearest boat under sail from further off, and the great lake.
+  boats: { query: 'view=inside', about: 'the boats, four hours into the day: riding beside the nearest skiff, foiling trimaran and glass-roofed catamaran in turn (each under sail if one is out; -2 four seconds on), then off the beam of the nearest boat under sail (-sailing), then the great lake from off its end (-lake); a heap snapshot at the end; logs the boats line', settle: 6000, steps: [
+    memoryDetails, { debug: 'Two hours later' }, { debug: 'Two hours later' }, { wait: 4000 },
+    ...['skiff', 'foiler', 'cruiser'].flatMap((name) => [{ debug: 'Ride beside a boat: skiff → foiler → cruiser → off' }, { wait: 12000 }, { shot: name }, { wait: 4000 }, { shot: `${name}-2` }]),
+    { debug: 'Ride beside a boat: skiff → foiler → cruiser → off' }, { debug: 'Fly: beside the nearest boat under sail' }, { wait: 10000 }, { shot: 'sailing' },
+    { debug: 'Fly: the next lake' }, { wait: 12000 }, { shot: 'lake' }, heap('boats'),
+  ] },
   // The districts' works (gen/works.ts): each press of the Go entry moves to the next kind, nearest the eye.
   works: { query: 'view=inside', about: 'the districts\' works, one kind after another, each from two of its radii off: pyramid, cone, sunken court, mesa, fold, dome, down, scarp, vale, bowl, stepwell, half-pipe, amphitheatre, ramp, drumlin, tor', settle: 6000, steps: [
     ...['pyramid', 'cone', 'sunken', 'mesa', 'fold', 'dome', 'down', 'scarp', 'vale', 'bowl', 'stepwell', 'halfpipe', 'amphitheatre', 'ramp', 'drumlin', 'tor'].flatMap((kind) => [{ debug: 'Fly: the next district work' }, { wait: 9000 }, { shot: kind }]),
