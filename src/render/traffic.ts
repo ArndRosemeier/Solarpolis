@@ -8,17 +8,20 @@
 import { Mesh } from 'three/webgpu';
 import type { Stage } from '@futuremagic/stage';
 import { v3add, v3dot, v3len, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
-import { apply, mul, shipShape, trafficAt, transpose, type Mat3, type PlacedHabitat, type ShipNow, type ShipShape, type Space, type Visit } from '../space';
+import { apply, mul, shipLightsOf, shipShape, trafficAt, transpose, type HullLight, type Mat3, type PlacedHabitat, type ShipNow, type ShipShape, type Space, type Visit } from '../space';
 import { freeMesh, pointsChanged, pointsGeometry, setPoint } from './geometry';
 import { STARS } from './materials';
 import { SHIP_ALBEDO, ShipMeshes, shipAxes, shipFlux } from './ship';
 import type { Hull } from './necklace';
+import { LampPoints } from './lamps';
 
 /** A ship this many pixels long (with its glowing plume) is drawn as meshes; shorter, as a point. */
 const MESH_PX = 3;
 
 interface Drawn {
   shape: ShipShape;
+  /** Its navigation lights (space/lights.ts). */
+  lights: HullLight[];
   meshes: ShipMeshes | null;
   adding: boolean;
 }
@@ -28,6 +31,8 @@ export class TrafficView {
   private readonly points: Mesh;
   private readonly pointPos: Float32Array;
   private readonly pointCol: Float32Array;
+  /** The ships' navigation lights. */
+  private readonly lamps: LampPoints;
   /** This frame's ships and where they are (scene axes, relative to the eye). */
   private now: { ship: ShipNow; shape: ShipShape; axes: Mat3; stern: Vec3 }[] = [];
 
@@ -39,10 +44,13 @@ export class TrafficView {
     this.points.name = `${placed.id} ships far`;
     this.points.userData.plainExposure = true;
     this.points.frustumCulled = false;
+    // Every ship at a berth or coming in, and the passenger's: three lights each.
+    this.lamps = new LampPoints((placed.habitat.exterior.spindle.berthArms + 1) * 3, `${placed.id} ships' lights`);
   }
 
   async start(): Promise<void> {
     await this.stage.add(this.points);
+    await this.lamps.enter(this.stage);
   }
 
   /**
@@ -53,13 +61,15 @@ export class TrafficView {
     const ships = trafficAt(this.space, this.placed, t, guest), seen = new Set<string>();
     this.pointCol.fill(0);
     this.now = [];
+    this.lamps.restart();
     ships.forEach((ship, k) => {
       const id = ship.visit.id;
       seen.add(id);
       let d = this.ships.get(id);
-      if (!d) { d = { shape: shipShape(ship.visit.ship), meshes: null, adding: false }; this.ships.set(id, d); }
+      if (!d) { const shape = shipShape(ship.visit.ship); d = { shape, lights: shipLightsOf(shape), meshes: null, adding: false }; this.ships.set(id, d); }
       const axes = mul(spindleAxes, shipAxes(ship.forward, ship.up)), stern = v3add(origin, apply(spindleAxes, ship.position));
       this.now.push({ ship, shape: d.shape, axes, stern });
+      for (const l of d.lights) this.lamps.shine(l, v3add(stern, apply(axes, l.at)), t);
       const L = d.shape.params.length, mid = v3add(stern, v3scale(apply(axes, [1, 0, 0]), L / 2)), dist = v3len(mid);
       const px = ((L + d.shape.plumeLength * ship.throttle) / dist) * pixelsPerRadian;
       if (px >= MESH_PX) {
@@ -72,6 +82,7 @@ export class TrafficView {
     });
     for (const [id, d] of this.ships) if (!seen.has(id)) { d.meshes?.removeFrom(this.stage); this.ships.delete(id); }
     pointsChanged(this.points);
+    this.lamps.send();
   }
 
   private addMeshes(id: string, d: Drawn): void {
@@ -114,5 +125,6 @@ export class TrafficView {
     this.ships.clear();
     this.stage.remove(this.points);
     freeMesh(this.points);
+    this.lamps.leave(this.stage);
   }
 }

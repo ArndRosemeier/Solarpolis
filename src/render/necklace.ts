@@ -12,7 +12,7 @@ import type { Stage } from '@futuremagic/stage';
 import { smoothstep, v3add, v3len, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
 import { exteriorDistance, type Habitat } from '../blueprint';
 import { columnsOf, makeSkin, skinFlux, type Columns, type Skin } from '../gen/skin';
-import { apply, mul, rotZ, sunlightFrom, transpose, type Mat3, type PlacedHabitat, type SkyView, type Space, type Visit } from '../space';
+import { apply, hullLightsOf, lampHidden, mul, rotZ, sunlightFrom, transpose, type HullLight, type Mat3, type PlacedHabitat, type SkyView, type Space, type Visit } from '../space';
 import { HARDWARE, RADIATOR, SKIN, STARS } from './materials';
 import { hideUnder, skinUniforms, type SkinUniforms } from './hullShaders';
 import { hullGeometry } from './hull';
@@ -25,6 +25,7 @@ import { skinEye, skinGrid } from '../gen/hullDetail';
 import { DRONES_WITHIN, DroneMesh } from './drones';
 import { TrafficView } from './traffic';
 import { BoreMeshes } from './bore';
+import { LampPoints } from './lamps';
 
 /**
  * The free camera holds station with a drum within HOLD_NEAR outer radii of it, and lets go beyond HOLD_FAR; and lets
@@ -52,7 +53,7 @@ interface Drawn {
   uniforms: SkinUniforms;
   /** Size across, for the switch to meshes (m). */
   span: number;
-  meshes: { skin: Mesh; radiators: Mesh; mast: Mesh; spindle: Mesh; drones: DroneMesh; pieces: { id: string; frame: PartFrame; origin: Vec3; mesh: Mesh }[]; bore: BoreMeshes | null } | null;
+  meshes: { skin: Mesh; radiators: Mesh; mast: Mesh; spindle: Mesh; drones: DroneMesh; pieces: { id: string; frame: PartFrame; origin: Vec3; mesh: Mesh }[]; bore: BoreMeshes | null; lamps: { lights: HullLight[]; points: LampPoints } } | null;
   building: boolean;
   /** The detailed parts (gen/hullParts.ts), and their tiles while the eye is near any of them. */
   parts: DetailPart[];
@@ -137,10 +138,12 @@ export class NecklaceView {
     });
     // The bore people cross by, only in the home habitat (the passenger's).
     const bore = d === this.drawn[0] ? new BoreMeshes(d.habitat, d.placed.id) : null;
-    const meshes = { skin: mesh(g.skin, SKIN, 'skin'), radiators: mesh(g.radiators, RADIATOR, 'radiators'), mast: mesh(g.mast, HARDWARE, 'mast'), spindle: mesh(g.spindle, HARDWARE, 'spindle'), drones, pieces, bore };
+    // Its beacons, strobes and running lights (space/lights.ts).
+    const lights = hullLightsOf(d.habitat), lamps = { lights, points: new LampPoints(lights.length, `${d.placed.id} lights`) };
+    const meshes = { skin: mesh(g.skin, SKIN, 'skin'), radiators: mesh(g.radiators, RADIATOR, 'radiators'), mast: mesh(g.mast, HARDWARE, 'mast'), spindle: mesh(g.spindle, HARDWARE, 'spindle'), drones, pieces, bore, lamps };
     this.poseMeshes(d, meshes);
     const traffic = new TrafficView(this.stage, this.space, d.placed, this.far);
-    await Promise.all([traffic.start(), ...[meshes.skin, meshes.radiators, meshes.mast, meshes.spindle, drones.mesh, drones.points, ...pieces.map((x) => x.mesh), ...(bore?.all ?? [])].map((m) => this.stage.add(m))]);
+    await Promise.all([traffic.start(), lamps.points.enter(this.stage), ...[meshes.skin, meshes.radiators, meshes.mast, meshes.spindle, drones.mesh, drones.points, ...pieces.map((x) => x.mesh), ...(bore?.all ?? [])].map((m) => this.stage.add(m))]);
     // The bore's arrays are on the GPU now; nothing reads them back (it is never culled), so the CPU's copies go.
     for (const m of bore?.all ?? []) dropUploaded(m, this.stage.renderer);
     d.building = false;
@@ -156,6 +159,7 @@ export class NecklaceView {
     if (!d.meshes) return;
     const m = d.meshes;
     for (const x of [m.skin, m.radiators, m.mast, m.spindle, m.drones.mesh, m.drones.points, ...m.pieces.map((p) => p.mesh), ...(m.bore?.all ?? [])]) { this.stage.remove(x); freeMesh(x); }
+    m.lamps.points.leave(this.stage);
     d.meshes = null;
   }
 
@@ -168,8 +172,17 @@ export class NecklaceView {
       const axes = p.frame === 'body' ? d.axes : d.spindleAxes;
       setPose(p.mesh, axes, v3add(d.origin, apply(axes, p.origin)));
     }
-    // The drones only near the skin: the eye's distance to the body, in its own frame.
+    // The eye in the body's frame.
     const eye = apply(transpose(d.axes), v3scale(d.origin, -1));
+    // The lights: the body's turn with it, the dock's stand still with the spindle (about the same axis, so the body's
+    // frame tells whether the body hides one).
+    m.lamps.points.restart();
+    for (const l of m.lamps.lights) {
+      const axes = l.frame === 'body' ? d.axes : d.spindleAxes, rel = v3add(d.origin, apply(axes, l.at));
+      if (!lampHidden(d.habitat.exterior, eye, apply(transpose(d.axes), v3sub(rel, d.origin)))) m.lamps.points.shine(l, rel, this.time);
+    }
+    m.lamps.points.send();
+    // The drones only near the skin: the eye's distance to the body.
     const near = exteriorDistance(d.habitat.exterior, eye) < DRONES_WITHIN * d.skin.droneSize;
     m.drones.mesh.visible = near;
     m.drones.points.visible = !near;
