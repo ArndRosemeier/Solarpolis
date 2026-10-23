@@ -41,6 +41,9 @@ for (const { name, params } of MATRIX) {
         const s = r.s0 + i * r.step;
         if (Math.abs(s - lake.s) < lake.halfWidth * 1.5) continue;
         const mid = riverPoint(r, s), rad = profile.at(s).r;
+        // Through a lake on the floor it runs in the lake's water (and its bed), at the lake's level.
+        const by = t.form.mereAt(mid.theta, s, mid.halfWidth * 3);
+        if (by) { deep++; banks++; n++; assert.ok(by.edge > 0 || Math.abs(mid.surface - by.mere.level) < 1e-6, 'through a lake at its level'); continue; }
         const ground = t.heightAt(mid.theta, s);
         if (ground < mid.surface - r.depth * 0.5) deep++;
         const side = t.heightAt(mid.theta + (mid.halfWidth * 1.05) / rad, s);
@@ -56,7 +59,11 @@ for (const { name, params } of MATRIX) {
   test(`river water (${name}): ribbons over the channel at the water's level, facing the air, flowing downstream`, () => {
     const t = terrainOf(name), h = t.habitat;
     if (!t.rivers.length) return;
-    const r = t.rivers[0], i = Math.floor(r.count * 0.6), s = r.s0 + i * r.step, mid = riverPoint(r, s);
+    // (A sample out of the lakes on the floor, and their shores.)
+    const r = t.rivers[0];
+    let i = Math.floor(r.count * 0.6);
+    while (i > 0 && t.form.fromWater(riverPoint(r, r.s0 + i * r.step).theta, r.s0 + i * r.step) < r.step * 80) i--;
+    const s = r.s0 + i * r.step, mid = riverPoint(r, s);
     const rad = h.profile.at(s).r, half = (mid.halfWidth * 30) / rad;
     // A fine tile around the river (cells far finer than it), whose own ground is the true ground.
     const tile = { theta0: mid.theta - half, theta1: mid.theta + half, s0: s - mid.halfWidth * 30, s1: s + mid.halfWidth * 30, cell: mid.halfWidth / 8, drawn: t.heightAt };

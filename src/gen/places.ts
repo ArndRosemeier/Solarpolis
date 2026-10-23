@@ -70,7 +70,7 @@ function makePlaces(t: Terrain): Places {
   const fit = (d: District, theta: number, s: number, halfAround: number, halfAlong: number): number => {
     const reach = Math.hypot(halfAround, halfAlong);
     if (s - halfAlong < plan.reserveEnd || s + halfAlong > h.profile.floorEnd) return -1;
-    if (fromLake(lake, s) < halfAlong + size * 0.5) return -1;
+    if (fromLake(lake, s) < halfAlong + size * 0.5 || plan.fromWater(theta, s) < reach + size * 0.5) return -1;
     for (const p of plots) if (Math.abs(gap(p.theta, theta)) < p.halfAround + halfAround + EDGE * 2 && Math.abs(p.s - s) < p.halfAlong + halfAlong + EDGE * 2) return -1;
     if (!plan.inside(d, theta, s, reach * 1.3)) return -1;
     const corners: [number, number][] = [];

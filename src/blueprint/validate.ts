@@ -73,6 +73,9 @@ export function validate(h: Habitat): Finding[] {
     out.push({ id: 'relief', severity: 'invalid', message: 'signature works need a whole count from 0 to 3' });
   if (forms && !((forms.fall ?? 0) >= 0 && (forms.fall ?? 0) <= 0.2))
     out.push({ id: 'relief', severity: 'invalid', message: 'the rooms\' steps need a fall from 0 to 0.2 of a Ring\'s height (under its saddles)' });
+  const lk = rl.lakes;
+  if (lk && !((!lk.great || (lk.great.length > 0 && lk.great.width > 0 && lk.great.length <= 1.5 && lk.great.width <= 0.8)) && Number.isInteger(lk.count) && lk.count >= 0 && lk.size > 0 && lk.size <= 0.4 && lk.depth > 0 && lk.depth <= 0.1))
+    out.push({ id: 'relief', severity: 'invalid', message: 'lakes need a great lake up to 1.5 radii long and 0.8 wide, a whole count ≥ 0 of smaller ones up to 0.4 radii across, and a depth up to a tenth of their width' });
   const c = p.clouds;
   if (c && !(c.base > 0 && c.thickness > 0 && c.base + c.thickness < h.radius - p.hubRadius && c.cover >= 0 && c.cover <= 1 && c.size > 0 && Number.isFinite(c.wind.along) && Number.isFinite(c.wind.around)))
     out.push({ id: 'clouds', severity: 'invalid', message: 'clouds need a base and thickness > 0 that stay clear of the axis, a cover from 0 to 1 and a size > 0' });

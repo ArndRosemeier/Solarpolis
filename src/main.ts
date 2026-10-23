@@ -14,7 +14,7 @@ import { nearestOnPath } from './gen/paths';
 import { busiestNear, deerAt, fleetOf, flierAt, floorGap, herdsNear, peopleAt, personKey, residentOf, venuesOf, type Person } from './sim';
 import { POSE } from './gen/standIn';
 import { nearestPlace, vineFaceFoot } from './gen/places';
-import { besideRiver, nearestSample, type River } from './gen/rivers';
+import { besideRiver, nearestSample, sampleS, type River } from './gen/rivers';
 import './app/style.css';
 import { el } from './app/dom';
 import { GravityMeter } from './app/gravityMeter';
@@ -461,7 +461,7 @@ toRiver('To the nearest river', 40, (r, i) => r.steep[i] < 0.05);
 toRiver('Below the nearest falls', 200, (r, i) => r.steep[i] > 0.8);
 // Where a river breaks through a Ring (gen/plan.ts `roomAt`): the only falls on the floor, one room down to the next.
 const ringFall = (r: River, i: number): boolean => {
-  const p = lab.habitat?.profile, s = r.s0 + i * r.step;
+  const p = lab.habitat?.profile, s = sampleS(r, i);
   return !!p && s > p.floorStart && s < p.floorEnd && r.steep[i] > 0.5;
 };
 toRiver('Below the nearest Ring fall', 80, ringFall);
@@ -470,7 +470,7 @@ debug.add({ label: 'Fly: across the nearest Ring fall', group: 'Go', run: () => 
   const v = view(), t = v?.ecology?.terrain, at = v?.walker.at;
   const near = t && at && nearestSample(t.rivers, at.theta, at.s, ringFall);
   if (!v || !t || !near) return;
-  const r = near.river, i = near.i, s = r.s0 + i * r.step, theta = r.theta[i], w = r.halfWidth[i];
+  const r = near.river, i = near.i, s = sampleS(r, i), theta = r.theta[i], w = r.halfWidth[i];
   const aim = toWorld(t.habitat.profile, { theta, s, h: r.surface[i] });
   const eye = toWorld(t.habitat.profile, { theta: theta + w * 2.5 / t.habitat.radius, s: s + (r.from === 'wild' ? 1 : -1) * (w * 2 + 12), h: r.surface[i] + 4 });
   const d = Math.hypot(...aim.map((q, k) => q - eye[k]));

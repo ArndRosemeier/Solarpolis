@@ -380,10 +380,14 @@ export function routeOf(h: Habitat, from: number, to: number): Route {
 /** A party's middle at its place: a seeded offset within its spread (θ, s), kept out of the lake unless they swim or stand on the pavilion. */
 function spotOf(h: Habitat, place: Venue, i: number, day: number): [number, number] {
   const seed = seedsOf(h).spot, a = TURN * unit(seed, i, day, 0), r = place.spread * Math.sqrt(unit(seed, i, day, 1));
-  const ring = Math.max(1, h.profile.at(place.s).r), lake = planOf(h).lake;
-  let s = place.s + r * Math.sin(a);
-  if (lake && place.activity !== 'swim' && place.kind !== 'landmark' && fromLake(lake, s) < 0) s = besideLake(lake, place.s, r * 0.1);
-  return [place.theta + (r * Math.cos(a)) / ring, s];
+  const plan = planOf(h), ring = Math.max(1, h.profile.at(place.s).r), lake = plan.lake;
+  let s = place.s + r * Math.sin(a), theta = place.theta + (r * Math.cos(a)) / ring;
+  if (place.activity !== 'swim' && place.kind !== 'landmark') {
+    if (lake && fromLake(lake, s) < 0) s = besideLake(lake, place.s, r * 0.1);
+    // Out of a lake on the floor: back to the place itself.
+    else if (plan.fromWater(theta, s) < 0) { theta = place.theta; s = place.s; }
+  }
+  return [theta, s];
 }
 
 /** Feet this far (m) out from the edge of the seat round a court's light well: sitting on it, facing out. */
@@ -429,9 +433,8 @@ function memberSpot(h: Habitat, place: Venue, form: Form, activity: Activity, le
       ds = r * Math.cos(a); dy = r * Math.sin(a);
     }
   }
-  // Nobody is put into the lake who did not come to swim.
-  const lake = planOf(h).lake;
-  if (lake && activity !== 'swim' && place.kind !== 'landmark' && fromLake(lake, cs + ds) < 0) ds = -ds;
+  // Nobody is put into the water who did not come to swim: the other way round the party's middle.
+  if (activity !== 'swim' && place.kind !== 'landmark' && planOf(h).fromWater(ct + dy / ring, cs + ds) < 0) { ds = -ds; dy = -dy; }
   return [ct + dy / ring, cs + ds, heading];
 }
 
@@ -513,13 +516,14 @@ function placeOf(h: Habitat, o: Outings, n: number, court: number, day: number, 
     // A game of catch: every other one goes out the other way, so they face each other over twice its length.
     const across = b.act === 'catch' && member % 2 === 1 ? Math.PI : 0;
     let toward = b.toward + across, off = b.away > 0;
-    // Nobody strolls into the lake who did not come to swim: the other way, or not at all.
-    const lake = off && activity !== 'swim' ? planOf(h).lake : null;
-    if (lake && fromLake(lake, ss + Math.cos(toward) * reach) < 0) {
+    // Nobody strolls into the water who did not come to swim: the other way, or not at all.
+    const plan = off && activity !== 'swim' ? planOf(h) : null, ringAt = Math.max(1, h.profile.at(ss).r);
+    const wet = (way: number): boolean => !!plan && plan.fromWater(st + (Math.sin(way) * reach) / ringAt, ss + Math.cos(way) * reach) < 0;
+    if (wet(toward)) {
       toward += Math.PI;
       // A game of catch needs both ways dry (each goes out its own way).
-      if (across || b.act === 'catch' || fromLake(lake, ss + Math.cos(toward) * reach) < 0) off = false;
-    } else if (lake && b.act === 'catch' && fromLake(lake, ss - Math.cos(toward) * reach) < 0) off = false;
+      if (across || b.act === 'catch' || wet(toward)) off = false;
+    } else if (b.act === 'catch' && wet(toward + Math.PI)) off = false;
     const away = off ? b.away : 0, moving = off && b.moving;
     const act: Act = !off && (b.act === 'stroll' || b.act === 'catch') ? 'quiet' : b.act;
     // Looking about where they stand faces away from the ring; at the end of a stroll, on the way they went; at catch,
