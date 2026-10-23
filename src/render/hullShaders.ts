@@ -409,7 +409,7 @@ const port: Record<string, Node<'vec4'>> = {};
 for (const k of portKeys) port[k] = uniform(new Vector4()).onObjectUpdate(({ object }) => ((object?.userData.port as PortUniforms | undefined) ?? noPort)[k]);
 
 /** The brightest window shows at this level once the eyes have opened for the dark (with the Sun out of view). */
-export const WINDOW_PEAK = 3;
+export const WINDOW_PEAK = 8;
 
 /**
  * The port face's windows and its bearing ring, per pixel, exactly as `windowAt` and `windowLit` in gen/portFace.ts:
