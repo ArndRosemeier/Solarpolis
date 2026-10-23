@@ -187,7 +187,7 @@ class ViewSlot<V extends PageView> {
 
 /** The player's neural link and its overlay (app/link): systems serve it their offers and say their lines through it. */
 const link = new Link();
-const insideSlot = new ViewSlot('Hold the right mouse button to look around · W A S D to move · Shift to run · Space to jump · wheel to see yourself · Tab for your link (call a capsule) · F to fly (E up, Q down)', 'Building the interior…', 'terrain tiles', async (h) => {
+const insideSlot = new ViewSlot('Hold the right mouse button to look around · W A S D to move · Shift to run · Space to jump · wheel to see yourself · N for your link (call a capsule) · F to fly (E up, Q down)', 'Building the interior…', 'terrain tiles', async (h) => {
   const v = await InteriorView.create(h, whereabouts);
   // The gravity the player feels, and why (with the spin, against it, higher up): Arnd, 2026-10-22.
   const meter = new GravityMeter(() => (lab.habitat ? { habitat: lab.habitat, ...v.paces } : null));
