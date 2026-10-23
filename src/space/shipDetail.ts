@@ -143,22 +143,47 @@ function band(x: number, w: number, r: number, role: ShipRole, colour: RGB, offs
   add({ shape: 'shell', role, from: a, r0: inner, to: a, r1: r, offset, colour });
 }
 
+/** One deck of the crew section and its row of windows (`deckWindows`): the last, under the nose, is the lounge. */
+export interface DeckWindows {
+  /** Its floor along the ship (m; the floor is aft: under thrust, down is toward the stern). */
+  floor: number;
+  /** The windows' sill above the floor, their height and width (m). */
+  sill: number;
+  high: number;
+  wide: number;
+  /** How many round the deck, the first one's angle (from +y toward +z, rad); the rest every 2π/count. */
+  count: number;
+  turn: number;
+  /** The band of tall panoramic windows, the lounge one watches the arrival from. */
+  panorama: boolean;
+}
+
+/** The decks of a crew section round its axis (radius `r`, from `from` to `to`), each with its row of windows. */
+export function deckWindows(q: { from: number; to: number; radius: number }): DeckWindows[] {
+  const r = q.radius, len = q.to - q.from;
+  if (r < DECKED) return [];
+  // Decks from just forward of the livery to short of the thrusters at the front.
+  const n = Math.floor((len - DECK * 1.1) / DECK), out: DeckWindows[] = [];
+  for (let j = 0; j < n; j++) {
+    const panorama = j === n - 1 && n > 1;
+    const high = panorama ? PANORAMA_HIGH : WINDOW_HIGH, sill = panorama ? (DECK - PANORAMA_HIGH) / 2 : SILL;
+    const wide = panorama ? WINDOW_WIDE * 0.9 : WINDOW_WIDE, pitch = panorama ? wide * 1.08 : wide * 2.4;
+    const count = Math.floor((2 * Math.PI * r) / pitch);
+    out.push({ floor: q.from + DECK * 0.5 + j * DECK, sill, high, wide, count, turn: (j % 2) * Math.PI / count, panorama });
+  }
+  return out;
+}
+
 /**
  * The crew section's decks: a row of windows each (most lit), the deck under the nose a band of tall panoramic
  * windows, and the livery's bands at its aft end.
  */
 function decks(q: Round, proud: number, livery: RGB, rng: Rng, add: (q: ShipPart) => void): void {
-  const r = q.radius, len = q.to - q.from;
+  const r = q.radius;
   band(q.from + DECK * 0.18, DECK * 0.18, r + 2 * proud, 'hull', livery, q.offset, add);
   band(q.from + DECK * 0.38, DECK * 0.05, r + 2 * proud, 'hull', livery, q.offset, add);
-  if (r < DECKED) return;
-  // Decks from just forward of the livery to short of the thrusters at the front.
-  const n = Math.floor((len - DECK * 1.1) / DECK);
-  for (let j = 0; j < n; j++) {
-    const floor = q.from + DECK * 0.5 + j * DECK, panorama = j === n - 1 && n > 1;
-    const high = panorama ? PANORAMA_HIGH : WINDOW_HIGH, sill = panorama ? (DECK - PANORAMA_HIGH) / 2 : SILL;
-    const wide = panorama ? WINDOW_WIDE * 0.9 : WINDOW_WIDE, pitch = panorama ? wide * 1.08 : wide * 2.4;
-    const count = Math.floor((2 * Math.PI * r) / pitch), half = wide / r / 2, turn = (j % 2) * Math.PI / count;
+  for (const d of deckWindows(q)) {
+    const { floor, sill, high, wide, count, turn, panorama } = d, half = wide / r / 2;
     const room = rng.pick(WINDOW_TINTS);
     for (let k = 0; k < count; k++) {
       const at = turn + (k * 2 * Math.PI) / count;

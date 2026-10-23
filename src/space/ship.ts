@@ -8,7 +8,7 @@
  * −x; +z is the side the radiator wings stand out from. Every size comes from `ShipParams`; `deriveShip` makes them
  * from a seed and the berth the ship must fit. Pure.
  */
-import { Rng } from '@futuremagic/core';
+import { Rng, v3cross, v3norm, type Vec3 } from '@futuremagic/core';
 import { fitOut } from './shipDetail';
 
 /** A torch, a laser sail, or thrusters alone (a port's tugs and drones: space/portCraft.ts). */
@@ -70,6 +70,21 @@ export function partSpan(q: ShipPart): { x0: number; x1: number; radius: number;
   }
   const r = q.shape === 'cylinder' ? q.radius : Math.max(q.r0, q.r1), [oy, oz] = q.offset ?? [0, 0];
   return { x0: Math.min(q.from, q.to), x1: Math.max(q.from, q.to), radius: r + Math.hypot(oy, oz), side: r + oz };
+}
+
+/**
+ * The ship frame's axes in the frame a ship is posed in: x its nose's direction, y its up made square to x, z = x × y
+ * (the one way from a pose's forward and up to the ship frame: space and render alike).
+ */
+export function shipAxesOf(pose: { forward: Vec3; up: Vec3 }): { x: Vec3; y: Vec3; z: Vec3 } {
+  const x = pose.forward, z = v3norm(v3cross(x, pose.up));
+  return { x, y: v3cross(z, x), z };
+}
+
+/** A ship's crew section (the round part people live in), or null. */
+export function crewSection(shape: ShipShape): Extract<ShipPart, { shape: 'cylinder' }> | null {
+  for (const q of shape.parts) if (q.shape === 'cylinder' && q.role === 'crew') return q;
+  return null;
 }
 
 /** Each role's albedo (linear), unless a part gives its own. A window's is its glass, unlit. */

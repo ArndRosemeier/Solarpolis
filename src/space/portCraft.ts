@@ -16,7 +16,7 @@
 import { Rng, deriveSeed, v3add, v3cross, v3dot, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
 import type { Habitat } from '../blueprint';
 import { approachOf, shipAt, smooth, type ShipNow, type Visit } from './traffic';
-import { shipShape, type ShipPart, type ShipShape } from './ship';
+import { crewSection, shipAxesOf, shipShape, type ShipPart, type ShipShape } from './ship';
 
 /** A tug's length, as a share of the berth arm's, and never less than TUG_LEAST (m): a crewed craft people fit in. */
 export const TUG_SIZE = 0.1;
@@ -73,7 +73,7 @@ export function tugCradle(h: Habitat, arm: number): Pose {
 
 /** The ship's middle, its frame (nose, side, up), from where it is now. */
 function shipFrame(ship: ShipNow): { mid: Vec3; side: Vec3; up: Vec3 } {
-  const L = ship.visit.ship.length, x = ship.forward, z = v3norm(v3cross(x, ship.up)), y = v3cross(z, x);
+  const L = ship.visit.ship.length, { x, y, z } = shipAxesOf(ship);
   return { mid: v3add(ship.position, v3scale(x, L / 2)), side: y, up: z };
 }
 
@@ -117,8 +117,8 @@ export function tugsAt(h: Habitat, habitatId: string, worldSeed: number, ships: 
 
 /** The crew section of a ship's shape: where inspectors work (x from, x to, radius; m). */
 function crewOf(s: ShipShape): { from: number; to: number; radius: number } {
-  const crew = s.parts.find((q) => q.shape === 'cylinder' && q.role === 'crew');
-  return crew && crew.shape === 'cylinder' ? { from: crew.from, to: crew.to, radius: crew.radius } : { from: s.params.length * 0.8, to: s.params.length * 0.95, radius: s.params.beam / 2 };
+  const crew = crewSection(s);
+  return crew ? { from: crew.from, to: crew.to, radius: crew.radius } : { from: s.params.length * 0.8, to: s.params.length * 0.95, radius: s.params.beam / 2 };
 }
 
 /** A visit's inspectors at clock time t: each out from the collar, round the crew section, back before it leaves. */

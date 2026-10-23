@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { v3add, v3dot, v3len, v3norm, v3scale, v3sub } from '@futuremagic/core';
 import { MATRIX, exteriorDistance, fromWorld } from '../src/blueprint';
-import { ARRIVAL, ARRIVAL_SHOTS, arrivalScore, captionAt, MIND_LINES, SPIN_UP, LIT_FROM, LIT_TO, LOOP, SHOTS, TORCH_SHIP, arrival, attractLoop, hubView, chooseStart, partSpan, shipAt, skyFrom, torchShip } from '../src/space';
+import { ARRIVAL, ARRIVAL_SHOTS, arrivalScore, captionAt, MIND_LINES, SPIN_UP, LIT_FROM, LIT_TO, LOOP, SHOTS, TORCH_SHIP, arrival, attractLoop, hubView, chooseStart, partSpan, shipAt, skyFrom, torchShip, loungeOf, shipShape } from '../src/space';
 import { spaceOf } from './worlds';
 
 const DEG = 180 / Math.PI;
@@ -91,17 +91,26 @@ for (const { name } of MATRIX) {
     const a = arrival(space, chooseStart(space, 0) + 40), g = a.guest, L = g.ship.length;
     assert.equal(a.at(ARRIVAL), null);
     let last = -Infinity, berthed = false;
-    for (let e = 0; e < ARRIVAL_SHOTS[0] + ARRIVAL_SHOTS[1]; e += 0.5) {
+    const lounge = loungeOf(shipShape(g.ship)), berthShot = ARRIVAL_SHOTS[0] + ARRIVAL_SHOTS[1];
+    for (let e = 0; e < berthShot + ARRIVAL_SHOTS[2]; e += 0.5) {
       const f = a.at(e)!, s = shipAt(h, g, f.clock)!;
-      assert.equal(f.shot, e < ARRIVAL_SHOTS[0] ? 3 : 4);
+      assert.equal(f.shot, e < ARRIVAL_SHOTS[0] || (e < berthShot && !lounge) ? 3 : e < berthShot ? 4 : 5);
       assert.ok(f.clock > last, 'the clock runs on (and jumps forward at the cut)');
       last = f.clock;
       // The eye in the spindle's frame: outside the habitat and off the ship's hull.
       const eye = space.frames.position(f.eye, p.orbitFrame, p.spindleFrame, f.clock);
       assert.ok(exteriorDistance(x, eye) > 0, `${name} ${e} s: eye inside the habitat`);
       const q = v3sub(eye, s.position), along = v3dot(q, s.forward), across = v3len(v3sub(q, v3scale(s.forward, along)));
-      assert.ok(along < 0 || along > L || across > g.ship.beam, `${name} ${e} s: eye inside the ship`);
       const look = v3norm(v3sub(f.target, f.eye)), nose = space.frames.direction(s.forward, p.spindleFrame, p.orbitFrame, f.clock);
+      if (f.shot === 4) {
+        // The cabin shot: in the lounge, standing on its floor, looking out of its window at the port face, up the nose.
+        assert.ok(lounge && f.cabin && across < lounge.radius && along > lounge.floor && along < lounge.ceiling, `${name} ${e} s: the eye out of the lounge`);
+        const face = space.frames.position([0, 0, x.spindle.from], p.spindleFrame, p.orbitFrame, f.clock);
+        assert.ok(v3dot(look, v3norm(v3sub(face, f.eye))) > 0.3, `${name} ${e} s: not looking toward the port face`);
+        assert.ok(v3dot(v3norm(f.up), nose) > 0.99);
+        continue;
+      }
+      assert.ok(along < 0 || along > L || across > g.ship.beam, `${name} ${e} s: eye inside the ship`);
       if (f.shot === 3) {
         // Shot 4: the ship coasts in nose first, and the camera looks the way it flies.
         assert.equal(s.phase, 'coast');
@@ -118,7 +127,7 @@ for (const { name } of MATRIX) {
     const m = a.moments, phase = (e: number) => shipAt(h, g, a.at(e)!.clock)!.phase;
     for (let e = 0.25; e < m.through; e += 0.5) assert.equal(m.burns.some(([x, y]) => e >= x && e < y), phase(e) === 'coast', `${name} ${e} s: burning`);
     for (const e of m.pulses) assert.ok(e >= 0 && e < m.through && ['turn', 'final'].includes(phase(e)), `${name}: a pulse at ${e} s, ${phase(e)}`);
-    assert.ok(m.pulses.some((e) => e >= ARRIVAL_SHOTS[0]), 'trims on the final creep in');
+    assert.ok(m.pulses.some((e) => e >= berthShot), 'trims on the final creep in');
     assert.ok(phase(m.berth - 0.05) === 'final' && phase(m.berth + 0.05) === 'berthed', 'the berth when it latches');
     assert.ok(m.through < m.bearing && m.bearing < ARRIVAL);
     const sc = arrivalScore(m, g.ship.seed);
@@ -137,11 +146,11 @@ for (const { name } of MATRIX) {
 for (const { name } of MATRIX) {
   test(`crossing (${name}): down the bore on the axis, through the bearing into the turning sleeve, toward the Hub`, () => {
     const space = spaceOf(name), p = space.home, h = p.habitat, b = h.exterior.spindle.bore;
-    const a = arrival(space, chooseStart(space, 0) + 40), from = ARRIVAL_SHOTS[0] + ARRIVAL_SHOTS[1];
+    const a = arrival(space, chooseStart(space, 0) + 40), from = ARRIVAL_SHOTS[0] + ARRIVAL_SHOTS[1] + ARRIVAL_SHOTS[2];
     let last: { z: number; clock: number } | null = null, crossed = false;
     for (let e = from; e < ARRIVAL; e += 0.25) {
       const f = a.at(e)!;
-      assert.equal(f.shot, 5);
+      assert.equal(f.shot, 6);
       const eye = space.frames.position(f.eye, p.orbitFrame, p.spindleFrame, f.clock), r = Math.hypot(eye[0], eye[1]);
       assert.ok(r < b.radius * 0.5 && eye[2] > b.from && eye[2] < b.to, `${name}: the eye left the bore at ${e} s`);
       // Looking down the bore toward the Hub.
@@ -154,7 +163,7 @@ for (const { name } of MATRIX) {
       last = { z: eye[2], clock: f.clock };
     }
     assert.ok(crossed, 'it passes the bearing');
-    assert.ok(SPIN_UP > ARRIVAL_SHOTS[2], 'in the shot the air has only begun to turn the passenger');
+    assert.ok(SPIN_UP > ARRIVAL_SHOTS[3], 'in the shot the air has only begun to turn the passenger');
   });
 }
 

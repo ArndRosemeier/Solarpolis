@@ -4,10 +4,9 @@
  * the exhaust plume (FLAME, its glow set per mesh by `userData.flame`). `ShipMeshes` is the one way a ship enters the scene: the title's and every ship of the traffic.
  */
 import { Mesh, Vector4, type BufferGeometry, type Material } from 'three/webgpu';
-import type { Stage } from '@futuremagic/stage';
 import { v3add, v3cross, v3len, v3norm, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
-import { ROLE_ALBEDO, type Mat3, type ShipShape } from '../space';
-import { ShapeBuilder, dropUploaded, freeMesh, setPose } from './geometry';
+import { ROLE_ALBEDO, shipAxesOf, type Mat3, type ShipShape } from '../space';
+import { PosedMeshes, ShapeBuilder } from './geometry';
 import { FLAME, HARDWARE, LAMP } from './materials';
 import { FLAME_GLOW, type FlameUniforms } from './hullShaders';
 
@@ -106,59 +105,34 @@ export function shipFlux(s: ShipShape, throttle: number, dist: number, sunToEye:
 
 /** A ship's axes in its frame's: x to the nose, z the radiator wings' side, y completing them. */
 export function shipAxes(forward: Vec3, up: Vec3): Mat3 {
-  const x = forward, z = v3norm(v3cross(x, up)), y = v3cross(z, x);
+  const { x, y, z } = shipAxesOf({ forward, up });
   return [x[0], y[0], z[0], x[1], y[1], z[1], x[2], y[2], z[2]];
 }
 
 /** A ship's meshes: its body, its lit windows (if it has any) and, for a torch, its plume. */
-export class ShipMeshes {
+export class ShipMeshes extends PosedMeshes {
   readonly body: Mesh;
   readonly lamps: Mesh | null;
   readonly plume: Mesh | null;
   private readonly flame: FlameUniforms;
 
   constructor(readonly shape: ShipShape, name: string, bodyMaterial: Material = HARDWARE.material) {
-    const g = shipGeometry(shape);
+    const g = shipGeometry(shape), body: Mesh = new Mesh(g.body, bodyMaterial);
+    const lamps: Mesh | null = g.lamps ? new Mesh(g.lamps, LAMP.material) : null, plume: Mesh | null = g.plume ? new Mesh(g.plume, FLAME.material) : null;
+    super([body, lamps, plume].filter((m): m is Mesh => m !== null));
+    this.body = body;
+    this.lamps = lamps;
+    this.plume = plume;
+    body.name = name;
+    if (lamps) lamps.name = `${name} windows`;
     this.flame = { flame: new Vector4(shape.plumeLength, 0, shape.nozzle, 0) };
-    this.body = new Mesh(g.body, bodyMaterial);
-    this.body.name = name;
-    this.lamps = g.lamps ? new Mesh(g.lamps, LAMP.material) : null;
-    if (this.lamps) this.lamps.name = `${name} windows`;
-    this.plume = g.plume ? new Mesh(g.plume, FLAME.material) : null;
-    if (this.plume) { this.plume.name = `${name} plume`; this.plume.userData.flame = this.flame; }
-    for (const m of this.meshes) { m.matrixAutoUpdate = false; m.frustumCulled = false; }
-    this.bytes = this.meshes.reduce((n, m) => n + Object.values(m.geometry.attributes).reduce((k, a) => k + a.array.byteLength, 0) + (m.geometry.index?.array.byteLength ?? 0), 0);
-  }
-
-  get meshes(): Mesh[] { return [this.body, this.lamps, this.plume].filter((m): m is Mesh => m !== null); }
-
-  /** The bytes its geometry holds on the GPU (and on the CPU too, until `addTo` lets go of them). */
-  readonly bytes: number;
-
-  /**
-   * Into the scene, hidden until posed (the Stage still builds their shaders under its cap). With `drop`, the CPU copy
-   * of its geometry goes once the GPU holds it (`dropUploaded`): for a ship whose geometry nothing reads again.
-   */
-  async addTo(stage: Stage, drop = false): Promise<void> {
-    for (const m of this.meshes) m.visible = false;
-    await Promise.all(this.meshes.map((m) => stage.add(m)));
-    if (drop) for (const m of this.meshes) dropUploaded(m, stage.renderer);
-  }
-
-  removeFrom(stage: Stage): void {
-    for (const m of this.meshes) { stage.remove(m); freeMesh(m); }
+    if (plume) { plume.name = `${name} plume`; plume.userData.flame = this.flame; }
   }
 
   /** Where it is (its axes in the scene, its stern relative to the eye) and how hard its torch thrusts (0–1). */
   pose(axes: Mat3, at: Vec3, throttle: number): void {
-    for (const m of this.meshes) setPose(m, axes, at);
+    this.poseAll(axes, at);
     this.flame.flame.y = throttle;
-    this.body.visible = true;
-    if (this.lamps) this.lamps.visible = true;
     if (this.plume) this.plume.visible = throttle > 0;
-  }
-
-  hide(): void {
-    for (const m of this.meshes) m.visible = false;
   }
 }

@@ -41,10 +41,10 @@ export interface Meterable {
   /** Irradiance from Earth on the hull, relative to full sunlight. */
   earthshine: number;
   /**
-   * Inside an enclosure (the spindle's bore), where every ray lands on its walls: their luminance and the light on
-   * them, relative to full sunlight.
+   * Inside an enclosure (the spindle's bore, a ship's lounge), where every ray lands on its walls, but those `open`
+   * lets out (a window): their luminance and the light on them, relative to full sunlight.
    */
-  room?: { luminance: number; light: number } | null;
+  room?: { luminance: number; light: number; open?: (d: Vec3) => boolean } | null;
   celestial?: { center: Vec3; radius: number; albedo: number; light: number }[];
 }
 
@@ -62,7 +62,7 @@ function lit(sun: number, sunlight: number): number {
 }
 
 function rayMeter(m: Meterable, d: Vec3): { luminance: number; light: number } {
-  if (m.room) return m.room;
+  if (m.room && !m.room.open?.(d)) return m.room;
   const s = m.sky;
   const a = v3len(v3cross(d, s.sunDir));
   const solarSin = Math.sin(s.sunRadius), irradiance = (AU / s.sunDistance) ** 2;
@@ -110,16 +110,30 @@ export const PERIPHERY = 1.5;
  * the light in view allows (`ANCHOR_LEVEL`).
  */
 export function exposureFor(m: Meterable, rays: readonly Vec3[], darkest: number): number {
-  let sum = 0, high = darkest, light = 0;
+  let sum = 0, high = darkest, light = 0, counted = 0, roomSum = 0, roomRays = 0;
   for (const d of rays) {
     const r = rayMeter(m, d), l = Math.max(darkest, r.luminance);
     sum += Math.log(l);
+    counted++;
     high = Math.max(high, l);
     light = Math.max(light, r.light);
+    if (r === m.room) { roomSum += Math.log(l); roomRays++; }
   }
   const anchored = light > 0 ? ANCHOR_LEVEL / light : Infinity;
-  return Math.min(KEY / Math.exp(sum / rays.length), HIGHLIGHT_LEVEL / high, anchored);
+  if (roomRays && m.room?.open) {
+    // In a room with windows the eyes settle on the room they stand in: black space beyond the glass does not open
+    // them further, and a bright view out stops them down only so far (`ROOM_LATITUDE`): it burns out instead.
+    const room = KEY / Math.exp(roomSum / roomRays);
+    return Math.min(room, Math.max(room / ROOM_LATITUDE, Math.min(HIGHLIGHT_LEVEL / high, anchored)));
+  }
+  return Math.min(KEY / Math.exp(sum / counted), HIGHLIGHT_LEVEL / high, anchored);
 }
+
+/**
+ * How far a bright view out of a room's windows (a sunlit spindle, a lit port face) stops the eyes down below what
+ * the room itself asks for: at most this factor. The eyes in a lit room keep it readable and let the windows burn.
+ */
+export const ROOM_LATITUDE = 4;
 
 /**
  * Inside, the eyes open up where the light around them is dimmer than in the open at the same hour (a wood's shade):
