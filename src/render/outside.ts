@@ -34,7 +34,7 @@ import { SolarView } from './solar';
 import { SolarControls } from './solarControls';
 import { HabitatLights } from './habitatLights';
 import { HabitatCatalogue } from './habitatCatalogue';
-import { REFERENCE_SYSTEM, makeLedger } from '../system';
+import { REFERENCE_SYSTEM, makeLedger, type Ledger } from '../system';
 import { polePlane } from '../space/orbits';
 import { VesselVisit } from './vesselVisit';
 import type { VoyagePanel, VoyagePanelFactory } from './voyagePanel';
@@ -101,6 +101,10 @@ export class OutsideView {
   /** The system's habitats as points of light, and their part of the catalogue (plan "The Whole System"). */
   private habitatLights!: HabitatLights;
   private habitatCatalogue!: HabitatCatalogue;
+  /** The system around the home habitat (system/ledger.ts). */
+  private ledger!: Ledger;
+  /** Visit chosen in the catalogue: a habitat id ('home' to go back) and the ledger it is in (docs/system.md). */
+  onVisit: ((id: string, ledger: Ledger) => void) | null = null;
   private observer: { id: string; yaw: number; pitch: number; distance: number } | null = null;
   private controlClock = 0;
   private vessel!: VesselVisit;
@@ -143,7 +147,9 @@ export class OutsideView {
     await Promise.all([v.stage.add(v.dome), v.buildNecklace(), v.loadMaps('full'), v.loadStars(), v.solar.start(), v.habitatLights.start()]);
     outside.bodiesInDome.value = 0;
     v.solarControls = new SolarControls(v.system, id => v.observe(id), () => { v.observer = null; v.flyer = null; v.frameHabitat(); }, n => { v.timeScale = n; });
-    v.habitatCatalogue = new HabitatCatalogue(ledger, v.system, id => v.observe(id), on => { v.habitatLights.naming = on; });
+    v.ledger = ledger;
+    v.habitatCatalogue = new HabitatCatalogue(ledger, id => v.observe(id), on => { v.habitatLights.naming = on; }, id => v.onVisit?.(id, v.ledger));
+    v.habitatLights.onPick = id => v.habitatCatalogue.showHabitat(id);
     v.solarControls.element.append(v.habitatCatalogue.element);
     v.vessel = new VesselVisit(v.stage, () => { v.stopAttract(); v.observer = null; v.flyer = null; v.timeScale = 1; v.exposure = 1; }, () => { v.frameHabitat(); v.voyage?.showCabin(false); }, TOUR_SHIP);
     v.voyage = makeVoyagePanel(v.system, () => v.space, () => v.time, () => { v.stopAttract(); v.vessel.close(); v.observer = null; v.flyer = null; v.exposure = 1; }, () => {
@@ -229,6 +235,7 @@ export class OutsideView {
     this.space = makeSpace({ ...REFERENCE_SPACE, home: h.params }, this.system);
     if (this.habitatLights) {
       const ledger = makeLedger(this.space.params, REFERENCE_SYSTEM);
+      this.ledger = ledger;
       this.habitatLights.reset(ledger);
       this.habitatCatalogue.reset(ledger);
     }
@@ -240,6 +247,11 @@ export class OutsideView {
     this.flyer = null;
     this.frameHabitat();
     await this.buildNecklace();
+  }
+
+  /** The player is now at habitat `id` ('home' when back): the catalogue tells trips from there. */
+  setVisiting(id: string): void {
+    this.habitatCatalogue?.setAt(id);
   }
 
   /** Back to the start view: the habitat in front of Earth, a little from the side. */
@@ -588,7 +600,7 @@ export class OutsideView {
     outside.pixelSolidAngle.value = ((this.camera.fov * Math.PI) / 180 / px) ** 2;
     outside.starExposure.value = starExposure(this.exposure, outside.pixelSolidAngle.value, this.sunSeen(), this.heroicStars);
     // The overlay's names, as a citizen's link shows them; not in the title's flight, aboard or on the tour.
-    this.habitatLights.label(this.camera, this.canvas.clientWidth || 1280, this.canvas.clientHeight || 720, outside.starExposure.value, outside.pixelSolidAngle.value,
+    this.habitatLights.writeNames(this.camera, this.canvas.clientWidth || 1280, this.canvas.clientHeight || 720, outside.starExposure.value, outside.pixelSolidAngle.value,
       !this.attracting && !this.vessel?.active && !this.voyage?.active && this.loop.running);
     outside.viewport.value.set((this.canvas.clientWidth || 1280) * ratio, px);
     draw(this.stage);

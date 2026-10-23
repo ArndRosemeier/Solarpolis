@@ -24,10 +24,10 @@ import { floorGap, pointAlong, sunwalkOf, walksOf } from './walks';
 /** What someone is doing. */
 export type Activity =
   | 'walk' | 'meet' | 'stroll' | 'picnic' | 'bathe' | 'sit' | 'gather' | 'herd' | 'play' | 'make' | 'wander'
-  | 'swim' | 'climb' | 'watch' | 'fly' | 'hike' | 'stargaze' | 'sunwalk' | 'bench';
+  | 'swim' | 'climb' | 'watch' | 'fly' | 'hike' | 'stargaze' | 'sunwalk' | 'bench' | 'sail';
 
-/** What someone is doing ('bench': sitting on a seat built for it, the seat round a court's light well). */
-export const ACTIVITIES: readonly Activity[] = ['walk', 'meet', 'stroll', 'picnic', 'bathe', 'sit', 'gather', 'herd', 'play', 'make', 'wander', 'swim', 'climb', 'watch', 'fly', 'hike', 'stargaze', 'sunwalk', 'bench'];
+/** What someone is doing ('bench': sitting on a seat built for it, the seat round a court's light well; 'sail': crewing a boat, sim/crews.ts). */
+export const ACTIVITIES: readonly Activity[] = ['walk', 'meet', 'stroll', 'picnic', 'bathe', 'sit', 'gather', 'herd', 'play', 'make', 'wander', 'swim', 'climb', 'watch', 'fly', 'hike', 'stargaze', 'sunwalk', 'bench', 'sail'];
 
 /** What a district's people do on its commons, by its style (blueprint/cultures.ts). */
 export const STYLE_ACTIVITY: Readonly<Record<DistrictStyle, Activity>> = {

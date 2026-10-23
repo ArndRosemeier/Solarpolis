@@ -26,6 +26,7 @@
     { "from": "src/world", "deny": ["three", "src/render", "src/app", "src/lab", "src/physics"], "why": "world queries are pure: gameplay, workers and tests use them" },
     { "from": "src/sim", "deny": ["three", "src/render", "src/app", "src/lab", "src/physics"], "why": "the society sim is pure: it runs in a worker and in headless tests" },
     { "from": "src/talk", "deny": ["three", "src/render", "src/app", "src/lab", "src/physics"], "why": "what people say is pure: the conversation engine runs in a worker and in headless tests" },
+    { "from": "src/link", "deny": ["three", "src/render", "src/app", "src/lab", "src/physics"], "why": "what the neural link offers and how it picks is pure: render, app and tests all read it, and it never draws" },
     { "from": "src/render", "deny": ["src/app", "src/lab"], "why": "the renderer does not know about the app or the Lab" },
     { "from": "src/persist", "deny": ["three", "src/render", "src/app", "src/lab"], "why": "persistence is a leaf: everything may save and load through it" }
   ],

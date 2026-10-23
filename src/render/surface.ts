@@ -16,7 +16,8 @@ export class FrameLoop {
 
   constructor(private readonly frame: (dt: number) => void, onKey: (e: KeyboardEvent) => void = () => {}) {
     window.addEventListener('keydown', (e) => {
-      if (!this.running) return;
+      // Typing into a field on the page (the link's search) is not moving.
+      if (!this.running || typing(e)) return;
       onKey(e);
       this.keys.add(e.code);
     });
@@ -30,6 +31,12 @@ export class FrameLoop {
     if (!on) this.keys.clear();
     else if (!was) runFrames(() => this.running, this.frame);
   }
+}
+
+/** Whether a key goes into a text field (or a list) on the page rather than to the view. */
+function typing(e: KeyboardEvent): boolean {
+  const t = e.target;
+  return (t instanceof HTMLInputElement && !['checkbox', 'radio', 'button', 'range'].includes(t.type)) || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement || (t instanceof HTMLElement && t.isContentEditable);
 }
 
 /** Call `frame(dt)` every animation frame while `on()` holds; dt in seconds, at most 0.1. */

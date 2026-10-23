@@ -12,6 +12,8 @@ import { Color, CylinderGeometry, Group, Mesh, PerspectiveCamera, Scene, SphereG
 import { Stage, createRenderer } from '@futuremagic/stage';
 import { deriveSeed, smoothstep, v3dot, v3madd, v3norm, v3scale } from '@futuremagic/core';
 import { fromWorld, toView, toWorld, type Habitat, type Vec3 } from '../blueprint';
+import type { Sighting } from '../link';
+import { toScreenOrEdge } from './screen';
 import { makeTerrain, type Terrain } from '../gen/terrain';
 import { EYE_HEIGHT, VIEW_FOV, Walker, type View } from '../world/walker';
 import { Flyer } from '../world/flyer';
@@ -50,6 +52,7 @@ import { SpeckView, type Measured } from './specks';
 import { FlierView } from './fliers';
 import { BoatView } from './boats';
 import { TalkView, type Bubble } from './talk';
+import type { Whereabouts } from '../system';
 import { AnimalView, DEER, SQUIRRELS } from './animals';
 import { BirdView } from './birds';
 import { CabinView } from './lift';
@@ -64,6 +67,8 @@ import { calledFrom, doorsAbove, doorsBelow, doorsHit, eyeInCabin, liftDoorsNear
 
 /** Running is this many times the walking speed. */
 const RUN = 8;
+/** How far inside the screen's edge the link pins a mark that is off screen (px). */
+const OVERLAY_INSET = 34;
 /** How long (s) the gravity meter takes to follow a change in the felt gravity, so a stride's jitter does not show. */
 const GRAVITY_SMOOTHING = 0.25;
 /** Faster than this (m/s) between two frames, the eye was put somewhere (Go), not moved: no wind for it. */
@@ -155,6 +160,8 @@ export class InteriorView {
   private drones: FlierView | null = null;
   /** Who says what in the parties near the eye: the speech bubbles (render/talk.ts). */
   private talk: TalkView | null = null;
+  /** Where the player is in the system (a visit, docs/system.md); null at home. Set before `setHabitat`. */
+  whereabouts: Whereabouts | null = null;
   /** A resident's measured size and colours for the far specks (their look's, or their drone body's), once known. */
   private readonly measured: Measured = (id, design) => {
     if (design >= 0) return this.drones?.measured(design) ?? null;
@@ -179,11 +186,18 @@ export class InteriorView {
   });
   /** Travel speed multiplier from the debug menu. */
   boost = 1;
-  /** Called each frame with the gravity the player feels (the page's gravity meter), smoothed over a fraction of a second. */
-  onExit: ((exit: ExitCourt | null, eye: Vec3, forward: Vec3, up: Vec3) => void) | null = null;
+  /** Below the land, the nearest lift up (null on the land or riding), for the link's Ways (app/link/ways.ts). */
+  onExit: ((exit: ExitCourt | null) => void) | null = null;
   /** The speech bubbles this frame, for the page to draw over the view (app/bubbles.ts). */
   onTalk: ((bubbles: readonly Bubble[]) => void) | null = null;
+  /**
+   * Each frame, for the neural link's overlay (app/link): the frame's dt and where a point of the habitat's world frame
+   * shows on screen this frame (on it, or pinned to its edge toward the point).
+   */
+  onOverlay: ((dt: number, project: (p: Vec3) => Sighting) => void) | null = null;
+  private readonly sight = (p: Vec3): Sighting => toScreenOrEdge(this.camera, toView(this.posedAt, p), this.canvas.clientWidth, this.canvas.clientHeight, OVERLAY_INSET);
   private exitClock = 0;
+  /** Called each frame with the gravity the player feels (the page's gravity meter), smoothed over a fraction of a second. */
   onGravity: ((r: GravityReading) => void) | null = null;
   /** Walking and running speed on foot (m/s), for the gravity meter's explanation. */
   get paces(): { walk: number; run: number } { return { walk: this.walker.speed, run: this.walker.speed * RUN }; }
@@ -238,8 +252,9 @@ export class InteriorView {
   }
 
   /** Make the view: throws `GraphicsUnavailable` where the browser has no WebGPU (the caller shows why). */
-  static async create(habitat: Habitat): Promise<InteriorView> {
+  static async create(habitat: Habitat, whereabouts: Whereabouts | null = null): Promise<InteriorView> {
     const v = new InteriorView(habitat);
+    v.whereabouts = whereabouts;
     // Reversed depth: from a blade of grass at the feet to the far endcap tens of kilometres away, in one view.
     v.renderer = (await createRenderer(v.canvas, { backends: 'webgpu', depth: 'reversed' })).renderer;
     // The near shadow map (render/lights.ts): the key light's, cast by the body and balls.
@@ -654,7 +669,7 @@ export class InteriorView {
     this.scene.add(this.specks.group);
     this.drones = new FlierView(h, this.terrain, this.stage, this.camera, this.pool);
     this.scene.add(this.drones.group);
-    this.talk = new TalkView(h, this.terrain);
+    this.talk = new TalkView(h, this.terrain, this.whereabouts ?? undefined);
     this.people.speaker = this.drones.speaker = this.talk.speaker;
     this.animals = [new AnimalView(SQUIRRELS, h, this.terrain, this.stage, this.camera, this.pool), new AnimalView(DEER, h, this.terrain, this.stage, this.camera, this.pool)];
     for (const a of this.animals) this.scene.add(a.group);
@@ -731,7 +746,7 @@ export class InteriorView {
     if (this.onExit && (!this.below || this.exitClock >= 0.1)) {
       this.exitClock = 0;
       const at = fromWorld(this.habitat.profile, ...v.eye);
-      this.onExit(this.below && !this.cabin?.aboard ? nearestExitCourt(this.terrain, at.theta, at.s) : null, v.eye, v.look, v.up);
+      this.onExit(this.below && !this.cabin?.aboard ? nearestExitCourt(this.terrain, at.theta, at.s) : null);
     }
     this.showLand(!this.below);
     below.people.value = this.below ? 1 : 0;
@@ -742,6 +757,7 @@ export class InteriorView {
     this.drones?.follow(v.eye, this.time, this.frameDt, this.people?.aloft, this.below);
     if (this.talk && this.people) this.talk.bubblesAt(this.people, v.eye, this.time, this.camera, this.canvas.clientWidth, this.canvas.clientHeight);
     this.onTalk?.(this.talk?.bubbles ?? []);
+    this.onOverlay?.(this.frameDt, this.sight);
     this.specks?.follow(this.time, this.frameDt, [...(this.people?.near ?? []), ...(this.drones?.near ?? [])], this.measured);
     for (const a of this.animals) a.follow(v.eye, this.time, this.frameDt);
     this.birds?.follow(v.eye, this.time, this.frameDt, this.below);

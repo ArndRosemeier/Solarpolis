@@ -104,12 +104,13 @@ export function specksAt(terrain: Terrain, t: number): Specks {
     }
     const feet = toWorld(profile, { theta: p.theta, s: p.s, h: foot.h });
     let drift: Vec3 = [0, 0, 0];
-    if (p.moving && p.speed > 0) {
+    // Walking, or aboard a boat under way (going the way it goes, whichever way they face).
+    if ((p.moving || p.drift !== undefined) && p.speed > 0) {
       // Over the floor: along the axis (heading 0) and around it (heading π/2), a metre each way.
       const r = Math.max(1, profile.at(p.s).r);
       const along = unit(toWorld(profile, { theta: p.theta, s: Math.min(profile.length, p.s + 0.5), h: foot.h }), toWorld(profile, { theta: p.theta, s: Math.max(0, p.s - 0.5), h: foot.h }));
       const around = unit(toWorld(profile, { theta: p.theta + 0.5 / r, s: p.s, h: foot.h }), toWorld(profile, { theta: p.theta - 0.5 / r, s: p.s, h: foot.h }));
-      const c = Math.cos(p.heading) * p.speed, sn = Math.sin(p.heading) * p.speed;
+      const way = p.drift ?? p.heading, c = Math.cos(way) * p.speed, sn = Math.sin(way) * p.speed;
       drift = [along[0] * c + around[0] * sn, along[1] * c + around[1] * sn, along[2] * c + around[2] * sn];
     }
     if (body) writeSpeck(out.data, i * SPECK_STRIDE, feet, body.height, drift, POSE.upright, [body.color, body.color, body.color], horizon, body.width);

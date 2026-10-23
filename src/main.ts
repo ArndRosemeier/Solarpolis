@@ -3,9 +3,11 @@ import { homePlan } from './gen/homeInterior';
 import { underHousesIn, bayFrame } from './gen/underMesh';
 import { neighboursAt } from './sim/neighbourhood';
 import { BOAT_KINDS, BOAT_KIND_LIST, boatAt, boatsNear, sailingOf, type Boat } from './sim/sailing';
+import { crewsAt, crewsOf } from './sim/crews';
 import { HARBOUR } from './gen/harbours';
 import { windAt } from './world/wind';
-import { ExitMarker } from './app/exitMarker';
+import { Link } from './app/link/link';
+import { Ways } from './app/link/ways';
 import { SpeechBubbles } from './app/bubbles';
 import { ArrivalCard } from './app/arrivalCard';
 /**
@@ -38,7 +40,8 @@ import { OutsideView } from './render/outside';
 import type { BirdSeen } from './render/birds';
 import { VoyageComputer } from './app/voyageComputer';
 import { arrivalScore, captionAt, hubView, type ArrivalScore } from './space';
-import { apart, fromWorld, toWorld, type DebrisSpec, type Habitat, type Vec3 } from './blueprint';
+import { apart, fromWorld, toWorld, type DebrisSpec, type Habitat, type HabitatParams, type Vec3 } from './blueprint';
+import { blueprintOf, placeInWords, type Ledger, type Whereabouts } from './system';
 import { levelRunOf, nearestOf, onRow, plantsOf, slopeAt, type Level } from './gen/scatter';
 import { frameOf, landmarksOf, type Hut, type Pavilion } from './gen/landmarks';
 import { plantingsOf, type Grove, type Hall } from './gen/planted';
@@ -89,7 +92,8 @@ header.append(soundButton(sound));
 
 // ---- the view ------------------------------------------------------------------------------------
 const lab = new BlueprintLab(new URLSearchParams(location.search), (query) => {
-  // The Lab owns the habitat's fields; the open view rides along.
+  // The Lab owns the habitat's fields; the open view rides along. A visit's habitat is not the page's to keep.
+  if (visiting) return;
   const q = new URLSearchParams(query);
   const open = new URLSearchParams(location.search).get('view');
   if (open === 'inside' || open === 'outside' || open === 'lab' || open === 'tour') q.set('view', open);
@@ -97,6 +101,41 @@ const lab = new BlueprintLab(new URLSearchParams(location.search), (query) => {
   history.replaceState(null, '', all ? `?${all}` : location.pathname);
 });
 app.append(lab.root);
+
+// ---- visiting another habitat (docs/system.md: a proof of concept, one arrives at once) ----------------------
+/** The habitat visited (a ledger id), or null at home. */
+let visiting: string | null = null;
+/** Home while away (the habitat left behind): its parameters and the habitat the Outside view keeps showing. */
+let left: { params: HabitatParams; habitat: Habitat } | null = null;
+/** Where the player is in the system, for the Inside view (news heard with the visited habitat's light-lag). */
+let whereabouts: Whereabouts | null = null;
+/** Where the arrival card says one has arrived. */
+let arrivedAt = 'the Necklace';
+let arrivalCard: ArrivalCard | null = null;
+
+/** Be at habitat `id` ('home', or a ledger id with its blueprint): the Inside view follows, the Outside view stays home. */
+function settle(id: string, params: HabitatParams, where: string): void {
+  if (id !== 'home' && !visiting && !(left && lab.parameters === left.params) && lab.habitat) left = { params: lab.parameters, habitat: lab.habitat };
+  if (id !== 'home' && !left) return;
+  visiting = id === 'home' ? null : id;
+  whereabouts = visiting && left ? { home: left.params, at: visiting } : null;
+  if (insideSlot.view) insideSlot.view.whereabouts = whereabouts;
+  arrivedAt = where;
+  lab.use(params);
+  if (lab.habitat) arrivalCard?.describe(lab.habitat, where);
+  outsideSlot.view?.setVisiting(id);
+}
+
+/** Visit habitat `id` of the ledger ('home' to go back): through the curtain onto its arrival terrace. */
+async function travelTo(id: string, ledger: Ledger): Promise<void> {
+  const back = id === 'home';
+  const record = ledger.habitat(id);
+  const params = back ? left?.params : blueprintOf(ledger, id);
+  if (!params || (!back && !record) || (back && !visiting) || id === visiting) return;
+  await drawCurtain(true);
+  settle(id, params, back || !record ? 'the Necklace' : `${record.name}, ${placeInWords(record)}`);
+  await arriveInside();
+}
 
 /** A 3D view on the page: made on first show, then kept and handed the Lab's current habitat. */
 interface PageView {
@@ -112,14 +151,15 @@ class ViewSlot<V extends PageView> {
   private readonly note = el('p', 'inside-note');
   view: V | null = null;
 
-  constructor(hint: string, private readonly building: string, private readonly memoryOwner: string, private readonly make: (h: Habitat) => Promise<V>) {
+  /** `habitat`: the one this view shows (the Lab's, or for the Outside view the home one while visiting). */
+  constructor(hint: string, private readonly building: string, private readonly memoryOwner: string, private readonly make: (h: Habitat) => Promise<V>, private readonly habitat: () => Habitat | null = () => lab.habitat) {
     this.box.append(this.note, el('p', 'inside-hint', hint));
     this.box.hidden = true;
     app.append(this.box);
   }
 
   async show(): Promise<void> {
-    const h = lab.habitat;
+    const h = this.habitat();
     if (!h) { this.note.textContent = 'These parameters make no habitat: fix them in the Blueprint first.'; return; }
     if (this.view) { await this.view.setHabitat(h); this.view.setRunning(!this.box.hidden); return; }
     this.note.textContent = this.building;
@@ -138,15 +178,20 @@ class ViewSlot<V extends PageView> {
   }
 }
 
+/** The player's neural link and its overlay (app/link): systems serve it their offers and say their lines through it. */
+const link = new Link();
 const insideSlot = new ViewSlot('Hold the right mouse button to look around · W A S D to move · Shift to run · Space to jump · wheel to see yourself · F to fly (E up, Q down)', 'Building the interior…', 'terrain tiles', async (h) => {
-  const v = await InteriorView.create(h);
+  const v = await InteriorView.create(h, whereabouts);
   // The gravity the player feels, and why (with the spin, against it, higher up): Arnd, 2026-10-22.
   const meter = new GravityMeter(() => (lab.habitat ? { habitat: lab.habitat, ...v.paces } : null));
   insideSlot.box.append(meter.box);
   v.onGravity = (r) => meter.showReading(r);
-  const exits = new ExitMarker();
-  insideSlot.box.append(exits.box);
-  v.onExit = (exit, eye, forward, up) => exits.showExit(exit, eye, forward, up);
+  // The player's neural link (Arnd, 2026-10-23): the one overlay every system speaks through.
+  insideSlot.box.append(link.root);
+  v.onOverlay = (dt, project) => link.frame(dt, project);
+  const ways = new Ways();
+  link.serve(ways);
+  v.onExit = (exit) => ways.showExit(exit);
   // People talk in silent speech bubbles (Arnd, 2026-10-23).
   const speech = new SpeechBubbles(() => h.params.life.talk.words);
   insideSlot.box.append(speech.box);
@@ -154,7 +199,8 @@ const insideSlot = new ViewSlot('Hold the right mouse button to look around · W
   const room = new HomeControls((mode) => v.arrangeHome(mode));
   insideSlot.box.append(room.root);
   v.onRoom = (state) => room.updateRoom(state);
-  const welcome = new ArrivalCard(h, () => v.finishArrivalReveal());
+  const welcome = new ArrivalCard(h, arrivedAt, () => v.finishArrivalReveal());
+  arrivalCard = welcome;
   insideSlot.box.append(welcome.root);
   v.onArrival = (progress, nearby) => {
     welcome.show(progress, nearby);
@@ -169,7 +215,11 @@ const insideSlot = new ViewSlot('Hold the right mouse button to look around · W
   memory.track('boats', () => v.boatBytes());
   return v;
 });
-const outsideSlot = new ViewSlot('Hold the right mouse button to swing around · wheel to come closer · 1 habitat, 2 Earth, 3 Moon, 4 nearest neighbour · F to fly (W A S D, E up, Q down, Shift faster)', 'Building the sky…', 'sky maps, stars and skin detail', (h) => OutsideView.create(h, (...args) => new VoyageComputer(...args)));
+const outsideSlot = new ViewSlot('Hold the right mouse button to swing around · wheel to come closer · 1 habitat, 2 Earth, 3 Moon, 4 nearest neighbour · F to fly (W A S D, E up, Q down, Shift faster)', 'Building the sky…', 'sky maps, stars and skin detail', async (h) => {
+  const v = await OutsideView.create(h, (...args) => new VoyageComputer(...args));
+  v.onVisit = (id, ledger) => void travelTo(id, ledger);
+  return v;
+}, () => (left && (visiting || lab.parameters === left.params) ? left.habitat : lab.habitat));
 /** A black curtain over the views for the short fade from the crossing into the Hub (Arnd, 2026-10-21). */
 const curtain = el('div', 'curtain');
 app.append(curtain);
@@ -193,6 +243,8 @@ function drawCurtain(closed: boolean): Promise<void> {
 async function startArrival(): Promise<void> {
   const v = outsideSlot.view;
   if (!v?.attracting) { showTab('inside'); return; }
+  // The title's ship comes in to the home habitat: a visit ends there.
+  if (visiting && left) settle('home', left.params, 'the Necklace');
   arriving = true;
   try { await flyIn(v); } finally {
     arriving = false;
@@ -219,21 +271,24 @@ async function flyIn(v: OutsideView): Promise<void> {
   await v.arrive();
   if (tab !== 'title') return;
   await drawCurtain(true);
-  if (tab === 'title') {
-    showTab('inside');
-    await starting;
-    const h = lab.habitat, inside = insideSlot.view;
-    if (h && inside) {
-      const terrace = await inside.prepareArrival();
-      if (insideSlot.box.hidden) { inside.finishArrivalReveal(); await drawCurtain(false); return; }
-      if (terrace) {
-        const reveal = inside.revealArrival();
-        await drawCurtain(false);
-        await reveal;
-        return;
-      }
-      const hub = hubView(h); inside.floatAt(hub.eye, hub.look);
+  if (tab === 'title') await arriveInside();
+  else await drawCurtain(false);
+}
+/** Behind the closed curtain: into the Inside view, out onto its arrival terrace (or the Hub), the curtain drawn back. */
+async function arriveInside(): Promise<void> {
+  showTab('inside');
+  await starting;
+  const h = lab.habitat, inside = insideSlot.view;
+  if (h && inside) {
+    const terrace = await inside.prepareArrival();
+    if (insideSlot.box.hidden) { inside.finishArrivalReveal(); await drawCurtain(false); return; }
+    if (terrace) {
+      const reveal = inside.revealArrival();
+      await drawCurtain(false);
+      await reveal;
+      return;
     }
+    const hub = hubView(h); inside.floatAt(hub.eye, hub.look);
   }
   await drawCurtain(false);
 }
@@ -887,9 +942,24 @@ debug.addInfo(() => {
   if (!v || !h) return '';
   const { theta, s } = v.walker.at, w = windAt(h, v.time, theta, s), fleet = sailingOf(h);
   const from = `${Math.abs(w.along) >= Math.abs(w.around) ? (w.along > 0 ? 'the wild end' : 'the port end') : w.around > 0 ? 'against the spin' : 'spinward'}`;
-  const out = boatsNear(h, v.time, theta, s, h.radius * 8).filter((b) => b.sailing).length;
-  return `wind: ${Math.hypot(w.along, w.around).toFixed(1)} m/s from ${from}; boats under sail: ${out} of ${fleet.boats.length}`;
+  const out = boatsNear(h, v.time, theta, s, h.radius * 8).filter((b) => b.sailing).length, crews = crewsOf(h);
+  return `wind: ${Math.hypot(w.along, w.around).toFixed(1)} m/s from ${from}; boats under sail: ${out} of ${fleet.boats.length}; ${crews.sailors} residents crew them`;
 });
+/** Beside the nearest crew walking to their boat or home from it (sim/crews.ts), a few metres off and a little up. */
+let crewSeen = '';
+debug.add({
+  label: 'Fly: beside the nearest crew on their way to their boat', group: 'Go', run: () => {
+    const v = view(), t = v?.ecology?.terrain, h = lab.habitat;
+    if (!v || !t || !h) return;
+    const { theta, s } = v.walker.at, R = h.radius, gap = (p: Person): number => floorGap(R, theta, s, p.theta, p.s);
+    const p = crewsAt(h, v.time, undefined, t).filter((q) => !q.seat).sort((a, b) => gap(a) - gap(b))[0];
+    crewSeen = p ? `a crew of ${p.size} walking between their court and boat ${p.boat}` : 'no crew on their way now';
+    if (!p) return;
+    const side = p.heading + Math.PI / 2, ground = t.standAt(p.theta, p.s);
+    floatToward(toWorld(h.profile, { theta: p.theta + (Math.sin(side) * 7) / R, s: p.s + Math.cos(side) * 7, h: ground + 3 }), toWorld(h.profile, { theta: p.theta, s: p.s, h: ground + 1 }));
+  },
+});
+debug.addInfo(() => crewSeen);
 debug.add({
   label: 'Fly: beside the nearest boat under sail', group: 'Go', run: () => {
     const v = view(), t = v?.ecology?.terrain, h = lab.habitat;

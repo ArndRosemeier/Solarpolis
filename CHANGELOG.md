@@ -2,6 +2,26 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.152 — The boats have crews
+
+- Every boat is sailed by its own residents, the same people every time, who live under the court nearest its harbour.
+- On a day their boat goes out they come up out of their court's lift together, walk to the harbour, out along the pier and the pontoon, and step aboard over the stern before it casts off.
+- Aboard, each has their place: in the cockpit or on the trampolines when the boat motors or goes about, hiked out on the windward side under sail, crossing over at every tack. A foiler lifts them with it.
+- Back in the berth they step off and walk home. On days their boat stays in, they stay below.
+- Go → "Fly: beside the nearest crew on their way to their boat".
+
+## v0.151 — Your neural link
+
+- Everyone in Solarpolis has a neural link with a visual overlay, and now the player does too: a thin ring in the top left corner (or the Tab key) opens it.
+- The link is where things are offered to you (capsules come next), live cards show what is being done for you, and marks in the world point at it, with an arrow at the edge of the screen when it is behind you.
+- Below the land, the way to the nearest lift up is now shown by the link: a card with the distance and a mark on the doors.
+
+## v0.150 — Visit another habitat
+
+- The Habitats panel now says how far a habitat is from where you are and how long the trip would take: by laser sail, by a torch ship that mostly coasts, or in a hurry, burning all the way.
+- Visit takes you there at once (a first try: later you will need a ship going your way) and you step out onto its arrival terrace. It is the same kind of cylinder at that habitat's own size, with its own land, Mind and people, and the news reaches it with its own light delay.
+- Click a habitat's name in the sky outside to choose it. Return home brings you back.
+
 ## v0.149 — The rest of the solar system is peopled
 
 - Some forty-three thousand habitats now fill the solar system, home to about 1.75 billion people, among them the world bible's polities: Aurelipolis, Thraxipolis, Tessivorn, Krillix, Velloran Reach, Grixmaw and the rest.
