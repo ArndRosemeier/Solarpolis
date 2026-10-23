@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MATRIX, REFERENCE, derive, validate, withParams } from '../src/blueprint';
 import { planOf, siteOf } from '../src/gen/plan';
-import { BOAT_KINDS, boatAt, boatsNear, dayKnown, feltShare, keepDay, planDay, sailingOf, inBasin, legsOf, outingOf, polarSpeed, type BoatKind } from '../src/sim/sailing';
+import { BOAT_KINDS, boatAt, boatsNear, dayKnown, feltShare, keepDay, planDay, sailingOf, inBasin, legsOf, offShore, outingOf, polarSpeed, type BoatKind } from '../src/sim/sailing';
 import { windAt } from '../src/world/wind';
 import { habitatOf } from './worlds';
 
@@ -36,7 +36,7 @@ test('sailing: the spin makes a boat heavier sailing with it and lighter against
 });
 
 for (const { name, params } of MATRIX) {
-  test(`sailing (${name}): boats on every water with room, moored inside it, sailing inside it, never through the wind`, () => {
+  test(`sailing (${name}): boats on every water with room, out of their berths and back on their drive, sailing inside it, never through the wind`, () => {
     const h = habitatOf(name), fleet = sailingOf(h), plan = planOf(h), L = params.day.length;
     // The water: the ring lake (if any) and every lake on the floor.
     assert.equal(fleet.basins.length, (plan.lake ? 1 : 0) + plan.meres.length);
@@ -46,7 +46,8 @@ for (const { name, params } of MATRIX) {
       if (b.width >= BOAT_KINDS.skiff.room * BOAT_KINDS.skiff.length) assert.ok(here.length >= 1, `boats on ${b.kind} ${b.id}`);
       for (const x of here) {
         assert.ok(b.width >= BOAT_KINDS[x.kind].room * BOAT_KINDS[x.kind].length, 'room for its design');
-        assert.ok(inBasin(b, x.home.u, x.home.v, -0.01), 'moored in its water');
+        // At a berth in its water (gen/harbours.ts checks the berths), or at a buoy in its sailing water.
+        assert.ok(x.harbour >= 0 ? offShore(b, x.home.u, x.home.v) > 0 : inBasin(b, x.home.u, x.home.v, -0.01), 'moored in its water');
       }
     }
     // The ring lake is cut at the pavilion's bridges: no boat sails through them.
@@ -64,18 +65,27 @@ for (const { name, params } of MATRIX) {
       assert.ok(o.start >= day * L && o.end <= (day + params.day.daylight) * L + 1, 'in the light hours');
       const all = legsOf(o);
       legs += all.length;
+      // Out of its berth on its drive, bow first, and back in astern after turning on the spot; sailing in between.
+      if (boat.harbour >= 0) {
+        assert.ok(all[0].motoring && !all[0].astern && Math.abs(wrap(all[0].heading - boat.berthHeading)) < 1e-6, 'out bow first');
+        const [spin, astern] = all.slice(-3, -1);
+        assert.ok(spin.spinning && spin.speed === 0 && astern.motoring && astern.astern && Math.abs(wrap(astern.heading - boat.berthHeading)) < 1e-6, 'back in astern');
+        assert.ok(Math.hypot(astern.u - boat.out.u, astern.v - boat.out.v) < 0.01, 'from the harbour mouth');
+      }
       for (const [i, leg] of all.entries()) {
-        assert.ok(inBasin(b, leg.u, leg.v, -0.5), 'on the water');
+        // On the water: in the harbour on its drive, in the sailing water under sail.
+        if (leg.motoring) assert.ok(offShore(b, leg.u, leg.v) > spec.beam / 2, 'in the harbour');
+        else assert.ok(inBasin(b, leg.u, leg.v, -0.5), 'on the water');
         if (i > 0) assert.ok(leg.t >= all[i - 1].t, 'in time order');
-        if (leg.turning || leg.speed <= 0.31) continue;
+        if (leg.turning || leg.motoring || leg.speed <= 0.31) continue;
         // Never pointing into the wind it met at the leg's start, nor deeper than it sails.
         const at = { theta: b.theta + leg.u / b.radius, s: b.s + leg.v }, w = windAt(h, o.start + leg.t, at.theta, at.s);
         const twa = Math.abs(wrap(leg.heading - upwindOf(w)));
         assert.ok(twa >= spec.noGo - 1e-3 && twa <= spec.deep + 1e-3, `${boat.kind} sails ${(twa / DEG).toFixed(0)}° off the wind`);
       }
-      // Back at its mooring at the end.
+      // Back at its berth (or buoy) at the end.
       const last = all[all.length - 1];
-      assert.ok(Math.hypot(last.u - boat.home.u, last.v - boat.home.v) < spec.length * 3, 'home again');
+      assert.ok(Math.hypot(last.u - boat.home.u, last.v - boat.home.v) < (boat.harbour >= 0 ? 0.01 : spec.length * 3), 'home again');
       // Followed through the outing: on the water, moving as fast as it says along its heading, never jumping.
       let prev = boatAt(h, boat, o.start);
       for (let t = o.start + 20; t < o.end; t += 20) {
@@ -85,9 +95,10 @@ for (const { name, params } of MATRIX) {
         assert.ok(Math.abs(now.heel) < spec.heel + 1e-9 && Number.isFinite(now.heading), 'upright enough');
         prev = now;
       }
-      // Moored, it lies head to wind.
-      const moored = boatAt(h, boat, o.end + 60);
-      assert.ok(!moored.sailing && moored.speed === 0 && Math.abs(wrap(moored.heading - upwindOf(moored.wind))) < 1e-9, 'head to wind at its mooring');
+      // In its berth it lies bow out; at a buoy, head to wind.
+      const moored = boatAt(h, boat, o.end + 60), lies = boat.harbour >= 0 ? boat.berthHeading : upwindOf(moored.wind);
+      assert.ok(!moored.sailing && moored.speed === 0 && Math.abs(wrap(moored.heading - lies)) < 1e-9, 'lying at its berth or buoy');
+      assert.ok(Math.hypot(wrap(moored.theta - b.theta) * b.radius - boat.home.u, moored.s - b.s - boat.home.v) < 1e-6, 'where it lies');
     }
     assert.ok(out >= 1 && legs > out * 10, `some go out (${out} of ${boats.length}, ${legs} legs)`);
     // The same every time; and found near where they are.
