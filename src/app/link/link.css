@@ -14,7 +14,7 @@
 }
 .link [hidden] { display: none !important; }
 
-/* The sigil: a thin ring in the corner that opens the link (Tab). */
+/* The sigil: a thin ring in the corner that opens the link (N). */
 .link-sigil {
   position: absolute; left: 14px; top: 12px; pointer-events: auto; display: flex; align-items: center; gap: 7px;
   padding: 4px 9px 4px 5px; border-radius: 16px; border: 1px solid transparent; background: #0b1a1a55; cursor: pointer;

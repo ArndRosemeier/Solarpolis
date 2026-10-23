@@ -1,13 +1,13 @@
 /**
  * The player's neural link and its overlay (Arnd, 2026-10-23: canon, as common as phones today; everything integrates
  * into it). The one place the game speaks to the player over the world: systems serve it (`serve`, a `LinkService`
- * from src/link) and say lines through it (`say`); it draws their offers in its panel (Tab, or its sigil in the
+ * from src/link) and say lines through it (`say`); it draws their offers in its panel (N, or its sigil in the
  * corner), their live work as cards with a mark in the world, and the lines as quiet whispers that fade. Quiet by
  * default: nothing shows until something is going on or the player opens it. Page text, so it stays sharp and costs
  * the GPU nothing; only its own panel, cards and sigil take the mouse, the world stays clickable everywhere else.
  */
 import type { Vec3 } from '@futuremagic/core';
-import { findChoices, type LinkChoice, type LinkLine, type LinkOffer, type LinkService, type LinkStatus, type Sighting } from '../../link';
+import { LINK_KEY, findChoices, type LinkChoice, type LinkLine, type LinkOffer, type LinkService, type LinkStatus, type Sighting } from '../../link';
 import { button, el } from '../dom';
 import './link.css';
 
@@ -43,9 +43,9 @@ export class Link {
   private drawn = '';
 
   constructor() {
-    this.sigil.setAttribute('aria-label', 'Open your link (Tab)');
-    this.sigil.title = 'Your link · Tab';
-    this.sigil.append(el('span', 'link-sigil-ring'), el('span', 'link-sigil-key', 'Tab'));
+    this.sigil.setAttribute('aria-label', `Open your link (${LINK_KEY.label})`);
+    this.sigil.title = `Your link · ${LINK_KEY.label}`;
+    this.sigil.append(el('span', 'link-sigil-ring'), el('span', 'link-sigil-key', LINK_KEY.label));
     this.panel.setAttribute('role', 'dialog');
     this.panel.setAttribute('aria-label', 'Your link');
     this.panel.hidden = true;
@@ -253,7 +253,9 @@ export class Link {
 
   private keyPressed(e: KeyboardEvent): void {
     if (!this.root.isConnected || !this.root.getClientRects().length) return;
-    if (e.code === 'Tab' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    // N typed into the link's search (or any field) is a letter, not the link's key.
+    const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || (e.target instanceof HTMLElement && e.target.isContentEditable);
+    if (e.code === LINK_KEY.code && !typing && !e.repeat && !e.ctrlKey && !e.altKey && !e.metaKey) {
       e.preventDefault();
       this.toggle();
       return;
