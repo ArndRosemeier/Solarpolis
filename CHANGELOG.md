@@ -2,6 +2,12 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.130 — Furniture stays in the homes as you walk past them
+
+- Walking along a street below the land, rooms no longer fill with furniture as you come near and empty behind you: every home whose rooms are drawn keeps its furniture, and it arrives and leaves together with the rooms.
+- Houses further off are lighter to draw: the far ones show their rooms' screens glowing in the open doorway instead of carrying whole interiors, and the stairs seen from a distance are drawn as their slope.
+- Walking up a home's stairs is smoother, and the physics no longer carries the wall screens.
+
 ## v0.129 — The setting's world bible is in the repository
 
 - Arnd's world bible, the overview of the whole setting this habitat is part of, is now in the repository as docs/world-bible.md, so every change can be checked against it.
