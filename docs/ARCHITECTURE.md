@@ -200,6 +200,7 @@ Each row is a question you will have while coding, and the one place that answer
 | What version is this, and what changed? | `VERSION`, `whatsNewButton` (`whatsNew.ts`), from `CHANGELOG.md` (`changelog.ts`). |
 | How do habitat parameters go into and out of a URL? | `habitatFromUrl`, `habitatToUrl`, `URL_FIELDS` (`params.ts`). |
 | Where does the page open, and how does it get there again? | The title (`TitleCard`, `title.ts`) over the Outside view playing `startAttract`; `showTab('title' \| 'lab' \| 'inside' \| 'outside')` in `main.ts`, with `?view=` for the others. Start plays `OutsideView.arrive` (the card gone, any key skips), then a short fade (`drawCurtain`) into the Inside view floating at the Hub (`InteriorView.floatAt` at `hubView`); any key on the card goes straight in. The header's name goes back to the title. |
+| Where does a setting of the person's live between visits (sound on or off)? | `readSetting(key, fallback)`, `writeSetting(key, value)` (`persist/settings.ts`), the only code that touches `localStorage`. |
 | How do I make a DOM element? | `el(tag, className, text)` (`dom.ts`). |
 
 ## The society (`src/sim`, pure)
@@ -222,7 +223,15 @@ Each row is a question you will have while coding, and the one place that answer
 | Where are the deer, and what are they doing? | `herdsNear(ecology, theta, s, radius)` (`sim/herds.ts`, in the worker): the herds whose homes lie within a radius, on deer land (`deerLand`: the wild reserve, `herd` and `let-go` districts), from cells two roams a side holding `animals.deer` per km² in herds of about `animals.herd`; each herd's places within `animals.roam` (lying-up spots under closed crowns, grazing in the open), each with room for the herd and a way from home that fords no more than a stream. `deerAt(terrain, herd, i, t)`: deer i at clock time t, in file behind the herd's path or spread round it when settled (grazing, looking up, standing). A herd's day follows the light where it lives (`localNoon`): out to graze as the light comes up, lying up round the peak, out again till after dark; laid out once a day as legs (`prepareHerd`, a few ms; `herdReady`). Pure. |
 | How are a day's outings dealt out so nobody is in two places? | `shuffleOf(n, seed)` (`permute.ts`): a seeded permutation with its inverse, never stored. |
 | How do I see where everyone is over a day? | The Blueprint tab's "Who is out on the land" (`src/lab/lifeView.ts`): one dot per person over the land plan's maps, with a slider through the day. |
+| What can be heard where, and when? | `soundscapeAt(ecology, t, listener)` (`sim/sounds.ts`): each bed's weight (`BEDS`: wind, leaves, grass, rivers, lake, falls, birds, bees, crickets) from the crowns, meadow, water and light round the listener, the air's carrying factor (`airAt`, from `habitat.airDensityAt`) and how busy the birds are (a chorus as the sunline's bright stretch comes up over the place, `lightAt`); `callsIn(ecology, t0, t1, listener)` the single bird calls placed on the land by seed and clock; `stepSurfaceAt` the ground under a foot (`STEP_SURFACES`); `strideAt(speed, gravity)` how far apart steps fall (cadence ∝ √g). Nothing of the land below. The Inside view hands the listener over as a `Hearing` (`InteriorView.hearing()`). |
 | What happens when the player touches someone? | *Planned:* they become a live agent in `src/sim`, starting from their derived state, and go back to their routine after. |
+
+## Sound (`src/audio`)
+
+| Question | The one way |
+|---|---|
+| How is sound played? | `Sound` (`audio/sound.ts`, the only `AudioContext`, made in `main.ts`): starts on the first click or key; beds as crossfading segments in two panned chains, calls through HRTF panners at their place, steps per stride, music streamed through a media element (`sound.music(id \| null)`). Decoded takes are reported as `sound` to the memory watchdog, kept under `BUDGET`, shed under pressure. The header's switch: `soundButton` (`app/soundButton.ts`); the debug menu's line: `sound.hearingLine()`. |
+| How is a sound or a piece of music made? | A line in `scripts/sound/sounds.json` (prompt, kind), then `node scripts/sound/make.mjs` (scripts/sound/README.md): OpenRouter takes, cut, levelled and encoded into `public/sound` with `index.json`. Never by hand, never in CI. |
 
 ## Arrival
 

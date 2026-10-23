@@ -1,0 +1,340 @@
+{
+ "sounds": {
+  "bed/bees": {
+   "kind": "bed",
+   "files": [
+    "bed/bees.mp3"
+   ],
+   "seconds": [
+    19.64
+   ]
+  },
+  "bed/birds-meadow": {
+   "kind": "bed",
+   "files": [
+    "bed/birds-meadow.mp3"
+   ],
+   "seconds": [
+    19.83
+   ]
+  },
+  "bed/birds-water": {
+   "kind": "bed",
+   "files": [
+    "bed/birds-water.mp3"
+   ],
+   "seconds": [
+    19.835
+   ]
+  },
+  "bed/birds-wood": {
+   "kind": "bed",
+   "files": [
+    "bed/birds-wood.mp3"
+   ],
+   "seconds": [
+    19.875
+   ]
+  },
+  "bed/crickets": {
+   "kind": "bed",
+   "files": [
+    "bed/crickets.mp3"
+   ],
+   "seconds": [
+    19.845
+   ]
+  },
+  "bed/falls": {
+   "kind": "bed",
+   "files": [
+    "bed/falls.mp3"
+   ],
+   "seconds": [
+    19.845
+   ]
+  },
+  "bed/grass": {
+   "kind": "bed",
+   "files": [
+    "bed/grass.mp3"
+   ],
+   "seconds": [
+    19.84
+   ]
+  },
+  "bed/lake": {
+   "kind": "bed",
+   "files": [
+    "bed/lake.mp3"
+   ],
+   "seconds": [
+    19.84
+   ]
+  },
+  "bed/leaves-broad": {
+   "kind": "bed",
+   "files": [
+    "bed/leaves-broad.mp3"
+   ],
+   "seconds": [
+    21.345
+   ]
+  },
+  "bed/leaves-conifer": {
+   "kind": "bed",
+   "files": [
+    "bed/leaves-conifer.mp3"
+   ],
+   "seconds": [
+    19.84
+   ]
+  },
+  "bed/river-riffle": {
+   "kind": "bed",
+   "files": [
+    "bed/river-riffle.mp3"
+   ],
+   "seconds": [
+    19.845
+   ]
+  },
+  "bed/river-slow": {
+   "kind": "bed",
+   "files": [
+    "bed/river-slow.mp3"
+   ],
+   "seconds": [
+    19.83
+   ]
+  },
+  "bed/wind-high": {
+   "kind": "bed",
+   "files": [
+    "bed/wind-high.mp3"
+   ],
+   "seconds": [
+    21.345
+   ]
+  },
+  "bed/wind-open": {
+   "kind": "bed",
+   "files": [
+    "bed/wind-open.mp3"
+   ],
+   "seconds": [
+    21.3
+   ]
+  },
+  "bed/wind-soft": {
+   "kind": "bed",
+   "files": [
+    "bed/wind-soft.mp3"
+   ],
+   "seconds": [
+    19.835
+   ]
+  },
+  "call/blackbird": {
+   "kind": "call",
+   "files": [
+    "call/blackbird.mp3"
+   ],
+   "seconds": [
+    6.505
+   ]
+  },
+  "call/lark": {
+   "kind": "call",
+   "files": [
+    "call/lark.mp3"
+   ],
+   "seconds": [
+    5.01
+   ]
+  },
+  "call/owl": {
+   "kind": "call",
+   "files": [
+    "call/owl.mp3"
+   ],
+   "seconds": [
+    2.975
+   ]
+  },
+  "call/pigeon": {
+   "kind": "call",
+   "files": [
+    "call/pigeon.mp3"
+   ],
+   "seconds": [
+    6.585
+   ]
+  },
+  "call/robin": {
+   "kind": "call",
+   "files": [
+    "call/robin.mp3"
+   ],
+   "seconds": [
+    5.335
+   ]
+  },
+  "call/thrush": {
+   "kind": "call",
+   "files": [
+    "call/thrush.mp3"
+   ],
+   "seconds": [
+    9.19
+   ]
+  },
+  "call/woodpecker": {
+   "kind": "call",
+   "files": [
+    "call/woodpecker.mp3"
+   ],
+   "seconds": [
+    2.765
+   ]
+  },
+  "call/wren": {
+   "kind": "call",
+   "files": [
+    "call/wren.mp3"
+   ],
+   "seconds": [
+    3.825
+   ]
+  },
+  "music/title": {
+   "kind": "music",
+   "take": "music/title-a",
+   "files": [
+    "music/title.mp3"
+   ],
+   "seconds": []
+  },
+  "step/floor": {
+   "kind": "steps",
+   "files": [
+    "step/floor-1.mp3",
+    "step/floor-2.mp3",
+    "step/floor-3.mp3",
+    "step/floor-4.mp3"
+   ],
+   "seconds": [
+    0.41,
+    0.41,
+    0.41,
+    0.41
+   ]
+  },
+  "step/grass": {
+   "kind": "steps",
+   "files": [
+    "step/grass-1.mp3",
+    "step/grass-2.mp3",
+    "step/grass-3.mp3",
+    "step/grass-4.mp3"
+   ],
+   "seconds": [
+    0.41,
+    0.41,
+    0.41,
+    0.41
+   ]
+  },
+  "step/gravel": {
+   "kind": "steps",
+   "files": [
+    "step/gravel-1.mp3",
+    "step/gravel-2.mp3",
+    "step/gravel-3.mp3",
+    "step/gravel-4.mp3"
+   ],
+   "seconds": [
+    0.41,
+    0.41,
+    0.41,
+    0.355
+   ]
+  },
+  "step/litter": {
+   "kind": "steps",
+   "files": [
+    "step/litter-1.mp3",
+    "step/litter-2.mp3",
+    "step/litter-3.mp3",
+    "step/litter-4.mp3"
+   ],
+   "seconds": [
+    0.41,
+    0.41,
+    0.41,
+    0.41
+   ]
+  },
+  "step/snow": {
+   "kind": "steps",
+   "files": [
+    "step/snow-1.mp3",
+    "step/snow-2.mp3",
+    "step/snow-3.mp3",
+    "step/snow-4.mp3"
+   ],
+   "seconds": [
+    0.41,
+    0.41,
+    0.41,
+    0.41
+   ]
+  },
+  "step/stone": {
+   "kind": "steps",
+   "files": [
+    "step/stone-1.mp3",
+    "step/stone-2.mp3",
+    "step/stone-3.mp3",
+    "step/stone-4.mp3"
+   ],
+   "seconds": [
+    0.367,
+    0.41,
+    0.41,
+    0.41
+   ]
+  },
+  "step/timber": {
+   "kind": "steps",
+   "files": [
+    "step/timber-1.mp3",
+    "step/timber-2.mp3",
+    "step/timber-3.mp3",
+    "step/timber-4.mp3"
+   ],
+   "seconds": [
+    0.41,
+    0.41,
+    0.34,
+    0.41
+   ]
+  },
+  "step/water": {
+   "kind": "steps",
+   "files": [
+    "step/water-1.mp3",
+    "step/water-2.mp3",
+    "step/water-3.mp3",
+    "step/water-4.mp3"
+   ],
+   "seconds": [
+    0.41,
+    0.41,
+    0.41,
+    0.41
+   ]
+  }
+ },
+ "rate": 32000
+}

@@ -22,6 +22,8 @@ import { TitleCard } from './app/title';
 import { DebugMenu } from './app/debug';
 import { MemoryWatchdog, browserHeap, thisDeviceBudget, type PressureLevel } from './app/memory';
 import { VERSION, whatsNewButton } from './app/whatsNew';
+import { Sound } from './audio/sound';
+import { soundButton } from './app/soundButton';
 import { BlueprintLab } from './lab/blueprintLab';
 import { GraphicsUnavailable } from '@futuremagic/stage';
 import { InteriorView } from './render/view';
@@ -73,6 +75,10 @@ const showLevel = (level: PressureLevel): void => {
 const memory = new MemoryWatchdog({ budget: thisDeviceBudget(), readHeap: browserHeap, now: () => performance.now(), onLevel: showLevel });
 memory.start(2000);
 document.body.append(warning);
+
+// ---- sound: the land heard from the Inside view, the title's music (design "Solarpolis: how it sounds") ----------------
+const sound = new Sound(memory, () => (tab === 'inside' ? insideSlot.view?.hearing() ?? null : null));
+header.append(soundButton(sound));
 
 // ---- the view ------------------------------------------------------------------------------------
 const lab = new BlueprintLab(new URLSearchParams(location.search), (query) => {
@@ -173,6 +179,16 @@ function drawCurtain(closed: boolean): Promise<void> {
 async function startArrival(): Promise<void> {
   const v = outsideSlot.view;
   if (!v?.attracting) { showTab('inside'); return; }
+  arriving = true;
+  try { await flyIn(v); } finally {
+    arriving = false;
+    // The title theme carries the flight and the first look, then fades into the land.
+    sound.music(null);
+  }
+}
+/** Whether Start's flight is under way (the title's music plays on through it). */
+let arriving = false;
+async function flyIn(v: OutsideView): Promise<void> {
   title.arriving();
   v.onTitle = null;
   starting = (starting ?? Promise.resolve()).then(() => insideSlot.show());
@@ -209,6 +225,8 @@ function showTab(which: Tab): void {
   lab.root.hidden = which !== 'lab';
   const titled = which === 'title';
   title.show(titled);
+  if (titled) sound.music('music/title');
+  else if (!arriving) sound.music(null);
   outsideSlot.box.classList.toggle('titled', titled);
   for (const [tab, slot] of [['inside', insideSlot], ['outside', outsideSlot]] as const) {
     const on = which === tab || (titled && tab === 'outside');
@@ -242,6 +260,7 @@ debug.addInfo(() => {
   return h ? `habitat R ${h.radius.toFixed(0)} m, L ${h.length.toFixed(0)} m, seed ${h.seed}, ${h.rpm.toFixed(2)} rpm` : 'habitat: none (the parameters make no habitat)';
 });
 debug.addInfo(() => memory.line());
+debug.addInfo(() => sound.hearingLine());
 debug.addInfo(() => debug.fps());
 debug.add({ label: 'Copy the parameters as JSON', group: 'Habitat', run: () => { void navigator.clipboard?.writeText(JSON.stringify(lab.parameters, null, 2)); } });
 debug.add({ label: 'Log the parameters and the derived habitat', group: 'Habitat', run: () => console.log(lab.parameters, lab.habitat) });

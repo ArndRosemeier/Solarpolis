@@ -54,12 +54,15 @@ import { GLASS, SKIES, skyOverBay } from '../gen/skies';
 import { GlassDeck, type GlassStage, type GlassWant } from './glassDeck';
 import { nearestExitCourt, type ExitCourt } from '../gen/exitCourt';
 import { underOf } from '../gen/under';
+import type { Hearing } from '../sim/sounds';
 import { calledFrom, doorsAbove, doorsBelow, doorsHit, eyeInCabin, liftDoorsNear, outside, type LiftDoors } from '../gen/lifts';
 
 /** Running is this many times the walking speed. */
 const RUN = 8;
 /** How long (s) the gravity meter takes to follow a change in the felt gravity, so a stride's jitter does not show. */
 const GRAVITY_SMOOTHING = 0.25;
+/** Faster than this (m/s) between two frames, the eye was put somewhere (Go), not moved: no wind for it. */
+const TELEPORT = 300;
 /** The physics' ground patch: side (m) and cell (m). */
 const PATCH_SIZE = 192;
 const PATCH_CELL = 1;
@@ -278,6 +281,32 @@ export class InteriorView {
     this.people?.shed();
     this.homes?.shed();
     this.glass?.dropAtlas();
+  }
+
+  /**
+   * What the player hears from (audio/sound.ts, sim/sounds.ts): the land and the clock, the eye and how fast it moves, and
+   * the feet while they walk on the ground. Null until the land's ecology is made or while the view is not running.
+   */
+  hearing(): Hearing | null {
+    const e = this.ecology;
+    if (!e || !this.loop.running) return null;
+    const view = this.current(), h = this.habitat, at = fromWorld(h.profile, ...view.eye), c = this.character;
+    const onFoot = !!c && !this.flyer && !this.cabin?.aboard && !this.arrivalReveal;
+    const v = onFoot ? c.velocity : [0, 0, 0] as Vec3;
+    const along = v3madd(v, view.up, -v3dot(v, view.up)), speed = Math.hypot(...along);
+    let feet: Hearing['feet'] = null;
+    if (onFoot && (c.grounded || c.swimming)) {
+      const f = fromWorld(h.profile, ...c.feet());
+      feet = { theta: f.theta, s: f.s, h: f.h, speed };
+    }
+    return {
+      ecology: e,
+      time: this.time,
+      listener: { theta: at.theta, s: at.s, h: at.h, ground: this.standOn(at.theta, at.s), below: this.below, speed: this.eyeSpeed },
+      eye: view.eye, look: view.look, up: view.up,
+      feet,
+      gravity: h.gravityAt(Math.hypot(view.eye[0], view.eye[1])),
+    };
   }
 
   /** Lines for the debug menu. */
@@ -943,6 +972,9 @@ export class InteriorView {
     this.loop.set(on);
   }
 
+  /** How fast the eye went over the last frame (m/s; the wind it hears), and where it was. A jump (Go) is no speed. */
+  private eyeSpeed = 0;
+  private lastEye: Vec3 | null = null;
   /** The last frame's time step (s), for posing the body. */
   private frameDt = 0;
 
@@ -988,6 +1020,9 @@ export class InteriorView {
     this.simulate(dt, this.current().eye);
     this.place();
     const guide = this.arrivalGuide, eye = this.current().eye;
+    const went = this.lastEye && dt > 0 ? Math.hypot(eye[0] - this.lastEye[0], eye[1] - this.lastEye[1], eye[2] - this.lastEye[2]) / dt : 0;
+    this.eyeSpeed = went > TELEPORT ? 0 : went;
+    this.lastEye = eye;
     if (guide) {
       const near = !this.below && Math.hypot(...eye.map((v, k) => v - guide.feet[k])) < guide.handrail * 35;
       this.onArrival?.(this.arrivalReveal ? Math.max(0, this.arrivalReveal.elapsed) / REVEAL_SECONDS : 1, near);
