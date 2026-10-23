@@ -37,6 +37,8 @@ export const REFERENCE: HabitatParams = {
   day: { length: 86400, daylight: 0.65, peakWidth: 0.14, base: 0.3, night: 0.03 },
   exterior: { brimReach: 1.6, brimSpacing: 0.4, maxBrims: 8, brimThickness: 2, brimMaterial: { density: 1800, strength: 3e9, safetyFactor: 1.5 }, spindleLength: 0.25, mastLength: 0.05, berthArms: 6, bore: 0.12, keepOut: 500, panel: 40, campaign: { around: 12, along: 30 }, panelLife: 120, starfloors: 0.004, drones: { trackEvery: 24, spacing: 2500, size: 3, speed: 1.5 }, antennas: { count: 5, dish: 0.6 }, parts: { module: 2.5, cell: 0.156, plate: 3, handrail: 1.1 } },
   climate: 'temperate-mild',
+  // The sample habitat's Mind (docs/design/README.md, 2026-10-23).
+  mind: 'A Little More Room Than Strictly Necessary',
   // Three valleys (O'Neill's three land strips), the wild fifth of the floor a reserve, districts of ten thousand.
   plan: { valleys: 3, reserve: 0.22, districtPeople: 10000, entranceSpacing: 1200, spiral: 0.6, pathWidth: { sunwalk: 12, way: 3, trail: 1.2 }, places: { orchard: 120, parcel: 150, hall: 72 } },
   // Bays of 30 m between pillars of cast regolith; two people to a household, half a bay of home each.
