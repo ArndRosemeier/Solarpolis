@@ -3,6 +3,7 @@ import { homePlan } from './gen/homeInterior';
 import { underHousesIn, bayFrame } from './gen/underMesh';
 import { neighboursAt } from './sim/neighbourhood';
 import { ExitMarker } from './app/exitMarker';
+import { SpeechBubbles } from './app/bubbles';
 import { ArrivalCard } from './app/arrivalCard';
 /**
  * The page: the header with the version and What's new, the memory watchdog, the debug menu, and the current view:
@@ -140,6 +141,10 @@ const insideSlot = new ViewSlot('Hold the right mouse button to look around · W
   const exits = new ExitMarker();
   insideSlot.box.append(exits.box);
   v.onExit = (exit, eye, forward, up) => exits.showExit(exit, eye, forward, up);
+  // People talk in silent speech bubbles (Arnd, 2026-10-23).
+  const speech = new SpeechBubbles(() => h.params.life.talk.words);
+  insideSlot.box.append(speech.box);
+  v.onTalk = (bubbles) => speech.showBubbles(bubbles);
   const room = new HomeControls((mode) => v.arrangeHome(mode));
   insideSlot.box.append(room.root);
   v.onRoom = (state) => room.updateRoom(state);
@@ -152,6 +157,7 @@ const insideSlot = new ViewSlot('Hold the right mouse button to look around · W
   memory.track('player body', () => v.bodyBytes());
   memory.track('people', () => v.peopleBytes());
   memory.track('drones', () => v.droneBytes());
+  memory.track('talk', () => v.talkBytes());
   memory.track('animals', () => v.animalBytes());
   return v;
 });
@@ -352,6 +358,8 @@ besideParty('Beside the nearest dancers', 20000, (p) => p.act === 'dance');
 besideParty('Beside the nearest pair talking with their hands', 20000, talksWithHands);
 besideParty('Beside the nearest one stretching', 20000, (p) => p.act === 'stretch');
 besideParty('Beside the nearest one at standing work', 20000, (p) => p.act === 'work' && p.posture === POSE.upright);
+// The speech bubbles: a party holding a conversation (Arnd, 2026-10-23).
+besideParty('Beside the nearest party talking', 20000, (p) => p.act === 'talk' && p.size > 1 && p.court >= 0);
 /** Before the nearest herd of deer (within a few km, or else in the wild reserve), approached from where the player stands. */
 toPlace('Before the nearest herd', 60, (eco, t, s) => {
   const h = eco.terrain.habitat, v = view(), r = h.radius;

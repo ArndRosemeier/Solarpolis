@@ -633,6 +633,22 @@ export function personKey(p: Pick<Person, 'court' | 'outing' | 'below'>): number
   return p.below ? -(2 ** 40) - p.outing : p.court < 0 ? -1 - p.outing : p.court * 2 ** 22 + p.outing;
 }
 
+/** One number for someone's party, the same for every member (a shared domestic gathering's own, below). */
+export function partyKey(p: Pick<Person, 'court' | 'outing' | 'member' | 'gathering'>): number {
+  return p.gathering ?? (personKey({ court: p.court, outing: p.outing - p.member }) | 0);
+}
+
+/**
+ * Who is in someone's party up on the land at clock time t: its residents in member order (0 chose where to go), or
+ * an empty list for a Sunwalker or someone below (their parties are kept elsewhere).
+ */
+export function partyMembers(h: Habitat, t: number, p: Pick<Person, 'court' | 'outing' | 'member' | 'size' | 'below'>): number[] {
+  if (p.below || p.court < 0) return [];
+  const o = outingsOf(h, Math.floor(t / h.params.day.length), p.court), lead = p.outing - p.member, out: number[] = [];
+  for (let k = 0; k < p.size && lead + k < o.resident.length; k++) out.push(o.resident[lead + k]);
+  return out;
+}
+
 /** How long one turn to speak lasts in a party that talks (s), at least; a turn runs on to twice this. */
 const TURN_TALK = 4;
 
@@ -642,7 +658,7 @@ const TURN_TALK = 4;
  */
 export function talkerAt(p: Pick<Person, 'court' | 'outing' | 'member' | 'size' | 'gathering'>, t: number): number {
   if (p.size < 2) return -1;
-  const party = p.gathering ?? (personKey({ court: p.court, outing: p.outing - p.member }) | 0);
+  const party = partyKey(p);
   // Turns in steps of TURN_TALK s; a step continues the last turn half the time, so turns run from one step to many.
   const step = Math.floor(t / TURN_TALK);
   let k = step;
