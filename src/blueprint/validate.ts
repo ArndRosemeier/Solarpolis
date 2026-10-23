@@ -99,7 +99,7 @@ export function validate(h: Habitat): Finding[] {
   if (!([lf.outings, lf.regulars, lf.sunwalk, lf.night, lf.shells, lf.minds].every(share) && lf.sunwalk + lf.night <= 1 && lf.stay > 0 && lf.stay < p.day.length / 2 && lf.pause > 0 && lf.pause < p.day.length / 2 && lf.walk > 0 && lf.reach > 0
     && lf.parties.length > 0 && lf.parties.length <= 16 && lf.parties.every(share) && Math.abs(lf.parties.reduce((a, b) => a + b, 0) - 1) < 1e-6))
     out.push({ id: 'life', severity: 'invalid', message: 'life needs shares from 0 to 1 (Sunwalk and night outings together at most all of them), a stay and a pause > 0 under half a day, a walking speed and a reach > 0, and party shares (1 to 16 sizes) that sum to 1' });
-  const dr = lf.drones, counts = [dr.couriers, dr.tenders, dr.surveyors, dr.lifters, dr.gliders, dr.guardians];
+  const dr = lf.drones, counts = [dr.couriers, dr.tenders, dr.surveyors, dr.lifters, dr.gliders, dr.guardians, dr.watchers];
   if (!(counts.every((c) => c >= 0) && dr.cruise > 0 && dr.lane > 0 && dr.lane < p.radius / 4 && dr.round > 0 && dr.round < p.day.length && Number.isInteger(dr.designs) && dr.designs >= 1
     && share(dr.persons) && dr.persons + lf.shells <= 1 && Number.isInteger(dr.bodies) && dr.bodies >= 1))
     out.push({ id: 'life', severity: 'invalid', message: 'drones need counts ≥ 0, a cruise speed > 0, a lane > 0 under a quarter of the radius, a round > 0 under a day, a whole number of designs and of bodies (at least 1 each), and a share of residents in drone bodies (with the shells at most all of them)' });

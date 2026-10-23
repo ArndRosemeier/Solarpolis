@@ -32,6 +32,7 @@ export const KIT: Readonly<Record<Role, { archetypes: readonly ArchetypeId[]; pr
   lifter: { archetypes: ['lifter'], propulsion: ['rotor', 'ducted'], palettes: ['industrial', 'corporate'] },
   glider: { archetypes: ['manta'], propulsion: ['ion', 'ducted'], palettes: ['chrome', 'arctic'] },
   guardian: { archetypes: ['sentinel'], propulsion: ['ducted', 'ring'], palettes: ['medical', 'arctic'] },
+  watcher: { archetypes: ['sentinel'], propulsion: ['ring', 'ion'], palettes: ['arctic', 'chrome'] },
   person: { archetypes: ['sentinel', 'scout', 'sentinel'], propulsion: ['ring', 'ducted', 'ion'], palettes: ['chrome', 'corporate', 'medical', 'arctic', 'explorer', 'desert', 'racing', 'neon'] },
 };
 
@@ -41,11 +42,22 @@ export function designsOf(h: Habitat, role: Role): number {
   return role === 'person' ? d.bodies : d.designs;
 }
 
+/**
+ * A watcher, the habitat Mind's eye (design "Nobody falls far"), is plainly a camera: a small round body with nothing
+ * on it but one big lens in its front, a dark bezel round the glass and a lit ring inside, turning to look about; no
+ * tools, no antennae, no strobes, ring or ion lift (quiet, no rotors). Its length (m) between these, and the lens's
+ * size against the kit's own eye.
+ */
+export const CAMERA = { size: [0.4, 0.55], lens: 2.6 } as const;
+
 /** The spec of a role's design `index` (Actors' `designDrone`, unbuilt): a pure function of the habitat's seed. */
 function specOf(h: Habitat, role: Role, index: number): DroneSpec {
   const kit = KIT[role], seed = deriveSeed(h.seed, 'drone', role, index), chance = (k: number): number => hashToFloat(hash3i(seed, k, 0, 0));
   const byChance = <T>(list: readonly T[], k: number): T => list[Math.floor(chance(k) * list.length)];
-  return designDrone({ seed, archetype: byChance(kit.archetypes, 3), propulsion: byChance(kit.propulsion, 2), palette: byChance(kit.palettes, 1), armed: false });
+  const base = { seed, archetype: byChance(kit.archetypes, 3), propulsion: byChance(kit.propulsion, 2), palette: byChance(kit.palettes, 1), armed: false };
+  if (role !== 'watcher') return designDrone(base);
+  const spec = designDrone({ ...base, hull: 'orb', size: CAMERA.size[0] + (CAMERA.size[1] - CAMERA.size[0]) * chance(4), tools: false });
+  return { ...spec, sensors: [{ kind: 'eye', mount: 'nose', size: CAMERA.lens }], tools: [], antennae: [], lights: { ...spec.lights, strobe: false, underglow: false } };
 }
 
 /**

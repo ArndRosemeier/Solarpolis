@@ -473,9 +473,9 @@ toPlace('Before the nearest herd', 60, (eco, t, s) => {
 });
 /**
  * Floating `back` m from the nearest drone at work (hovering at a spot it is still at half a minute on), a little
- * above it, looking at it: a tender over its orchard, a lifter at the Gate, a courier at its stop.
+ * above it, looking at it: a tender over its orchard, a lifter at the Gate, a courier at its stop (only of `role`, if given).
  */
-const toDrone = (label: string, back: number): void => debug.add({
+const toDrone = (label: string, back: number, role?: string): void => debug.add({
   label, group: 'Go', run: () => {
     const v = view(), t = v?.ecology?.terrain, at = v?.walker.at;
     if (!v || !t || !at) return;
@@ -483,7 +483,7 @@ const toDrone = (label: string, back: number): void => debug.add({
     let best: { theta: number; s: number; h: number } | null = null, gap = Infinity;
     fleetOf(t).forEach((_, id) => {
       const f = flierAt(t, id, v.time), later = flierAt(t, id, v.time + 30);
-      if (f.doing !== 'work' || later.theta !== f.theta || later.s !== f.s) return;
+      if (f.doing !== 'work' || later.theta !== f.theta || later.s !== f.s || (role && f.role !== role)) return;
       const w = toWorld(P, f), d = Math.hypot(w[0] - me[0], w[1] - me[1], w[2] - me[2]);
       if (d < gap) { gap = d; best = f; }
     });
@@ -497,6 +497,8 @@ const toDrone = (label: string, back: number): void => debug.add({
 });
 toDrone('Fly: beside the nearest drone at work', 4);
 toDrone('Fly: the nearest drone at work from 60 m', 60);
+toDrone('Fly: beside the nearest watcher (the Mind\'s camera drone)', 2, 'watcher');
+toDrone('Fly: the nearest watcher from 20 m', 20, 'watcher');
 /** Low beside the nearest animal of a kind out on the land around the player, `back` m off its side, looking at it. */
 const toAnimal = (kind: string, label: string, back: number): void => debug.add({
   label, group: 'Go', run: () => {

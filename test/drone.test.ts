@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ARCHETYPES } from '@actors/drone';
 import { MATRIX, derive } from '../src/blueprint';
-import { KIT, LIGHT_SCALE, STROBE_CODE, designGuess, designsOf, droneDesign, type DesignMesh } from '../src/gen/drone';
+import { CAMERA, KIT, LIGHT_SCALE, STROBE_CODE, designGuess, designsOf, droneDesign, type DesignMesh } from '../src/gen/drone';
 import { simplify, type Shape } from '../src/gen/simplify';
 import { ROLES } from '../src/sim';
 
@@ -92,4 +92,18 @@ test('drone bodies people wear: their own designs, small, and their far look gue
   assert.ok(g.height > ext[1] / 2.5 && g.height < ext[1] * 2.5, `height ${g.height.toFixed(2)} for ${ext[1].toFixed(2)}`);
   assert.ok(g.across > across / 2.5 && g.across < across * 2.5, `across ${g.across.toFixed(2)} for ${across.toFixed(2)}`);
   assert.ok(g.albedo.every((v) => v >= 0 && v <= 1));
+});
+
+test('drone: a watcher, the Mind\'s eye, is plainly a camera: small, round, one big lit lens in its front, no strobes', () => {
+  const h = derive(MATRIX.find((m) => m.name === 'small')!.params);
+  for (let k = 0; k < designsOf(h, 'watcher'); k++) {
+    const d = droneDesign(h, 'watcher', k), ext = d.max.map((v, i) => v - d.min[i]);
+    assert.ok(d.name.includes(ARCHETYPES.sentinel.name), d.name);
+    assert.ok(Math.max(ext[0], ext[2]) < 2 * CAMERA.size[1], `small: ${ext.map((v) => v.toFixed(2))}`);
+    const spin = d.body.spin, paint = d.body.paint, pos = d.body.positions, n = pos.length / 3;
+    assert.ok(Array.from({ length: n }, (_, i) => spin[i * 4 + 3]).every((w) => w > -STROBE_CODE), 'no strobes');
+    // The lens's lit ring: lights out in front (+z), well past the body's middle.
+    const front = Array.from({ length: n }, (_, i) => i).filter((i) => paint[i * 4 + 3] > 1 && paint[i * 4 + 3] < 255 && pos[i * 3 + 2] > 0.6 * d.max[2]);
+    assert.ok(front.length > 0, 'a lit lens in front');
+  }
 });

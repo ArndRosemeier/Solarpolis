@@ -26,6 +26,11 @@ for (const { name, params } of MATRIX) {
     assert.equal(count('glider'), Math.round((d.gliders * floor) / 1000));
     if (plan.sites.some((x) => x.kind === 'lift-stair')) assert.ok(count('lifter') >= Math.floor(d.lifters));
     if (plan.sites.some((x) => x.kind === 'summit-hut')) assert.ok(count('guardian') >= 2 && count('surveyor') >= Math.floor(d.surveyors));
+    // The Mind's watchers over the places people go: about `watchers` for each, low over the people there.
+    const venues = venuesOf(h).venues.length;
+    assert.ok(count('watcher') >= Math.floor(d.watchers) * venues && count('watcher') <= Math.ceil(d.watchers) * venues, `${count('watcher')} watchers for ${venues} places`);
+    if (d.watchers * venues >= 3) assert.ok(count('watcher') > 0);
+    for (const j of fleet) if (j.role === 'watcher') assert.ok(j.move === 'roam' && j.height < d.lane);
     for (const j of fleet) assert.ok(ROLES.includes(j.role) && Number.isInteger(j.design) && j.design >= 0 && j.design < d.designs);
     assert.equal(fleetOf(t), fleet, 'made once per terrain');
   });
