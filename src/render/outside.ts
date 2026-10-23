@@ -15,7 +15,7 @@ import { Color, Mesh, PerspectiveCamera, Scene, SphereGeometry, Texture, type We
 import { Stage, createRenderer } from '@futuremagic/stage';
 import { Rng, deriveSeed, v3add, v3dot, v3len, v3scale, v3sub, v3norm, type Vec3 } from '@futuremagic/core';
 import type { Habitat } from '../blueprint';
-import { DAY, EARTH, MOON, REFERENCE_SPACE, SpaceFlyer, arrival, attractLoop, calendarOf, chooseStart, decodeStars, guestShip, julianDay, makeSpace, shipShape, skyFrom, type Arrival, type ArrivalFrame, type Cinema, type CinemaFrame, type Mat3, type ShipShape, type Space, type SkyView } from '../space';
+import { DAY, EARTH, MOON, REFERENCE_SPACE, SpaceFlyer, arrival, attractLoop, calendarOf, chooseStart, decodeStars, guestShip, julianDay, makeSpace, shipLightsOf, shipShape, skyFrom, type Arrival, type ArrivalFrame, type Cinema, type CinemaFrame, type HullLight, type Mat3, type ShipShape, type Space, type SkyView } from '../space';
 import { SKY, STARS, outsideKinds, standInAttribute } from './materials';
 import { filtered } from './textures';
 import { outside, skyMaps } from './skyShaders';
@@ -23,6 +23,7 @@ import { DARKEST, PERIPHERY, adapt, exposureFor, meterRays, starExposure, sunInV
 import { NecklaceView } from './necklace';
 import { meshGeometry, setPose } from './geometry';
 import { SHIP_ALBEDO, ShipMeshes, shipAxes } from './ship';
+import { LampPoints } from './lamps';
 import { BORE_ALBEDO } from './bore';
 import { BORE_LIGHT } from './hullShaders';
 import { FrameLoop, dragToLook, draw, fitCanvas, moveKeys } from './surface';
@@ -73,6 +74,8 @@ export class OutsideView {
   /** The passenger's ship (space/traffic.ts, `guestShip`): the title's torch ship, the one that berths after Start. */
   private shipShape: ShipShape;
   private ship: ShipMeshes | null = null;
+  /** The title ship's navigation lights (space/lights.ts). */
+  private shipLamps: { lights: HullLight[]; points: LampPoints } | null = null;
   /** Called each frame of the attract loop with how far the title has faded in (0–1). */
   onTitle: ((fade: number) => void) | null = null;
   /** Each frame of the arrival after Start: how far in it is (s) and the arrival itself (its sounds and the Mind's lines). */
@@ -244,6 +247,8 @@ export class OutsideView {
     // The title's ship was made for the last habitat's berths: made again when the title next plays.
     this.ship?.removeFrom(this.stage);
     this.ship = null;
+    this.shipLamps?.points.leave(this.stage);
+    this.shipLamps = null;
     this.flyer = null;
     this.frameHabitat();
     await this.buildNecklace();
@@ -407,8 +412,13 @@ export class OutsideView {
   /** The torch ship of the title flight, where the shot puts it (hidden otherwise). */
   private placeShip(eye: Vec3, at: CinemaFrame['ship']): void {
     if (!this.ship) return;
-    if (!at) { this.ship.hide(); return; }
-    this.ship.pose(shipAxes(at.forward, at.up), v3sub(at.position, eye), at.throttle);
+    this.shipLamps?.points.restart();
+    if (at) {
+      const axes = shipAxes(at.forward, at.up), stern = v3sub(at.position, eye);
+      this.ship.pose(axes, stern, at.throttle);
+      for (const l of this.shipLamps?.lights ?? []) this.shipLamps!.points.shine(l, v3add(stern, apply(axes, l.at)), this.time);
+    } else this.ship.hide();
+    this.shipLamps?.points.send();
   }
 
   /**
@@ -418,8 +428,10 @@ export class OutsideView {
   async startAttract(): Promise<void> {
     if (!this.ship) {
       const ship = new ShipMeshes(this.shipShape, 'torch ship');
-      await ship.addTo(this.stage);
+      const lights = shipLightsOf(this.shipShape), lamps = { lights, points: new LampPoints(lights.length, 'torch ship lights') };
+      await Promise.all([ship.addTo(this.stage), lamps.points.enter(this.stage)]);
       this.ship = ship;
+      this.shipLamps = lamps;
     }
     this.flyer = null;
     const start = chooseStart(this.space, 0);
