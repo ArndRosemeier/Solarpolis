@@ -1134,6 +1134,11 @@ export class InteriorView {
     return caps.hit(this.current().eye, [d.x, d.y, d.z], CAPSULE_SEEN);
   }
 
+  /** A spot `steps` handrails out from the waiting capsule's door step (world), or null: the debug menu stands the player there. */
+  besideCapsule(steps = 3): Vec3 | null {
+    return this.caps?.besideDoor(steps) ?? null;
+  }
+
   /** Get into the waiting capsule: the body walks round to its door from where it stands (too far, the capsule says so). */
   boardCapsule(): void {
     const caps = this.caps;
