@@ -2,6 +2,12 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.162 — More of 3026's clothes
+
+- Residents dress from the whole new Commonwear range: comet flares, cocoon pants, courtyard culottes, glowing lightstream leggings and drift shorts, the arc vest, the solstice bolero and the memory sash.
+- Tops and pants mix from person to person, so a crowd shows many more outfits.
+- Sheer stockings keep the skin under them, now fixed in Actors itself.
+
 ## v0.161 — A capsule waits where you arrive
 
 - When you arrive, a capsule is already standing on its berth by the arrival terrace, ready to take you anywhere: click it to get in.
