@@ -9,8 +9,10 @@
  * from a seed and the berth the ship must fit. Pure.
  */
 import { Rng } from '@futuremagic/core';
+import { fitOut } from './shipDetail';
 
-export type Drive = 'torch' | 'sail';
+/** A torch, a laser sail, or thrusters alone (a port's tugs and drones: space/portCraft.ts). */
+export type Drive = 'torch' | 'sail' | 'thrusters';
 
 export interface ShipParams {
   drive: Drive;
@@ -26,13 +28,63 @@ export interface ShipParams {
   seed: number;
 }
 
-export type ShipRole = 'hull' | 'crew' | 'tank' | 'radiator' | 'drive' | 'truss' | 'cargo' | 'sail';
+/**
+ * What a part is: its albedo by default (render/ship.ts). `fitting` is small dark hardware (thrusters, booms, seams);
+ * `window` gives off its own light (its `colour` is its luminance, relative to white paper in full sunlight).
+ */
+export type ShipRole = 'hull' | 'crew' | 'tank' | 'radiator' | 'drive' | 'truss' | 'cargo' | 'sail' | 'fitting' | 'window';
 
-/** A round piece along the ship's axis, or a box (radiator wings, truss). Positions in the ship frame (m). */
+/** Where a part is off the ship's axis (y, z; m), and its own albedo in place of its role's. */
+interface Placed {
+  offset?: [number, number];
+  colour?: [number, number, number];
+}
+
+/**
+ * A round piece along the ship's axis (closed at both ends), a cone (closed at its wide end), a shell (one surface of
+ * revolution between two rings, no ends, all round or only the angles `arc`: its front faces (x, r) along
+ * (r0 − r1, to − from), so outward going forward at one radius, forward from the outer ring to the inner at one x),
+ * a box, turned `turn` about the ship's axis (from +y toward +z), or a strut: a square beam `width` wide from a to b.
+ * Angles around the axis are from +y toward +z.
+ * Positions in the ship frame (m).
+ */
 export type ShipPart =
-  | { shape: 'cylinder'; role: ShipRole; from: number; to: number; radius: number; offset?: [number, number] }
-  | { shape: 'cone'; role: ShipRole; from: number; to: number; r0: number; r1: number }
-  | { shape: 'box'; role: ShipRole; center: [number, number, number]; half: [number, number, number] };
+  | ({ shape: 'cylinder'; role: ShipRole; from: number; to: number; radius: number } & Placed)
+  | ({ shape: 'cone'; role: ShipRole; from: number; to: number; r0: number; r1: number } & Placed)
+  | ({ shape: 'shell'; role: ShipRole; from: number; r0: number; to: number; r1: number; arc?: [number, number] } & Placed)
+  | ({ shape: 'box'; role: ShipRole; center: [number, number, number]; half: [number, number, number]; turn?: number } & Omit<Placed, 'offset'>)
+  | ({ shape: 'strut'; role: ShipRole; a: [number, number, number]; b: [number, number, number]; width: number } & Omit<Placed, 'offset'>);
+
+/** A part's extent along the ship's axis, how far it reaches from the axis, and how far out toward +z (m). */
+export function partSpan(q: ShipPart): { x0: number; x1: number; radius: number; side: number } {
+  if (q.shape === 'box' || q.shape === 'strut') {
+    const pts: [number, number, number][] = [];
+    if (q.shape === 'box') {
+      const t = q.turn ?? 0, c = Math.cos(t), s = Math.sin(t);
+      for (const a of [-1, 1]) for (const b of [-1, 1]) for (const d of [-1, 1]) {
+        const y = b * q.half[1], z = d * q.half[2];
+        pts.push([q.center[0] + a * q.half[0], q.center[1] + c * y - s * z, q.center[2] + s * y + c * z]);
+      }
+    } else for (const e of [q.a, q.b]) for (const b of [-1, 1]) for (const d of [-1, 1]) pts.push([e[0], e[1] + (b * q.width) / 2, e[2] + (d * q.width) / 2]);
+    return { x0: Math.min(...pts.map((v) => v[0])), x1: Math.max(...pts.map((v) => v[0])), radius: Math.max(...pts.map((v) => Math.hypot(v[1], v[2]))), side: Math.max(...pts.map((v) => v[2])) };
+  }
+  const r = q.shape === 'cylinder' ? q.radius : Math.max(q.r0, q.r1), [oy, oz] = q.offset ?? [0, 0];
+  return { x0: Math.min(q.from, q.to), x1: Math.max(q.from, q.to), radius: r + Math.hypot(oy, oz), side: r + oz };
+}
+
+/** Each role's albedo (linear), unless a part gives its own. A window's is its glass, unlit. */
+export const ROLE_ALBEDO: Record<ShipRole, [number, number, number]> = {
+  hull: [0.6, 0.6, 0.62],
+  crew: [0.72, 0.71, 0.68],
+  tank: [0.5, 0.48, 0.44],
+  radiator: [0.06, 0.06, 0.065],
+  drive: [0.3, 0.29, 0.28],
+  truss: [0.35, 0.35, 0.36],
+  cargo: [0.62, 0.6, 0.55],
+  sail: [0.78, 0.78, 0.8],
+  fitting: [0.16, 0.16, 0.17],
+  window: [0.02, 0.025, 0.03],
+};
 
 export interface ShipShape {
   params: ShipParams;
@@ -109,8 +161,8 @@ export function sailShip(p: ShipParams): ShipShape {
   return { params: p, parts, nozzle: 0, plumeLength: 0, plumeRadius: 0 };
 }
 
-/** A ship's shape from its blueprint. */
-export const shipShape = (p: ShipParams): ShipShape => (p.drive === 'sail' ? sailShip(p) : torchShip(p));
+/** A ship's shape from its blueprint, with its fittings (space/shipDetail.ts). */
+export const shipShape = (p: ShipParams): ShipShape => fitOut(p.drive === 'sail' ? sailShip(p) : torchShip(p));
 
 /** The ranges ships are made in: length as a multiple of the berth arm's, beam of the length, thrusters (m/s²). */
 export const SHIP_DESIGN = {

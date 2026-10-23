@@ -19,7 +19,7 @@
  */
 import type { Vec3 } from '@futuremagic/core';
 import { berthArmAt, exteriorDistance, type Exterior, type Habitat } from '../blueprint';
-import type { ShipShape } from './ship';
+import { partSpan, type ShipShape } from './ship';
 
 /** The Sun's illuminance at 1 AU (lux): the unit a light's flux is given in. */
 export const SUN_LUX = 128_000;
@@ -163,11 +163,8 @@ export function hullLightsOf(h: Habitat): HullLight[] {
 function widest(shape: ShipShape): { x: number; z: number } {
   let best = { x: shape.params.length / 2, z: shape.params.beam / 2 };
   for (const p of shape.parts) {
-    const reach = p.shape === 'box' ? Math.abs(p.center[2]) + p.half[2]
-      : p.shape === 'cylinder' ? p.radius + Math.hypot(...(p.offset ?? [0, 0]))
-      : Math.max(p.r0, p.r1);
-    const x = p.shape === 'box' ? p.center[0] : (p.from + p.to) / 2;
-    if (reach > best.z) best = { x, z: reach };
+    const s = partSpan(p);
+    if (s.side > best.z) best = { x: (s.x0 + s.x1) / 2, z: s.side };
   }
   return best;
 }

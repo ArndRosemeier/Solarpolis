@@ -272,6 +272,11 @@ export class NecklaceView {
     return this.drawn.reduce((n, d) => n + (d.detail?.bytes() ?? 0), 0);
   }
 
+  /** The bytes the ships at the drawn habitats hold. */
+  trafficBytes(): number {
+    return this.drawn.reduce((n, d) => n + (d.traffic?.shipBytes() ?? 0), 0);
+  }
+
   /** Give memory back: detail tiles not drawn this frame go. */
   shed(): void {
     for (const d of this.drawn) d.detail?.shed();
