@@ -2,6 +2,17 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.170 — Stepping off a real brink
+
+- The debug entry that walks you to a brink now takes the deepest drop within 1.5 km instead of the nearest. The nearest was often a bank a few metres high that you slide down rather than fall from, so the guardians had nothing to catch.
+- The `catch` shots view starts in the nearest meadow, so the 50 m and 8 m drops land on open ground instead of inside a wood.
+- The Mind's camera drones turn to look at you. A watcher at work within 40 m faces you and tips its lens down toward your eyes, so you see the camera, not the back of an orb.
+
+## v0.169 — A notice for newcomers about the light gravity
+
+- Stepping out of the port door, you now walk under a big panel of glowing letters hung from the porch: LIGHT GRAVITY and how strong it is here (0.04 g in the reference habitat). It says that you weigh a 25th of your weight on the floor, that nothing is wrong (it is the spin, this close to the axis), to move gently, and that your weight comes back as you go down.
+- Its words come from the habitat itself: its name, the gravity on the landing and on the floor.
+
 ## v0.168 — The Mind's eyes: camera drones
 
 - Small round camera drones now hang a while over the places people go, then drift on: one big lens with a lit ring in their front, nothing else on them. They are how the habitat's Mind sees everything, and why the guardians are already on their way when you step off an edge.

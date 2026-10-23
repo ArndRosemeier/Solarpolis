@@ -20,7 +20,7 @@
 import { Group, InstancedInterleavedBuffer, Vector2, type Camera, type InstancedBufferGeometry, type Mesh } from 'three/webgpu';
 import type { Stage } from '@futuremagic/stage';
 import { hash3i, hashToFloat } from '@futuremagic/core';
-import { toView, toWorld, type Habitat, type Vec3, apart as away } from '../blueprint';
+import { fromWorld, toView, toWorld, wrapAngle, type Habitat, type Vec3, apart as away } from '../blueprint';
 import type { Terrain } from '../gen/terrain';
 import { horizonAt, OPEN_SKY } from '../gen/horizon';
 import { BODY_WIDTH, POSE, SPECK_STRIDE, packColor, writeSpeck } from '../gen/standIn';
@@ -54,6 +54,13 @@ const PERSONS_ROOM = 8;
 /** A person in a drone body nods while it is their turn to talk: this far (rad), once in this long (s). */
 const NOD = 0.07;
 const NOD_EVERY = 1.3;
+/**
+ * The Mind's camera drones (sim/air.ts watchers) at work turn their lens on whoever comes this near (m, over the floor)
+ * and tip it down toward their eyes, at most this far (rad), easing in at this rate (1/s): you see it look at you.
+ */
+const WATCHED_WITHIN = 40;
+const LOOK_DOWN = 0.6;
+const LOOK_RATE = 2;
 
 type Level = 0 | 1 | 2;
 
@@ -92,6 +99,8 @@ interface One {
   litAt: Vec3;
   level: Level;
   phase: number;
+  /** How far it tips forward to look down at the eye (rad; a watcher's, else 0). */
+  look: number;
 }
 
 export class FlierView {
@@ -191,8 +200,8 @@ export class FlierView {
     this.counts = [0, 0, 0];
     if (!below) this.ones.forEach((one, id) => {
       const due = !one.flier || away(one.at, eye) < EVERY_FRAME || (id + this.frameNo) % FAR_SHARE === 0;
-      if (due) this.putDrone(one, flierAt(this.terrain, id, t), one.flier ? dt : 0);
-      this.write(one, byDesign.get(`${one.flier!.role}/${one.flier!.design}`)!, frame, 0);
+      if (due) this.putDrone(one, this.watching(one, flierAt(this.terrain, id, t), eye, one.flier ? dt : 0), one.flier ? dt : 0);
+      this.write(one, byDesign.get(`${one.flier!.role}/${one.flier!.design}`)!, frame, one.look);
     });
     // The people in drone bodies: every frame, from the people's view's latest word on where they are.
     const here = new Set<number>();
@@ -227,7 +236,7 @@ export class FlierView {
 
   /** A drone not yet placed. */
   private unplaced(seed: number): One {
-    return { flier: null, at: [0, 0, 0], low: [0, 0, 0], turn: 0, roll: 0, horizon: [OPEN_SKY, OPEN_SKY], litAt: [Infinity, 0, 0], level: 2, phase: 1000 * hashToFloat(seed) };
+    return { flier: null, at: [0, 0, 0], low: [0, 0, 0], turn: 0, roll: 0, horizon: [OPEN_SKY, OPEN_SKY], litAt: [Infinity, 0, 0], level: 2, phase: 1000 * hashToFloat(seed), look: 0 };
   }
 
   /** Write a placed drone at its level by its size on screen (a margin each way, so it does not flicker at the line); `nod` tips it forward (rad). */
@@ -260,6 +269,24 @@ export class FlierView {
   measured(design: number): { height: number; width: number; bands: [number, number, number] } | null {
     const d = this.drawn?.find((x) => x.design.role === 'person' && x.design.index === design);
     return d ? { height: d.height, width: d.across / (d.height * BODY_WIDTH), bands: [d.color, d.color, d.color] } : null;
+  }
+
+  /**
+   * A watcher at work near the eye faces it (its heading turned toward the eye; `putDrone` eases the turn) and tips its
+   * lens down to it; any other drone, or one gone on, eases back level. Returns the flier to put.
+   */
+  private watching(one: One, f: Flier, eye: Vec3, dt: number): Flier {
+    let look = 0, out = f;
+    if (f.role === 'watcher' && f.doing === 'work') {
+      const e = fromWorld(this.habitat.profile, eye[0], eye[1], eye[2]), r = Math.hypot(eye[0], eye[1]);
+      const across = wrapAngle(e.theta - f.theta + Math.PI) - Math.PI, side = across * r, along = e.s - f.s, flat = Math.hypot(side, along);
+      if (flat < WATCHED_WITHIN) {
+        out = flat > 0.5 ? { ...f, heading: Math.atan2(side, along) } : f;
+        look = Math.min(LOOK_DOWN, Math.max(0, Math.atan2(f.h - e.h, Math.max(0.5, flat))));
+      }
+    }
+    one.look = dt > 0 ? one.look + (look - one.look) * Math.min(1, dt * LOOK_RATE) : look;
+    return out;
   }
 
   /** Put a drone where the fleet says it is now: its ground point, its turn eased toward its way, its bank, its light. */
