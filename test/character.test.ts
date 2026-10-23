@@ -2,9 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MATRIX, fromWorld, toWorld, type Vec3 } from '../src/blueprint';
 import { buildPatch } from '../src/gen/patch';
-import { coast, upAt } from '../src/world/motion';
+import { coast, feltGravity, spinwardAt, upAt } from '../src/world/motion';
 import { PhysicsWorld, PHYSICS_STEP } from '../src/physics/world';
-import { HUMAN, JUMP_SPEED } from '../src/physics/character';
+import { GRIP, HUMAN, HUMAN_DRAG, JUMP_SPEED } from '../src/physics/character';
 import { flatOf, terrainOf } from './worlds';
 
 /** Step for `seconds`, or until `each` says stop. */
@@ -17,26 +17,27 @@ for (const { name } of MATRIX) {
   const t = flatOf(name), h = t.habitat;
   const s = (h.profile.floorStart + h.profile.floorEnd) / 2;
 
-  test(`character (${name}): stands, walks along the ground, and a jump lands where the turning frame says`, async () => {
+  test(`character (${name}): stands, walks along the ground, a jump lands where the turning frame says, and the feet grip by the weight felt`, async () => {
     const world = await PhysicsWorld.create(h);
     world.setGround(buildPatch(t, 0, s, 64, 2));
     const c = world.addCharacter(toWorld(h.profile, { theta: 0, s, h: 0.05 }));
     run(world, 0.5);
     assert.ok(c.grounded, 'grounded');
     assert.ok(Math.abs(fromWorld(h.profile, ...c.feet()).h) < 0.1, `feet on the ground: ${fromWorld(h.profile, ...c.feet()).h}`);
-    assert.deepEqual(c.up.map((x) => Math.round(x * 1e6) / 1e6), upAt(c.feet())!.map((x) => Math.round(x * 1e6) / 1e6));
+    assert.ok(c.up.every((x, i) => Math.abs(x - upAt(c.feet())![i]) < 1e-6), `up ${c.up} vs ${upAt(c.feet())}`);
 
-    // Walk 2 s at 3 m/s along +z: about 6 m, still on the ground.
-    const z0 = c.feet()[2];
+    // Walk 2 s at 3 m/s along +z: about 6 m, less what getting up to speed through the grip takes, still on the ground.
+    const z0 = c.feet()[2], g0 = h.gravityAt(h.radius);
     run(world, 2, () => { c.stride.walk = [0, 0, 3]; });
     c.stride.walk = [0, 0, 0];
-    assert.ok(Math.abs(c.feet()[2] - z0 - 6) < 0.3, `walked ${c.feet()[2] - z0} m`);
+    const walked = 6 - 9 / (2 * GRIP * g0);
+    assert.ok(Math.abs(c.feet()[2] - z0 - walked) < 0.1, `walked ${c.feet()[2] - z0} m vs ${walked} m`);
     assert.ok(c.grounded, 'still grounded');
     run(world, 0.25);
 
     // Jump straight up: the reference integrator says where it comes down (Coriolis puts it a little antispinward).
     const from = c.feet(), up = upAt(from)!;
-    const expect = coast(h, from, [up[0] * JUMP_SPEED, up[1] * JUMP_SPEED, 0], 30, 1 / 480, (p, v) => v[0] * up[0] + v[1] * up[1] < 0 && Math.hypot(p[0], p[1]) >= Math.hypot(from[0], from[1]));
+    const expect = coast(h, from, [up[0] * JUMP_SPEED, up[1] * JUMP_SPEED, 0], 30, 1 / 480, (p, v) => v[0] * up[0] + v[1] * up[1] < 0 && Math.hypot(p[0], p[1]) >= Math.hypot(from[0], from[1]), HUMAN_DRAG);
     c.stride.jump = true;
     let top = 0, air = 0;
     run(world, 30, () => {
@@ -53,6 +54,26 @@ for (const { name } of MATRIX) {
     assert.ok(drift(expect.p) < 0, 'the reference lands antispinward');
     assert.ok(Math.abs(drift(landed) - drift(expect.p)) < 0.1 * Math.abs(drift(expect.p)) + 0.003, `drift ${drift(landed)} vs ${drift(expect.p)}`);
     assert.ok(Math.hypot(...([0, 1, 2].map((k) => landed[k] - expect.p[k]) as Vec3)) < 2 * JUMP_SPEED * PHYSICS_STEP + 0.02, 'lands where the reference lands');
+
+    // Against the spin the feet feel lighter and grip less, so getting up to speed takes longer than with it.
+    const floor = toWorld(h.profile, { theta: 0, s, h: 0 }), spin = spinwardAt(floor)!;
+    const speed = Math.min(10, 0.25 * h.spin * h.radius), took: number[] = [];
+    for (const sign of [1, -1]) {
+      const c = world.addCharacter(toWorld(h.profile, { theta: 0, s, h: 0.05 }));
+      run(world, 0.3);
+      let time = 0;
+      run(world, 5, () => {
+        if (Math.abs(c.velocity[0] * spin[0] + c.velocity[1] * spin[1]) >= 0.9 * speed) return true;
+        c.stride.walk = [spin[0] * sign * speed, spin[1] * sign * speed, 0];
+        time += PHYSICS_STEP;
+      });
+      took.push(time);
+    }
+    // The grip takes the weight felt on the way: on average about that at the mean speed, plus a little headwind.
+    const felt = (v: number): number => feltGravity(h, floor, [spin[0] * v, spin[1] * v, 0]);
+    const want = (sign: number): number => (0.9 * speed) / (GRIP * felt(sign * 0.45 * speed));
+    assert.ok(took[1] > took[0], `antispinward ${took[1]} s vs spinward ${took[0]} s`);
+    for (const [i, sign] of [[0, 1], [1, -1]]) assert.ok(Math.abs(took[i] - want(sign)) < 0.15 * want(sign) + 2 * PHYSICS_STEP, `${sign > 0 ? 'spinward' : 'antispinward'} ${took[i]} s vs ${want(sign)} s`);
     world.dispose();
   });
 }

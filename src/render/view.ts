@@ -886,6 +886,7 @@ export class InteriorView {
       this.walker.speed = base * run;
       if (this.character) {
         this.character.stride.walk = this.walker.stride({ forward, right });
+        this.character.legs = this.boost;
         if (this.jump) this.character.stride.jump = true;
       } else {
         this.walker.step({ forward, right }, dt);

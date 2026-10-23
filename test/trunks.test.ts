@@ -9,6 +9,7 @@ import { upAt } from '../src/world/motion';
 import { PhysicsWorld, PHYSICS_STEP } from '../src/physics/world';
 import { HUMAN } from '../src/physics/character';
 import { ecologyOf } from './worlds';
+import { STRONG } from './runs';
 
 /** A square this wide (m) around the tree under test: a few neighbours, quick to plant. */
 const SIZE = 24;
@@ -104,6 +105,7 @@ for (const { name, params } of MATRIX) {
     const go = (trunks: boolean): { gone: number; room: number } => {
       world.setGround(trunks ? patch : { ...patch, trunks: new Float32Array(0) });
       const c = world.addCharacter(run!.from);
+      c.legs = STRONG;
       for (let i = 0; i < Math.round(0.4 / PHYSICS_STEP); i++) world.advance(PHYSICS_STEP);
       let room = Infinity;
       // Half a second at a run: 20 m, far past it.

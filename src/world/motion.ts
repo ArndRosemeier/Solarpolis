@@ -7,7 +7,11 @@
  *
  * So a dropped ball lands behind the spot below where it was let go (antispinward) by `habitat.dropOffset(h)`, a
  * thrown one curves, and on an endcap slope "down" leans out from the axis and weakens toward it. The physics
- * (src/physics) applies this to every body; this is the formula and its reference integrator, for tests. Pure.
+ * (src/physics) applies this to every body; this is the formula and its reference integrator, for tests.
+ *
+ * The air turns with the habitat, so in this frame it stands still (wind is not in the physics yet), and anything
+ * moving through it is slowed by drag growing with the square of its speed (`airDrag`): a body thrown against the spin
+ * at the floor's own speed hangs still seen from outside, but in here it meets a gale and is back down in seconds. Pure.
  */
 import type { Habitat, Vec3 } from '../blueprint';
 
@@ -18,17 +22,28 @@ export function apparentAcceleration(h: Habitat, p: Vec3, v: Vec3): Vec3 {
 }
 
 /**
- * Follow a free body for `seconds` with steps of `dt` (classic RK4), without collisions: the reference that the
- * physics engine's motion is checked against.
+ * The air's drag on a body at `p` moving at `v` (habitat frame), as an acceleration (m/s²): −ρ(r) · k · |v| · v / 2,
+ * where `k` is the body's drag area over its mass (Cd · A / m, m²/kg). The air is the habitat's: at rest in its frame
+ * and thinner toward the axis (`habitat.airDensityAt`).
  */
-export function coast(h: Habitat, p: Vec3, v: Vec3, seconds: number, dt = 1 / 240, stop?: (p: Vec3, v: Vec3) => boolean): { p: Vec3; v: Vec3; t: number } {
+export function airDrag(h: Habitat, p: Vec3, v: Vec3, k: number): Vec3 {
+  const c = -0.5 * h.airDensityAt(Math.hypot(p[0], p[1])) * k * Math.hypot(v[0], v[1], v[2]);
+  return [c * v[0], c * v[1], c * v[2]];
+}
+
+/**
+ * Follow a free body for `seconds` with steps of `dt` (classic RK4), without collisions: the reference that the
+ * physics engine's motion is checked against. `drag` is the body's drag area over its mass (`airDrag`); 0 is a vacuum.
+ */
+export function coast(h: Habitat, p: Vec3, v: Vec3, seconds: number, dt = 1 / 240, stop?: (p: Vec3, v: Vec3) => boolean, drag = 0): { p: Vec3; v: Vec3; t: number } {
   let P: Vec3 = [...p], V: Vec3 = [...v], t = 0;
   const add = (a: Vec3, b: Vec3, k: number): Vec3 => [a[0] + b[0] * k, a[1] + b[1] * k, a[2] + b[2] * k];
+  const acc = (p: Vec3, v: Vec3): Vec3 => drag > 0 ? add(apparentAcceleration(h, p, v), airDrag(h, p, v, drag), 1) : apparentAcceleration(h, p, v);
   while (t < seconds && !(stop && stop(P, V))) {
-    const a1 = apparentAcceleration(h, P, V);
-    const p2 = add(P, V, dt / 2), v2 = add(V, a1, dt / 2), a2 = apparentAcceleration(h, p2, v2);
-    const p3 = add(P, v2, dt / 2), v3 = add(V, a2, dt / 2), a3 = apparentAcceleration(h, p3, v3);
-    const p4 = add(P, v3, dt), v4 = add(V, a3, dt), a4 = apparentAcceleration(h, p4, v4);
+    const a1 = acc(P, V);
+    const p2 = add(P, V, dt / 2), v2 = add(V, a1, dt / 2), a2 = acc(p2, v2);
+    const p3 = add(P, v2, dt / 2), v3 = add(V, a2, dt / 2), a3 = acc(p3, v3);
+    const p4 = add(P, v3, dt), v4 = add(V, a3, dt), a4 = acc(p4, v4);
     P = [0, 1, 2].map((i) => P[i] + (dt / 6) * (V[i] + 2 * v2[i] + 2 * v3[i] + v4[i])) as Vec3;
     V = [0, 1, 2].map((i) => V[i] + (dt / 6) * (a1[i] + 2 * a2[i] + 2 * a3[i] + a4[i])) as Vec3;
     t += dt;

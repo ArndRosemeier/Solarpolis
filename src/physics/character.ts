@@ -2,9 +2,13 @@
  * The player's body in the physics: an upright capsule moved by Rapier's character controller. "Up" is not fixed: it
  * points toward the axis wherever the body is (`world/motion.ts`, `upAt`), and gravity is the spin's, so it weakens
  * up the endcaps and a jump there carries much higher and further. In the air the body follows the turning frame's
- * apparent acceleration (centrifugal and Coriolis), the same as every ball; on the ground the feet set the speed.
- * In deep water it floats: buoyancy holds it with the head just out, and it swims slowly; water brakes a fast body
- * hard (drag grows with the square of the speed), so a runner who plunges in stops within a few metres.
+ * apparent acceleration (centrifugal and Coriolis) and the air's drag, the same as every ball. On the ground the same
+ * forces push it, and the legs push back toward the stride through their grip: friction times the weight the body
+ * feels (`feltGravity`, Arnd 2026-10-23). So running with the spin grips harder and against it skids sooner; toward
+ * the axis the feet barely hold; a headwind at a run takes grip; and on an endcap slope the Coriolis force leans the
+ * body sideways while the legs hold the line. In deep water it floats: buoyancy holds it with the head just out, and
+ * it swims slowly; water brakes a fast body hard (drag grows with the square of the speed), so a runner who plunges in
+ * stops within a few metres.
  *
  * The controller's corrections move the body but never speed it up: stepping onto a kerb, sliding over a seam between
  * ground triangles or being pushed out of a slope may lift it a few centimetres in one step, and taken as velocity
@@ -17,12 +21,17 @@
 import type RAPIER_NS from '@dimforge/rapier3d-compat';
 import type { Habitat, Vec3 } from '../blueprint';
 import { v3add as add, v3dot as dot, v3lerp, v3madd as along, v3scale as scale, v3sub as sub } from '@futuremagic/core';
-import { apparentAcceleration, upAt } from '../world/motion';
+import { airDrag, apparentAcceleration, feltGravity, upAt } from '../world/motion';
 
 type Rapier = typeof RAPIER_NS;
 
-/** A standing human: capsule radius and full height (m), and mass (kg). */
-export const HUMAN = { radius: 0.3, height: 1.8, mass: 75 };
+/**
+ * A standing human: capsule radius and full height (m), mass (kg), and drag area (Cd · A, m²) of a falling body: a
+ * skydiver lying flat falls at about 55 m/s in Earth's air (Cd · A = 2 m g / ρ v²).
+ */
+export const HUMAN = { radius: 0.3, height: 1.8, mass: 75, dragArea: 0.4 };
+/** The body's drag area over its mass (m²/kg), for `airDrag`. */
+export const HUMAN_DRAG = HUMAN.dragArea / HUMAN.mass;
 /** Take-off speed of a standing jump (m/s): about half a metre high at Earth gravity. */
 export const JUMP_SPEED = 3.2;
 /** After a jump the feet count as off the ground for this long (s), so the ground just left does not catch them. */
@@ -30,6 +39,11 @@ const JUMP_LEAVES = 0.1;
 /** Steepest ground the feet climb, and where they start to slide (radians from level). */
 const MAX_CLIMB = (50 * Math.PI) / 180;
 const SLIDE_FROM = (55 * Math.PI) / 180;
+/**
+ * How hard the legs can push along the ground per unit of felt weight (a friction coefficient): good soles on turf or
+ * rock, as much as the steepest slope the feet climb asks of them.
+ */
+export const GRIP = Math.tan(MAX_CLIMB);
 /** Steps the feet take without jumping, and how far down they stay on the ground when walking over a crest (m). */
 const STEP_UP = 0.4;
 const SNAP_DOWN = 0.3;
@@ -67,6 +81,11 @@ export class Character {
   /** Up at the feet: toward the axis (kept as it was on the axis itself). */
   up: Vec3;
   stride: Stride = { walk: [0, 0, 0], jump: false };
+  /**
+   * The legs' strength as a multiple of a human's (the debug menu's travel boost): their grip goes with its square, so
+   * a boosted run reaches its speed in the same time and holds it against the headwind as a plain one does.
+   */
+  legs = 1;
   /** Time left (s) in which a jump is still leaving the ground. */
   private leaving = 0;
   private readonly body: RAPIER_NS.RigidBody;
@@ -128,16 +147,22 @@ export class Character {
       const goal = speed > SWIM_SPEED ? scale(want, SWIM_SPEED / speed) : want;
       v = along(v, sub(goal, flat(v)), Math.min(1, SWIM_PULL * dt));
     } else if (this.grounded) {
-      // The feet set the speed along the ground; gravity keeps them pressed to it. A jump leaves it.
+      // The turning frame and the air push the body; the legs push it toward the stride across up, as hard as the
+      // grip allows. Up and down are the stride's (`downhill`) and gravity's, as on any ground: uphill the controller
+      // lifts the feet, and the legs gain no speed upward that a crest would throw the body off with. The ground's
+      // push holds up the weight. A jump leaves it, keeping the speed along the ground.
       const t = this.body.translation();
-      const stride = downhill(flat(this.stride.walk), up, this.groundBelow([t.x, t.y, t.z], up, HUMAN.radius + SNAP_DOWN)?.normal ?? null);
-      v = along(stride, a, dt);
+      const n = this.groundBelow([t.x, t.y, t.z], up, HUMAN.radius + SNAP_DOWN)?.normal ?? null;
+      const want = downhill(flat(this.stride.walk), up, n);
+      const pushed = flat(along(v, add(a, airDrag(this.habitat, feet, v, HUMAN_DRAG)), dt));
+      const press = Math.max(0, feltGravity(this.habitat, feet, v) * dot(n ?? up, up));
+      v = along(legs(pushed, flat(want), up, GRIP * this.legs * this.legs * press * dt), up, dot(want, up) + dot(a, up) * dt);
       if (this.stride.jump) {
-        v = along(flat(this.stride.walk), up, JUMP_SPEED);
+        v = along(flat(v), up, JUMP_SPEED);
         this.leaving = JUMP_LEAVES;
       }
     } else {
-      v = along(v, a, dt);
+      v = along(v, add(a, airDrag(this.habitat, feet, v, HUMAN_DRAG)), dt);
     }
     this.stride.jump = false;
     this.leaving = Math.max(0, this.leaving - dt);
@@ -156,6 +181,9 @@ export class Character {
     }
     this.grounded = touching && this.leaving === 0;
     this.velocity = afterMove(v, scale(moved, 1 / dt), up);
+    // On the feet only a wall takes speed along the ground: a seam between ground triangles may stall the capsule for
+    // a step, but the legs carry on (with momentum, a stall kept as speed would be a stumble on flat ground).
+    if (footed && !this.swimming && !walled(this.control, up)) this.velocity = along(flat(v), up, dot(this.velocity, up));
 
     this.body.setNextKinematicTranslation({ x: t.x + moved[0], y: t.y + moved[1], z: t.z + moved[2] });
     const q = uprightRotation(up);
@@ -194,6 +222,24 @@ export function downhill(walk: Vec3, up: Vec3, n: Vec3 | null): Vec3 {
   if (lift < Math.cos(MAX_CLIMB)) return walk;
   const rate = -dot(walk, n!) / lift;
   return rate < 0 ? along(walk, up, rate) : walk;
+}
+
+/** Whether the controller met a wall this step (`computedCollision`: anything steeper than the feet climb). */
+function walled(control: RAPIER_NS.KinematicCharacterController, up: Vec3): boolean {
+  for (let i = 0; i < control.numComputedCollisions(); i++) {
+    const n = control.computedCollision(i)?.normal1;
+    if (n && Math.abs(n.x * up[0] + n.y * up[1] + n.z * up[2]) < Math.cos(MAX_CLIMB)) return true;
+  }
+  return false;
+}
+
+/**
+ * The velocity `v` after the legs push it toward `want` along the ground (normal `n`) by at most `reach` (m/s) this
+ * step: what they can change is the part along the ground, and what is left over skids. Exported for tests.
+ */
+export function legs(v: Vec3, want: Vec3, n: Vec3, reach: number): Vec3 {
+  const d = sub(want, v), off = along(d, n, -dot(d, n)), size = Math.hypot(...off);
+  return size <= reach ? add(v, off) : along(v, off, reach / size);
 }
 
 /**
