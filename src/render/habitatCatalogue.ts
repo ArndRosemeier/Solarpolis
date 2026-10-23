@@ -13,6 +13,7 @@ const FORMS = { cylinder: 'cylinder', torus: 'torus', bubble: 'bubble', asteroid
 
 /** A light time in words: seconds, minutes, or hours and minutes. */
 export function lightWords(s: number): string {
+  if (s < 1) return 'under a second';
   if (s < 90) return `${Math.round(s)} s`;
   const m = Math.round(s / 60);
   return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
