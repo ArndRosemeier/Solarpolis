@@ -110,6 +110,9 @@ export class VesselMeshes {
     this.platform = new Mesh(arraysGeometry(platform.arrays()), SHIP_CABIN.material); this.platform.name = 'ship central lift'; this.root.add(this.platform); this.roomMeshes.push(this.platform);
     this.updateRooms(0, 0, plan.start, [plan.start + 1.65, 0, -2.4]);
     await this.hull.addTo(this.stage);
+    // Prepare the coloured instance layouts explicitly before the parent group becomes drawable.
+    await this.stage.prepare(this.furniture);
+    await this.stage.prepare(this.drones);
     await this.stage.add(this.root);
     this.root.visible = false;
     this.held = [...this.roomMeshes, ...this.hull.meshes].reduce((n, m) => n + Object.values(m.geometry.attributes).reduce((s, a) => s + a.array.byteLength, 0) + (m.geometry.index?.array.byteLength ?? 0), 0) + this.base.length * 256 + 1024 * 1024 * 4 * 4 / 3;

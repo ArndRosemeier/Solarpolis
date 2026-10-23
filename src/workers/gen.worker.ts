@@ -34,11 +34,14 @@ import { droneDesign, type DroneDesign } from '../gen/drone';
 import { densNear, type Den } from '../sim/fauna';
 import { herdsNear, type Herd } from '../sim/herds';
 import { coatsOf, type CoatAsk, type Coats } from '../gen/coat';
+import type { VoyageRequest } from './voyage';
+import type { VoyagePlan } from '../space/voyage';
 
 /** The built things that stream in tiles. */
 export type TiledPart = 'stair' | 'courts' | 'crossings' | 'halls' | 'under';
 
 export type GenRequest =
+  | VoyageRequest
   | { kind: 'tile'; params: HabitatParams; key: TileKey }
   /** The ground for the physics around (θ, s); `below`: the Understorey's floor and pillars there as well. */
   | { kind: 'patch'; params: HabitatParams; theta: number; s: number; size: number; cell: number; below?: boolean }
@@ -64,6 +67,7 @@ export type GenRequest =
   /** An Actors animal pack's coats, one per look, baked per vertex (gen/coat.ts). */
   | { kind: 'coats'; ask: CoatAsk };
 export type GenAnswer =
+  | { kind: 'voyage'; plan: VoyagePlan }
   | { kind: 'tile'; tile: TileMesh }
   | { kind: 'patch'; patch: GroundPatch }
   | { kind: 'plants'; cell: PlantCell }
@@ -113,10 +117,15 @@ function terrainFor(params: HabitatParams): { terrain: Terrain; ecology: Ecology
   return cached;
 }
 
-self.onmessage = (e: MessageEvent<GenRequest>) => {
+self.onmessage = async (e: MessageEvent<GenRequest>) => {
   try {
     const req = e.data;
     const post = (answer: GenAnswer, transfer: Transferable[] = buffers(answer)): void => (self as unknown as DedicatedWorkerGlobalScope).postMessage(answer, transfer);
+    if (req.kind === 'voyage') {
+      const { buildVoyage } = await import('./voyage');
+      post({ kind: 'voyage', plan: await buildVoyage(req) });
+      return;
+    }
     if (req.kind === 'foliage') {
       const leaves = leafAtlas();
       post({ kind: 'foliage', bark: barkAtlas(), leaves, leafMeans: leafMeans(leaves) });

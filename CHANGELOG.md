@@ -2,6 +2,18 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.139 — Stairs climb
+
+- You walk up stairs without getting stuck: the courts' stairs, the Lift Stair, kerbs and short steps. Before, even ordinary 16 cm steps often stopped you.
+- How high a step you can take depends on how heavy you feel: about half a metre at 1 g, more as you get lighter toward the axis (at most your own height). So the Lift Stair's tall risers near the hub are steps, not walls. Anything higher is a ledge to jump onto.
+
+## v0.138 — A passenger voyage through the solar system
+
+- A new Ship Tour tab lets you choose planets and their moons in an expandable, searchable tree. Your ship Mind handles the journey, two observation laps, and the return to the cylinder.
+- Voyages start in real time, with a HUD clock to pause or accelerate. Fusion burns provide 1 g; turnovers and fuel-saving coasts are freefall. The complete return trip keeps a finite propellant reserve.
+- The voyage computer offers views in all directions, optical magnification, labelled close-up reconstructions, nearby worlds, an itinerary and route map. You can also visit the passenger decks while the ship flies.
+- The long-range tour ship uses the reusable exploration-ship recipe. Wider ships now keep their rounded tank shoulders clear of passenger rooms.
+
 ## v0.137 — People talk in speech bubbles
 
 - Parties who stop to talk now hold real conversations, shown in quiet speech bubbles over whoever speaks: greetings, how their day is going, and what they care about, from orchards and pottery to letters that take hours to cross the light-lag. Nobody speaks aloud.

@@ -46,6 +46,8 @@ export function vesselPlan(recipe: VesselRecipe): VesselPlan {
   const length = (recipe.decks.length * h + recipe.shell * 2) / .16;
   const shape = torchShip({ drive: 'torch', length, beam: recipe.radius * 2, plume: 8, thrust: d.thrust / (d.dryMass + d.propellant), rcs: .2, seed: recipe.seed });
   shape.colours = { hull: recipe.palette.shell, crew: recipe.palette.shell, tank: [.55, .58, .54], drive: [.10, .14, .14], truss: [.32, .40, .36] };
+  // The forward tank shoulders must end before the pressure cabin, including on wide recipes.
+  shape.parts = shape.parts.map(p => p.role === 'tank' && p.shape === 'cylinder' ? { ...p, to: p.to - p.radius * .4 } : p);
   // Mature ships enclose their spine in a continuous tapered service fairing.
   shape.parts = shape.parts.flatMap(p => p.role === 'truss' && p.shape === 'box'
     ? [{ shape: 'cone' as const, role: 'truss' as const, from: p.center[0] - p.half[0], to: p.center[0] + p.half[0], r0: recipe.radius * .24, r1: recipe.radius * .34 }] : [p]);

@@ -44,8 +44,19 @@ const SLIDE_FROM = (55 * Math.PI) / 180;
  * rock, as much as the steepest slope the feet climb asks of them.
  */
 export const GRIP = Math.tan(MAX_CLIMB);
-/** Steps the feet take without jumping, and how far down they stay on the ground when walking over a crest (m). */
-const STEP_UP = 0.4;
+/**
+ * The work (J/kg) the legs put into one step up without jumping: half a metre at Earth's gravity, so the highest step
+ * grows as the weight fades (`stepUpAt`), as the Lift Stair's risers do (gen/liftStair.ts `riserAt`).
+ */
+const STEP_WORK = 0.5 * 9.81;
+/**
+ * What the capsule meets ahead that it treats as a step to take rather than ground to walk up (radians from level):
+ * a riser, or the rounded edge of one the capsule's foot has ridden onto. Gentler slopes the controller climbs.
+ */
+const EDGE = (30 * Math.PI) / 180;
+/** How far past a riser a foot finds the step's tread (m). */
+const FOOT = 0.05;
+/** How far down the feet stay on the ground when walking over a crest (m). */
 const SNAP_DOWN = 0.3;
 /** The gap the controller keeps between the capsule and what it touches (m). */
 const SKIN = 0.02;
@@ -88,6 +99,8 @@ export class Character {
   legs = 1;
   /** Time left (s) in which a jump is still leaving the ground. */
   private leaving = 0;
+  /** How much higher (m) the body is still rising onto a step it began to climb. */
+  private climbing = 0;
   private readonly body: RAPIER_NS.RigidBody;
   private readonly collider: RAPIER_NS.Collider;
   private readonly control: RAPIER_NS.KinematicCharacterController;
@@ -108,7 +121,8 @@ export class Character {
     this.control = world.createCharacterController(SKIN);
     this.control.setMaxSlopeClimbAngle(MAX_CLIMB);
     this.control.setMinSlopeSlideAngle(SLIDE_FROM);
-    this.control.enableAutostep(STEP_UP, HUMAN.radius, false);
+    // Steps are the body's own (`stepUp`): Rapier's autostep stalls on short treads and tall risers.
+    this.control.disableAutostep();
     this.control.enableSnapToGround(SNAP_DOWN);
     this.control.setApplyImpulsesToDynamicBodies(true);
     this.control.setCharacterMass(HUMAN.mass);
@@ -167,13 +181,22 @@ export class Character {
     this.stride.jump = false;
     this.leaving = Math.max(0, this.leaving - dt);
 
-    const want = { x: v[0] * dt, y: v[1] * dt, z: v[2] * dt };
+    // A step ahead (a riser, a kerb, a ledge as high as the legs lift the body here): the body rises onto it as fast
+    // as the stride would climb the steepest slope, the legs keep their speed, and the rise is no speed upward.
+    const t0 = this.body.translation(), wantFlat = flat(this.stride.walk);
+    // Once begun, a step is climbed to its top, even where the capsule's rounded foot already rests on its edge.
+    if (!footed || this.swimming || this.stride.walk.every((x) => x === 0)) this.climbing = 0;
+    else if (this.climbing <= 0) this.climbing = this.stepUp([t0.x, t0.y, t0.z], up, flat(v), wantFlat, dt, stepUpAt(feltGravity(this.habitat, feet, v)));
+    const lift = Math.min(this.climbing, Math.max(JUMP_SPEED, Math.hypot(...wantFlat) * Math.tan(MAX_CLIMB)) * dt);
+    const want = { x: v[0] * dt + up[0] * lift, y: v[1] * dt + up[1] * lift, z: v[2] * dt + up[2] * lift };
     this.control.setUp({ x: up[0], y: up[1], z: up[2] });
     this.control.computeColliderMovement(this.collider, want);
     const m = this.control.computedMovement(), t = this.body.translation();
-    let moved: Vec3 = [m.x, m.y, m.z], touching = this.control.computedGrounded();
+    let moved: Vec3 = [m.x, m.y, m.z], touching = this.control.computedGrounded() || lift > 0;
+    // What is overhead may stop the climb.
+    if (lift > 0) this.climbing = dot(moved, up) < 0.5 * lift ? 0 : Math.max(0, this.climbing - lift);
     // A seam between ground triangles can catch the capsule and lift it off the ground in one step: the feet stay down.
-    const extra = dot(moved, up) - Math.max(0, dot(v, up)) * dt;
+    const extra = dot(moved, up) - Math.max(0, dot(v, up)) * dt - lift;
     if (footed && extra > 0.01) {
       const g = this.groundBelow(add([t.x, t.y, t.z], moved), up, HUMAN.radius + extra + SNAP_DOWN);
       const gap = g ? g.toi - HUMAN.radius / Math.max(dot(g.normal, up), 0.5) - SKIN : 0;
@@ -183,13 +206,61 @@ export class Character {
     this.velocity = afterMove(v, scale(moved, 1 / dt), up);
     // On the feet only a wall takes speed along the ground: a seam between ground triangles may stall the capsule for
     // a step, but the legs carry on (with momentum, a stall kept as speed would be a stumble on flat ground).
-    if (footed && !this.swimming && !walled(this.control, up)) this.velocity = along(flat(v), up, dot(this.velocity, up));
+    // Climbing a step, the riser takes no speed either, and the rise leaves none upward.
+    if (footed && !this.swimming && lift > 0) this.velocity = flat(v);
+    else if (footed && !this.swimming && !walled(this.control, up)) this.velocity = along(flat(v), up, dot(this.velocity, up));
 
     this.body.setNextKinematicTranslation({ x: t.x + moved[0], y: t.y + moved[1], z: t.z + moved[2] });
     const q = uprightRotation(up);
     this.body.setNextKinematicRotation({ x: q[0], y: q[1], z: q[2], w: q[3] });
     this.before = this.now;
     this.now = add(along(add([t.x, t.y, t.z], moved), up, -HUMAN.height / 2), origin);
+  }
+
+  /**
+   * How high the body must rise this step to go on onto a step ahead (m), or 0: none, or none it can take. The capsule
+   * at `centre` (bubble axes) moving at `v` along the ground meets a riser or its edge within this step's move
+   * (steeper than `EDGE`); lifted by up to `most`, under whatever is overhead, it could go on; and a foot's length
+   * past the riser there is ground to stand on, no steeper than the feet climb, above where they are now and well
+   * above the ground a foot's length before it. The capsule is wider than a foot: on short treads it rests on the
+   * nosings, as a foot rests on one tread.
+   */
+  private stepUp(centre: Vec3, up: Vec3, v: Vec3, wantFlat: Vec3, dt: number, most: number): number {
+    const speed = Math.hypot(...wantFlat);
+    if (speed < 1e-3) return 0;
+    const dir = scale(wantFlat, 1 / speed), move = Math.max(Math.max(0, dot(v, dir)), speed) * dt + 4 * SKIN;
+    // A little above where it stands, so the ground under the capsule is not what it meets.
+    const ahead = this.cast(along(centre, up, 2 * SKIN), dir, move);
+    if (!ahead || dot(ahead.normal, up) >= Math.cos(EDGE)) return 0;
+    const over = this.cast(centre, up, most), room = over ? Math.max(0, over.toi - SKIN) : most;
+    if (room < 0.02) return 0;
+    const high = along(centre, up, room), past = this.cast(high, dir, ahead.toi + FOOT);
+    if (past && past.toi < ahead.toi + SKIN) return 0;
+    // The ground a foot's length before and past where the capsule meets it, over the soles (straight down from as
+    // high as there is room): a step is a jump in it up to a tread, most of the rise; a slope rises evenly, and the
+    // controller walks up that.
+    const soles = dot(centre, up) - HUMAN.height / 2;
+    const footing = (x: number): { rise: number; level: boolean } | null => {
+      const p = along(along(ahead.point, dir, x), up, soles + room - dot(ahead.point, up));
+      const ray = new this.R.Ray({ x: p[0], y: p[1], z: p[2] }, { x: -up[0], y: -up[1], z: -up[2] });
+      const hit = this.world.castRayAndGetNormal(ray, room + SNAP_DOWN, true, undefined, undefined, this.collider);
+      if (!hit) return null;
+      return { rise: room - hit.timeOfImpact, level: Math.abs(hit.normal.x * up[0] + hit.normal.y * up[1] + hit.normal.z * up[2]) >= Math.cos(EDGE) };
+    };
+    const before = footing(-FOOT), top = footing(FOOT);
+    if (!top || !top.level || top.rise < 0.01) return 0;
+    // Steeper between the two than the feet climb, and most of the rise.
+    const jump = top.rise - (before?.rise ?? 0);
+    return jump > 2 * FOOT * Math.tan(MAX_CLIMB) && jump >= 0.5 * top.rise ? top.rise + SKIN : 0;
+  }
+
+  /** Sweep the capsule from `centre` (bubble axes) along the unit `dir` up to `distance`: how far, the normal and point met. */
+  private cast(centre: Vec3, dir: Vec3, distance: number): { toi: number; normal: Vec3; point: Vec3 } | null {
+    const q = uprightRotation(this.up), rot = { x: q[0], y: q[1], z: q[2], w: q[3] };
+    const hit = this.world.castShape({ x: centre[0], y: centre[1], z: centre[2] }, rot, { x: dir[0], y: dir[1], z: dir[2] }, this.collider.shape, 0, distance, false, undefined, undefined, this.collider);
+    if (!hit) return null;
+    // The world's query gives both in the bubble's axes: the normal of what it meets (toward the capsule), and where.
+    return { toi: hit.time_of_impact, normal: [hit.normal1.x, hit.normal1.y, hit.normal1.z], point: [hit.witness1.x, hit.witness1.y, hit.witness1.z] };
   }
 
   /**
@@ -254,6 +325,14 @@ export function afterMove(want: Vec3, moved: Vec3, up: Vec3): Vec3 {
   v = along(v, up, fit - rise);
   const speed = Math.hypot(...v), limit = Math.hypot(...want);
   return speed > limit ? scale(v, limit / speed) : v;
+}
+
+/**
+ * The highest step (m) the legs take without jumping where the body feels `g` (m/s²): `STEP_WORK` / g, at most the
+ * body's own height. Exported for tests.
+ */
+export function stepUpAt(g: number): number {
+  return Math.min(HUMAN.height, STEP_WORK / Math.max(g, 1e-3));
 }
 
 /** The rotation (x, y, z, w) that turns a capsule's own axis (+y) to `up` (a unit vector). */
