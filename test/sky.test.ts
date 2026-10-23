@@ -7,9 +7,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { v3dot, v3scale, type Vec3 } from '@futuremagic/core';
 import {
-  DAY, circleOverlap, colorOfTemperature, decodeStars, fluxOfMagnitude, julianDay, makeSpace, obliquityAt, skyFrom,
-  temperatureOfColorIndex, REFERENCE_SPACE, JD_J2000, type Space,
+  DAY, circleOverlap, colorOfTemperature, decodeStars, fluxOfMagnitude, julianDay, obliquityAt, skyFrom,
+  temperatureOfColorIndex, JD_J2000, type Space,
 } from '../src/space';
+import { spaceOf } from './worlds';
 
 const D = Math.PI / 180;
 const near = (got: number, want: number, tol: number, what: string): void =>
@@ -66,7 +67,7 @@ test('sky: circle overlap at the edges and in between', () => {
 });
 
 test('sky: from the geostationary ring Earth is 17.4° across and the Sun half a degree', () => {
-  const s = makeSpace(REFERENCE_SPACE);
+  const s = spaceOf('reference');
   const v = skyFrom(s, s.home.bodyFrame, [0, 0, s.home.habitat.length / 2], tOf(s, 3026, 5, 1));
   const d = Math.hypot(...v.earth.center);
   near(2 * Math.asin(v.earth.radius / d) / D, 17.4, 0.1, 'Earth (°)');
@@ -75,7 +76,7 @@ test('sky: from the geostationary ring Earth is 17.4° across and the Sun half a
 });
 
 test('sky: Earth hides the Sun around local midnight near the equinox, for about 70 minutes, never at the solstice', () => {
-  const s = makeSpace(REFERENCE_SPACE);
+  const s = spaceOf('reference');
   const eye: Vec3 = [0, 0, s.home.habitat.length / 2];
   const minutesDark = (y: number, m: number, d: number): number => {
     const t0 = tOf(s, y, m, d);
@@ -89,7 +90,7 @@ test('sky: Earth hides the Sun around local midnight near the equinox, for about
 
 test('exposure: full Earth in view sets it near 0.6, a sunlit hull against black keeps its highlights, empty sky opens the eyes', async () => {
   const { exposureFor, adapt, KEY, DARKEST, HIGHLIGHT_LEVEL, ANCHOR_LEVEL } = await import('../src/render/exposure');
-  const s = makeSpace(REFERENCE_SPACE);
+  const s = spaceOf('reference');
   // Local noon at the equinox: the Sun behind the eye, Earth full.
   const t0 = tOf(s, 3026, 3, 20);
   let t = t0, best = 1;

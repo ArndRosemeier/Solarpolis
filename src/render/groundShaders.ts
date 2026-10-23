@@ -26,7 +26,9 @@ const PERIOD = 12;
 
 function layers(srgb: boolean, fill: [number, number, number, number]): DataArrayTexture {
   const data = new Uint8Array(S * S * 4 * L);
-  for (let i = 0; i < data.length; i += 4) data.set(fill, i);
+  // The first texel, then copied over twice as much each time (a set per texel took 80 ms per array at load).
+  data.set(fill, 0);
+  for (let n = 4; n < data.length; n *= 2) data.copyWithin(n, 0, Math.min(n, data.length - n));
   return filtered(new DataArrayTexture(data, S, S, L), { srgb, mips: true, anisotropy: 8, repeat: true });
 }
 /** Placeholders until the workers have drawn the layers: a plain mid grey, flat, unshaded. */
