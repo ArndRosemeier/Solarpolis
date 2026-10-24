@@ -117,6 +117,8 @@ export interface Species {
   seen: number;
   /** The tallest it grows (m). */
   tall: number;
+  /** Planted off the ground, on what people built (the Threshold's planters, `Planted.stand`). */
+  aloft?: boolean;
 }
 
 /**
@@ -134,7 +136,7 @@ export function canopyBand(ecology: Ecology): [number, number] {
 export function plantsOf(ecology: Ecology): Species[] {
   const out: Species[] = [];
   const woods = canopyBand(ecology);
-  const plant = (spec: PlantSpec, biome: number, what: 'plant' | 'planted') => {
+  const plant = (spec: PlantSpec, biome: number, what: 'plant' | 'planted', aloft = false) => {
     const u = unit(spec);
     const band = LEVELS.map((l) => l.fade.map((f) => f * u) as [number, number, number, number]);
     const far = band[LEVELS.length - 1];
@@ -145,14 +147,15 @@ export function plantsOf(ecology: Ecology): Species[] {
       const end = Math.max(far[3], Math.min(SIGHT * spec.height[1], woods[1], DENSE * spec.spacing));
       [far[2], far[3]] = [(end * out0) / out1, end];
     }
-    out.push({ id: out.length, biome, on: -1, what, spec, cell: cellsFor(band), band, seen: band[LEVELS.length - 1][3], tall: spec.height[1] });
+    out.push({ id: out.length, biome, on: -1, what, spec, cell: cellsFor(band), band, seen: band[LEVELS.length - 1][3], tall: spec.height[1], aloft });
   };
   ecology.climate.biomes.forEach((b, biome) => { for (const spec of b.plants) plant(spec, biome, 'plant'); });
   // Each planted species as one of its own, sized by its tallest planted plant.
   const planted = plantingsOf(ecology.terrain);
   for (const spec of planted.species) {
-    const tall = Math.max(...(planted.bySpecies.get(spec.name) ?? []).map((p) => p.height), spec.height[1]);
-    plant({ ...spec, height: [spec.height[0], tall] }, -1, 'planted');
+    const own = planted.bySpecies.get(spec.name) ?? [];
+    const tall = Math.max(...own.map((p) => p.height), spec.height[1]);
+    plant({ ...spec, height: [spec.height[0], tall] }, -1, 'planted', own.some((p) => p.stand !== undefined));
   }
   const onFloor = (what: 'cover' | 'debris', spec: CoverSpec | DebrisSpec, band: [number, number, number, number][]) =>
     out.push({ id: out.length, biome: -1, on: FLOOR_LAYERS.indexOf(spec.on), what, spec, cell: cellsFor(band, what === 'debris' ? DEBRIS_ACROSS : 0), band, seen: band[band.length - 1][3], tall: spec.height[1] });
@@ -210,8 +213,10 @@ export function cellsNear(ecology: Ecology, sp: Species, level: Level, eye: Vec3
   const at = fromWorld(profile, eye[0], eye[1], eye[2]);
   const [, , , far] = sp.band[level], near = from, cell = sp.cell[level], tall = sp.tall;
   // Too high above the ground to see any of this plant at this level: none. Above the ground under the eye, not above
-  // the profile: on a hill the eye stands that much higher over the profile, and its plants with it.
-  const ground = ecology.terrain.heightAt(at.theta, at.s), above = Math.max(0, at.h - ground - tall);
+  // the profile: on a hill the eye stands that much higher over the profile, and its plants with it. A species planted
+  // off the ground (`aloft`: the Threshold's planters) stands on what people built up here, so it is reckoned from the
+  // eye's own height instead of the ground tens of metres below.
+  const ground = sp.aloft ? at.h : ecology.terrain.heightAt(at.theta, at.s), above = Math.max(0, at.h - ground - tall);
   if (above > far) return [];
   const reach = Math.sqrt(Math.max(0, far * far - above * above)) + cell;
   const out: NearCell[] = [];

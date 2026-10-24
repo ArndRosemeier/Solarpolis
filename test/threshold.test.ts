@@ -8,7 +8,8 @@ import { buildStairTile, stairGridOf, stairTilesFor } from '../src/gen/liftStair
 import { FLIGHT_STEPS, TIERS } from '../src/gen/threshold';
 import { tileId } from '../src/gen/detailTree';
 import { plantingsOf } from '../src/gen/planted';
-import { habitatOf, terrainOf } from './worlds';
+import { cellsNear, plantCell, plantsOf } from '../src/gen/scatter';
+import { ecologyOf, habitatOf, terrainOf } from './worlds';
 import { stairFacesOut } from './meshChecks';
 
 /** Heights of the stair's top along a straight walk a → b, every `step` m. */
@@ -155,4 +156,12 @@ for (const { name } of MATRIX) test(`threshold garden (${name}): planters stand 
   // They are species of the plantings, so the scatter stage draws them at every level.
   const names = new Set(plantingsOf(t).species.map((s) => s.name));
   for (const bed of garden) assert.ok(names.has(bed.spec.name), `${bed.spec.name} is not a planted species`);
+  // Standing on a gallery, the eye is tens of metres over the ground: its own plants are still drawn (`aloft`).
+  const eco = ecologyOf(name), species = plantsOf(eco), top = th.galleries[0];
+  const eye = rampOf(h).world((top.z0 + top.z1) / 2, (top.w0 + top.w1) / 2, top.e + 1.7);
+  const trailing = species.find((x) => x.spec.name === garden[0].spec.name)!;
+  assert.ok(trailing.aloft, 'planted off the ground');
+  const cells = cellsNear(eco, trailing, 0, eye);
+  const grown = cells.reduce((n, c) => n + (plantCell(eco, species, c.key).count ?? 0), 0);
+  assert.ok(grown > 0, `${name}: nothing of the garden is drawn from the gallery (${cells.length} cells)`);
 });
