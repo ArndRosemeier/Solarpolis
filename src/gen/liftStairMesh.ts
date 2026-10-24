@@ -21,7 +21,8 @@ import { v3cross, v3norm, v3sub, type Vec3 } from '@futuremagic/core';
 import { fromWorld, type Habitat } from '../blueprint';
 import { Shape, intoPlace, placeAt, type MappedArrays, type Place, type RGB } from './shapes';
 import { wantedCells, type Grid, type GridEye, type TileKey, type WantedTile } from './detailTree';
-import { centreOf, legShapesOf, lineAt, liftStairOf, onLeg, openingsOf, rampOf, type LegShape, type LiftStair, type PlanPoint, type Ramp, type StairPlatform } from './liftStair';
+import { bayStands, centreOf, cut, legShapesOf, lineAt, liftStairOf, onLeg, openingsOf, rampOf, type LegShape, type LiftStair, type PlanPoint, type Ramp, type StairPlatform } from './liftStair';
+import type { Planter } from './threshold';
 import { FINISH } from './pavilion';
 import { kept } from './kept';
 import { arrivalTerraceOf, DOOR_HALF, PORCH, porchOf } from './arrivalTerrace';
@@ -35,6 +36,8 @@ const STONE: RGB = [0.5, 0.47, 0.42];
 const PAVING: RGB = [0.58, 0.55, 0.5];
 const BRONZE: RGB = [0.22, 0.15, 0.08];
 const GLASS: RGB = [1, 0.8, 0.55];
+/** The soil in the Threshold's planters (gen/liftStair.ts `bayStands`), kept damp and dark. */
+const SOIL: RGB = [0.055, 0.042, 0.03];
 /** The Threshold's warmer stone, its top terrace's paving, its galleries' timber decks, the inlays' polished bronze. */
 const WARM: RGB = [0.48, 0.39, 0.3];
 const WARM_PAVING: RGB = [0.44, 0.36, 0.28];
@@ -309,7 +312,7 @@ class StairBuilder {
     }
     if (threshold && this.detail !== 'solid') this.dressFront(q, stone);
     const berth = this.berthHere(q);
-    if (q.bay) this.bay(q, q.bay, berth);
+    if (q.bay) this.bay(q, q.bay);
     else {
       // Lamps at the corners of its downhill edge, and its uphill edge on the larger ones.
       const inset = p + hr * 0.4;
@@ -347,18 +350,16 @@ class StairBuilder {
   }
 
   /**
-   * A bay of a gallery: a lantern on its front parapet every leg's width or so along the gallery, a timber bench against
-   * its back between them (not at the foot of a flight, nor round the berth), and on the upper gallery its stretch of
-   * the spin arrow: a bronze line along the gallery, its head at the spinward end.
+   * A bay of a gallery, from the one rule for what stands on it (`bayStands`, gen/liftStair.ts): its lantern, its
+   * timber bench, its planters of soil (what grows in them is planted in gen/planted.ts), and on the upper gallery its
+   * stretch of the spin arrow: a bronze line along the gallery, its head at the spinward end.
    */
-  private bay(q: StairPlatform, bay: { tier: number; index: number }, berth: { at: PlanPoint; clear: number } | null): void {
-    const hr = this.hr, p = this.st.parapet, W = this.st.width, length = q.w1 - q.w0, mid = centreOf(q)[1];
-    const every = Math.max(1, Math.round(W / length)), notch = q.z1 - q.z0 < (this.st.threshold?.galleries[bay.tier].z1 ?? q.z1) - q.z0 - 1e-6;
-    const clearOf = (at: PlanPoint, r: number): boolean => !berth || Math.hypot(at[0] - berth.at[0], at[1] - berth.at[1]) > berth.clear + r;
-    const lamp: PlanPoint = [q.z0 + p + hr * 0.4, mid];
-    if (bay.index % every === 0 && clearOf(lamp, hr * 0.3)) this.lamp(lamp, q.e);
-    const open = openingsOf(this.st, q).z1.length > 0, back = q.z1 - (open ? 0 : p) - hr * 0.08;
-    if (bay.index % every === Math.floor(every / 2) && !notch && clearOf([back, mid], length / 2)) this.bench(q, back, mid, length * 0.8);
+  private bay(q: StairPlatform, bay: { tier: number; index: number }): void {
+    const hr = this.hr, W = this.st.width;
+    const stands = bayStands(this.st, q);
+    if (stands.lamp) this.lamp(stands.lamp, q.e);
+    if (stands.bench) this.bench(q, stands.bench.back, stands.bench.mid, stands.bench.length);
+    for (const t of stands.planters) this.planter(t);
     if (bay.tier !== 0 || this.detail === 'solid' || this.detail === 'far') return;
     // The spin arrow: along the upper gallery a third of the way in from its front, spinward (+w).
     const g = this.st.threshold!.galleries[0], z = g.z0 + (g.z1 - g.z0) * 0.3, tip = g.w1 - W * 0.5, tail = g.w0 + W * 0.5;
@@ -375,6 +376,15 @@ class StairBuilder {
     slat(back - deep, back, w0, w1, hr * 0.36, hr * 0.42, DECK, FINISH.timber);
     for (const w of [w0 + hr * 0.15, w1 - hr * 0.25]) slat(back - deep * 0.85, back - deep * 0.15, w, w + hr * 0.1, 0, hr * 0.36, WARM, FINISH.stone);
     if (this.detail === 'near') slat(back - hr * 0.06, back, w0, w1, hr * 0.42, hr * 0.85, DECK, FINISH.timber);
+  }
+
+  /** A planter (gen/liftStair.ts `bayStands`): a trough of the warm stone with its soil let into the top. */
+  private planter(t: Planter): void {
+    if (this.detail === 'far') return;
+    const q: StairPlatform = { kind: 'gallery', z0: t.z0, z1: t.z1, w0: t.w0, w1: t.w1, e: t.e };
+    const wall = this.hr * 0.07;
+    this.boxOn(q, [t.z0, t.z1, t.w0, t.w1], 0, t.rim, WARM, FINISH.stone);
+    this.boxOn(q, [t.z0 + wall, t.z1 - wall, t.w0 + wall, t.w1 - wall], t.soil - wall, t.soil, SOIL, FINISH.stone);
   }
 
   /** A box on a platform's floor over a plan rectangle (z0, z1, w0, w1), from `lo` to `hi` above it. */
@@ -628,11 +638,4 @@ function area(poly: readonly PlanPoint[]): number {
   let n = 0;
   for (let i = 0; i < poly.length; i++) { const a = poly[i], b = poly[(i + 1) % poly.length]; n += a[0] * b[1] - b[0] * a[1]; }
   return n;
-}
-
-/** An interval less some others: the pieces left. */
-function cut([lo, hi]: [number, number], holes: readonly [number, number][]): [number, number][] {
-  let parts: [number, number][] = [[lo, hi]];
-  for (const [a, b] of holes) parts = parts.flatMap(([x, y]): [number, number][] => (b <= x || a >= y ? [[x, y]] : [...(a > x ? [[x, a] as [number, number]] : []), ...(b < y ? [[b, y] as [number, number]] : [])]));
-  return parts;
 }

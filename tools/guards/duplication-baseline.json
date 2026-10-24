@@ -1920,10 +1920,6 @@
     "reason": "Each is a call of the one seam for the ground's height (`terrain.heightAt(theta, s)`) at a point its caller holds; there is nothing left to fold."
   },
   {
-    "key": "idiom: [.heightAt .s .theta] in solarpolis/gen/scatter.ts + solarpolis/sim/birds.ts + solarpolis/sim/sounds.ts",
-    "reason": "Each is a call of the one seam for the ground's height (`terrain.heightAt(theta, s)`) at a point its caller holds; there is nothing left to fold."
-  },
-  {
     "key": "idiom: [.heightAt .standAt] in solarpolis/gen/capsules.ts + solarpolis/gen/scatter.ts + solarpolis/sim/birds.ts + solarpolis/sim/fauna.ts + solarpolis/sim/flocks.ts",
     "reason": "Plain idioms of the pure layers (profile radius with a guard, a cell's rows and columns, terrain heights, a kept cache) used by the birds' homes and day plan as by the other animals' and people's; each works its own data. The flocks (sim/flocks.ts) joined with the same plain idiom."
   },

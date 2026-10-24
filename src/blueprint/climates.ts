@@ -145,6 +145,11 @@ export interface Climate {
   hall: PlantSpec;
   /** The biome (by name) each kind of planted place is grown as (gen/places.ts): the orchards' fruit, the vineyards. */
   places: Readonly<Record<'orchard' | 'vineyard', string>>;
+  /**
+   * The Threshold's planters (gen/planted.ts): what trails over its galleries' parapets and hangs down the face
+   * (`trailing`, grown nowhere else), and the shrub (by name, one of the biomes') along the walls behind the walk.
+   */
+  garden: { trailing: PlantSpec; shrub: string };
 }
 
 export const CLIMATES: Readonly<Record<string, Climate>> = {
@@ -184,6 +189,7 @@ export const CLIMATES: Readonly<Record<string, Climate>> = {
     grove: 'oak',
     hall: { name: 'hall linden', form: 'hall-linden', height: [21, 25], spacing: 8 },
     places: { orchard: 'orchard', vineyard: 'vineyard' },
+    garden: { trailing: { name: 'gallery ivy', form: 'vine', height: [0.8, 1.3], spacing: 1.1 }, shrub: 'hazel' },
   },
   mediterranean: {
     name: 'mediterranean',
@@ -219,6 +225,7 @@ export const CLIMATES: Readonly<Record<string, Climate>> = {
     hall: { name: 'hall linden', form: 'hall-linden', height: [18, 22], spacing: 7 },
     // Olives are its orchards.
     places: { orchard: 'olive grove', vineyard: 'vineyard' },
+    garden: { trailing: { name: 'gallery jasmine', form: 'vine', height: [0.7, 1.2], spacing: 1 }, shrub: 'myrtle' },
   },
 };
 
