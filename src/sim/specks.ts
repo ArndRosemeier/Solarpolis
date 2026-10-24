@@ -13,7 +13,7 @@ import { BODY_WIDTH, MEAN_HEIGHT, POSE, SPECK_STRIDE, guessBands, packColor, wri
 import { designGuess } from '../gen/drone';
 import { kept } from '../gen/kept';
 import type { Habitat } from '../blueprint';
-import { footingOf } from './footing';
+import { feetOf, footingOf } from './footing';
 import { peopleAt, personKey, residentOf } from './population';
 
 /** Everyone up on the land at clock time `t`, as the speck layer draws them, in order of `personKey`. */
@@ -95,7 +95,7 @@ export function specksAt(terrain: Terrain, t: number): Specks {
       }
     }
     const who = residentOf(h, p.resident), body = who.design >= 0 ? bodiesOf(h)[who.design] : null;
-    foot ??= footingOf(terrain, p, landmarkTopAt(terrain, p.theta, p.s), body?.height ?? MEAN_HEIGHT);
+    foot ??= footingOf(terrain, p, landmarkTopAt(terrain, ...feetOf(h, p)), body?.height ?? MEAN_HEIGHT);
     horizon ??= horizonOf(terrain, p.theta, p.s);
     if (!p.moving && next) {
       next.key[kept] = key; next.theta[kept] = p.theta; next.s[kept] = p.s; next.h[kept] = foot.h; next.swim[kept] = foot.swim ? 1 : 0; next.pose[kept] = p.posture;
