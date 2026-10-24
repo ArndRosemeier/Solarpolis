@@ -33,7 +33,7 @@ export interface Planted {
   s: number;
   height: number;
   turn: number;
-  /** Where its foot stands, where that is not the ground: a planter on the Threshold (m over the habitat's floor). */
+  /** Where its foot stands, where that is not the ground: a planter on the Threshold (m over the land, as `heightAt`). */
   stand?: number;
 }
 
@@ -152,7 +152,7 @@ export interface GardenBed {
  * The Threshold's garden (plan "The Threshold", step 6): every planter on its galleries (gen/liftStair.ts
  * `bayStands`) planted along its length, the front troughs with the climate's trailing plant (it spills over the
  * parapet and hangs down the face), the troughs against the walls with its garden shrub. Each plant stands on its
- * planter's soil (`Planted.stand`), not on the ground tens of metres below.
+ * planter's soil (`Planted.stand`, over the land as `heightAt` measures it), not on the ground tens of metres below.
  */
 function thresholdGarden(t: Terrain, climate: Climate): GardenBed[] {
   const h = t.habitat, stair = liftStairOf(h);
@@ -166,10 +166,12 @@ function thresholdGarden(t: Terrain, climate: Climate): GardenBed[] {
     const run = planter.w1 - planter.w0, n = Math.max(1, Math.round(run / spec.spacing));
     const z = (planter.z0 + planter.z1) / 2, plants: Planted[] = [];
     for (let k = 0; k < n; k++) {
-      const w = planter.w0 + (run * (k + 0.5)) / n, world = ramp.world(z, w, planter.e);
-      const { theta, s } = fromWorld(h.profile, world[0], world[1], world[2]);
+      // Its foot on the soil: the height the plant stands at is over the land under it (as `heightAt` measures), not
+      // the plan's height over the habitat's floor, which up the endcap's face is another thing entirely.
+      const w = planter.w0 + (run * (k + 0.5)) / n, world = ramp.world(z, w, planter.e + planter.soil);
+      const { theta, s, h: stand } = fromWorld(h.profile, world[0], world[1], world[2]);
       const low = hash3f(seed, i, k, 1), turn = hash3f(seed, i, k, 2) * 2 * Math.PI;
-      plants.push({ species: spec.name, theta, s, height: spec.height[0] + (spec.height[1] - spec.height[0]) * low, turn, stand: planter.e + planter.soil });
+      plants.push({ species: spec.name, theta, s, height: spec.height[0] + (spec.height[1] - spec.height[0]) * low, turn, stand });
     }
     beds.push({ planter, spec, plants });
   }

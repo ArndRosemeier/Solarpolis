@@ -1,7 +1,7 @@
 /** The Threshold's galleries beside the Lift Stair's top terrace (gen/threshold.ts), over the whole matrix. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MATRIX } from '../src/blueprint';
+import { MATRIX, toWorld } from '../src/blueprint';
 import { BERTH_CLEAR, bayStands, legShapesOf, liftStairOf, plantersOf, rampOf, riserAt, stairTopAt, type LiftStair, type PlanPoint } from '../src/gen/liftStair';
 import { arrivalTerraceOf } from '../src/gen/arrivalTerrace';
 import { buildStairTile, stairGridOf, stairTilesFor } from '../src/gen/liftStairMesh';
@@ -117,7 +117,7 @@ test('threshold (reference): its tiles draw the galleries with faces looking out
 for (const { name } of MATRIX) test(`threshold garden (${name}): planters stand on the galleries, clear of the berth and the walk, planted on their own soil`, () => {
   const t = terrainOf(name), h = t.habitat, st = liftStairOf(h);
   if (!st?.threshold) return;
-  const th = st.threshold, hr = st.handrail, p = st.parapet, planters = plantersOf(st);
+  const th = st.threshold, hr = st.handrail, p = st.parapet, planters = plantersOf(st), ramp = rampOf(h);
   assert.ok(planters.length > 0, `${name}: no planters`);
   const berth = th.berth ? { at: th.berth.at, e: th.berth.e, clear: BERTH_CLEAR * hr } : null;
   for (const pl of planters) {
@@ -148,7 +148,10 @@ for (const { name } of MATRIX) test(`threshold garden (${name}): planters stand 
   for (const bed of garden) {
     assert.ok(bed.plants.length >= 1 && bed.plants.length <= Math.ceil((bed.planter.w1 - bed.planter.w0) / bed.spec.spacing) + 1, 'as many as it holds');
     for (const plant of bed.plants) {
-      assert.equal(plant.stand, bed.planter.e + bed.planter.soil);
+      // Its foot is on the soil of its trough: the same world point the ramp puts there.
+      const mid = ramp.world((bed.planter.z0 + bed.planter.z1) / 2, (bed.planter.w0 + bed.planter.w1) / 2, bed.planter.e + bed.planter.soil);
+      const foot = toWorld(h.profile, { theta: plant.theta, s: plant.s, h: plant.stand! });
+      assert.ok(Math.hypot(foot[0] - mid[0], foot[1] - mid[1], foot[2] - mid[2]) <= (bed.planter.w1 - bed.planter.w0) / 2 + 0.2, 'standing in its trough');
       assert.ok(plant.stand! > t.heightAt(plant.theta, plant.s), 'standing over the ground, not in it');
       assert.ok(plant.height >= bed.spec.height[0] - 1e-9 && plant.height <= bed.spec.height[1] + 1e-9, 'its species\' height');
     }
