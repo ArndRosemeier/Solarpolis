@@ -13,7 +13,7 @@
  */
 import type { Stage } from '@futuremagic/stage';
 import { deriveSeed, v3add, v3len, v3scale, v3sub, type Vec3 } from '@futuremagic/core';
-import { LOUNGE, fromShip, fromShipDirection, seatedFeet, sunOnSeated, toShipDirection, type Lounge, type Place } from '../space';
+import { LOUNGE, fromShip, fromShipDirection, seatedPlace, sunOnSeated, toShipDirection, type Lounge, type Place } from '../space';
 import { Figure } from './actors/figure';
 import { Residents } from './actors/residents';
 import { humanCatalog } from './actors/pack';
@@ -66,7 +66,7 @@ export class Passengers {
       const p = places[k];
       f.object.visible = !!p;
       if (!p) return;
-      f.update({ feet: v3sub(fromShip(ship, seatedFeet(l, p)), eye), up, front: fromShipDirection(ship, p.facing), speed: 0, anim: { move: 'sit' } }, dt, time);
+      f.update({ feet: v3sub(fromShip(ship, seatedPlace(l, p)), eye), up, front: fromShipDirection(ship, p.facing), speed: 0, anim: { move: 'sit' } }, dt, time);
     });
     // The lights in the scene's axes, relative to the eye: the cove's from above (toward aft), the windows' from where
     // the light they let in comes from on balance.

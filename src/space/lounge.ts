@@ -117,12 +117,15 @@ export function placesInView(l: Lounge, look: number, spread = 0.45): Place[] {
   return l.couches.filter((c) => off(c.angle) <= spread).sort((a, b) => off(a.angle) - off(b.angle)).flatMap((c) => c.places);
 }
 
-/** Seated, one's feet rest this far (m) out from the front of the seat (as on the courts' seats and the capsules'). */
-export const SEAT_FEET = 0.15;
+/**
+ * Seated, one's hips rest this far (m) back from the seat's front edge (as on the capsules' benches, gen/capsules.ts):
+ * the sitting clips keep the hips over the body's place, so that is where it goes.
+ */
+export const SEAT_HIPS = 0.26;
 
-/** Where a passenger seated at `p` has their feet: on the floor, a little out from the seat's front (ship frame). */
-export function seatedFeet(l: Lounge, p: Place): Vec3 {
-  return [l.floor, p.at[1] + p.facing[1] * SEAT_FEET, p.at[2] + p.facing[2] * SEAT_FEET];
+/** The body's place of a passenger seated at `p`: on the floor, under where their hips rest on the seat (ship frame). */
+export function seatedPlace(l: Lounge, p: Place): Vec3 {
+  return [l.floor, p.at[1] - p.facing[1] * SEAT_HIPS, p.at[2] - p.facing[2] * SEAT_HIPS];
 }
 
 /** Seated, the heights (m) over the floor of a passenger's lap, chest and head: where the Sun through the glass finds them. */
