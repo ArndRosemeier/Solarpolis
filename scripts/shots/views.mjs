@@ -318,6 +318,10 @@ export const views = {
   // The passenger on the bench and the fans (Arnd 2026-10-23: z-fighting, not sitting on the seat, rotors not turning):
   // seated, the camera turned round to the pod's side (-side) and front (-front), then from the eyes looking down at
   // the lap (-eyes-down); on the ride, the fans spinning up before lift-off (-spinup), lifting off (-liftoff), climbing.
+  'capsule-frames': { query: 'view=inside', about: 'shadow flicker in a capsule (render/lights.ts: riding, the shadow map moves with the rider): boarded and riding to the nearest court, three frames as fast as they can be taken in the climb (-a, -b, -c): the capsule and its passenger stay put in the frame, so a change in their shadows between them is flicker', settle: 6000, steps: [
+    { wheel: 600 }, { debug: 'Capsule: call one here' }, { wait: 15000 }, capsulePhase('waiting'), { debug: 'Capsule: walk up to it' }, { wait: 6000 },
+    { debug: 'Capsule: get in' }, capsulePhase('seated', 30000), { wait: 1500 },
+    { debug: 'Capsule: ride to the nearest court' }, capsulePhase('riding', 30000), { wait: 9000 }, { shot: 'a' }, { shot: 'b' }, { shot: 'c' }] },
   'capsule-seat': { query: 'view=inside', about: 'a called capsule boarded: seated, from the side (-side) and the front (-front), from the eyes looking down (-eyes-down); then on the ride the fans spinning up (-spinup), lifting off (-liftoff), climbing (-climb); logs the capsule line', settle: 6000, steps: [
     { wheel: 600 }, { debug: 'Capsule: call one here' }, { wait: 15000 }, capsulePhase('waiting'), { debug: 'Capsule: walk up to it' }, { wait: 6000 },
     { debug: 'Capsule: get in' }, capsulePhase('seated', 30000), { wait: 1500 },
