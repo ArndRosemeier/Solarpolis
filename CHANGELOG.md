@@ -2,6 +2,11 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.190 — The Threshold is planted
+
+- The galleries beside the arrival terrace now have troughs of soil along their parapets and against their walls, planted with greenery that spills over the edge and hangs down the face.
+- What grows there is the climate's own: ivy and hazel in the temperate habitat, jasmine and myrtle in the mediterranean one.
+
 ## v0.189 — Passengers sit on their couches
 
 - In the arrival's cabin shot the fellow passengers now sit on the couches' seats; before, their hips hung in front of the seat edge.
