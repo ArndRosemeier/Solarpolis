@@ -20,6 +20,7 @@ import { FINISH } from './pavilion';
 import { COURT, entrancesOf, planOf, siteOf, type Plan, type Site } from './plan';
 import { Shape, floorAt, type Place, type RGB } from './shapes';
 import { kept } from './kept';
+import { SEAT_HIPS } from './standIn';
 import type { Terrain } from './terrain';
 
 /**
@@ -38,8 +39,6 @@ export const CAP = {
 const CURVE = { plan: 2.3, nose: 2.0, tail: 2.6, belly: 3.4, section: 2.6 };
 /** How far the door swings up and out when open (rad): a little past level, so one walks out under its foot. */
 export const DOOR_OPEN = 1.65;
-/** Seated on a bench, the hips rest this far (m) back from its front edge (the sitting clips keep them over the body's place). */
-const SEAT_HIPS = 0.26;
 /** Each fan's blades, and how far above its duct's middle they turn (handrails). */
 const FAN_BLADES = 7;
 const FAN_ABOVE = 0.02;

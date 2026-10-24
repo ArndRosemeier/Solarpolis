@@ -515,6 +515,7 @@ const besideParty = (label: string, within: number, keep: (p: Person) => boolean
 });
 // Down on the grass (sitting or lying, not on a seat); then the beats the places offer.
 besideParty('Beside the nearest party on the grass', 6000, (p) => p.size > 1 && p.posture !== POSE.upright && p.activity !== 'bench');
+besideParty('Beside the nearest party on a court seat', 6000, (p) => p.activity === 'bench' && p.size > 1);
 besideParty('Beside the nearest game of catch', 20000, (p) => p.act === 'catch' && p.size > 1);
 besideParty('Beside the nearest dancers', 20000, (p) => p.act === 'dance');
 besideParty('Beside the nearest pair talking with their hands', 20000, talksWithHands);

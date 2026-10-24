@@ -36,7 +36,8 @@ import { floorGap, pointAlong, routeThrough, sunwalkOf, walksOf, type Route } fr
 import { besideLake, venuesOf, type Activity, type Venue, type Venues } from './venues';
 import { courtFloorOf, courtPassageOf, courtWayIn, courtWayOut } from '../gen/courts';
 import type { Terrain } from '../gen/terrain';
-import { POSE } from '../gen/standIn';
+import { POSE, SEAT_HIPS } from '../gen/standIn';
+import { SIT_BACK, SIT_DOWN, STAND_UP } from '../world/mount';
 import { beatAt, type Act } from './beats';
 import { crewBytes, crewMemberAt, crewOf, crewOfResident, crewsAt, crewsBelow, crewsOf } from './crews';
 
@@ -403,9 +404,6 @@ function spotOf(h: Habitat, place: Venue, i: number, day: number): [number, numb
   return [theta, s];
 }
 
-/** Feet this far (m) out from the edge of the seat round a court's light well: sitting on it, facing out. */
-const SEAT_FEET = 0.15;
-
 /**
  * Where a party meets in a court, standing: down on its open floor or up round it on the land, never on its wall or
  * stairs. Null in a habitat built without landmarks (no court is built): there the venue's spread, as anywhere.
@@ -423,8 +421,8 @@ function courtSpotOf(h: Habitat, place: Venue, lead: number, day: number): [numb
 function memberSpot(h: Habitat, place: Venue, form: Form, activity: Activity, lead: number, m: number, size: number, day: number): [number, number, number] {
   const seed = seedsOf(h).spot, face = seedsOf(h).face;
   if (form === 'bench') {
-    // Side by side round the seat, facing out over the court.
-    const site = venuesOf(h).courts[place.court], r = courtFloorOf(h, site.size)!.seat + SEAT_FEET, ring = Math.max(1, h.profile.at(site.s).r);
+    // Side by side round the seat, facing out over the court: where their hips rest on it, `SEAT_HIPS` in from its edge.
+    const site = venuesOf(h).courts[place.court], r = courtFloorOf(h, site.size)!.seat - SEAT_HIPS, ring = Math.max(1, h.profile.at(site.s).r);
     const a = TURN * unit(seed, lead, day, 2) + (m * ROW_GAP) / r;
     return [site.theta + (r * Math.sin(a)) / ring, site.s + r * Math.cos(a), a];
   }
@@ -449,6 +447,20 @@ function memberSpot(h: Habitat, place: Venue, form: Form, activity: Activity, le
   // Nobody is put into the water who did not come to swim: the other way round the party's middle.
   if (activity !== 'swim' && place.kind !== 'landmark' && planOf(h).inWater(ct + dy / ring, cs + ds)) { ds = -ds; dy = -dy; }
   return [ct + dy / ring, cs + ds, heading];
+}
+
+/** The point d m ahead of (θ, s) on the floor, heading `heading` (0 toward +s, +π/2 toward +θ). */
+export function ahead(h: Habitat, theta: number, s: number, heading: number, d: number): [number, number] {
+  return [theta + (d * Math.sin(heading)) / Math.max(1, h.profile.at(s).r), s + d * Math.cos(heading)];
+}
+
+/**
+ * Whether someone at a seat has their hips on it: seated, or getting up (the clip carries them forward); sitting down
+ * (the clip carries them back onto it) and once up they stand `SIT_BACK` in front of it (world/mount.ts).
+ */
+function onSeat(b: { posture: number; from: number; since: number }): boolean {
+  const down = POSE.kneel;
+  return b.posture === down ? b.from === down || b.since >= SIT_DOWN : b.from === down && b.since < STAND_UP;
 }
 
 /** The ways into a court toward spots on its floor: one per sector round its middle. */
@@ -507,7 +519,9 @@ function placeOf(h: Habitat, o: Outings, n: number, court: number, day: number, 
   const night = o.night[n] === 1, bench = FORMS[o.form[n]] === 'bench';
   const activity: Activity = bench ? 'bench' : night && place.activity !== 'watch' ? 'stargaze' : place.activity;
   const form: Form = night && !bench ? 'row' : FORMS[o.form[n]];
-  const [st, ss, facing] = memberSpot(h, place, form, activity, lead, member, size, day);
+  const [hipsTheta, hipsS, facing] = memberSpot(h, place, form, activity, lead, member, size, day);
+  // On a seat that is where the hips rest; they come to it and leave it from `SIT_BACK` in front (mount.ts).
+  const [st, ss] = bench ? ahead(h, hipsTheta, hipsS, facing, SIT_BACK) : [hipsTheta, hipsS];
   // A spot in a court is reached round its aisle (by its angle in the court's frame: x along the axis, y around).
   const site = v.courts[court], ring = Math.max(1, h.profile.at(site.s).r), dth = st - site.theta - TURN * Math.round((st - site.theta) / TURN);
   const inside = place.kind === 'court' && floorGap(R, site.theta, site.s, st, ss) < site.size ? Math.atan2(dth * ring, ss - site.s) : null;
@@ -543,8 +557,9 @@ function placeOf(h: Habitat, o: Outings, n: number, court: number, day: number, 
     // back toward the one they throw to.
     const heading = moving ? toward + (b.back ? Math.PI : 0) : off ? (act === 'catch' ? toward + Math.PI : toward) : act === 'look' && form === 'ring' ? facing + Math.PI : facing;
     const dTheta = away > 0 ? (away * Math.sin(toward)) / Math.max(1, h.profile.at(ss).r) : 0;
+    const [t0, s0] = bench && onSeat(b) ? [hipsTheta, hipsS] : [st, ss];
     return {
-      resident: i, theta: st + dTheta, s: ss + away * Math.cos(toward), heading, moving, speed: moving ? pace : 0,
+      resident: i, theta: t0 + dTheta, s: s0 + away * Math.cos(toward), heading, moving, speed: moving ? pace : 0,
       activity, court, outing: n, member, size, act, posture: b.posture, from: b.from, since: b.since,
     };
   }

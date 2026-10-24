@@ -27,7 +27,8 @@ import { fromWorld, toView, toWorld, type Habitat, type Vec3, apart as dist } fr
 import type { Terrain } from '../gen/terrain';
 import { horizonAt } from '../gen/horizon';
 import { MEAN_HEIGHT, POSE, SPECK_STRIDE, STAND_IN_STRIDE, speckBands, standInArrays, writeSpeck } from '../gen/standIn';
-import { floorGap, footingOf, personKey, lifeBytes, peopleAt, residentOf, talkerAt, whereIs, type Footing, type Person, type Resident } from '../sim';
+import { SIT_DOWN as SIT_DOWN_SPAN, STAND_UP as STAND_UP_SPAN } from '../world/mount';
+import { feetOf, floorGap, footingOf, personKey, lifeBytes, peopleAt, residentOf, talkerAt, whereIs, type Footing, type Person, type Resident } from '../sim';
 import { neighbourAt, neighboursAt, neighbourhoodBytes, shedNeighbourhoods } from '../sim/neighbourhood';
 import { CROWD, STAND_IN_LAYOUT, layInstances } from './materials';
 import { arraysGeometry, drawnAnywhere, freeMesh, instancedOf, sendInstances } from './geometry';
@@ -107,7 +108,7 @@ const HANDS_FOR = 4;
  * Getting down and up, played on the game clock over the clip's length (s): onto a seat and up from it, and lying down
  * (getting up from lying, backwards) and getting up. Down onto the grass and up from it, the clips cross-fade.
  */
-const SIT_DOWN = { clip: 'sit down', span: 1.33 }, STAND_UP = { clip: 'stand up', span: 1.07 }, GET_UP = { clip: 'get up from lying', span: 1.57 };
+const SIT_DOWN = { clip: 'sit down', span: SIT_DOWN_SPAN }, STAND_UP = { clip: 'stand up', span: STAND_UP_SPAN }, GET_UP = { clip: 'get up from lying', span: 1.57 };
 /**
  * Two who were captured together (motion capture, `CMU`): the first of each pair in a party plays A, the second B, in
  * step on the game clock from the start of the beat. Talking and dancing run forth and back (no jump at the clip's end).
@@ -315,9 +316,10 @@ export class PeopleView {
   /** Where someone stands now: on the ground (or a landmark's deck), or treading water; facing their way. */
   private stand(one: Someone): void {
     const h = this.habitat, p = one.person, { profile } = h;
-    if (!one.placed || floorGap(h.radius, p.theta, p.s, one.deckAt[0], one.deckAt[1]) > DECK_MOVE) {
-      one.deck = p.below ? null : this.deckOf(p.theta, p.s);
-      one.deckAt = [p.theta, p.s];
+    const [ft, fs] = feetOf(h, p);
+    if (!one.placed || floorGap(h.radius, ft, fs, one.deckAt[0], one.deckAt[1]) > DECK_MOVE) {
+      one.deck = p.below ? null : this.deckOf(ft, fs);
+      one.deckAt = [ft, fs];
     }
     // A drone body is placed by the drones' view (render/fliers.ts), from the same footing.
     if (one.resident.body === 'drone') { one.placed = true; return; }
