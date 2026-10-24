@@ -37,6 +37,7 @@ import { planDay, type Outing } from '../sim/sailing';
 import { nestsNear, type Nest } from '../sim/birds';
 import { flocksNear, type Flock } from '../sim/flocks';
 import type { VoyageRequest } from './voyage';
+import { Namer, type Nameable, type Named } from '../link';
 import type { VoyagePlan } from '../space/voyage';
 import { buildCapsule, type CapPad } from '../gen/capsules';
 import { landingNear } from '../gen/capLanding';
@@ -89,7 +90,9 @@ export type GenRequest =
   /** A capsule's flight between two ends (world/capFlight.ts `planFlight`). */
   | { kind: 'capFlight'; params: HabitatParams; ends: FlightEnds }
   /** A fall foreseen from the feet at `p` moving at `v`, and its catch if it would hurt (world/catch.ts `catchFor`). */
-  | { kind: 'catch'; params: HabitatParams; p: Vec3; v: Vec3; drag: number; options: CatchOptions };
+  | { kind: 'catch'; params: HabitatParams; p: Vec3; v: Vec3; drag: number; options: CatchOptions }
+  /** What the ray from `eye` along `dir` rests on, `others` (people) first: names on hover (src/link/naming.ts). */
+  | { kind: 'name'; params: HabitatParams; eye: Vec3; dir: Vec3; others: Nameable[]; below: boolean };
 export type GenAnswer =
   | { kind: 'voyage'; plan: VoyagePlan }
   | { kind: 'tile'; tile: TileMesh }
@@ -119,6 +122,7 @@ export type GenAnswer =
   | { kind: 'capPad'; pad: CapPad | null }
   | { kind: 'capFlight'; flight: Flight }
   | { kind: 'catch'; plan: CatchPlan | null }
+  | { kind: 'name'; named: Named | null }
   | { error: string };
 
 /** Every typed array's buffer in an answer, to transfer rather than copy. */
@@ -149,6 +153,9 @@ function terrainFor(params: HabitatParams): { terrain: Terrain; ecology: Ecology
   }
   return cached;
 }
+
+/** Names on hover's knowledge of the land, made on its first ask. */
+let namer: { terrain: Terrain; namer: Namer } | null = null;
 
 /** The habitat alone, for jobs that need no terrain (the sailing: its plan and wind are kept per habitat). */
 let derived: { json: string; habitat: Habitat } | null = null;
@@ -249,6 +256,11 @@ self.onmessage = async (e: MessageEvent<GenRequest>) => {
     }
     if (req.kind === 'capFlight') {
       post({ kind: 'capFlight', flight: planFlight(terrain, req.ends) });
+      return;
+    }
+    if (req.kind === 'name') {
+      if (namer?.terrain !== terrain) namer = { terrain, namer: new Namer(terrain, ecology) };
+      post({ kind: 'name', named: namer.namer.name(req.eye, req.dir, req.others, req.below) });
       return;
     }
     if (req.kind === 'catch') {

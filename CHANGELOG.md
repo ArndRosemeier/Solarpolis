@@ -2,6 +2,17 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.186 — Crews stay on their side of the boat
+
+- On a run with the wind nearly dead astern, the crew of a skiff or foiler (and the boat's wing) no longer flicker from one side to the other with every gust. Each leg of a sail keeps the side it was planned on; crew and wing cross over only halfway through a tack or gybe.
+
+## v0.185 — Your link names what you rest the mouse on
+
+- Rest the mouse pointer on something for a moment and your link names it beside the pointer: people, trees and bushes (with their height), stones and fallen logs, the courts, the lake pavilion, the summit hut, the founders' grove, harbours, bridges, the Lift Stair and the Threshold, and otherwise the ground itself (meadow, woodland, a river, the ring lake, snow) and the court it is near.
+- People show only what they choose to share: most show their name and what they care about, some only their name, a few nothing at all ("Someone"). Nobody's link ever tells you whether they are a mind. Speech bubbles now follow the same choice.
+- A toggle in your link (N, "Names on hover") turns it off and on, and is remembered for your next visit.
+- Works with a mouse; touch screens will get their own way to ask later. The looking happens in the background, so the frame rate does not dip.
+
 ## v0.184 — First Light: the title starts at once
 
 - The game opens on space within a second: Earth below, the stars, and the habitats of the ring catching the Sun like a necklace of lights, drawn by a small renderer of its own while the game loads behind it.

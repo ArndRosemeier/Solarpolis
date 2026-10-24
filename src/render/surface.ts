@@ -121,6 +121,16 @@ export function clickToUse(canvas: HTMLCanvasElement, use: (x: number, y: number
   });
 }
 
+/**
+ * Where a mouse pointer is over the canvas with no button held (px), or null once it leaves, a button goes down or it
+ * is not a mouse (a touch has no resting pointer): names on hover follow it.
+ */
+export function hoverOver(canvas: HTMLCanvasElement, moved: (at: readonly [number, number] | null) => void): void {
+  canvas.addEventListener('pointermove', (e) => moved(e.pointerType === 'mouse' && e.buttons === 0 ? [e.offsetX, e.offsetY] : null));
+  canvas.addEventListener('pointerleave', () => moved(null));
+  canvas.addEventListener('pointerdown', () => moved(null));
+}
+
 /** How far (pixels) the pointer may move between press and release and still click. */
 const CLICK_SLOP = 6;
 

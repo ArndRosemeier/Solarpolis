@@ -51,7 +51,7 @@ export const REFERENCE: HabitatParams = {
     drones: { couriers: 1, tenders: 1, surveyors: 2, lifters: 6, gliders: 0.4, guardians: 0.2, watchers: 0.15, cruise: 12, lane: 35, round: 1200, designs: 2, persons: 0.08, bodies: 6 },
     animals: { squirrels: 8, range: 25, out: 0.7, deer: 7, herd: 8, roam: 400 },
     birds: { woods: 4, territory: 30, larks: 0.4, owls: 4, swallows: 8, swifts: 40, starlings: 2500 },
-    talk: { words: 15, dots: 40, parties: 4, read: 14, quiet: 30 },
+    talk: { words: 15, dots: 40, parties: 4, read: 14, quiet: 30, shares: { name: 0.85, pursuits: 0.7 } },
     sailing: { boats: 6, outings: 0.4, stay: 7200 },
     // Capsules: quick over the land but easy on their passengers, a minute or so away when called.
     caps: { cruise: 140, climb: 10, accel: 4, ease: 5, turn: 5, over: 30, axis: 0.12, comfort: 1.3, tilt: 0.35, call: 900, reach: 60 },

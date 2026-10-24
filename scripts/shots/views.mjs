@@ -59,6 +59,21 @@ async function logArrival(page) {
   await page.locator('.dbg-panel .dbg-close').click().catch(() => {});
   await page.evaluate((ls) => { for (const l of ls) console.warn(l); }, text.split('\n').filter((l) => l.startsWith('arrival') || l.startsWith('shaders') || l.startsWith('memory')));
 }
+/**
+ * Names on hover: rest the mouse at (x, y) as shares of the view, wait for the link to name what is there, and log it
+ * (or that nothing was named) to the report.
+ */
+const restAt = (x, y) => async (page) => {
+  const box = await page.locator('canvas.view-canvas').first().boundingBox();
+  if (!box) throw new Error('no view canvas');
+  await page.mouse.move(box.x + box.width * x - 30, box.y + box.height * y);
+  await page.mouse.move(box.x + box.width * x, box.y + box.height * y, { steps: 4 });
+  await page.waitForTimeout(1500);
+  const label = page.locator('.link-name');
+  const named = (await label.isVisible()) ? await label.innerText() : '(nothing named)';
+  await page.evaluate((l) => console.warn(l), `name at ${x}, ${y}: ${named.replace(/\n/g, ' · ')}`);
+};
+
 async function logPeople(page) {
   await page.keyboard.press('Control+Shift+F12');
   const text = await page.locator('.dbg-panel .dbg-info').innerText({ timeout: 3000 }).catch(() => '');
@@ -195,6 +210,13 @@ export const views = {
   // The hamlets' skies (gen/skies.ts, render/hamletSkies.ts): one bay under each kind in turn, looking up.
   'under-skies': { query: 'view=inside', about: 'below the land, in a bay under each kind of hamlet sky in turn, looking up at it (-open, -aurora, -moon, -mars, -canopy, -deep, -glass); logs the position line (it names the sky)', settle: 6000, steps: [{ debug: 'Below: under the next kind of hamlet sky' }, { wait: 9000 }, { look: [0, -330] }, { wait: 1200 }, { shot: 'open' }, { look: [0, 330] }, { debug: 'Below: under the next kind of hamlet sky' }, { wait: 9000 }, { look: [0, -330] }, { wait: 1200 }, { shot: 'aurora' }, { look: [0, 330] }, { debug: 'Below: under the next kind of hamlet sky' }, { wait: 9000 }, { look: [0, -330] }, { wait: 1200 }, { shot: 'moon' }, { look: [0, 330] }, { debug: 'Below: under the next kind of hamlet sky' }, { wait: 9000 }, { look: [0, -330] }, { wait: 1200 }, { shot: 'mars' }, { look: [0, 330] }, { debug: 'Below: under the next kind of hamlet sky' }, { wait: 9000 }, { look: [0, -330] }, { wait: 1200 }, { shot: 'canopy' }, { look: [0, 330] }, { debug: 'Below: under the next kind of hamlet sky' }, { wait: 9000 }, { look: [0, -330] }, { wait: 1200 }, { shot: 'deep' }, { look: [0, 330] }, { debug: 'Below: under the next kind of hamlet sky' }, { wait: 9000 }, { look: [0, -330] }, { wait: 1200 }, { shot: 'glass' }, { look: [0, 330] }, { run: logPeople }] },
   'link': { query: 'view=inside', about: 'the neural link: below in the pillar forest, the lift-up card and the mark on the doors or the edge arrow (-ways), turned away so the arrow points back (-behind), then the link open with N (-open)', settle: 6000, steps: [{ debug: 'Below: the pillar forest under here' }, { wait: 10000 }, { shot: 'ways' }, { look: [786, 0] }, { wait: 1500 }, { shot: 'behind' }, { key: 'KeyN' }, { wait: 800 }, { shot: 'open' }] },
+  'names': { query: 'view=inside', about: 'the link names what the mouse rests on (logged): before a crowd, on someone (-person), on the ground (-ground), toward the far side (-far); in a wood on a tree (-tree); then names turned off in the link and nothing named (-off)', settle: 6000, steps: [
+    { debug: 'Before the nearest crowd' }, { wait: 9000 }, { run: restAt(0.5, 0.55) }, { shot: 'person' }, { run: restAt(0.5, 0.85) }, { shot: 'ground' }, { run: restAt(0.5, 0.2) }, { shot: 'far' },
+    { debug: 'Into the nearest wood' }, { wait: 9000 }, { run: restAt(0.5, 0.45) }, { shot: 'tree' },
+    { key: 'KeyN' }, { wait: 600 }, { run: async (page) => { await page.locator('.link-offer', { hasText: 'Names on hover' }).click(); } }, { wait: 600 },
+    { run: restAt(0.5, 0.45) }, { shot: 'off' },
+    { key: 'KeyN' }, { wait: 600 }, { run: async (page) => { await page.locator('.link-offer', { hasText: 'Names on hover' }).click(); } }, { wait: 300 },
+  ] },
   'under-life': { query: 'view=inside', about: 'neighbours walking to shared halls, nearby faces, the exit compass, and memory below', settle: 6000, steps: [memoryDetails, { debug: 'Below: beside neighbours at a shared hall' }, { wait: 15000 }, { shot: 'neighbours' }, { run: logPeople }, { wait: 5000 }, { shot: 'later' }, { debug: "Below: in a street among a hamlet's homes" }, { wait: 12000 }, { shot: 'street' }, { run: logPeople }, heap('below-life')] },
   'adaptive-home-walk': { query: 'view=inside', about: 'Walk through the actual house doorway, climb the internal stair, and see residents at home', settle: 6000, steps: [
     { debug: 'Below: at an adaptive home doorway' }, { wait: 10000 }, { shot: 'door' }, { key: 'KeyW', hold: 2200 }, { wait: 2000 }, { shot: 'inside' },

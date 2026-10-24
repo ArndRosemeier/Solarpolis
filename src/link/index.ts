@@ -3,3 +3,5 @@ export type { LinkService, LinkOffer, LinkChoice, LinkStatus, LinkLine } from '.
 export { LINK_KEY } from './service';
 export { choiceMatch, findChoices } from './choices';
 export { pickMarks, type ScreenPoint, type Sighting } from './marks';
+export { nameUnder, groundUnder, shownOf, shownName, personNamed, POINT_SLACK, type Nameable, type Named, type Shown } from './names';
+export { Namer, NAMES_REACH } from './naming';

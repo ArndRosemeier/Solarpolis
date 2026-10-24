@@ -405,6 +405,11 @@ export interface Talking {
   read: number;
   /** How long a party falls quiet between two conversations, on average (s). */
   quiet: number;
+  /**
+   * What people let anyone's neural link show of them (src/link/names.ts): the share who show their name (0 … 1; the
+   * rest show nothing), and of those the share who also show what they care about. Never whether they are a mind.
+   */
+  shares: { name: number; pursuits: number };
 }
 
 /**

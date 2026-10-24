@@ -98,13 +98,23 @@ export interface Outing {
   /** When it casts off and when it is moored again (clock time, s). */
   start: number;
   end: number;
-  /** Legs, `LEG_FIELDS` floats each: start (s after `start`), u, v, heading, speed, flags (`TURNING_LEG`, `FOILING`, `MOTOR`, `ASTERN`, `SPIN`). */
+  /** Legs, `LEG_FIELDS` floats each: start (s after `start`), u, v, heading, speed, flags (`TURNING_LEG`, `FOILING`, `MOTOR`, `ASTERN`, `SPIN`, `STARBOARD`). */
   legs: Float32Array;
   count: number;
 }
 const LEG_FIELDS = 6;
-/** A leg's flags: going about, flying on its foils, under its drive (the wing feathered), going astern, turning on the spot. */
-const TURNING_LEG = 1, FOILING = 2, MOTOR = 4, ASTERN = 8, SPIN = 16;
+/**
+ * A leg's flags: going about, flying on its foils, under its drive (the wing feathered), going astern, turning on the
+ * spot; under sail, the wind over its starboard side (else its port side) as the leg was planned: held for the whole
+ * leg, so a gust on a run never throws the wing and the crew from side to side.
+ */
+const TURNING_LEG = 1, FOILING = 2, MOTOR = 4, ASTERN = 8, SPIN = 16, STARBOARD = 32;
+
+/** The side the wind comes over a boat heading so at a speed (its own way taken off the true wind): +1 starboard, −1 port. */
+function tackOf(wind: { along: number; around: number }, heading: number, own: number): 1 | -1 {
+  const au = wind.around - Math.sin(heading) * own, av = wind.along - Math.cos(heading) * own;
+  return -au * Math.cos(heading) + av * Math.sin(heading) >= 0 ? 1 : -1;
+}
 
 /**
  * One leg of an outing: when it starts (s after the outing's), where, which way its bow points, how fast, going about
@@ -278,7 +288,7 @@ function sail(h: Habitat, b: Basin, boat: Boat, markAt: (k: number) => { u: numb
     // A tack or gybe first, where it turns through the wind's eye or its tail: slower, on the way round.
     if (Number.isFinite(heading) && Math.abs(angleDiff(0, want - heading)) > 30 * DEG) {
       const through = Math.min(speed * TURNING * bs.turn, runIn(b, u, v, want, margin));
-      leg(want, through / bs.turn, TURNING_LEG);
+      leg(want, through / bs.turn, TURNING_LEG | (tackOf(wind, want, speed) > 0 ? STARBOARD : 0));
       u += Math.sin(want) * through; v += Math.cos(want) * through; t += bs.turn;
       // (Round, it looks at the wind again.)
       heading = want;
@@ -287,7 +297,7 @@ function sail(h: Habitat, b: Basin, boat: Boat, markAt: (k: number) => { u: numb
     const go = Math.min(run, runIn(b, u, v, want, margin), speed * LEG);
     if (go <= 0) { heading = want; continue; }
     heading = want;
-    leg(want, speed, at2.foiling ? FOILING : 0);
+    leg(want, speed, (at2.foiling ? FOILING : 0) | (tackOf(wind, want, speed) > 0 ? STARBOARD : 0));
     u += Math.sin(want) * go; v += Math.cos(want) * go; t += go / speed;
   }
   if (berthed) {
@@ -333,7 +343,7 @@ export interface BoatState {
 export function boatAt(h: Habitat, boat: Boat, t: number): BoatState {
   const b = sailingOf(h).basins[boat.basin], bs = BOAT_KINDS[boat.kind], day = dayNumber(h, t);
   const o = outingOf(h, boat, day);
-  let u = boat.home.u, v = boat.home.v, heading = boat.berthHeading, speed = 0, sailing = false, turning = false, foiling = false, motoring = false, astern = false;
+  let u = boat.home.u, v = boat.home.v, heading = boat.berthHeading, speed = 0, sailing = false, turning = false, foiling = false, motoring = false, astern = false, side: -1 | 0 | 1 = 0;
   if (o && t >= o.start && t < o.end) {
     const L = o.legs, dt = t - o.start;
     // The leg it is on: the last one started.
@@ -346,6 +356,8 @@ export function boatAt(h: Habitat, boat: Boat, t: number): BoatState {
     u = L[i + 1] + Math.sin(heading) * speed * into * way; v = L[i + 2] + Math.cos(heading) * speed * into * way;
     // Going about, or turning on the spot, the bow swings round from the last heading to the new one.
     if ((turning || (flags & SPIN) !== 0) && lo > 0) heading = L[i - LEG_FIELDS + 3] + angleDiff(0, heading - L[i - LEG_FIELDS + 3]) * Math.min(1, into / bs.turn);
+    const held = turning && lo > 0 && into < bs.turn / 2 ? L[i - LEG_FIELDS + 5] : flags;
+    if (!motoring && !((held & MOTOR) !== 0)) side = (held & STARBOARD) !== 0 ? 1 : -1;
   }
   const at = basinPoint(b, u, v), wind = windAt(h, t, at.theta, at.s);
   if (!Number.isFinite(heading)) heading = headingOf(-wind.around, -wind.along);
@@ -353,7 +365,8 @@ export function boatAt(h: Habitat, boat: Boat, t: number): BoatState {
   const own = astern ? -speed : speed;
   const au = wind.around - Math.sin(heading) * own, av = wind.along - Math.cos(heading) * own;
   const across = (-au) * Math.cos(heading) - (-av) * Math.sin(heading), aws = Math.hypot(au, av);
-  const tack: 1 | -1 = across >= 0 ? 1 : -1;
+  // Under sail, the side its leg was planned on (going about, the last leg's until halfway round); else as the wind is now.
+  const tack: 1 | -1 = side !== 0 ? side : across >= 0 ? 1 : -1;
   const push = sailing && !motoring ? Math.min(1, (aws / (bs.top * 0.9)) ** 2) * Math.min(1, Math.abs(across) / Math.max(aws, 1e-6) * 1.5) : 0;
   return { boat, theta: at.theta, s: at.s, level: b.level, heading: angleDiff(0, heading), speed, sailing, turning, foiling, motoring, astern, tack, heel: bs.heel * push * (foiling ? -0.5 : 1), wind };
 }

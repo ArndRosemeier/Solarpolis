@@ -37,7 +37,8 @@ import type { Level } from '../gen/scatter';
 import { slopeAt } from '../gen/scatter';
 import { setFloorEye, setRockBeds, setSnow } from './groundShaders';
 import { UNDER_CROWNS, crownsClosed, makeEcology, type Ecology } from '../gen/ecology';
-import { FrameLoop, clickToUse, dragToLook, draw, fitCanvas, moveKeys, wheelOver } from './surface';
+import { FrameLoop, clickToUse, dragToLook, draw, fitCanvas, hoverOver, moveKeys, wheelOver } from './surface';
+import type { Nameable, Named } from '../link';
 import { freeMesh } from './geometry';
 import { logged } from './loadLog';
 import { cloudClearings, cloudSpan, cloudsAt } from '../world/clouds';
@@ -46,7 +47,7 @@ import { LandmarkView } from './landmarks';
 import { TiledView, courtSource, crossingSource, hallSource, harbourSource, stairSource, underSource } from './tiled';
 import { underStandAt, underHousesIn } from '../gen/underMesh';
 import { hallAt } from '../gen/halls';
-import { landmarkTopAt, landmarksOf } from '../gen/landmarks';
+import { landmarkTopAt, landmarksOf, standOnLand } from '../gen/landmarks';
 import { speckBands } from '../gen/standIn';
 import { snowFieldOf } from '../gen/snow';
 import { screenTextureBytes, screenTextures } from './actors/screens';
@@ -75,6 +76,10 @@ import { calledFrom, doorsAbove, doorsBelow, doorsHit, eyeInCabin, liftDoorsNear
 const RUN = 8;
 /** How far inside the screen's edge the link pins a mark that is off screen (px). */
 const OVERLAY_INSET = 34;
+/** Names on hover: how long the pointer rests before the link names what it is on, how often it asks again while it stays (s), and how far it may wobble and still rest (px). */
+const NAME_REST = 0.3;
+const NAME_EVERY = 0.25;
+const NAME_JITTER = 4;
 /** How long (s) the gravity meter takes to follow a change in the felt gravity, so a stride's jitter does not show. */
 const GRAVITY_SMOOTHING = 0.25;
 /** Faster than this (m/s) between two frames, the eye was put somewhere (Go), not moved: no wind for it. */
@@ -222,6 +227,18 @@ export class InteriorView {
   onOverlay: ((dt: number, project: (p: Vec3) => Sighting) => void) | null = null;
   private readonly sight = (p: Vec3): Sighting => toScreenOrEdge(this.camera, toView(this.posedAt, p), this.canvas.clientWidth, this.canvas.clientHeight, OVERLAY_INSET);
   private exitClock = 0;
+  /**
+   * Names on hover (the link's L2): whether the link names what the pointer rests on, and where it shows the name
+   * (null: nothing named, or the pointer moved on).
+   */
+  naming = true;
+  onNamed: ((named: Named | null, x: number, y: number) => void) | null = null;
+  /** The worker's answer on its way, while one is asked. */
+  private nameAsked: Promise<void> | null = null;
+  /** Where the pointer rests over the view (px), for how long (s), and when it is next asked about. */
+  private pointer: { x: number; y: number; still: number; next: number } | null = null;
+  private namedNow = false;
+  private readonly nameables: Nameable[] = [];
   /** Called each frame with the gravity the player feels (the page's gravity meter), smoothed over a fraction of a second. */
   onGravity: ((r: GravityReading) => void) | null = null;
   /** Walking and running speed on foot (m/s), for the gravity meter's explanation. */
@@ -258,8 +275,7 @@ export class InteriorView {
    */
   private readonly standOn = (theta: number, s: number): number => {
     if (this.below) return underStandAt(this.terrain, theta, s);
-    const g = this.terrain.standAt(theta, s), top = landmarkTopAt(this.terrain, theta, s);
-    return top !== null && top > g ? top : g;
+    return standOnLand(this.terrain, theta, s);
   };
 
   private homes: HomesView | null = null;
@@ -813,6 +829,7 @@ export class InteriorView {
     if (this.talk && this.people) this.talk.bubblesAt(this.people, v.eye, this.time, this.camera, this.canvas.clientWidth, this.canvas.clientHeight);
     this.onTalk?.(this.talk?.bubbles ?? []);
     this.onOverlay?.(this.frameDt, this.sight);
+    this.nameUnderPointer(this.frameDt);
     this.specks?.follow(this.time, this.frameDt, [...(this.people?.near ?? []), ...(this.drones?.near ?? [])], this.measured);
     for (const a of this.animals) a.follow(v.eye, this.time, this.frameDt);
     this.birds?.follow(v.eye, this.time, this.frameDt, this.below);
@@ -1108,10 +1125,44 @@ export class InteriorView {
     if (this.flyer || this.cabin?.ride || this.cabinMaking) return null;
     const doors = liftDoorsNear(this.terrain, this.walker.view().eye, this.below);
     if (!doors) return null;
+    return doorsHit(doors, this.current().eye, this.rayAt(x, y)) ? doors : null;
+  }
+
+  /** The direction (world, unit) of the ray from the eye through the point (x, y) of the view (px). */
+  private rayAt(x: number, y: number): Vec3 {
     // The camera sits at the origin: the point unprojected is the ray's direction.
     this.camera.updateMatrixWorld();
     const d = new Vector3((2 * x) / (this.canvas.clientWidth || 1) - 1, 1 - (2 * y) / (this.canvas.clientHeight || 1), 0.5).unproject(this.camera).normalize();
-    return doorsHit(doors, this.current().eye, [d.x, d.y, d.z]) ? doors : null;
+    return [d.x, d.y, d.z];
+  }
+
+  /**
+   * Names on hover: once the pointer has rested a moment, what it rests on (people, plants, places, the ground), asked
+   * again a few times a second while it stays (the player walks, people move), and handed to the link.
+   */
+  private nameUnderPointer(dt: number): void {
+    const p = this.pointer;
+    if (!p || !this.naming || !this.onNamed || this.arrivalReveal || this.flyer) { this.unname(); return; }
+    p.still += dt;
+    if (p.still < NAME_REST || p.still < p.next || this.nameAsked) return;
+    p.next = p.still + NAME_EVERY;
+    this.nameables.length = 0;
+    this.people?.nameables(this.nameables);
+    // In a worker (looking along the land for plants takes a few milliseconds), asked before the tiles waiting.
+    const asked = p, eye = this.current().eye;
+    this.nameAsked = this.pool.job({ kind: 'name', params: this.habitat.params, eye, dir: this.rayAt(p.x, p.y), others: this.nameables, below: this.below }, true).then((a) => {
+      this.nameAsked = null;
+      // Moved on meanwhile: the answer is for a place the pointer left.
+      if (this.pointer !== asked || !this.naming || !('kind' in a) || a.kind !== 'name') return;
+      this.namedNow = !!a.named;
+      this.onNamed?.(a.named, asked.x, asked.y);
+    }, () => { this.nameAsked = null; });
+  }
+
+  private unname(): void {
+    if (!this.namedNow) return;
+    this.namedNow = false;
+    this.onNamed?.(null, 0, 0);
   }
 
   /**
@@ -1184,9 +1235,7 @@ export class InteriorView {
   private capsuleUnder(x: number, y: number): boolean {
     const caps = this.caps;
     if (!caps || this.flyer || this.below || this.cabin?.ride || (caps.phase !== 'waiting' && caps.phase !== 'parked')) return false;
-    this.camera.updateMatrixWorld();
-    const d = new Vector3((2 * x) / (this.canvas.clientWidth || 1) - 1, 1 - (2 * y) / (this.canvas.clientHeight || 1), 0.5).unproject(this.camera).normalize();
-    return caps.hit(this.current().eye, [d.x, d.y, d.z], CAPSULE_SEEN);
+    return caps.hit(this.current().eye, this.rayAt(x, y), CAPSULE_SEEN);
   }
 
   /** A spot `steps` handrails out from the waiting capsule's door step (world), or null: the debug menu stands the player there. */
@@ -1277,6 +1326,13 @@ export class InteriorView {
       if (doors) void this.useDoors(doors);
       else if (this.capsuleUnder(x, y)) this.boardCapsule();
     }, (x, y) => !!this.doorsUnder(x, y) || this.capsuleUnder(x, y));
+    // Resting the pointer on something names it (the link's names on hover); moving it on, pressing or leaving clears.
+    hoverOver(this.canvas, (at) => {
+      const p = this.pointer;
+      if (at && p && Math.hypot(at[0] - p.x, at[1] - p.y) < NAME_JITTER) return;
+      this.pointer = at ? { x: at[0], y: at[1], still: 0, next: 0 } : null;
+      this.unname();
+    });
     // The pointer stays visible and free (Arnd, 2026-10-21): the right button held down looks around.
     dragToLook(this.canvas, (dx, dy) => {
       if (this.arrivalReveal) this.finishArrivalReveal();
