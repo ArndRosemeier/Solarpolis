@@ -33,6 +33,13 @@ export const JOINT = {
 /** A person's height before their look is measured (m): about Actors' grown bodies' middle. */
 export const MEAN_HEIGHT = 1.7;
 
+/**
+ * Seated, the hips rest this far (m) back from the seat's front edge (Actors' sitting clips keep them over the body's
+ * place), and the feet this far out in front of it: on a capsule's bench, round a court's light well.
+ */
+export const SEAT_HIPS = 0.26;
+export const SEAT_FEET = 0.15;
+
 /** How a stand-in stands (`pose` per instance): upright (walking or standing; swimmers too, sunk), kneeling, lying on its back. */
 export const POSE = { upright: 0, kneel: 1, lie: 2 } as const;
 
