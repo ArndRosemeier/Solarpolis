@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { v3add, v3cross, v3dot, v3norm, v3scale, v3sub } from '@futuremagic/core';
 import { MATRIX } from '../src/blueprint';
-import { ARRIVAL_SHOTS, CABIN_FOV, LOUNGE, arrival, cabinCamera, chooseStart, deriveShip, loungeOf, placesInView, seatedFeet, shipShape, sunOnSeated, throughWindow, windowFacing, windowLight, type Lounge } from '../src/space';
+import { ARRIVAL_SHOTS, CABIN_FOV, LOUNGE, arrival, cabinCamera, chooseStart, deriveShip, loungeOf, placesInView, seatedPlace, shipShape, sunOnSeated, throughWindow, windowFacing, windowLight, type Lounge } from '../src/space';
 import { loungeGeometry } from '../src/render/lounge';
 import { windingOk } from './meshChecks';
 import { spaceOf } from './worlds';
@@ -33,8 +33,8 @@ for (const { name } of MATRIX) {
         assert.ok(r > l.core + 0.5 && r < l.radius - 0.5, `${name}: a place ${r.toFixed(2)} m out in a room of ${l.radius.toFixed(2)} m`);
         assert.ok(Math.abs(Math.hypot(...p.facing) - 1) < 1e-9 && v3dot(p.facing, [0, p.at[1] / r, p.at[2] / r]) > 0.95, 'facing out');
         assert.ok(p.at[0] > l.floor && p.at[0] < l.floor + 1);
-        const feet = seatedFeet(l, p), out = Math.hypot(feet[1], feet[2]);
-        assert.ok(feet[0] === l.floor && out > r && out < l.radius - 0.3, 'feet on the floor, in front of the seat, clear of the wall');
+        const under = seatedPlace(l, p), out = Math.hypot(under[1], under[2]);
+        assert.ok(under[0] === l.floor && out < r - 0.1 && out > r - LOUNGE.couch.deep + 0.1, 'the hips over the seat, clear of its front and its back');
       }
       // The Sun reaches a couch's sitters through the window they face (at some height of it), never along the axis.
       const sitters = l.couches[0].places, facing = sitters[0].facing;
