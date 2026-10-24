@@ -2,6 +2,14 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.187 — Capsules ride smoothly, faster, with turning fans
+
+- The ride is smooth all the way: the pod eases into every change of speed instead of lurching from speeding up to braking, curves gently off and onto its pads, turns slowly over them, and swells over the hills instead of following every bump.
+- It flies about twice as fast at its best (140 m/s cruise, quicker climbs and acceleration); whole trips take a third less time, as much as the passenger's comfort in the spin allows.
+- The passenger sits on the bench, not in the air in front of it.
+- The fans have blades that spin up before take-off, turn through the flight and run down after landing.
+- No more flickering along the bronze band round the hull and the spine over the glass.
+
 ## v0.186 — Crews stay on their side of the boat
 
 - On a run with the wind nearly dead astern, the crew of a skiff or foiler (and the boat's wing) no longer flicker from one side to the other with every gust. Each leg of a sail keeps the side it was planned on; crew and wing cross over only halfway through a tack or gybe.
