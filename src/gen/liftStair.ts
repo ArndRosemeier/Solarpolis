@@ -25,7 +25,7 @@ import { toWorld, type Habitat, type Vec3 } from '../blueprint';
 import { landformOf, planOf, siteOf } from './plan';
 import { kept } from './kept';
 import { standThrough } from './standing';
-import { layThreshold, type Threshold } from './threshold';
+import { layThreshold, type Planter, type Threshold } from './threshold';
 
 /** The face the stair climbs, in plan (z, w) and height e above the floor. */
 export interface Ramp {
@@ -48,6 +48,13 @@ export interface Ramp {
   world(z: number, w: number, e: number): Vec3;
   /** A world point in plan: z, w and its height e. */
   plan(p: Vec3): { z: number; w: number; e: number };
+}
+
+/** A span with holes cut out of it (the parts of [lo, hi] no hole covers), in order. */
+export function cut([lo, hi]: [number, number], holes: readonly [number, number][]): [number, number][] {
+  let parts: [number, number][] = [[lo, hi]];
+  for (const [a, b] of holes) parts = parts.flatMap(([x, y]): [number, number][] => (b <= x || a >= y ? [[x, y]] : [...(a > x ? [[x, a] as [number, number]] : []), ...(b < y ? [[b, y] as [number, number]] : [])]));
+  return parts;
 }
 
 /**
@@ -341,6 +348,70 @@ function layStair(h: Habitat): LiftStair | null {
 
 /** The capsule berth's clear radius (handrails): a capsule (about 3.4 × 2.2 m) and room to step round it. */
 export const BERTH_CLEAR = 2.75;
+
+/**
+ * A planter's depth and the height of its rim and its soil over the floor (handrails), the gap it keeps from a lamp and
+ * from the bay's ends, the share of a bay a back planter runs, the shortest piece laid at all, and how much of a
+ * gallery's depth stays free to walk on.
+ */
+const PLANTER = { deep: 0.5, rim: 0.34, soil: 0.3, off: 0.5, end: 0.12, run: 0.8, least: 0.8, walk: 1.1, gap: 0.08 };
+
+/** What stands on a gallery's bay: its lamp, its bench, its planters. */
+export interface BayStands {
+  /** The lamp on the front parapet (its foot in plan), or null. */
+  lamp: PlanPoint | null;
+  /** The bench against the back: the z its back stands at, its middle along w, its length. */
+  bench: { back: number; mid: number; length: number } | null;
+  planters: Planter[];
+}
+
+/**
+ * One rule for what stands on a gallery's bay (gen/threshold.ts), so the mesh builds it and the garden plants it alike:
+ * a lantern on the front parapet every leg's width or so along the gallery, a bench against the back between them (not
+ * at the foot of a flight), planters of soil along the front where neither the lamp nor a way through stands, and one
+ * against the back wall where there is no bench. Nothing stands within the capsule berth's clear ring, and a gallery
+ * too shallow to walk past a planter has none.
+ */
+export function bayStands(st: LiftStair, q: StairPlatform): BayStands {
+  const bay = q.bay, th = st.threshold;
+  if (!bay || !th) return { lamp: null, bench: null, planters: [] };
+  const hr = st.handrail, p = st.parapet, W = st.width, g = th.galleries[bay.tier];
+  const length = q.w1 - q.w0, mid = centreOf(q)[1], every = Math.max(1, Math.round(W / length));
+  // The bay round a flight's notch is only the strip in front of it: no bench, no planter against the wall.
+  const notch = q.z1 - q.z0 < g.z1 - g.z0 - 1e-6;
+  const berth = th.berth && Math.abs(th.berth.e - q.e) < 1e-6 ? { at: th.berth.at, clear: BERTH_CLEAR * hr } : null;
+  const clearOf = (at: PlanPoint, r: number): boolean => !berth || Math.hypot(at[0] - berth.at[0], at[1] - berth.at[1]) > berth.clear + r;
+  const open = openingsOf(st, q);
+  const lampAt: PlanPoint = [q.z0 + p + hr * 0.4, mid];
+  const lamp = bay.index % every === 0 && clearOf(lampAt, hr * 0.3) ? lampAt : null;
+  const back = q.z1 - (open.z1.length > 0 ? 0 : p) - hr * 0.08;
+  const bench = bay.index % every === Math.floor(every / 2) && !notch && clearOf([back, mid], length / 2)
+    ? { back, mid, length: length * 0.8 } : null;
+  const deep = PLANTER.deep * hr, planters: Planter[] = [];
+  const trough = (kind: 'front' | 'back', z0: number, from: number, to: number): void => {
+    // Inside the gallery's own end parapets, wherever the bay lies along it.
+    const edge = p + PLANTER.gap * hr, w0 = Math.max(from, g.w0 + edge), w1 = Math.min(to, g.w1 - edge);
+    if (w1 - w0 < PLANTER.least * hr) return;
+    const at: PlanPoint = [z0 + deep / 2, (w0 + w1) / 2];
+    if (!clearOf(at, Math.hypot(deep, w1 - w0) / 2)) return;
+    planters.push({ tier: bay.tier, kind, z0, z1: z0 + deep, w0, w1, e: q.e, rim: PLANTER.rim * hr, soil: PLANTER.soil * hr });
+  };
+  // Deep enough to walk past one (a notch bay is the walk past a flight's foot: nothing stands in it).
+  if (q.z1 - q.z0 > 2 * p + deep + PLANTER.walk * W && !notch) {
+    // A hair off the parapet and the wall, as the bench stands, so no face of a trough is buried in them.
+    const gap = PLANTER.gap * hr, ends: [number, number] = [q.w0 + PLANTER.end * hr, q.w1 - PLANTER.end * hr];
+    const holes = [...open.z0, ...(lamp ? [[mid - PLANTER.off * hr, mid + PLANTER.off * hr] as [number, number]] : [])];
+    for (const [a, b] of cut(ends, holes)) trough('front', q.z0 + p + gap, a, b);
+    if (!bench) {
+      const run = length * PLANTER.run, a = mid - run / 2, b = mid + run / 2;
+      for (const [x, y] of cut([a, b], open.z1)) trough('back', q.z1 - p - gap - deep, x, y);
+    }
+  }
+  return { lamp, bench, planters };
+}
+
+/** Every planter on the Threshold's galleries (made once per stair, then kept). */
+export const plantersOf: (st: LiftStair) => readonly Planter[] = kept((st: LiftStair) => st.platforms.flatMap((q) => bayStands(st, q).planters));
 
 /** A platform's middle across the ramp. */
 const middleOf = (p: StairPlatform): number => centreOf(p)[1];

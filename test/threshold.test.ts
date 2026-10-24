@@ -2,12 +2,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MATRIX } from '../src/blueprint';
-import { legShapesOf, liftStairOf, rampOf, riserAt, stairTopAt, type LiftStair, type PlanPoint } from '../src/gen/liftStair';
+import { BERTH_CLEAR, bayStands, legShapesOf, liftStairOf, plantersOf, rampOf, riserAt, stairTopAt, type LiftStair, type PlanPoint } from '../src/gen/liftStair';
 import { arrivalTerraceOf } from '../src/gen/arrivalTerrace';
 import { buildStairTile, stairGridOf, stairTilesFor } from '../src/gen/liftStairMesh';
 import { FLIGHT_STEPS, TIERS } from '../src/gen/threshold';
 import { tileId } from '../src/gen/detailTree';
-import { habitatOf } from './worlds';
+import { plantingsOf } from '../src/gen/planted';
+import { habitatOf, terrainOf } from './worlds';
 import { stairFacesOut } from './meshChecks';
 
 /** Heights of the stair's top along a straight walk a → b, every `step` m. */
@@ -110,4 +111,48 @@ test('threshold (reference): its tiles draw the galleries with faces looking out
   }
   // The flights are legs of the stair: drawn as its steps are.
   assert.ok(legShapesOf(st).slice(-th.flights.length).every((s, i) => s.leg === th.flights[i] && s.steps.length === FLIGHT_STEPS));
+});
+
+for (const { name } of MATRIX) test(`threshold garden (${name}): planters stand on the galleries, clear of the berth and the walk, planted on their own soil`, () => {
+  const t = terrainOf(name), h = t.habitat, st = liftStairOf(h);
+  if (!st?.threshold) return;
+  const th = st.threshold, hr = st.handrail, p = st.parapet, planters = plantersOf(st);
+  assert.ok(planters.length > 0, `${name}: no planters`);
+  const berth = th.berth ? { at: th.berth.at, e: th.berth.e, clear: BERTH_CLEAR * hr } : null;
+  for (const pl of planters) {
+    const g = th.galleries[pl.tier];
+    assert.ok(pl.e === g.e, 'on its gallery\'s floor');
+    assert.ok(pl.z0 >= g.z0 + p - 1e-9 && pl.z1 <= g.z1 - p + 1e-9, `${name}: a trough through a parapet (z ${pl.z0} … ${pl.z1} of ${g.z0} … ${g.z1})`);
+    assert.ok(pl.w0 >= g.w0 + p - 1e-9 && pl.w1 <= g.w1 - p + 1e-9, 'inside the end parapets');
+    assert.ok(pl.rim > 0 && pl.soil > 0 && pl.soil < pl.rim, 'soil below the rim');
+    // The walk past it stays as wide as a leg of the stair.
+    assert.ok(g.z1 - g.z0 - 2 * p - (pl.z1 - pl.z0) >= st.width, `${name}: no room to walk past a trough`);
+    if (berth) {
+      const mid: PlanPoint = [(pl.z0 + pl.z1) / 2, (pl.w0 + pl.w1) / 2];
+      const far = Math.abs(berth.e - pl.e) > 1e-6 || Math.hypot(mid[0] - berth.at[0], mid[1] - berth.at[1]) > berth.clear;
+      assert.ok(far, `${name}: a trough in the berth's clear ring`);
+    }
+  }
+  // Nothing stands twice in a bay: a lamp and a trough keep apart, a bench and a back trough never share a bay.
+  for (const q of st.platforms.filter((x) => x.bay)) {
+    const stands = bayStands(st, q);
+    if (stands.bench) assert.ok(!stands.planters.some((x) => x.kind === 'back'), 'a bench or a trough against the wall, not both');
+    for (const x of stands.planters) {
+      if (stands.lamp) assert.ok(stands.lamp[1] <= x.w0 + 1e-9 || stands.lamp[1] >= x.w1 - 1e-9 || x.kind === 'back', 'a trough clear of the lamp');
+    }
+  }
+  // Every trough is planted along its length, each plant standing on its soil, not on the ground far below.
+  const garden = plantingsOf(t).garden;
+  assert.equal(garden.length, planters.filter((x) => x.kind === 'front').length + planters.filter((x) => x.kind === 'back').length);
+  for (const bed of garden) {
+    assert.ok(bed.plants.length >= 1 && bed.plants.length <= Math.ceil((bed.planter.w1 - bed.planter.w0) / bed.spec.spacing) + 1, 'as many as it holds');
+    for (const plant of bed.plants) {
+      assert.equal(plant.stand, bed.planter.e + bed.planter.soil);
+      assert.ok(plant.stand! > t.heightAt(plant.theta, plant.s), 'standing over the ground, not in it');
+      assert.ok(plant.height >= bed.spec.height[0] - 1e-9 && plant.height <= bed.spec.height[1] + 1e-9, 'its species\' height');
+    }
+  }
+  // They are species of the plantings, so the scatter stage draws them at every level.
+  const names = new Set(plantingsOf(t).species.map((s) => s.name));
+  for (const bed of garden) assert.ok(names.has(bed.spec.name), `${bed.spec.name} is not a planted species`);
 });

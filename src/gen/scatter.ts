@@ -20,8 +20,8 @@
  * at all three levels, seen as far as its size makes it more than a pixel or two (`debrisUnit`). It lies along the
  * ground: each one carries the ground's slope under it, which its kind shears it by.
  *
- * Planted plants (gen/planted.ts: the founders' grove) are species of their own (`planted`): no lattice, each where it
- * was planted, at its own height; drawn at the three levels as trees are. Scattered plants and debris keep out of a
+ * Planted plants (gen/planted.ts: the founders' grove, the Threshold's planters) are species of their own
+ * (`planted`): no lattice, each where it was planted, at its own height and on its own floor (`Planted.stand`); drawn at the three levels as trees are. Scattered plants and debris keep out of a
  * grove's clearing.
  */
 import { hash3f, deriveSeed } from '@futuremagic/core';
@@ -327,7 +327,7 @@ export function standsIn(ecology: Ecology, sp: Species, b: { theta0: number; the
     // Each where it was planted, its shape from its own hash.
     for (const p of plantedIn(t, spec.name, b)) {
       if (stops.keepsOff(p.theta, p.s, out)) continue;
-      const ground = t.heightAt(p.theta, p.s), own = hash3f(seed, Math.round(p.s * 16), Math.round(p.theta * 1e5), 5);
+      const ground = p.stand ?? t.heightAt(p.theta, p.s), own = hash3f(seed, Math.round(p.s * 16), Math.round(p.theta * 1e5), 5);
       visit(p.theta, p.s, ground, (q) => (q === 3 ? p.height : q === 4 ? p.turn : own), 0);
     }
     return;

@@ -16,13 +16,15 @@
  * the woods' canopy from afar (`plantedCanopy`), so a grove is still there when its trees are too far to draw. Pure.
  */
 import { Rng, deriveSeed, hash3f, smoothstep } from '@futuremagic/core';
-import { climateOf, type Climate, type PlantSpec } from '../blueprint';
+import { climateOf, fromWorld, type Climate, type PlantSpec } from '../blueprint';
 import type { Terrain } from './terrain';
 import { planOf, siteOf, type District } from './plan';
 import { pathsOf } from './paths';
 import { floorAt, inFloorFrame, type FloorFrame } from './shapes';
 import { canopyColor } from './trees';
 import { kept } from './kept';
+import { liftStairOf, plantersOf, rampOf } from './liftStair';
+import type { Planter } from './threshold';
 
 /** One planted plant: its species (a plant of the climate, by name), where it stands, its height (m) and turn. */
 export interface Planted {
@@ -31,6 +33,8 @@ export interface Planted {
   s: number;
   height: number;
   turn: number;
+  /** Where its foot stands, where that is not the ground: a planter on the Threshold (m over the habitat's floor). */
+  stand?: number;
 }
 
 /** A grove: a ring of trees around a clearing (or one tree, `ring` 0), and how far scattered trees keep off it. */
@@ -90,6 +94,8 @@ const HALL_TRIES = 16;
 export interface Plantings {
   groves: Grove[];
   halls: Hall[];
+  /** What grows in the Threshold's planters (gen/liftStair.ts `bayStands`), planter by planter. */
+  garden: GardenBed[];
   /** Every planted species. */
   species: PlantSpec[];
   /** Every planted plant, by species name. */
@@ -122,6 +128,7 @@ function makePlantings(t: Terrain): Plantings {
   const climate = climateOf(t.habitat.params.climate), spec = climate && plantSpec(climate, climate.grove);
   if (site && spec) groves.push(foundersGrove(t, site.theta, site.s, site.size, spec));
   const halls = climate ? grownHalls(t, climate.hall, groves) : [];
+  const garden = climate ? thresholdGarden(t, climate) : [];
   const bySpecies = new Map<string, Planted[]>(), species: PlantSpec[] = [];
   const put = (spec: PlantSpec, tree: Planted): void => {
     const list = bySpecies.get(tree.species);
@@ -130,7 +137,43 @@ function makePlantings(t: Terrain): Plantings {
   };
   for (const g of groves) for (const tree of g.trees) put(g.spec, tree);
   for (const hall of halls) for (const c of hall.columns) put(hall.spec, c.tree);
-  return { groves, halls, species, bySpecies };
+  for (const bed of garden) for (const plant of bed.plants) put(bed.spec, plant);
+  return { groves, halls, garden, species, bySpecies };
+}
+
+/** What one of the Threshold's planters is planted with: the planter, its species and its plants. */
+export interface GardenBed {
+  planter: Planter;
+  spec: PlantSpec;
+  plants: Planted[];
+}
+
+/**
+ * The Threshold's garden (plan "The Threshold", step 6): every planter on its galleries (gen/liftStair.ts
+ * `bayStands`) planted along its length, the front troughs with the climate's trailing plant (it spills over the
+ * parapet and hangs down the face), the troughs against the walls with its garden shrub. Each plant stands on its
+ * planter's soil (`Planted.stand`), not on the ground tens of metres below.
+ */
+function thresholdGarden(t: Terrain, climate: Climate): GardenBed[] {
+  const h = t.habitat, stair = liftStairOf(h);
+  if (!stair?.threshold) return [];
+  const ramp = rampOf(h), seed = deriveSeed(h.seed, 'planted', 'threshold-garden'), beds: GardenBed[] = [];
+  const shrub = plantSpec(climate, climate.garden.shrub);
+  for (const [i, planter] of plantersOf(stair).entries()) {
+    const spec = planter.kind === 'front' ? climate.garden.trailing : shrub;
+    if (!spec) continue;
+    // Along the trough's middle line, as many as its spacing leaves room for, evenly within it.
+    const run = planter.w1 - planter.w0, n = Math.max(1, Math.round(run / spec.spacing));
+    const z = (planter.z0 + planter.z1) / 2, plants: Planted[] = [];
+    for (let k = 0; k < n; k++) {
+      const w = planter.w0 + (run * (k + 0.5)) / n, world = ramp.world(z, w, planter.e);
+      const { theta, s } = fromWorld(h.profile, world[0], world[1], world[2]);
+      const low = hash3f(seed, i, k, 1), turn = hash3f(seed, i, k, 2) * 2 * Math.PI;
+      plants.push({ species: spec.name, theta, s, height: spec.height[0] + (spec.height[1] - spec.height[0]) * low, turn, stand: planter.e + planter.soil });
+    }
+    beds.push({ planter, spec, plants });
+  }
+  return beds;
 }
 
 /** One grown hall in each grove district outside the reserve, where one fits. */

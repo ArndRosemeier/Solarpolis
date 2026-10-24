@@ -49,6 +49,24 @@ export interface Gallery {
   bays: StairPlatform[];
 }
 
+/**
+ * A planter standing on a gallery's floor: a stone trough of soil, along the front parapet ('front': what grows in it
+ * spills over and hangs down the face) or against the wall under the gallery above ('back': a green wall beside the
+ * walk). Its plan rectangle, the floor it stands on, and the rim and soil above that floor (m). Laid per bay by
+ * `bayStands` (gen/liftStair.ts), built in gen/liftStairMesh.ts and planted in gen/planted.ts.
+ */
+export interface Planter {
+  tier: number;
+  kind: 'front' | 'back';
+  z0: number;
+  z1: number;
+  w0: number;
+  w1: number;
+  e: number;
+  rim: number;
+  soil: number;
+}
+
 export interface Threshold {
   /** The side of the top terrace the galleries run out to (+1 spinward, −1 the other way). */
   side: number;
