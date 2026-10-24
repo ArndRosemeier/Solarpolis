@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.191 — Steady shadows on the Threshold and in a capsule
+
+- Shadows no longer flicker round the arrival terrace or while you ride a capsule. Near the axis every small step turned the sun's shadow map a little, so every shadow edge was drawn anew each frame; the map now turns only in small held steps. In a moving capsule the map now moves with you instead of jumping from one land texel to the next.
+
 ## v0.190 — The Threshold is planted
 
 - The galleries beside the arrival terrace now have troughs of soil along their parapets and against their walls, planted with greenery that spills over the edge and hangs down the face.
