@@ -1,0 +1,79 @@
+{
+  "id": "20261024-002935-arrival",
+  "request": "shots-req/arrival/cabin",
+  "ref": "c312092e8117836b5a59cde6a92e09542fd7ef76",
+  "sha": "c312092e8117836b5a59cde6a92e09542fd7ef76",
+  "dirty": false,
+  "subject": "Lounge passengers sit on the seat, not in front of it",
+  "size": [
+    1600,
+    900
+  ],
+  "adapter": {
+    "vendor": "nvidia",
+    "architecture": "blackwell",
+    "device": "",
+    "description": "",
+    "fallback": false
+  },
+  "totalMs": 53427,
+  "ok": true,
+  "failure": null,
+  "views": [
+    {
+      "view": "cabin",
+      "about": "the cabin shot (space/lounge.ts, render/lounge.ts, render/passengers.ts): Start after 25 s on the title (the passengers loaded behind it), then from the lounge under the nose looking out of the window that faces the port face, past the passengers in their couches, as the ship creeps in along its berth arm (-in, -mid, -late, the arm and face nearer); lit by its lamps, by the bright view out and by the Sun through the glass; logs the arrival and loading lines",
+      "query": "",
+      "ok": true,
+      "failure": null,
+      "readyMs": 4383,
+      "debugInfo": "Solarpolis v0.187\nhabitat R 4000 m, L 30000 m, seed 1, 0.47 rpm\nmemory 642 MB of 2560 MB/3584 MB (desktop), heap 338 MB, sky maps, stars and skin detail 159 MB, terrain tiles 95 MB, drones 29 MB, +761 MB/min\nsound: 10.6 MB decoded · arrival 15.0 s, 1 loops\n57 fps, slowest frame 18 ms\narrival: first light 0.5 s, title 3.9 s after opening, the opening cut to it at 7.6 s (394 frames, slowest 131 ms, 3 stutters) · after Start: interior 0.0 s, body not yet, flight not yet · flight 56 fps, slowest frame 266 ms, 2 stutters · 14 shaders built in flight (worst 46 ms, 111 ms blocked)\narrival's long frames: 6.9 s 279 ms [FrameRequestCallback r main-CSmJcPI2.js@676994 266 ms]\narrival's loading (s after Start): -29.5 passengers … · -29.5 human pack … · -29.5 interior view … · -29.5 interior renderer … · -29.2 human pack ✓ · -29.2 interior renderer ✓ · -29.2 interior warm-up … · -28.5 passengers ✓ · -11.6 interior warm-up ✓ · -11.6 interior build … · -11.6 squirrel pack … · -11.6 deer pack … · -9.4 interior build ✓ · -9.4 player body … · -9.3 player body ✓ · -9.3 player body shaders … · -0.8 squirrel pack ✓ · -0.8 deer pack ✓ · 0.0 interior view …\nshaders 35 warm-up + 17 later · worst 14 ms · policy ok · 2 built again alike (shaders.repeats())\nterrain 0 tiles drawn (0 new last frame, 47 built so far), 0 MB in use, 47 cached (29 MB), 0 building · 8 bands, 47 roots of 4.4 km, 8 levels · 4 workers\nplants (plants/cells) full 0/0, lite 0/0, hull 0/0; 0 tufts; 0 stones and fallen wood; 0 draws, 0 cached (0.0 MB; shapes and atlases 21.0 MB), 0 planting, 20 forms\nplant LOD: 0 holes (0 frames with holes so far), 0 levels standing in for a finer one being planted, 0 far cells coming in\nlandmarks: pavilion (far; 0.2 MB), hut (far; 0.0 MB)\nlift stair: 0 tiles drawn, 16 kept (4.9 MB), 0 building\nentrance courts: 0 tiles drawn, 56 kept (11.5 MB), 0 building\nriver crossings: 0 tiles drawn, 48 kept (0.9 MB), 0 building\ngrown halls: 0 tiles drawn, 48 kept (0.3 MB), 0 building\nharbours: 0 tiles drawn, 48 kept (0.2 MB), 0 building\nunderstorey: 0 tiles drawn, 0 kept (0.0 MB), 0 building\nhome furniture: 0 homes (0 near, 0 mid), 0 of 8192 pieces drawn\nglass deck: none near\npeople: 0 up within 1.5 km · neighbourhood cache 0.00 MB · 0 figures (0 loading) · 0 stand-ins · 0 specks · 0 waiting for their look · handover holes 0, frames with holes 0 · figure levels made in 0 ms at most\nspecks: none yet\ndrones: 651 and 0 people in drone bodies (20 designs, built in 1335 ms) · 0 near · 0 coarse · 0 specks · handover holes 0, frames with holes 0\ntalk: not loaded\nsquirrels: 0 within 250 m from 0 homes (0 getting ready, 0 away) · 0 figures (0 loading) · 0 specks · handover holes 0, frames with holes 0\ndeer: 0 within 2000 m from 0 homes (0 getting ready, 0 away) · 0 figures (0 loading) · 0 specks · handover holes 0, frames with holes 0\nbirds: 0 round the eye (none; bodies built in 1411 ms) · flocks: none · 0 singing · 0 near · 0 coarse · 0 specks · handover holes 0, frames with holes 0\nboats: 89, 0 under sail (3 designs, built in 1425 ms) · 0 near · 0 coarse · 0 specks · handover holes 0, frames with holes 0\ncapsule: idle (not built yet)\ncatches: 0\nθ 17.2°, s 13.30 of 34.91 km, ground 19.0 m, on foot, in the air, gravity 0.99 g, eyes ×1.00\nwind: 3.5 m/s from against the spin; boats under sail: 3 of 89; 254 residents crew them\nday 1, 09:54 (dawn at 06:00), sun 25% of the way to the port end, clouds 32%, clock ×1\nshaders 17 warm-up + 15 later · worst 46 ms · 12 POLICY VIOLATIONS (shaders.report()) · 1 built again alike (shaders.repeats())\n3026-01-01 06:02 UT · clock ×1 · exposure 1.4e+1\nsunlight 100% · Earth 17.4° across · looking at habitat\n0.0 m from the nearest surface · nearest neighbour 11,388 km away\nhome hull detail: 33 tiles drawn, 41 kept, 0 building\nhome ships: 2 berthed, 1 on thrusters, 0 braking or leaving on the torch; 1 tugs out, 6 inspectors\nphysics: 0 bodies, 1154 trunk pieces",
+      "shaderReport": "shaders: 35 built in warm-up, 17 after, worst block 14 ms, 0 violations, 2 built again alike\nbuilt 2× alike (2 after warm-up, 31 ms): activity prop (instanced)\nbuilt 2× alike (2 after warm-up, 24 ms): ShadowMaterial (instanced) of Mesh adaptive domestic fittings (near)<Shadow Map [ sunline key ] (shadow warm-up)",
+      "shots": [
+        {
+          "file": "cabin-in.png",
+          "ms": 126
+        },
+        {
+          "file": "cabin-mid.png",
+          "ms": 120
+        },
+        {
+          "file": "cabin-late.png",
+          "ms": 130
+        },
+        {
+          "file": "cabin.png",
+          "ms": 121
+        }
+      ],
+      "totalMs": 48492,
+      "adapter": {
+        "vendor": "nvidia",
+        "architecture": "blackwell",
+        "device": "",
+        "description": "",
+        "fallback": false
+      },
+      "wgsl": {
+        "modules": 154,
+        "unique": 153,
+        "withMessages": []
+      },
+      "gpuErrors": [],
+      "pipelineErrors": [],
+      "deviceLost": null,
+      "console": [
+        "warning: THREE.TSL: Return statement used in an inline 'Fn()'. Define a layout struct to allow return values. Stack trace not available. Enable \"THREE.Node.captureStackTrace\" to capture stack traces.",
+        "warning: THREE.TSL: Return statement used in an inline 'Fn()'. Define a layout struct to allow return values. Stack trace not available. Enable \"THREE.Node.captureStackTrace\" to capture stack traces.",
+        "warning: using deprecated parameters for the initialization function; pass a single object instead",
+        "warning: memory 642 MB of 2560 MB/3584 MB (desktop), heap 338 MB, sky maps, stars and skin detail 159 MB, terrain tiles 95 MB, drones 29 MB, +761 MB/min",
+        "warning: arrival: first light 0.5 s, title 3.9 s after opening, the opening cut to it at 7.6 s (394 frames, slowest 131 ms, 3 stutters) · after Start: interior 0.0 s, body not yet, flight not yet · flight 56 fps, slowest frame 266 ms, 2 stutters · 14 shaders built in flight (worst 46 ms, 111 ms blocked)",
+        "warning: arrival's long frames: 6.9 s 279 ms [FrameRequestCallback r main-CSmJcPI2.js@676994 266 ms]",
+        "warning: arrival's loading (s after Start): -29.5 passengers … · -29.5 human pack … · -29.5 interior view … · -29.5 interior renderer … · -29.2 human pack ✓ · -29.2 interior renderer ✓ · -29.2 interior warm-up … · -28.5 passengers ✓ · -11.6 interior warm-up ✓ · -11.6 interior build … · -11.6 squirrel pack … · -11.6 deer pack … · -9.4 interior build ✓ · -9.4 player body … · -9.3 player body ✓ · -9.3 player body shaders … · -0.8 squirrel pack ✓ · -0.8 deer pack ✓ · 0.0 interior view …",
+        "warning: shaders 35 warm-up + 17 later · worst 14 ms · policy ok · 2 built again alike (shaders.repeats())",
+        "warning: shaders 17 warm-up + 15 later · worst 46 ms · 12 POLICY VIOLATIONS (shaders.report()) · 1 built again alike (shaders.repeats())"
+      ]
+    }
+  ]
+}

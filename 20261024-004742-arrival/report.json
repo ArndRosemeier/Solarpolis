@@ -1,0 +1,94 @@
+{
+  "id": "20261024-004742-arrival",
+  "request": "shots-req/arrival/threshold",
+  "ref": "da164c716bd08f8117e55cd719f86375981148e5",
+  "sha": "da164c716bd08f8117e55cd719f86375981148e5",
+  "dirty": false,
+  "subject": "The Threshold's galleries are planted",
+  "size": [
+    1600,
+    900
+  ],
+  "adapter": {
+    "vendor": "nvidia",
+    "architecture": "blackwell",
+    "device": "",
+    "description": "",
+    "fallback": false
+  },
+  "totalMs": 90972,
+  "ok": true,
+  "failure": null,
+  "views": [
+    {
+      "view": "threshold",
+      "about": "the Threshold (gen/threshold.ts): after the arrival walk on the top terrace (-landed), looking along the galleries to either side (-left, -right) and down over them (-down); from off the Gate face (-face); the portal and its door (-portal); on the lowest gallery by the capsule berth looking up at the flights (-berth); at nightfall from off the face (-night); a heap snapshot",
+      "query": "view=inside",
+      "ok": true,
+      "failure": null,
+      "readyMs": 20040,
+      "debugInfo": "Solarpolis v0.188\nhabitat R 4000 m, L 30000 m, seed 1, 0.47 rpm\nmemory 784 MB of 2560 MB/3584 MB (desktop), heap 225 MB, terrain tiles 482 MB, drones 29 MB, sound 18 MB, +524 MB/min\nsound: 17.9 MB decoded, 2 beds, 0 calls · wind-high 0.89, wind-open 0.32, air ×0.89, light 0.03, birds 0.00 · 0 near, 0 hums, 0 cues · steps on stone (3) · moment -\n46 fps, slowest frame 36 ms\narrival: title not yet · not started\narrival's loading: 0.2 interior renderer … · 0.8 interior renderer ✓ · 0.9 interior warm-up … · 17.5 interior warm-up ✓ · 17.5 interior build … · 17.5 human pack … · 17.5 squirrel pack … · 17.5 deer pack … · 17.9 human pack ✓ · 17.9 deer pack ✓ · 17.9 squirrel pack ✓ · 19.7 interior build ✓ · 19.7 player body … · 20.4 player body ✓ · 20.4 player body shaders … · 20.7 player body shaders ✓\nshaders 35 warm-up + 33 later · worst 41 ms · 9 POLICY VIOLATIONS (shaders.report()) · 2 built again alike (shaders.repeats())\nterrain 342 tiles drawn (0 new last frame, 1056 built so far), 245 MB in use, coarser ×1.6 to stay in budget, 728 cached (384 MB), 0 building · 8 bands, 47 roots of 4.4 km, 8 levels · 4 workers\nplants (plants/cells) full 0/145, lite 0/296, hull 12172/1528; 0 tufts; 232592 stones and fallen wood; 523 draws, 4266 cached (14.5 MB; shapes and atlases 21.0 MB), 0 planting, 20 forms\nplant LOD: 0 holes (0 frames with holes so far), 3 levels standing in for a finer one being planted, 0 far cells coming in\nlandmarks: pavilion (far; 0.2 MB), hut (far; 0.0 MB)\nlift stair: 30 tiles drawn, 91 kept (10.9 MB), 0 building\nentrance courts: 56 tiles drawn, 304 kept (24.5 MB), 0 building\nriver crossings: 48 tiles drawn, 300 kept (1.2 MB), 0 building\ngrown halls: 48 tiles drawn, 276 kept (0.3 MB), 0 building\nharbours: 48 tiles drawn, 316 kept (0.2 MB), 0 building\nunderstorey: 0 tiles drawn, 0 kept (0.0 MB), 0 building\nhome furniture: 0 homes (0 near, 0 mid), 0 of 8192 pieces drawn\nglass deck: none near\npeople: 0 up within 1.5 km · neighbourhood cache 0.00 MB · 0 figures (0 loading) · 0 stand-ins · 0 specks · 0 waiting for their look · handover holes 0, frames with holes 0 · figure levels made in 0 ms at most\nspecks: 11957 up on the land, 0 drawn nearer · list 2.6 s old, 23 lists, slowest 2016 ms\ndrones: 651 and 0 people in drone bodies (20 designs, built in 1383 ms) · 0 near · 2 coarse · 649 specks · handover holes 0, frames with holes 0\ntalk: 0 parties kept, 0 conversations; news heard here in 6 d: 2, latest flare--1 from sun after 8.2 min, 0 bubbles\nsquirrels: 0 within 250 m from 0 homes (0 getting ready, 0 away) · 0 figures (0 loading) · 0 specks · handover holes 0, frames with holes 0\ndeer: 0 within 2000 m from 0 homes (0 getting ready, 0 away) · 0 figures (0 loading) · 0 specks · handover holes 0, frames with holes 0\nbirds: 5 round the eye (5 lark; bodies built in 1375 ms) · flocks: 40 swifts (0 in sight) · 0 singing · 0 near · 0 coarse · 5 specks · handover holes 0, frames with holes 0\nboats: 89, 0 under sail (3 designs, built in 1464 ms) · 0 near · 0 coarse · 89 specks · handover holes 0, frames with holes 0\ncapsule: parked, 0.37 MB\ncatches: 0\nθ 127.6°, s 34.79 of 34.91 km, ground 31.4 m, flying 82 m up, eyes ×1.00\nwind: 7.0 m/s from the wild end; boats under sail: 0 of 89; 254 residents crew them\nday 1, 21:33 (dawn at 06:00), sun 100% of the way to the port end, clouds 26%, clock ×1\noutside: not started\nphysics: 0 bodies, 4 trunk pieces\nmemory by owner:\n  terrain tiles: 482 MB\n  drones: 29 MB\n  sound: 18 MB\n  player body: 16 MB\n  people: 6 MB\n  animals: 5 MB\n  boats: 2 MB\n  birds: 1 MB\n  talk: 0 MB\n  first light: 0 MB\nlast totals (MB): 830 790 793 803 819 863 789 812 847 799 768 771 785 792 784",
+      "shaderReport": "shaders: 35 built in warm-up, 33 after, worst block 41 ms, 9 violations, 2 built again alike\nrun: \"MeshStandardNodeMaterial\" started 1 ms after a build of 14 ms ended (minimum 27 ms)\nrun: \"MeshStandardNodeMaterial\" started 4 ms after a build of 8 ms ended (minimum 15 ms)\nrun: \"MeshPhysicalNodeMaterial\" started 1 ms after a build of 7 ms ended (minimum 14 ms)\nrun: \"MeshPhysicalNodeMaterial\" started 0 ms after a build of 7 ms ended (minimum 14 ms)\nrun: \"MeshPhysicalNodeMaterial\" started 1 ms after a build of 7 ms ended (minimum 13 ms)\nrun: \"MeshLambertNodeMaterial\" started 10 ms after a build of 8 ms ended (minimum 16 ms)\nrun: \"MeshLambertNodeMaterial\" started 0 ms after a build of 5 ms ended (minimum 9 ms)\nrun: \"MeshPhysicalNodeMaterial\" started 0 ms after a build of 4 ms ended (minimum 8 ms)\nrun: \"MeshPhysicalNodeMaterial\" started 1 ms after a build of 6 ms ended (minimum 12 ms)\nbuilt 2× alike (2 after warm-up, 35 ms): activity prop (instanced)\nbuilt 2× alike (2 after warm-up, 27 ms): ShadowMaterial (instanced) of Mesh adaptive domestic fittings (near)<Shadow Map [ sunline key ] (shadow warm-up)",
+      "shots": [
+        {
+          "file": "threshold-landed.png",
+          "ms": 113
+        },
+        {
+          "file": "threshold-left.png",
+          "ms": 177
+        },
+        {
+          "file": "threshold-right.png",
+          "ms": 203
+        },
+        {
+          "file": "threshold-down.png",
+          "ms": 184
+        },
+        {
+          "file": "threshold-face.png",
+          "ms": 335
+        },
+        {
+          "file": "threshold-portal.png",
+          "ms": 190
+        },
+        {
+          "file": "threshold-berth.png",
+          "ms": 186
+        },
+        {
+          "file": "threshold-night.png",
+          "ms": 327
+        },
+        {
+          "file": "threshold.png",
+          "ms": 268
+        }
+      ],
+      "totalMs": 86298,
+      "adapter": {
+        "vendor": "nvidia",
+        "architecture": "blackwell",
+        "device": "",
+        "description": "",
+        "fallback": false
+      },
+      "wgsl": {
+        "modules": 121,
+        "unique": 121,
+        "withMessages": []
+      },
+      "gpuErrors": [],
+      "pipelineErrors": [],
+      "deviceLost": null,
+      "console": [
+        "warning: THREE.TSL: Return statement used in an inline 'Fn()'. Define a layout struct to allow return values. Stack trace not available. Enable \"THREE.Node.captureStackTrace\" to capture stack traces.",
+        "warning: THREE.TSL: Return statement used in an inline 'Fn()'. Define a layout struct to allow return values. Stack trace not available. Enable \"THREE.Node.captureStackTrace\" to capture stack traces.",
+        "warning: using deprecated parameters for the initialization function; pass a single object instead",
+        "warning: HEAP threshold\nnodes 1745599, reachable 244.2 MB, unreachable 0.0 MB; {\"usage\":{\"usedSize\":62812652,\"totalSize\":66543616,\"embedderHeapUsedSize\":5886192,\"backingStorageSize\":155314292},\"perf\":{\"usedJSHeapSize\":218648240,\"totalJSHeapSize\":222120052},\"snapshotMs\":3047}\nby node type: native 188.8 MB, object 19.3 MB, code 15.0 MB, array 10.4 MB, string 4.9 MB, number 3.3 MB, object shape 1.4 MB, closure 1.0 MB, concatenated string 0.1 MB, sliced string 0.0 MB, regexp 0.0 MB, symbol 0.0 MB, synthetic 0.0 MB\ntop classes (self size):\n  167.7 MB  ×13404  native:system / JSArrayBufferData\n  15.0 MB  ×127675  code:\n  10.2 MB  ×797  native:system / ExternalStringData\n  7.1 MB  ×78465  array:(object elements)\n  4.9 MB  ×454231  string:\n  4.4 MB  ×166128  object:Object\n  3.3 MB  ×392549  number:\n  3.3 MB  ×56150  object:e\n  3.0 MB  ×8344  array:\n  2.5 MB  ×29490  object:$p\n  2.3 MB  ×15946  native:GPUBuffer\n  1.9 MB  ×1  native:system / CppGCManaged (WasmNativeModule)\n  1.5 MB  ×13664  native:ArrayBuffer\n  1.5 MB  ×96093  object:Array\n  1.4 MB  ×26027  object shape:\n  1.3 MB  ×26535  object:ArrayBuffer\n  1.3 MB  ×5119  native:system / WeakArrayList\n  1.2 MB  ×21366  object:Float32Array\n  0.8 MB  ×24764  native:system / PropertyArray\n  0.5 MB  ×10103  object:ei\n  0.4 MB  ×5245  object:Yl\n  0.4 MB  ×6516  object:MN\n  0.4 MB  ×7173  object:Int32Array\n  0.4 MB  ×5883  native:system / FunctionTemplateInfo\n  0.4 MB  ×1300  native:blink::NetworkResourcesData::ResourceData\n  0.3 MB  ×2251  object:Gi\n  0.3 MB  ×12606  closure:\n  0.3 MB  ×3027  native:Float32Array\n  0.3 MB  ×2417  object:kC\n  0.3 MB  ×6485  object:RP\n  0.3 MB  ×218  array:(object properties)\n  0.2 MB  ×3817  object:Float64Array\n  0.2 MB  ×2427  native:GPUBindGroup\n  0.2 MB  ×3141  object:Uint8Array\n  0.2 MB  ×2495  object:ON\n  0.2 MB  ×3439  object:CN\n  0.2 MB  ×1967  object:Wl\n  0.1 MB  ×6723  concatenated string:\n  0.1 MB  ×251  native:system / ArrayList\n  0.1 MB  ×1908  object:Uint32Array\ntyped array data 167.7 MB, by the path that holds it (shortest retainers):\n  27.4 MB  ×1  now.context.Z1.view.physics.R.KinematicCharacterController.context.u\n  8.9 MB  ×2  now.context.Z1.view.animals.pack.base.runtime.basePositions\n  8.0 MB  ×1  23 / blink::ScriptStateProtectingContext.global_object.shaders.now.context.QF.source.data.data\n  8.0 MB  ×1  23 / blink::ScriptStateProtectingContext.global_object.shaders.now.context.$F.source.data.data\n  7.5 MB  ×20  now.context.Z1.view.drones.drawn.design.body.index\n  6.5 MB  ×523  shaders.now.context.Z1.view.plants.drawn.cell.instances\n  6.1 MB  ×20  now.context.Z1.view.drones.drawn.design.body.spin\n  4.7 MB  ×1  now.context.Z1.view.people.residents.human.runtime.basePositions\n  4.6 MB  ×442  shaders.now.context.Z1.view.plants.shapes.attributes.array\n  4.6 MB  ×20  now.context.Z1.view.drones.drawn.design.body.positions\n  4.6 MB  ×20  now.context.Z1.view.drones.drawn.design.body.normals\n  4.0 MB  ×1  23 / blink::ScriptStateProtectingContext.global_object.shaders.now.context.VV.source.data.data\n  3.9 MB  ×36  context.Z1.view.people.residents.human.runtime.targets.deltas\n  3.6 MB  ×10  shaders.now.context.Z1.view.animals.coats.looks.coat\n  3.4 MB  ×5  shaders.now.context.AM.parent.47 / part of key (gr @552157) -> value (.567 / part of key (ik @591633) -> value .attributes.array\n  2.6 MB  ×1  shaders.now.context.AM.parent.47 / part of key (gr @552157) -> value (.567 / part of key (ik @591633) -> value .vertexBuffers.array\n  2.4 MB  ×125  context.Z1.view.people.residents.human.runtime.targets.indices\n  2.0 MB  ×1  23 / blink::ScriptStateProtectingContext.global_object.shaders.now.context.zV.source.data.data\n  2.0 MB  ×1  23 / blink::ScriptStateProtectingContext.global_object.shaders.now.context.BV.source.data.data\n  1.5 MB  ×20  now.context.Z1.view.drones.drawn.design.body.paint\n  1.4 MB  ×1080  global_object.shaders.now.context.Z1.view.people.residents.rise\n  1.3 MB  ×2  context.Z1.view.figure.character.actor.rendered.stencil.weights\n  1.3 MB  ×2  context.Z1.view.figure.character.actor.rendered.stencil.cols\n  1.2 MB  ×2  now.context.Z1.view.figure.character.actor.rendered.indices\n  1.2 MB  ×3  shaders.now.context.Z1.view.animals.coats.looks.dapple\n  1.1 MB  ×31  shaders.now.context.Z1.view.figure.animator.loaded.data\n  1.1 MB  ×42  now.context.Z1.view.figure.character.actor.rendered.weights\n  1.0 MB  ×53  now.context.Z1.view.figure.character.actor.rendered.joints\n  1.0 MB  ×1  global_object.shaders.now.context.H1.life.base.floor.data\n  1.0 MB  ×1  20 / DevTools console.document.context.previous.rc.source.data.data\n  1.0 MB  ×2424  global_object.shaders.now.context.qB.42 / part of key (aa @130129) -> value (.bindGroups.bindings._buffer\n  0.9 MB  ×86  shaders.now.context.Z1.view.plants.shapes.index.array\n  0.9 MB  ×1  global_object.shaders.now.context.Z1.view.physics.patch.index\n  0.9 MB  ×1  now.context.AM.parent.47 / part of key (gr @552157) -> value (.567 / part of key (ik @591633) -> value .geometry.index.array\n  0.8 MB  ×20  now.context.Z1.view.drones.drawn.design.veil.index\n  0.8 MB  ×345  23 / blink::ScriptStateProtectingContext.global_object.shaders.now.context.xp.1 / part of key (Object @558273) -> valu.days.start\n  0.7 MB  ×4  context.Z1.view.animals.pack.base.runtime.meshes.weights\n  0.7 MB  ×452  now.context.Z1.view.plants.cache.built.cell.instances\n  0.7 MB  ×111  global_object.shaders.now.context.H1.habitat.9 / part of key (Object @558273) -> valu.byKey.legs\n  0.7 MB  ×20  context.Z1.view.drones.drawn.design.coarse.body.index\ndominator tree (retained ≥ 4 MB):\n244.2 MB  .[1]  synthetic \"(GC roots)\"\n  62.3 MB  (via object \"system / Context / scope @610115\").t  object \"e\"\n    29.4 MB  .drones  object \"Fq\"\n      29.1 MB  .drawn  object \"Array\"\n    18.6 MB  .plants  object \"KW\"\n      5.7 MB  .shapes  object \"Map\"\n        5.7 MB  .table  array \"\"\n    4.8 MB  .animals  object \"Array\"\n  29.5 MB  (via object \"system / Context / scope @1063681\").previous  object \"system / Context / scope @621647\"\n    27.4 MB  (via object \"DataView\").buffer  object \"ArrayBuffer\"\n      27.4 MB  .backing_store  native \"system / JSArrayBufferData\"  (self 27.4 MB)\n  8.0 MB  (via object \"system / Context / scope @229205\").QF  object \"Pn\"\n    8.0 MB  .source  object \"En\"\n      8.0 MB  .data  object \"Object\"\n        8.0 MB  .data  native \"Uint8Array\"\n          8.0 MB  .buffer  native \"ArrayBuffer\"\n            8.0 MB  .backing_store  native \"system / JSArrayBufferData\"  (self 8.0 MB)\n  8.0 MB  (via object \"system / Context / scope @229205\").$F  object \"Pn\"\n    8.0 MB  .source  object \"En\"\n      8.0 MB  .data  object \"Object\"\n        8.0 MB  .data  native \"Uint8Array\"\n          8.0 MB  .buffer  native \"ArrayBuffer\"\n            8.0 MB  .backing_store  native \"system / JSArrayBufferData\"  (self 8.0 MB)\n  7.8 MB  (via object \"e\").runtime  object \"e\"\n    6.4 MB  .targets  object \"Map\"\n      6.4 MB  .table  array \"\"\n  5.7 MB  (via object \"e\").runtime  object \"e\"\n    5.0 MB  (via object \"Float32Array\").buffer  object \"ArrayBuffer\"\n      5.0 MB  .backing_store  native \"system / JSArrayBufferData\"  (self 5.0 MB)\n  4.8 MB  (via array \"(object elements)\").1  object \"Object\"\n  4.7 MB  (via object \"Uint32Array\").buffer  object \"ArrayBuffer\"\n    4.7 MB  .backing_store  native \"system / JSArrayBufferData\"  (self 4.7 MB)\n  4.4 MB  (via object \"e\").runtime  object \"e\"\n  4.0 MB  (via object \"system / Context / scope @229205\").VV  object \"aa\"\n    4.0 MB  .source  object \"En\"\n      4.0 MB  .data  object \"Object\"\n        4.0 MB  .data  native \"Uint8Array\"\n          4.0 MB  .buffer  native \"ArrayBuffer\"\n            4.0 MB  .backing_store  native \"system / JSArrayBufferData\"  (self 4.0 MB)"
+      ]
+    }
+  ]
+}

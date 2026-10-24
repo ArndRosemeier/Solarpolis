@@ -1,0 +1,89 @@
+{
+  "id": "20261023-215433-arrival",
+  "request": "shots-req/arrival/cabin",
+  "ref": "c940dfe475b19ff7fff66c5fea8de000a4d0583e",
+  "sha": "c940dfe475b19ff7fff66c5fea8de000a4d0583e",
+  "dirty": false,
+  "subject": "Cabin shot: the eyes settle on the room, the view looks down over the couches",
+  "size": [
+    1600,
+    900
+  ],
+  "adapter": {
+    "vendor": "nvidia",
+    "architecture": "blackwell",
+    "device": "",
+    "description": "",
+    "fallback": false
+  },
+  "totalMs": 28341,
+  "ok": false,
+  "failure": null,
+  "views": [
+    {
+      "view": "cabin",
+      "about": "the cabin shot (space/lounge.ts, render/lounge.ts): after Start, from the lounge under the nose looking out of the window that faces the port face, past the couches, as the ship creeps in along its berth arm (-in, -mid, -late, the arm and face nearer); lit by its lamps, by the bright view out and by the Sun through the glass",
+      "query": "",
+      "ok": false,
+      "failure": null,
+      "readyMs": 4039,
+      "debugInfo": "Solarpolis v0.176\nhabitat R 4000 m, L 30000 m, seed 1, 0.47 rpm\nmemory 266 MB of 2560 MB/3584 MB (desktop), heap 160 MB, sky maps, stars and skin detail 95 MB, sound 11 MB, +633 MB/min\nsound: 10.6 MB decoded · arrival 15.3 s, 1 loops\n45 fps, slowest frame 250 ms\narrival: title 3.8 s after opening · after Start: interior not yet, body not yet, flight not yet · flight 58 fps, slowest frame 250 ms, 3 stutters · 0 shaders built in flight (worst 0 ms, 4 ms blocked)\narrival's long frames: 13.6 s 116 ms [TimerHandler:setTimeout ? ?@-1 109 ms; FrameRequestCallback r index-DriWVrnz.js@664952 7 ms] · 14.0 s 98 ms [TimerHandler:setTimeout ? ?@-1 80 ms; FrameRequestCallback t index-DriWVrnz.js@487847 9 ms; FrameRequestCallback r index-DriWVrnz.js@664952 9 ms]\narrival's loading (s after Start): -4.2 interior view … · -4.2 interior renderer … · -4.0 interior renderer ✓ · -4.0 interior warm-up … · 14.0 interior warm-up ✓ · 14.0 interior build … · 14.0 human pack … · 14.0 squirrel pack … · 14.0 deer pack … · 15.2 squirrel pack ✓ · 15.2 human pack ✓ · 15.2 deer pack ✓\ninside: not started\nshaders 17 warm-up + 1 later · worst 6 ms · policy ok · 1 built again alike (shaders.repeats())\n3026-01-01 06:02 UT · clock ×1 · exposure 2.4e+0\nsunlight 100% · Earth 17.4° across · looking at habitat\n85 m from the nearest surface · nearest neighbour 11,388 km away\nhome hull detail: 20 tiles drawn, 40 kept, 3 building\nhome ships: 2 berthed, 1 on thrusters, 0 braking or leaving on the torch; 1 tugs out, 6 inspectors",
+      "shaderReport": "shaders: 35 built in warm-up, 11 after, worst block 15 ms, 0 violations, 2 built again alike\nbuilt 2× alike (2 after warm-up, 34 ms): activity prop (instanced)\nbuilt 2× alike (2 after warm-up, 22 ms): ShadowMaterial (instanced) of Mesh adaptive domestic fittings (near)<Shadow Map [ sunline key ] (shadow warm-up)",
+      "shots": [
+        {
+          "file": "cabin-in.png",
+          "ms": 81
+        },
+        {
+          "file": "cabin-mid.png",
+          "ms": 93
+        },
+        {
+          "file": "cabin-late.png",
+          "ms": 179
+        },
+        {
+          "file": "cabin.png",
+          "ms": 344
+        }
+      ],
+      "totalMs": 23532,
+      "adapter": {
+        "vendor": "nvidia",
+        "architecture": "blackwell",
+        "device": "",
+        "description": "",
+        "fallback": false
+      },
+      "wgsl": {
+        "modules": 115,
+        "unique": 115,
+        "withMessages": [
+          {
+            "hash": "1ab2d35c8177",
+            "label": "vertex_ShadowMaterial",
+            "lines": 138,
+            "messages": [
+              {
+                "type": "error",
+                "message": "no compilation info"
+              }
+            ]
+          }
+        ]
+      },
+      "gpuErrors": [],
+      "pipelineErrors": [],
+      "deviceLost": null,
+      "console": [
+        "warning: THREE.TSL: Return statement used in an inline 'Fn()'. Define a layout struct to allow return values. Stack trace not available. Enable \"THREE.Node.captureStackTrace\" to capture stack traces.",
+        "warning: THREE.TSL: Return statement used in an inline 'Fn()'. Define a layout struct to allow return values. Stack trace not available. Enable \"THREE.Node.captureStackTrace\" to capture stack traces.",
+        "warning: memory 266 MB of 2560 MB/3584 MB (desktop), heap 160 MB, sky maps, stars and skin detail 95 MB, sound 11 MB, +633 MB/min",
+        "warning: arrival: title 3.8 s after opening · after Start: interior not yet, body not yet, flight not yet · flight 59 fps, slowest frame 100 ms, 2 stutters · 0 shaders built in flight (worst 0 ms, 3 ms blocked)",
+        "warning: arrival's long frames: 13.6 s 116 ms [TimerHandler:setTimeout ? ?@-1 109 ms; FrameRequestCallback r index-DriWVrnz.js@664952 7 ms] · 14.0 s 98 ms [TimerHandler:setTimeout ? ?@-1 80 ms; FrameRequestCallback t index-DriWVrnz.js@487847 9 ms; FrameRequestCallback r index-DriWVrnz.js@664952 9 ms]",
+        "warning: arrival's loading (s after Start): -4.2 interior view … · -4.2 interior renderer … · -4.0 interior renderer ✓ · -4.0 interior warm-up … · 14.0 interior warm-up ✓ · 14.0 interior build … · 14.0 human pack … · 14.0 squirrel pack … · 14.0 deer pack …",
+        "warning: shaders 17 warm-up + 1 later · worst 6 ms · policy ok · 1 built again alike (shaders.repeats())"
+      ]
+    }
+  ]
+}

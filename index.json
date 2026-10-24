@@ -1,0 +1,435 @@
+[
+  {
+    "id": "20261024-075301-arrival",
+    "request": "shots-req/arrival/threshold-still,capsule-frames",
+    "ref": "76bcc227b2ba02e7a33bcc4debe871e69fad3d47",
+    "sha": "76bcc227b2ba02e7a33bcc4debe871e69fad3d47",
+    "ok": true,
+    "failure": null,
+    "views": [
+      "threshold-still",
+      "capsule-frames"
+    ],
+    "files": [
+      "threshold-still-a.png",
+      "threshold-still-b.png",
+      "threshold-still-c.png",
+      "threshold-still-d.png",
+      "threshold-still-e.png",
+      "threshold-still.png",
+      "capsule-frames-a.png",
+      "capsule-frames-b.png",
+      "capsule-frames-c.png",
+      "capsule-frames.png"
+    ]
+  },
+  {
+    "id": "20261024-075038-arrival-base2",
+    "request": "shots-req/arrival-base2/capsule-frames",
+    "ref": "85f19a25ead90d61d663ce5747d0ca74ccb774ad",
+    "sha": "85f19a25ead90d61d663ce5747d0ca74ccb774ad",
+    "ok": true,
+    "failure": null,
+    "views": [
+      "capsule-frames"
+    ],
+    "files": [
+      "capsule-frames-a.png",
+      "capsule-frames-b.png",
+      "capsule-frames-c.png",
+      "capsule-frames.png"
+    ]
+  },
+  {
+    "id": "20261024-074708-arrival-base",
+    "request": "shots-req/arrival-base/threshold-still",
+    "ref": "454f67ae18d64e3fcda811aaeafa834fe98cdc2c",
+    "sha": "454f67ae18d64e3fcda811aaeafa834fe98cdc2c",
+    "ok": true,
+    "failure": null,
+    "views": [
+      "threshold-still"
+    ],
+    "files": [
+      "threshold-still-a.png",
+      "threshold-still-b.png",
+      "threshold-still-c.png",
+      "threshold-still-d.png",
+      "threshold-still-e.png",
+      "threshold-still.png"
+    ]
+  },
+  {
+    "id": "20261024-005712-arrival",
+    "request": "shots-req/arrival/threshold",
+    "ref": "c38b6aaaa5aaae7f37dbb08f4f6b91f4cdf198a8",
+    "sha": "c38b6aaaa5aaae7f37dbb08f4f6b91f4cdf198a8",
+    "ok": true,
+    "failure": null,
+    "views": [
+      "threshold"
+    ],
+    "files": [
+      "threshold-landed.png",
+      "threshold-left.png",
+      "threshold-right.png",
+      "threshold-down.png",
+      "threshold-face.png",
+      "threshold-portal.png",
+      "threshold-berth.png",
+      "threshold-night.png",
+      "threshold.png"
+    ]
+  },
+  {
+    "id": "20261024-005206-arrival",
+    "request": "shots-req/arrival/threshold",
+    "ref": "d6f1de0e474cb62f6939db4b64d998795749538a",
+    "sha": "d6f1de0e474cb62f6939db4b64d998795749538a",
+    "ok": true,
+    "failure": null,
+    "views": [
+      "threshold"
+    ],
+    "files": [
+      "threshold-landed.png",
+      "threshold-left.png",
+      "threshold-right.png",
+      "threshold-down.png",
+      "threshold-face.png",
+      "threshold-portal.png",
+      "threshold-berth.png",
+      "threshold-night.png",
+      "threshold.png"
+    ]
+  },
+  {
+    "id": "20261024-004742-arrival",
+    "request": "shots-req/arrival/threshold",
+    "ref": "da164c716bd08f8117e55cd719f86375981148e5",
+    "sha": "da164c716bd08f8117e55cd719f86375981148e5",
+    "ok": true,
+    "failure": null,
+    "views": [
+      "threshold"
+    ],
+    "files": [
+      "threshold-landed.png",
+      "threshold-left.png",
+      "threshold-right.png",
+      "threshold-down.png",
+      "threshold-face.png",
+      "threshold-portal.png",
+      "threshold-berth.png",
+      "threshold-night.png",
+      "threshold.png"
+    ]
+  },
+  {
+    "id": "20261024-002935-arrival",
+    "request": "shots-req/arrival/cabin",
+    "ref": "c312092e8117836b5a59cde6a92e09542fd7ef76",
+    "sha": "c312092e8117836b5a59cde6a92e09542fd7ef76",
+    "ok": true,
+    "failure": null,
+    "views": [
+      "cabin"
+    ],
+    "files": [
+      "cabin-in.png",
+      "cabin-mid.png",
+      "cabin-late.png",
+      "cabin.png"
+    ]
+  },
+  {
+    "id": "20261024-002610-claude",
+    "request": "shots-req/claude/court-seat,people-court",
+    "ref": "2c78ff27e21b709068e258bdf8e7f146ff4e7017",
+    "sha": "2c78ff27e21b709068e258bdf8e7f146ff4e7017",
+    "ok": true,
+    "failure": null,
+    "views": [
+      "court-seat",
+      "people-court"
+    ],
+    "files": [
+      "court-seat-near.png",
+      "court-seat-near2.png",
+      "court-seat-above.png",
+      "court-seat.png",
+      "people-court-court.png",
+      "people-court-court2.png",
+      "people-court-ring.png",
+      "people-court-ring2.png",
+      "people-court.png"
+    ]
+  },
+  {
+    "id": "20261023-233838-capsules",
+    "request": "shots-req/capsules/capsule-seat,capsule",
+    "ref": "32bca893397789ee13ba50464e37dc763be1c651",
+    "sha": "32bca893397789ee13ba50464e37dc763be1c651",
+    "ok": true,
+    "failure": null,
+    "views": [
+      "capsule-seat",
+      "capsule"
+    ],
+    "files": [
+      "capsule-seat-side.png",
+      "capsule-seat-front.png",
+      "capsule-seat-eyes-down.png",
+      "capsule-seat-spinup.png",
+      "capsule-seat-liftoff.png",
+      "capsule-seat-climb.png",
+      "capsule-seat.png",
+      "capsule-coming.png",
+      "capsule-waiting-far.png",
+      "capsule-waiting.png",
+      "capsule-boarding.png",
+      "capsule-seated.png",
+      "capsule-climb.png",
+      "capsule-cruise.png",
+      "capsule-eyes.png",
+      "capsule-landing.png",
+      "capsule-out.png",
+      "capsule.png"
+    ]
+  },
+  {
+    "id": "20261023-231916-crew-side",
+    "request": "shots-req/crew-side/crews,boats",
+    "ref": "660e291bdf614faff95ecb26cf3aa8ff4ade3e5e",
+    "sha": "660e291bdf614faff95ecb26cf3aa8ff4ade3e5e",
+    "ok": true,
+    "failure": null,
+    "views": [
+      "crews",
+      "boats"
+    ],
+    "files": [
+      "crews-walking.png",
+      "crews-walking-2.png",
+      "crews-skiff.png",
+      "crews-foiler.png",
+      "crews-cruiser.png",
+      "crews.png",
+      "boats-skiff.png",
+      "boats-skiff-2.png",
+      "boats-foiler.png",
+      "boats-foiler-2.png",
+      "boats-cruiser.png",
+      "boats-cruiser-2.png",
+      "boats-sailing.png",
+      "boats-lake.png",
+      "boats.png"
+    ]
+  },
+  {
+    "id": "20261023-230823-claude",
+    "request": "shots-req/claude/names",
+    "ref": "f46d51f08951ef621bab03a2df1f818cd6559791",
+    "sha": "f46d51f08951ef621bab03a2df1f818cd6559791",
+    "ok": true,
+    "failure": null,
+    "views": [
+      "names"
+    ],
+    "files": [
+      "names-person.png",
+      "names-ground.png",
+      "names-far.png",
+      "names-tree.png",
+      "names-off.png",
+      "names.png"
+    ]
+  },
+  {
+    "id": "20261023-225313-first-light",
+    "request": "shots-req/first-light/opening,title",
+    "ref": "fef90d86bc298be4159782bf882b2ba3d5aae807",
+    "sha": "fef90d86bc298be4159782bf882b2ba3d5aae807",
+    "ok": true,
+    "failure": null,
+    "views": [
+      "opening",
+      "title"
+    ],
+    "files": [
+      "opening-early.png",
+      "opening-mid.png",
+      "opening-cut.png",
+      "opening-flight.png",
+      "opening.png",
+      "title.png"
+    ]
+  },
+  {
+    "id": "20261023-225116-first-light",
+    "request": "shots-req/first-light/opening,title",
+    "ref": "1fd72be1bdf210798a3b667c2bac10cafdca8ee5",
+    "sha": "1fd72be1bdf210798a3b667c2bac10cafdca8ee5",
+    "ok": true,
+    "failure": null,
+    "views": [
+      "opening",
+      "title"
+    ],
+    "files": [
+      "opening-early.png",
+      "opening-mid.png",
+      "opening-cut.png",
+      "opening-flight.png",
+      "opening.png",
+      "title.png"
+    ]
+  },
+  {
+    "id": "20261023-223330-arrival",
+    "request": "shots-req/arrival/cabin",
+    "ref": "2c32447d854a85d885cc7553f3086fc81f1e62a8",
+    "sha": "2c32447d854a85d885cc7553f3086fc81f1e62a8",
+    "ok": true,
+    "failure": null,
+    "views": [
+      "cabin"
+    ],
+    "files": [
+      "cabin-in.png",
+      "cabin-mid.png",
+      "cabin-late.png",
+      "cabin.png"
+    ]
+  },
+  {
+    "id": "20261023-222010-arrival",
+    "request": "shots-req/arrival/cabin",
+    "ref": "61d26c53248d41b9eded01be38d8402016c3d187",
+    "sha": "61d26c53248d41b9eded01be38d8402016c3d187",
+    "ok": true,
+    "failure": null,
+    "views": [
+      "cabin"
+    ],
+    "files": [
+      "cabin-in.png",
+      "cabin-mid.png",
+      "cabin-late.png",
+      "cabin.png"
+    ]
+  },
+  {
+    "id": "20261023-221456-arrival",
+    "request": "shots-req/arrival/cabin,arrival",
+    "ref": "93559c4bafa919002abdbd2b2286cf003ff204cf",
+    "sha": "93559c4bafa919002abdbd2b2286cf003ff204cf",
+    "ok": true,
+    "failure": null,
+    "views": [
+      "cabin",
+      "arrival"
+    ],
+    "files": [
+      "cabin-in.png",
+      "cabin-mid.png",
+      "cabin-late.png",
+      "cabin.png",
+      "arrival-corridor.png",
+      "arrival-cabin.png",
+      "arrival-berth.png",
+      "arrival-bore.png",
+      "arrival-sleeve.png",
+      "arrival-welcome.png",
+      "arrival-reveal.png",
+      "arrival-terrace.png",
+      "arrival.png"
+    ]
+  },
+  {
+    "id": "20261023-215711-arrival",
+    "request": "shots-req/arrival/cabin",
+    "ref": "82cc732afe1f6e0c85939e185950de49c197bb22",
+    "sha": "82cc732afe1f6e0c85939e185950de49c197bb22",
+    "ok": true,
+    "failure": null,
+    "views": [
+      "cabin"
+    ],
+    "files": [
+      "cabin-in.png",
+      "cabin-mid.png",
+      "cabin-late.png",
+      "cabin.png"
+    ]
+  },
+  {
+    "id": "20261023-215433-arrival",
+    "request": "shots-req/arrival/cabin",
+    "ref": "c940dfe475b19ff7fff66c5fea8de000a4d0583e",
+    "sha": "c940dfe475b19ff7fff66c5fea8de000a4d0583e",
+    "ok": false,
+    "failure": null,
+    "views": [
+      "cabin"
+    ],
+    "files": [
+      "cabin-in.png",
+      "cabin-mid.png",
+      "cabin-late.png",
+      "cabin.png"
+    ]
+  },
+  {
+    "id": "20261023-214007-arrival",
+    "request": "shots-req/arrival/cabin,docking,arrival",
+    "ref": "5c897e8a25bdfd2d0f9d4a0b36001f776a149066",
+    "sha": "5c897e8a25bdfd2d0f9d4a0b36001f776a149066",
+    "ok": true,
+    "failure": null,
+    "views": [
+      "cabin",
+      "docking",
+      "arrival"
+    ],
+    "files": [
+      "cabin-in.png",
+      "cabin-mid.png",
+      "cabin-late.png",
+      "cabin.png",
+      "docking-corridor.png",
+      "docking-open.png",
+      "docking-clamps.png",
+      "docking-green.png",
+      "docking-held.png",
+      "docking.png",
+      "arrival-corridor.png",
+      "arrival-cabin.png",
+      "arrival-berth.png",
+      "arrival-bore.png",
+      "arrival-sleeve.png",
+      "arrival-welcome.png",
+      "arrival-reveal.png",
+      "arrival-terrace.png",
+      "arrival.png"
+    ]
+  },
+  {
+    "id": "20261023-211132-arrival",
+    "request": "shots-req/arrival/arrival-timing,arrival-timing-late",
+    "ref": "e391934c5057ed39802ef9695faf4f19cf976ceb",
+    "sha": "e391934c5057ed39802ef9695faf4f19cf976ceb",
+    "ok": true,
+    "failure": null,
+    "views": [
+      "arrival-timing",
+      "arrival-timing-late"
+    ],
+    "files": [
+      "arrival-timing-out.png",
+      "arrival-timing.png",
+      "arrival-timing-late-out.png",
+      "arrival-timing-late.png"
+    ]
+  }
+]

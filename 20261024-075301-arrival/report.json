@@ -1,0 +1,133 @@
+{
+  "id": "20261024-075301-arrival",
+  "request": "shots-req/arrival/threshold-still,capsule-frames",
+  "ref": "76bcc227b2ba02e7a33bcc4debe871e69fad3d47",
+  "sha": "76bcc227b2ba02e7a33bcc4debe871e69fad3d47",
+  "dirty": false,
+  "subject": "Steady shadows near the axis and in a riding capsule",
+  "size": [
+    1600,
+    900
+  ],
+  "adapter": {
+    "vendor": "nvidia",
+    "architecture": "blackwell",
+    "device": "",
+    "description": "",
+    "fallback": false
+  },
+  "totalMs": 188244,
+  "ok": true,
+  "failure": null,
+  "views": [
+    {
+      "view": "threshold-still",
+      "about": "shadow flicker on the Threshold (render/lights.ts heldTurn): after the arrival walk, standing still, three frames as fast as they can be taken (-a, -b, -c), then after a few steps sideways and standing again (-d, -e): any change between them is flicker",
+      "query": "view=inside",
+      "ok": true,
+      "failure": null,
+      "readyMs": 23389,
+      "debugInfo": "Solarpolis v0.190\nhabitat R 4000 m, L 30000 m, seed 1, 0.47 rpm\nmemory 809 MB of 2560 MB/3584 MB (desktop), heap 255 MB, terrain tiles 478 MB, drones 29 MB, sound 18 MB, +862 MB/min\nsound: 17.9 MB decoded, 2 beds, 0 calls · wind-high 0.89, wind-open 0.04, air ×0.89, light 0.13, birds 0.65 · 0 near, 0 hums, 0 cues · steps on stone (2) · moment -\n59 fps, slowest frame 33 ms\narrival: title not yet · not started\narrival's loading: 0.2 interior renderer … · 0.9 interior renderer ✓ · 1.0 interior warm-up … · 20.3 interior warm-up ✓ · 20.3 interior build … · 20.3 human pack … · 20.3 squirrel pack … · 20.3 deer pack … · 20.5 squirrel pack ✓ · 20.5 deer pack ✓ · 20.8 human pack ✓ · 23.0 interior build ✓ · 23.0 player body … · 23.8 player body ✓ · 23.8 player body shaders … · 24.1 player body shaders ✓\nshaders 35 warm-up + 33 later · worst 45 ms · 9 POLICY VIOLATIONS (shaders.report()) · 2 built again alike (shaders.repeats())\nterrain 386 tiles drawn (0 new last frame, 854 built so far), 276 MB in use, coarser ×1.6 to stay in budget, 729 cached (384 MB), 0 building · 8 bands, 47 roots of 4.4 km, 8 levels · 4 workers\nplants (plants/cells) full 117/477, lite 120/707, hull 11855/1526; 0 tufts; 229660 stones and fallen wood; 734 draws, 3720 cached (13.2 MB; shapes and atlases 21.0 MB), 0 planting, 20 forms\nplant LOD: 0 holes (0 frames with holes so far), 10 levels standing in for a finer one being planted, 0 far cells coming in\nlandmarks: pavilion (far; 0.2 MB), hut (far; 0.0 MB)\nlift stair: 60 tiles drawn, 79 kept (9.5 MB), 0 building\nentrance courts: 56 tiles drawn, 192 kept (22.8 MB), 0 building\nriver crossings: 48 tiles drawn, 184 kept (1.2 MB), 0 building\ngrown halls: 48 tiles drawn, 176 kept (0.3 MB), 0 building\nharbours: 48 tiles drawn, 176 kept (0.2 MB), 0 building\nunderstorey: 0 tiles drawn, 0 kept (0.0 MB), 0 building\nhome furniture: 0 homes (0 near, 0 mid), 0 of 8192 pieces drawn\nglass deck: none near\npeople: 0 up within 1.5 km · neighbourhood cache 0.00 MB · 0 figures (0 loading) · 0 stand-ins · 0 specks · 0 waiting for their look · handover holes 0, frames with holes 0 · figure levels made in 0 ms at most\nspecks: 6794 up on the land, 0 drawn nearer · list 1.0 s old, 11 lists, slowest 2583 ms\ndrones: 651 and 0 people in drone bodies (20 designs, built in 1773 ms) · 0 near · 1 coarse · 650 specks · handover holes 0, frames with holes 0\ntalk: 0 parties kept, 0 conversations; news heard here in 6 d: 2, latest flare--1 from sun after 8.2 min, 0 bubbles\nsquirrels: 0 within 250 m from 0 homes (0 getting ready, 0 away) · 0 figures (0 loading) · 0 specks · handover holes 0, frames with holes 0\ndeer: 0 within 2000 m from 0 homes (0 getting ready, 0 away) · 0 figures (0 loading) · 0 specks · handover holes 0, frames with holes 0\nbirds: 3 round the eye (3 lark; bodies built in 1765 ms) · flocks: 40 swifts (0 in sight) · 0 singing · 0 near · 0 coarse · 3 specks · handover holes 0, frames with holes 0\nboats: 89, 3 under sail (3 designs, built in 1864 ms) · 0 near · 0 coarse · 89 specks · handover holes 0, frames with holes 0\ncapsule: parked, 0.37 MB\ncatches: 0\nθ 134.7°, s 34.81 of 34.91 km, ground 12.8 m, on foot, standing, gravity 0.04 g, eyes ×1.00\nwind: 4.8 m/s from the wild end; boats under sail: 3 of 89; 254 residents crew them\nday 1, 09:54 (dawn at 06:00), sun 25% of the way to the port end, clouds 32%, clock ×1\noutside: not started\nphysics: 0 bodies, 8 trunk pieces",
+      "shaderReport": "shaders: 35 built in warm-up, 33 after, worst block 45 ms, 9 violations, 2 built again alike\nrun: \"MeshStandardNodeMaterial\" started 2 ms after a build of 15 ms ended (minimum 31 ms)\nrun: \"MeshStandardNodeMaterial\" started 3 ms after a build of 7 ms ended (minimum 14 ms)\nrun: \"MeshPhysicalNodeMaterial\" started 1 ms after a build of 8 ms ended (minimum 15 ms)\nrun: \"MeshPhysicalNodeMaterial\" started 1 ms after a build of 9 ms ended (minimum 18 ms)\nrun: \"MeshPhysicalNodeMaterial\" started 1 ms after a build of 7 ms ended (minimum 13 ms)\nrun: \"MeshLambertNodeMaterial\" started 12 ms after a build of 12 ms ended (minimum 25 ms)\nrun: \"MeshLambertNodeMaterial\" started 1 ms after a build of 7 ms ended (minimum 14 ms)\nrun: \"MeshPhysicalNodeMaterial\" started 0 ms after a build of 6 ms ended (minimum 13 ms)\nrun: \"MeshPhysicalNodeMaterial\" started 2 ms after a build of 10 ms ended (minimum 19 ms)\nbuilt 2× alike (2 after warm-up, 47 ms): activity prop (instanced)\nbuilt 2× alike (2 after warm-up, 26 ms): ShadowMaterial (instanced) of Mesh adaptive domestic fittings (near)<Shadow Map [ sunline key ] (shadow warm-up)",
+      "shots": [
+        {
+          "file": "threshold-still-a.png",
+          "ms": 271
+        },
+        {
+          "file": "threshold-still-b.png",
+          "ms": 248
+        },
+        {
+          "file": "threshold-still-c.png",
+          "ms": 265
+        },
+        {
+          "file": "threshold-still-d.png",
+          "ms": 267
+        },
+        {
+          "file": "threshold-still-e.png",
+          "ms": 257
+        },
+        {
+          "file": "threshold-still.png",
+          "ms": 275
+        }
+      ],
+      "totalMs": 54829,
+      "adapter": {
+        "vendor": "nvidia",
+        "architecture": "blackwell",
+        "device": "",
+        "description": "",
+        "fallback": false
+      },
+      "wgsl": {
+        "modules": 121,
+        "unique": 121,
+        "withMessages": []
+      },
+      "gpuErrors": [],
+      "pipelineErrors": [],
+      "deviceLost": null,
+      "console": [
+        "warning: THREE.TSL: Return statement used in an inline 'Fn()'. Define a layout struct to allow return values. Stack trace not available. Enable \"THREE.Node.captureStackTrace\" to capture stack traces.",
+        "warning: THREE.TSL: Return statement used in an inline 'Fn()'. Define a layout struct to allow return values. Stack trace not available. Enable \"THREE.Node.captureStackTrace\" to capture stack traces.",
+        "warning: using deprecated parameters for the initialization function; pass a single object instead"
+      ]
+    },
+    {
+      "view": "capsule-frames",
+      "about": "shadow flicker in a capsule (render/lights.ts: riding, the shadow map moves with the rider): boarded and riding to the nearest court, three frames as fast as they can be taken in the climb (-a, -b, -c): the capsule and its passenger stay put in the frame, so a change in their shadows between them is flicker",
+      "query": "view=inside",
+      "ok": true,
+      "failure": null,
+      "readyMs": 23907,
+      "debugInfo": "Solarpolis v0.190\nhabitat R 4000 m, L 30000 m, seed 1, 0.47 rpm\nmemory 797 MB of 2560 MB/3584 MB (desktop), heap 358 MB, terrain tiles 361 MB, drones 29 MB, sound 19 MB, +364 MB/min\nsound: 19.3 MB decoded, 6 beds, 1 calls · wind-open 0.90, leaves-broad 0.65, birds-wood 0.50, wind-soft 0.31, birds-meadow 0.08, air ×1.00, light 0.50, birds 0.77 · 0 near, 0 hums, 0 cues · steps on litter (3) · moment -\n29 fps, slowest frame 83 ms\narrival: title not yet · not started\narrival's loading: 0.2 interior renderer … · 0.9 interior renderer ✓ · 0.9 interior warm-up … · 21.1 interior warm-up ✓ · 21.1 interior build … · 21.1 human pack … · 21.1 squirrel pack … · 21.1 deer pack … · 21.2 squirrel pack ✓ · 21.5 human pack ✓ · 21.6 deer pack ✓ · 23.5 interior build ✓ · 23.5 player body … · 24.4 player body ✓ · 24.4 player body shaders … · 24.7 player body shaders ✓\nshaders 35 warm-up + 36 later · worst 44 ms · 9 POLICY VIOLATIONS (shaders.report()) · 2 built again alike (shaders.repeats())\nterrain 375 tiles drawn (0 new last frame, 534 built so far), 255 MB in use, 534 cached (279 MB), 0 building · 8 bands, 47 roots of 4.4 km, 8 levels · 4 workers\nplants (plants/cells) full 854/275, lite 3195/665, hull 31091/2007; 0 tufts; 22922 stones and fallen wood; 1356 draws, 4540 cached (5.0 MB; shapes and atlases 21.0 MB), 0 planting, 20 forms\nplant LOD: 0 holes (0 frames with holes so far), 1 levels standing in for a finer one being planted, 0 far cells coming in\nlandmarks: pavilion (far; 0.2 MB), hut (far; 0.0 MB)\nlift stair: 16 tiles drawn, 16 kept (4.9 MB), 0 building\nentrance courts: 242 tiles drawn, 304 kept (24.5 MB), 0 building\nriver crossings: 237 tiles drawn, 300 kept (1.2 MB), 0 building\ngrown halls: 219 tiles drawn, 276 kept (0.3 MB), 0 building\nharbours: 249 tiles drawn, 324 kept (0.2 MB), 0 building\nunderstorey: 0 tiles drawn, 0 kept (0.0 MB), 0 building\nhome furniture: 0 homes (0 near, 0 mid), 0 of 8192 pieces drawn\nglass deck: none near\npeople: 166 up within 1.5 km · neighbourhood cache 0.00 MB · 0 figures (0 loading) · 10 stand-ins · 143 specks · 0 waiting for their look · handover holes 0, frames with holes 0 · figure levels made in 0 ms at most\nspecks: 6852 up on the land, 166 drawn nearer · list 2.1 s old, 35 lists, slowest 2334 ms\ndrones: 651 and 13 people in drone bodies (20 designs, built in 1584 ms) · 0 near · 0 coarse · 664 specks · handover holes 0, frames with holes 0\ntalk: 0 parties kept, 0 conversations; news heard here in 6 d: 2, latest flare--1 from sun after 8.2 min, 0 bubbles\nsquirrels: 77 within 250 m from 77 homes (0 getting ready, 0 away) · 0 figures (0 loading) · 77 specks · handover holes 0, frames with holes 0\ndeer: 58 within 2000 m from 7 homes (0 getting ready, 0 away) · 0 figures (0 loading) · 58 specks · handover holes 0, frames with holes 0\nbirds: 91 round the eye (13 wren, 18 pigeon, 7 lark, 26 blackbird, 11 robin, 10 thrush, 5 woodpecker, 1 owl; bodies built in 1658 ms) · flocks: 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 2500 starlings (360 in sight), 2500 starlings (2500 in sight) · 14 singing · 0 near · 4 coarse · 2947 specks · handover holes 0, frames with holes 0\nboats: 89, 3 under sail (3 designs, built in 1678 ms) · 0 near · 0 coarse · 89 specks · handover holes 0, frames with holes 0\ncapsule: riding to Court 66, let-go land, 0.30 km in 41 s, 9 s gone, nearest the axis 3922 m, at most 1.18 g, 0.38 MB\ncatches: 0\nθ 17.6°, s 13.30 of 34.91 km, ground 19.5 m, in a capsule (riding), eyes ×1.00\nwind: 4.2 m/s from against the spin; boats under sail: 3 of 89; 254 residents crew them\nday 1, 09:55 (dawn at 06:00), sun 25% of the way to the port end, clouds 32%, clock ×1\noutside: not started\nphysics: 0 bodies, 1154 trunk pieces",
+      "shaderReport": "shaders: 35 built in warm-up, 36 after, worst block 44 ms, 9 violations, 2 built again alike\nrun: \"MeshStandardNodeMaterial\" started 2 ms after a build of 16 ms ended (minimum 32 ms)\nrun: \"MeshStandardNodeMaterial\" started 4 ms after a build of 11 ms ended (minimum 21 ms)\nrun: \"MeshPhysicalNodeMaterial\" started 1 ms after a build of 8 ms ended (minimum 15 ms)\nrun: \"MeshPhysicalNodeMaterial\" started 1 ms after a build of 9 ms ended (minimum 17 ms)\nrun: \"MeshPhysicalNodeMaterial\" started 1 ms after a build of 7 ms ended (minimum 14 ms)\nrun: \"MeshLambertNodeMaterial\" started 11 ms after a build of 10 ms ended (minimum 20 ms)\nrun: \"MeshLambertNodeMaterial\" started 1 ms after a build of 6 ms ended (minimum 11 ms)\nrun: \"MeshPhysicalNodeMaterial\" started 0 ms after a build of 4 ms ended (minimum 9 ms)\nrun: \"MeshPhysicalNodeMaterial\" started 1 ms after a build of 6 ms ended (minimum 12 ms)\nbuilt 2× alike (2 after warm-up, 32 ms): activity prop (instanced)\nbuilt 2× alike (2 after warm-up, 26 ms): ShadowMaterial (instanced) of Mesh adaptive domestic fittings (near)<Shadow Map [ sunline key ] (shadow warm-up)",
+      "shots": [
+        {
+          "file": "capsule-frames-a.png",
+          "ms": 467
+        },
+        {
+          "file": "capsule-frames-b.png",
+          "ms": 451
+        },
+        {
+          "file": "capsule-frames-c.png",
+          "ms": 446
+        },
+        {
+          "file": "capsule-frames.png",
+          "ms": 446
+        }
+      ],
+      "totalMs": 128257,
+      "adapter": {
+        "vendor": "nvidia",
+        "architecture": "blackwell",
+        "device": "",
+        "description": "",
+        "fallback": false
+      },
+      "wgsl": {
+        "modules": 127,
+        "unique": 127,
+        "withMessages": []
+      },
+      "gpuErrors": [],
+      "pipelineErrors": [],
+      "deviceLost": null,
+      "console": [
+        "warning: THREE.TSL: Return statement used in an inline 'Fn()'. Define a layout struct to allow return values. Stack trace not available. Enable \"THREE.Node.captureStackTrace\" to capture stack traces.",
+        "warning: THREE.TSL: Return statement used in an inline 'Fn()'. Define a layout struct to allow return values. Stack trace not available. Enable \"THREE.Node.captureStackTrace\" to capture stack traces.",
+        "warning: using deprecated parameters for the initialization function; pass a single object instead",
+        "warning: capsule: waiting, 0.40 MB",
+        "warning: capsule: seated, 0.40 MB",
+        "warning: capsule: riding to Court 66, let-go land, 0.30 km in 41 s, 0 s gone, nearest the axis 3922 m, at most 1.18 g, 0.38 MB"
+      ]
+    }
+  ]
+}

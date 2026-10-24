@@ -1,0 +1,86 @@
+{
+  "id": "20261023-230823-claude",
+  "request": "shots-req/claude/names",
+  "ref": "f46d51f08951ef621bab03a2df1f818cd6559791",
+  "sha": "f46d51f08951ef621bab03a2df1f818cd6559791",
+  "dirty": false,
+  "subject": "The link names what the mouse rests on, with a toggle",
+  "size": [
+    1600,
+    900
+  ],
+  "adapter": {
+    "vendor": "nvidia",
+    "architecture": "blackwell",
+    "device": "",
+    "description": "",
+    "fallback": false
+  },
+  "totalMs": 69523,
+  "ok": true,
+  "failure": null,
+  "views": [
+    {
+      "view": "names",
+      "about": "the link names what the mouse rests on (logged): before a crowd, on someone (-person), on the ground (-ground), toward the far side (-far); in a wood on a tree (-tree); then names turned off in the link and nothing named (-off)",
+      "query": "view=inside",
+      "ok": true,
+      "failure": null,
+      "readyMs": 21434,
+      "debugInfo": "Solarpolis v0.183\nhabitat R 4000 m, L 30000 m, seed 1, 0.47 rpm\nmemory 1078 MB of 2560 MB/3584 MB (desktop), heap 514 MB, terrain tiles 453 MB, people 36 MB, drones 29 MB, +1044 MB/min\nsound: 21.7 MB decoded, 5 beds, 1 calls · birds-wood 0.47, wind-soft 0.33, leaves-broad 0.21, birds-meadow 0.10, grass 0.05, air ×1.00, light 0.50, birds 0.78 · 4 near, 2 hums, 0 cues · steps on stone (2) · moment -\n38 fps, slowest frame 50 ms\narrival: title not yet · not started\narrival's loading: 0.2 interior renderer … · 0.9 interior renderer ✓ · 0.9 interior warm-up … · 18.8 interior warm-up ✓ · 18.8 interior build … · 18.9 human pack … · 18.9 squirrel pack … · 18.9 deer pack … · 19.0 squirrel pack ✓ · 19.2 human pack ✓ · 19.3 deer pack ✓ · 21.0 interior build ✓ · 21.0 player body … · 21.8 player body ✓ · 21.8 player body shaders … · 22.1 player body shaders ✓\nshaders 35 warm-up + 114 later · worst 39 ms · 3 POLICY VIOLATIONS (shaders.report()) · 2 built again alike (shaders.repeats())\nterrain 396 tiles drawn (0 new last frame, 701 built so far), 269 MB in use, 701 cached (363 MB), 0 building · 8 bands, 47 roots of 4.4 km, 8 levels · 4 workers\nplants (plants/cells) full 709/441, lite 2660/624, hull 67900/1764; 18542 tufts; 18480 stones and fallen wood; 1567 draws, 4420 cached (7.4 MB; shapes and atlases 21.0 MB), 0 planting, 20 forms\nplant LOD: 0 holes (0 frames with holes so far), 3 levels standing in for a finer one being planted, 0 far cells coming in\nlandmarks: pavilion (far; 0.2 MB), hut (far; 0.0 MB)\nlift stair: 16 tiles drawn, 16 kept (4.9 MB), 0 building\nentrance courts: 252 tiles drawn, 418 kept (29.6 MB), 0 building\nriver crossings: 238 tiles drawn, 402 kept (1.5 MB), 0 building\ngrown halls: 223 tiles drawn, 395 kept (0.3 MB), 0 building\nharbours: 253 tiles drawn, 398 kept (0.2 MB), 0 building\nunderstorey: 0 tiles drawn, 0 kept (0.0 MB), 0 building\nhome furniture: 0 homes (0 near, 0 mid), 0 of 8192 pieces drawn\nglass deck: none near\npeople: 279 up within 1.5 km · neighbourhood cache 0.00 MB · 2 figures (0 loading) · 30 stand-ins · 225 specks · 0 waiting for their look · handover holes 0, frames with holes 0 · figure levels made in 13 ms at most\nspecks: 6803 up on the land, 279 drawn nearer · list 0.3 s old, 14 lists, slowest 2090 ms\ndrones: 651 and 22 people in drone bodies (20 designs, built in 1405 ms) · 0 near · 3 coarse · 670 specks · handover holes 0, frames with holes 0\ntalk: 4 parties kept, 11 conversations; news heard here in 6 d: 2, latest flare--1 from sun after 8.2 min, 0 bubbles\nsquirrels: 60 within 250 m from 60 homes (0 getting ready, 0 away) · 0 figures (0 loading) · 60 specks · handover holes 0, frames with holes 0\ndeer: 45 within 2000 m from 5 homes (0 getting ready, 0 away) · 0 figures (0 loading) · 45 specks · handover holes 0, frames with holes 0\nbirds: 65 round the eye (10 pigeon, 3 lark, 14 blackbird, 4 woodpecker, 14 wren, 9 robin, 10 thrush, 1 owl; bodies built in 1468 ms) · flocks: 8 swallows (0 in sight), 8 swallows (8 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 2500 starlings (2500 in sight) · 10 singing · 0 near · 2 coarse · 2571 specks · handover holes 0, frames with holes 0\nboats: 89, 3 under sail (3 designs, built in 1485 ms) · 0 near · 0 coarse · 89 specks · handover holes 0, frames with holes 0\ncapsule: idle (not built yet)\ncatches: 0\nθ 355.0°, s 13.27 of 34.91 km, ground 5.3 m, on foot, standing, gravity 1.00 g, eyes ×1.95\nwind: 4.6 m/s from against the spin; boats under sail: 3 of 89; 254 residents crew them\nday 1, 09:54 (dawn at 06:00), sun 25% of the way to the port end, clouds 32%, clock ×1\noutside: not started\nphysics: 0 bodies, 1234 trunk pieces",
+      "shaderReport": "shaders: 35 built in warm-up, 114 after, worst block 39 ms, 3 violations, 2 built again alike\nrun: \"MeshStandardNodeMaterial\" started 1 ms after a build of 10 ms ended (minimum 21 ms)\nrun: \"MeshStandardNodeMaterial\" started 3 ms after a build of 7 ms ended (minimum 14 ms)\nrun: \"MeshPhysicalNodeMaterial\" started 1 ms after a build of 6 ms ended (minimum 12 ms)\nbuilt 2× alike (2 after warm-up, 28 ms): activity prop (instanced)\nbuilt 2× alike (2 after warm-up, 23 ms): ShadowMaterial (instanced) of Mesh adaptive domestic fittings (near)<Shadow Map [ sunline key ] (shadow warm-up)",
+      "shots": [
+        {
+          "file": "names-person.png",
+          "ms": 330
+        },
+        {
+          "file": "names-ground.png",
+          "ms": 333
+        },
+        {
+          "file": "names-far.png",
+          "ms": 375
+        },
+        {
+          "file": "names-tree.png",
+          "ms": 335
+        },
+        {
+          "file": "names-off.png",
+          "ms": 343
+        },
+        {
+          "file": "names.png",
+          "ms": 384
+        }
+      ],
+      "totalMs": 61217,
+      "adapter": {
+        "vendor": "nvidia",
+        "architecture": "blackwell",
+        "device": "",
+        "description": "",
+        "fallback": false
+      },
+      "wgsl": {
+        "modules": 223,
+        "unique": 210,
+        "withMessages": []
+      },
+      "gpuErrors": [],
+      "pipelineErrors": [],
+      "deviceLost": null,
+      "console": [
+        "warning: THREE.TSL: Return statement used in an inline 'Fn()'. Define a layout struct to allow return values. Stack trace not available. Enable \"THREE.Node.captureStackTrace\" to capture stack traces.",
+        "warning: THREE.TSL: Return statement used in an inline 'Fn()'. Define a layout struct to allow return values. Stack trace not available. Enable \"THREE.Node.captureStackTrace\" to capture stack traces.",
+        "warning: using deprecated parameters for the initialization function; pass a single object instead",
+        "warning: name at 0.5, 0.55: Court 71 · Let-go land · a way down to the homes below",
+        "warning: name at 0.5, 0.85: Court 71 · Let-go land · a way down to the homes below",
+        "warning: name at 0.5, 0.2: Woodland · By Court 57",
+        "warning: name at 0.5, 0.45: Oak · About 24 m tall",
+        "warning: name at 0.5, 0.45: (nothing named)"
+      ]
+    }
+  ]
+}

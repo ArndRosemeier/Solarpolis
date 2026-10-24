@@ -1,0 +1,114 @@
+{
+  "id": "20261023-225116-first-light",
+  "request": "shots-req/first-light/opening,title",
+  "ref": "1fd72be1bdf210798a3b667c2bac10cafdca8ee5",
+  "sha": "1fd72be1bdf210798a3b667c2bac10cafdca8ee5",
+  "dirty": false,
+  "subject": "Merge main",
+  "size": [
+    1600,
+    900
+  ],
+  "adapter": {
+    "vendor": "nvidia",
+    "architecture": "blackwell",
+    "device": "",
+    "description": "",
+    "fallback": false
+  },
+  "totalMs": 49865,
+  "ok": true,
+  "failure": null,
+  "views": [
+    {
+      "view": "opening",
+      "about": "the opening (design \"First Light\", src/boot): drawn by its own worker before the game has loaded, Earth low, the Moon, the stars and the ring's glints, the name over it, as soon as the page is ready (-early) and 2.5 s on (-mid); then the cut to the title flight's shot 1 (-cut, half a second after it; -flight, 4 s on); logs the arrival line (first light, title after opening, the opening's frames and stutters) and a heap snapshot",
+      "query": "",
+      "ok": true,
+      "failure": null,
+      "readyMs": 4472,
+      "debugInfo": "Solarpolis v0.181\nhabitat R 4000 m, L 30000 m, seed 1, 0.47 rpm\nmemory 330 MB of 2560 MB/3584 MB (desktop), heap 190 MB, sky maps, stars and skin detail 140 MB, first light 0 MB, sound 0 MB, +737 MB/min\nsound: 0.0 MB decoded, 0 beds, 0 calls · none · 0 near, 0 hums, 0 cues · steps on - (0) · moment -\n45 fps, slowest frame 67 ms\narrival: first light 0.6 s, title 3.9 s after opening, the opening cut to it at 7.6 s (423 frames, slowest 42 ms, 2 stutters) · not started\narrival's loading: 3.9 passengers … · 3.9 human pack … · 3.9 interior view … · 4.0 interior renderer … · 4.2 human pack ✓ · 4.2 interior renderer ✓ · 4.3 interior warm-up … · 5.0 passengers ✓ · 24.2 interior warm-up ✓ · 24.2 interior build … · 24.2 squirrel pack … · 24.2 deer pack …\ninside: not started\nshaders 17 warm-up + 1 later · worst 6 ms · policy ok · 1 built again alike (shaders.repeats())\n3026-01-01 05:50 UT · clock ×1 · exposure 2.4e+0\nsunlight 100% · Earth 17.3° across · looking at habitat\n195 km from the nearest surface · nearest neighbour 11,387 km away\nskin detail: none near\nhome ships: 2 berthed, 0 on thrusters, 0 braking or leaving on the torch; 0 tugs out, 6 inspectors",
+      "shaderReport": "shaders: 35 built in warm-up, 13 after, worst block 80 ms, 0 violations, 2 built again alike\nbuilt 2× alike (2 after warm-up, 50 ms): activity prop (instanced)\nbuilt 2× alike (2 after warm-up, 21 ms): ShadowMaterial (instanced) of Mesh adaptive domestic fittings (near)<Shadow Map [ sunline key ] (shadow warm-up)",
+      "shots": [
+        {
+          "file": "opening-early.png",
+          "ms": 82
+        },
+        {
+          "file": "opening-mid.png",
+          "ms": 34
+        },
+        {
+          "file": "opening-cut.png",
+          "ms": 66
+        },
+        {
+          "file": "opening-flight.png",
+          "ms": 62
+        },
+        {
+          "file": "opening.png",
+          "ms": 130
+        }
+      ],
+      "totalMs": 25484,
+      "adapter": {
+        "vendor": "nvidia",
+        "architecture": "blackwell",
+        "device": "",
+        "description": "",
+        "fallback": false
+      },
+      "wgsl": {
+        "modules": 116,
+        "unique": 116,
+        "withMessages": []
+      },
+      "gpuErrors": [],
+      "pipelineErrors": [],
+      "deviceLost": null,
+      "console": [
+        "warning: memory 343 MB of 2560 MB/3584 MB (desktop), heap 203 MB, sky maps, stars and skin detail 140 MB, first light 0 MB, sound 0 MB, +1548 MB/min",
+        "warning: arrival: first light 0.6 s, title 3.9 s after opening, the opening cut to it at 7.6 s (423 frames, slowest 42 ms, 2 stutters) · not started",
+        "warning: arrival's loading: 3.9 passengers … · 3.9 human pack … · 3.9 interior view … · 4.0 interior renderer … · 4.2 human pack ✓ · 4.2 interior renderer ✓ · 4.3 interior warm-up … · 5.0 passengers ✓",
+        "warning: shaders 17 warm-up + 1 later · worst 6 ms · policy ok · 1 built again alike (shaders.repeats())",
+        "warning: THREE.TSL: Return statement used in an inline 'Fn()'. Define a layout struct to allow return values. Stack trace not available. Enable \"THREE.Node.captureStackTrace\" to capture stack traces.",
+        "warning: THREE.TSL: Return statement used in an inline 'Fn()'. Define a layout struct to allow return values. Stack trace not available. Enable \"THREE.Node.captureStackTrace\" to capture stack traces.",
+        "warning: HEAP opening\nnodes 1185437, reachable 158.6 MB, unreachable 0.0 MB; {\"usage\":{\"usedSize\":41881520,\"totalSize\":48357376,\"embedderHeapUsedSize\":4339208,\"backingStorageSize\":123467544},\"perf\":{\"usedJSHeapSize\":165359424,\"totalJSHeapSize\":171824920},\"snapshotMs\":1549}\nby node type: native 124.7 MB, object 11.1 MB, code 10.4 MB, array 5.5 MB, string 2.5 MB, number 2.4 MB, object shape 1.2 MB, closure 0.6 MB, concatenated string 0.1 MB, sliced string 0.0 MB, regexp 0.0 MB, symbol 0.0 MB, synthetic 0.0 MB\ntop classes (self size):\n  114.3 MB  ×5375  native:system / JSArrayBufferData\n  10.4 MB  ×98794  code:\n  5.7 MB  ×1792  native:system / ExternalStringData\n  4.5 MB  ×48707  array:(object elements)\n  3.0 MB  ×37011  object:e\n  2.7 MB  ×32481  object:$p\n  2.5 MB  ×365975  string:\n  2.4 MB  ×316482  number:\n  1.8 MB  ×58145  object:Object\n  1.2 MB  ×22808  object shape:\n  0.7 MB  ×1536  array:\n  0.7 MB  ×13669  object:ArrayBuffer\n  0.7 MB  ×43928  object:Array\n  0.5 MB  ×6347  object:Yl\n  0.5 MB  ×4483  native:blink::UniqueElementData\n  0.4 MB  ×7159  object:Int32Array\n  0.4 MB  ×5900  native:system / FunctionTemplateInfo\n  0.3 MB  ×207  array:(object properties)\n  0.2 MB  ×3007  native:system / WeakArrayList\n  0.2 MB  ×2820  native:Text\n  0.2 MB  ×8734  native:system / PropertyArray\n  0.2 MB  ×1071  native:ShadowRoot\n  0.2 MB  ×1028  native:<slot pseudo=\"-internal-option-slot\">\n  0.2 MB  ×1077  native:blink::HeapHashTableBacking<blink::HashTable<blink::AtomicSt\n  0.2 MB  ×2632  object:Float64Array\n  0.1 MB  ×1855  object:Wl\n  0.1 MB  ×473  native:blink::NetworkResourcesData::ResourceData\n  0.1 MB  ×1986  object:Float32Array\n  0.1 MB  ×250  native:system / ArrayList\n  0.1 MB  ×3894  closure:\n  0.1 MB  ×1028  native:<span pseudo=\"-internal-option-label-container\" aria-hidden=\n  0.1 MB  ×4780  concatenated string:\n  0.1 MB  ×3539  native:blink::HeapVectorBacking<cppgc::internal::BasicMember<blink:\n  0.1 MB  ×2769  native:blink::NodeRareData\n  0.1 MB  ×1382  object:Uint8Array\n  0.1 MB  ×10  native:blink::HeapHashTableBacking<blink::HashTable<std::pair<blink\n  0.1 MB  ×480  object:hh\n  0.1 MB  ×2118  native:blink::FlatTreeNodeData\n  0.1 MB  ×5315  native:system / AccessorPair\n  0.1 MB  ×21  native:blink::ImageResource\ntyped array data 114.3 MB, by the path that holds it (shortest retainers):\n  11.0 MB  ×21  parent.children.children.children.geometry.attributes.actorMorph0.data.array\n  8.2 MB  ×75  extension.context.previous.a4.reactions_or_result.human.runtime.targets.deltas\n  8.0 MB  ×1  22 / blink::ScriptStateProtectingContext.global_object.shaders.now.context.uF.source.data.data\n  8.0 MB  ×1  22 / blink::ScriptStateProtectingContext.global_object.shaders.now.context.dF.source.data.data\n  5.9 MB  ×323  extension.context.previous.a4.reactions_or_result.human.runtime.targets.indices\n  4.7 MB  ×1  context.extension.context.previous.a4.reactions_or_result.human.runtime.basePositions\n  4.0 MB  ×1  22 / blink::ScriptStateProtectingContext.global_object.shaders.now.context.$B.source.data.data\n  3.6 MB  ×5  Yj.lamps.parent.children.children.children.geometry.index.array\n  3.2 MB  ×53  lamps.parent.children.children.children.geometry.attributes.position.array\n  3.2 MB  ×53  lamps.parent.children.children.children.geometry.attributes.normal.array\n  2.4 MB  ×4  y1.view.passengers.seated.character.actor.lastDeltas.meshes.normals\n  2.4 MB  ×4  y1.view.passengers.seated.character.actor.lastDeltas.meshes.positions\n  2.4 MB  ×4  context.y1.view.passengers.seated.character.shape.meshes.normals\n  2.4 MB  ×4  context.y1.view.passengers.seated.character.shape.meshes.positions\n  2.1 MB  ×53  lamps.parent.children.children.children.geometry.attributes.skinIndex.array\n  2.0 MB  ×1  22 / blink::ScriptStateProtectingContext.global_object.shaders.now.context.ZB.source.data.data\n  2.0 MB  ×1  22 / blink::ScriptStateProtectingContext.global_object.shaders.now.context.QB.source.data.data\n  2.0 MB  ×52  context.y1.view.passengers.seated.character.actor.rendered.weights\n  1.9 MB  ×1  now.context.y1.view.stars.geometry.attributes.color.array\n  1.9 MB  ×1  now.context.y1.view.stars.geometry.attributes.position.array\n  1.6 MB  ×39  now.context.Yj.lamps.parent.children.geometry.index.array\n  1.5 MB  ×10  context.Yj.lamps.parent.children.geometry.attributes.normal.array\n  1.3 MB  ×2  y1.view.passengers.seated.character.actor.rendered.stencil.weights\n  1.3 MB  ×2  y1.view.passengers.seated.character.actor.rendered.stencil.cols\n  1.3 MB  ×1  now.context.y1.view.stars.geometry.attributes.corner.array\n  1.2 MB  ×2  context.y1.view.passengers.seated.character.actor.rendered.indices\n  1.1 MB  ×31  now.context.y1.view.passengers.seated.animator.loaded.data\n  1.0 MB  ×1  global_object.shaders.now.context.l1.life.base.floor.data\n  1.0 MB  ×4  reactions_or_result.context.extension.context.previous.ac.source.data.data\n  1.0 MB  ×52  context.y1.view.passengers.seated.character.actor.rendered.joints\n  0.9 MB  ×1  shaders.now.context.y1.view.stars.geometry.index.array\n  0.9 MB  ×1  now.context.Yj.lamps.parent.47 / part of key (gr @211133) -> value (.91 / part of key (ik @211169) -> value (.attributes.array\n  0.9 MB  ×4  context.y1.view.passengers.seated.character.actor.lastDeltas.normals\n  0.9 MB  ×4  context.y1.view.passengers.seated.character.actor.lastDeltas.positions\n  0.9 MB  ×4  now.context.y1.view.passengers.seated.character.shape.positions\n  0.9 MB  ×4  now.context.y1.view.passengers.seated.character.shape.normals\n  0.8 MB  ×337  global_object.shaders.now.context.l1.habitat.3 / part of key (Object @152093) -> valu.days.start\n  0.6 MB  ×9  context.Yj.lamps.parent.children.geometry.attributes.position.array\n  0.6 MB  ×9  context.Yj.lamps.parent.children.geometry.attributes.color.array\n  0.6 MB  ×27  extension.context.previous.a4.reactions_or_result.human.runtime.proxySkins.weights\ndominator tree (retained ≥ 4 MB):\n158.6 MB  .[1]  synthetic \"(GC roots)\"\n  17.4 MB  (via object \"system / Context / scope @156609\").this  object \"e\"\n    14.5 MB  .passengers  object \"mZ\"\n      14.5 MB  .seated  object \"Array\"\n  15.8 MB  (via object \"e\").runtime  object \"e\"\n    14.2 MB  .targets  object \"Map\"\n      14.2 MB  .table  array \"\"\n  8.0 MB  (via object \"system / Context / scope @129171\").dF  object \"Pn\"\n    8.0 MB  .source  object \"En\"\n      8.0 MB  .data  object \"Object\"\n        8.0 MB  .data  native \"Uint8Array\"\n          8.0 MB  .buffer  native \"ArrayBuffer\"\n            8.0 MB  .backing_store  native \"system / JSArrayBufferData\"  (self 8.0 MB)\n  8.0 MB  (via object \"system / Context / scope @129171\").uF  object \"Pn\"\n    8.0 MB  .source  object \"En\"\n      8.0 MB  .data  object \"Object\"\n        8.0 MB  .data  native \"Uint8Array\"\n          8.0 MB  .buffer  native \"ArrayBuffer\"\n            8.0 MB  .backing_store  native \"system / JSArrayBufferData\"  (self 8.0 MB)\n  5.1 MB  (via object \"Array\").[1]  object \"ra\"\n    5.1 MB  .geometry  object \"e\"\n      4.3 MB  .attributes  object \"Object\"\n  5.1 MB  (via array \"\").12  object \"ra\"\n    5.1 MB  .geometry  object \"e\"\n      4.3 MB  .attributes  object \"Object\"\n  5.1 MB  (via object \"Array\").[1]  object \"ra\"\n    5.1 MB  .geometry  object \"e\"\n      4.3 MB  .attributes  object \"Object\"\n  5.1 MB  (via object \"Array\").[1]  object \"ra\"\n    5.1 MB  .geometry  object \"e\"\n      4.3 MB  .attributes  object \"Object\"\n  4.8 MB  (via object \"Array\").[1]  object \"Object\"\n  4.7 MB  (via object \"Uint32Array\").buffer  object \"ArrayBuffer\"\n    4.7 MB  .backing_store  native \"system / JSArrayBufferData\"  (self 4.7 MB)\n  4.0 MB  (via object \"system / Context / scope @129171\").$B  object \"aa\"\n    4.0 MB  .source  object \"En\"\n      4.0 MB  .data  object \"Object\"\n        4.0 MB  .data  native \"Uint8Array\"\n          4.0 MB  .buffer  native \"ArrayBuffer\"\n            4.0 MB  .backing_store  native \"system / JSArrayBufferData\"  (self 4.0 MB)"
+      ]
+    },
+    {
+      "view": "title",
+      "about": "the title card over the attract flight",
+      "query": "",
+      "ok": true,
+      "failure": null,
+      "readyMs": 6357,
+      "debugInfo": "Solarpolis v0.181\nhabitat R 4000 m, L 30000 m, seed 1, 0.47 rpm\nmemory 337 MB of 2560 MB/3584 MB (desktop), heap 197 MB, sky maps, stars and skin detail 140 MB, first light 0 MB, sound 0 MB, +2275 MB/min\nsound: 0.0 MB decoded, 0 beds, 0 calls · none · 0 near, 0 hums, 0 cues · steps on - (0) · moment -\n57 fps, slowest frame 50 ms\narrival: first light 2.4 s, title 5.8 s after opening, the opening cut to it at 9.5 s (421 frames, slowest 248 ms, 2 stutters) · not started\narrival's loading: 5.8 passengers … · 5.8 human pack … · 5.8 interior view … · 5.9 interior renderer … · 6.1 human pack ✓ · 6.1 interior renderer ✓ · 6.2 interior warm-up … · 6.9 passengers ✓\ninside: not started\nshaders 17 warm-up + 1 later · worst 6 ms · policy ok · 1 built again alike (shaders.repeats())\n3026-01-01 05:50 UT · clock ×1 · exposure 1.2e+0\nsunlight 100% · Earth 16.6° across · looking at habitat\n2,016 km from the nearest surface · nearest neighbour 11,599 km away\nskin detail: none near\nhome ships: 2 berthed, 0 on thrusters, 0 braking or leaving on the torch; 0 tugs out, 6 inspectors",
+      "shaderReport": "shaders: 10 built in warm-up, 0 after, worst block 1 ms, 0 violations, 0 built again alike",
+      "shots": [
+        {
+          "file": "title.png",
+          "ms": 64
+        }
+      ],
+      "totalMs": 10555,
+      "adapter": {
+        "vendor": "nvidia",
+        "architecture": "blackwell",
+        "device": "",
+        "description": "",
+        "fallback": false
+      },
+      "wgsl": {
+        "modules": 55,
+        "unique": 55,
+        "withMessages": []
+      },
+      "gpuErrors": [],
+      "pipelineErrors": [],
+      "deviceLost": null,
+      "console": []
+    }
+  ]
+}
