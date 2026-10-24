@@ -2,6 +2,10 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.189 — Passengers sit on their couches
+
+- In the arrival's cabin shot the fellow passengers now sit on the couches' seats; before, their hips hung in front of the seat edge.
+
 ## v0.188 — Residents sit on the court seats
 
 - People resting on the stone seat round a court's light well now sit on it, hips on the stone and feet on the paving, instead of hanging in the air in front of it. They step up to it, sit down and get up again the way passengers do in a capsule.
