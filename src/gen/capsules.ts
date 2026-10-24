@@ -38,8 +38,13 @@ export const CAP = {
 const CURVE = { plan: 2.3, nose: 2.0, tail: 2.6, belly: 3.4, section: 2.6 };
 /** How far the door swings up and out when open (rad): a little past level, so one walks out under its foot. */
 export const DOOR_OPEN = 1.65;
-/** Feet this far (m) out from the front of a bench when sitting on it (as on the courts' seats, sim/population.ts). */
-const SEAT_FEET = 0.15;
+/** Seated on a bench, the hips rest this far (m) back from its front edge (the sitting clips keep them over the body's place). */
+const SEAT_HIPS = 0.26;
+/** Each fan's blades, and how far above its duct's middle they turn (handrails). */
+const FAN_BLADES = 7;
+const FAN_ABOVE = 0.02;
+/** How far the bronze trims (the belt's band, the spine) stand proud of the shell (handrails). */
+const TRIM_PROUD = 0.006;
 
 const PEARL: RGB = [0.62, 0.62, 0.6];
 const BRONZE: RGB = [0.22, 0.15, 0.08];
@@ -85,9 +90,9 @@ function angleAt(x: number, z: number): number {
 /** The glass's lowest edge at x: over the floor amidships, sweeping down toward the nose so one sees ahead and down. */
 const glassEdgeAt = (x: number): number => CAP.belly + CAP.floor + CAP.belt - (CAP.belt - CAP.beltNose) * smoothstep(0.1, 0.9, x / (CAP.length / 2));
 
-/** The capsule's seat and door, in its frame (m): where one's feet are seated and the way one faces; the doorway's middle inside and a step out from it. */
+/** The capsule's seat and door, in its frame (m): where one's hips rest seated (on the floor under them) and the way one faces; the doorway's middle inside and a step out from it. */
 export interface CapSeat {
-  feet: Vec3;
+  hips: Vec3;
   front: Vec3;
 }
 export interface CapDoor {
@@ -102,6 +107,8 @@ export interface CapLayout {
   /** The cabin floor's height over the ground (m), and the door's hinge (a point on its line, along x). */
   floor: number;
   hinge: Vec3;
+  /** Its fans: where each one's blades turn (their middle, on its axis: the frame's z) and which way (1: about +z). */
+  fans: { at: Vec3; turn: 1 | -1 }[];
   /** How far from its middle anything of it reaches (m), and its half length and half width (m) on the ground. */
   reach: number;
   halfLength: number;
@@ -115,28 +122,33 @@ export function capLayout(h: Habitat): CapLayout {
   const sill = shellPoint(0, -angleAt(0, CAP.belly + CAP.floor + CAP.doorFoot));
   const ductOut = (CAP.ductAt[1] + CAP.duct) * hr, hingeAt = shellPoint(0, -CAP.hinge);
   return {
-    seat: { feet: [edge + SEAT_FEET, side, floor], front: [1, 0, 0] },
+    seat: { hips: [edge - SEAT_HIPS, side, floor], front: [1, 0, 0] },
     door: { inside: [0, sill[1] * hr + 0.35 * hr, floor], outside: [0, sill[1] * hr - 0.75 * hr, 0], out: [0, -1, 0] },
     floor,
     hinge: [0, hingeAt[1] * hr, hingeAt[2] * hr],
+    // Each fan in its duct, a little above the duct's middle; neighbours turn opposite ways (as a quad's do).
+    fans: [1, -1].flatMap((sx) => [1, -1].map((sy) => ({ at: [sx * CAP.ductAt[0] * hr, sy * CAP.ductAt[1] * hr, (CAP.ductAt[2] + FAN_ABOVE) * hr] as Vec3, turn: (sx * sy) as 1 | -1 }))),
     reach: Math.hypot((CAP.ductAt[0] + CAP.duct) * hr, ductOut, MIDDLE * hr + (CAP.height / 2) * hr),
     halfLength: Math.max(CAP.length / 2, CAP.ductAt[0] + CAP.duct) * hr,
     halfWidth: ductOut,
   };
 }
 
-/** The capsule's meshes in its frame (m): its body, its glass (and the fans' blur), and its door's body and glass, the door in the hinge's frame (origin on the hinge line). */
+/** The capsule's meshes in its frame (m): its body, its glass, and its door's body and glass, the door in the hinge's frame (origin on the hinge line); one fan's blades and blur. */
 export interface CapsuleShapes {
   body: Shape;
   glass: Shape;
   doorBody: Shape;
   doorGlass: Shape;
+  /** One fan's blades and their blur at speed, in the fan's frame (`CapLayout.fans`). */
+  rotor: Shape;
+  blur: Shape;
 }
 
 /**
  * Build the capsule: a pearl ceramic shell, glass from the belt line over the top (lower toward the nose), a bronze band
  * along the belt, four ducted fans on short pylons at its corners (dark ducts with stator vanes and hubs, the blades a
- * blur), four feet; inside, a timber floor and two cushioned benches facing each other, the shell lined. The door is
+ * blur, turning on their own: `rotor`, `blur`), four feet; inside, a timber floor and two cushioned benches facing each other, the shell lined. The door is
  * the stretch of shell and glass amidships on its right. Built as `mapped` shapes for the BUILT kind (body) and the
  * glass kind (`finish` there: how much of what lies behind it the glass keeps out).
  */
@@ -145,23 +157,45 @@ export function buildCapsule(h: Habitat): CapsuleShapes {
   const body = new Shape(24, true, true), glass = new Shape(24, true, true), doorBody = new Shape(24, true, true), doorGlass = new Shape(24, true, true);
   const L = CAP.length / 2, X = 40, door = CAP.door, hinge = m(shellPoint(0, -CAP.hinge));
   const beltPhi = (x: number): number => angleAt(x, glassEdgeAt(x)), footPhi = (x: number): number => angleAt(x, CAP.belly + CAP.floor + CAP.doorFoot);
+  // The shell's point and normal at (x, φ), `inset` in from its outside (negative: out from it), the normal out (or in, `inward`).
+  const shellAt = (x: number, phi: number, inset: number, inward: boolean): { p: Vec3; n: Vec3 } => {
+    const p = shellPoint(x, phi, inset), dx = 1e-3, da = 1e-3;
+    const px = v3sub(shellPoint(Math.min(L, x + dx), phi, inset), shellPoint(Math.max(-L, x - dx), phi, inset));
+    const pa = v3sub(shellPoint(x, phi + da, inset), shellPoint(x, phi - da, inset));
+    let n = v3cross(px, pa);
+    const away: Vec3 = [Math.abs(x) > L * 0.999 ? Math.sign(x) : 0, p[1], p[2] - MIDDLE];
+    if (Math.hypot(...n) < 1e-12) n = away;
+    n = v3norm(v3dot(n, away) < 0 ? [-n[0], -n[1], -n[2]] : n);
+    return { p, n: inward ? [-n[0], -n[1], -n[2]] : n };
+  };
+  const vertexAt = (p: Vec3, n: Vec3, x: number, phi: number, origin: Vec3): { p: Vec3; n: Vec3; uv: [number, number] } => {
+    const q = m(p);
+    return { p: [q[0] - origin[0], q[1] - origin[1], q[2] - origin[2]], n, uv: [x * hr, phi * hr] };
+  };
+  // Each row's x and its angles once (finding the belt is a search).
+  const rowsOf = (x0: number, x1: number, a0: (x: number) => number, a1: (x: number) => number, rows: number): { xs: number[]; from: number[]; to: number[] } => {
+    const xs = Array.from({ length: rows + 1 }, (_, i) => x0 + ((x1 - x0) * i) / rows);
+    return { xs, from: xs.map(a0), to: xs.map(a1) };
+  };
   // A patch of the shell between x0 and x1 and two angles (functions of x), outside (normals out) or its lining inside.
   const patch = (sh: Shape, x0: number, x1: number, a0: (x: number) => number, a1: (x: number) => number, rows: number, cols: number, col: RGB, inside = false, origin: Vec3 = [0, 0, 0]): void => {
-    const inset = inside ? CAP.wall : 0;
-    // Each row's angles once (finding the belt is a search).
-    const xs = Array.from({ length: rows + 1 }, (_, i) => x0 + ((x1 - x0) * i) / rows), from = xs.map(a0), to = xs.map(a1);
+    const inset = inside ? CAP.wall : 0, { xs, from, to } = rowsOf(x0, x1, a0, a1, rows);
     sh.smoothGrid(rows, cols, (i, j) => {
-      const x = xs[i], f = j / cols, phi = from[i] + (to[i] - from[i]) * f;
-      const p = shellPoint(x, phi, inset), dx = 1e-3, da = 1e-3;
-      const px = v3sub(shellPoint(Math.min(L, x + dx), phi, inset), shellPoint(Math.max(-L, x - dx), phi, inset));
-      const pa = v3sub(shellPoint(x, phi + da, inset), shellPoint(x, phi - da, inset));
-      let n = v3cross(px, pa);
-      const away: Vec3 = [Math.abs(x) > L * 0.999 ? Math.sign(x) : 0, p[1], p[2] - MIDDLE];
-      if (Math.hypot(...n) < 1e-12) n = away;
-      n = v3norm(v3dot(n, away) < 0 ? [-n[0], -n[1], -n[2]] : n);
-      if (inside) n = [-n[0], -n[1], -n[2]];
-      const q = m(p);
-      return { p: [q[0] - origin[0], q[1] - origin[1], q[2] - origin[2]], n, uv: [x * hr, phi * hr] };
+      const x = xs[i], phi = from[i] + (to[i] - from[i]) * (j / cols), s = shellAt(x, phi, inset, inside);
+      return vertexAt(s.p, s.n, x, phi, origin);
+    }, col);
+  };
+  // A trim standing proud of the shell by TRIM_PROUD between two angles: its face and its two edges down to the
+  // shell, so it never lies in the shell's (or the glass's) own surface, where the two would fight over the depth.
+  const proud = (sh: Shape, x0: number, x1: number, a0: (x: number) => number, a1: (x: number) => number, rows: number, col: RGB, origin: Vec3 = [0, 0, 0]): void => {
+    const { xs, from, to } = rowsOf(x0, x1, a0, a1, rows);
+    sh.smoothGrid(rows, 3, (i, j) => {
+      const x = xs[i], phi = j < 2 ? from[i] : to[i], s = shellAt(x, phi, j === 0 || j === 3 ? 0 : -TRIM_PROUD, false);
+      // The edges face away from the trim's middle (round the section), the face out; the corners take both.
+      const sign = Math.sign(to[i] - from[i]) * (j < 2 ? -1 : 1), da = 1e-3;
+      const side = v3norm(v3sub(shellPoint(x, phi + sign * da), shellPoint(x, phi - sign * da)));
+      const n = j === 0 || j === 3 ? side : v3norm([s.n[0] + side[0], s.n[1] + side[1], s.n[2] + side[2]]);
+      return vertexAt(s.p, n, x, phi, origin);
     }, col);
   };
   const keel = (): number => Math.PI, keelR = (): number => -Math.PI;
@@ -190,13 +224,13 @@ export function buildCapsule(h: Habitat): CapsuleShapes {
   patch(doorBody, -door, door, doorFoot, beltR, 8, 6, LINING, true, hinge);
   // The bronze band along the belt line, both sides (the door's piece goes with it), and a thin spine over the top.
   body.finish = FINISH.bronze;
-  const band = (sh: Shape, x0: number, x1: number, side: 1 | -1, origin: Vec3 = [0, 0, 0]): void => patch(sh, x0, x1, (x) => side * (beltPhi(x) + 0.015), (x) => side * (beltPhi(x) + 0.06), Math.max(4, Math.round((x1 - x0) * 6)), 1, BRONZE, false, origin);
+  const band = (sh: Shape, x0: number, x1: number, side: 1 | -1, origin: Vec3 = [0, 0, 0]): void => proud(sh, x0, x1, (x) => side * (beltPhi(x) + 0.015), (x) => side * (beltPhi(x) + 0.06), Math.max(4, Math.round((x1 - x0) * 6)), BRONZE, origin);
   band(body, -L * 0.97, L * 0.97, 1);
   band(body, -L * 0.97, -door, -1);
   band(body, door, L * 0.97, -1);
   doorBody.finish = FINISH.bronze;
   band(doorBody, -door, door, -1, hinge);
-  patch(body, -L * 0.9, L * 0.8, () => -0.03, () => 0.03, 24, 1, BRONZE);
+  proud(body, -L * 0.9, L * 0.8, () => -0.03, () => 0.03, 24, BRONZE);
   // The cabin floor: timber boards across, on the shell's lining.
   body.finish = FINISH.timber;
   const floorZ = (CAP.belly + CAP.floor) * hr, boards = 14, fx = (L - 0.25) * hr;
@@ -238,20 +272,28 @@ export function buildCapsule(h: Habitat): CapsuleShapes {
     const mid: Vec3 = [(into[0] + at[0]) / 2, (into[1] + at[1]) / 2, (into[2] + at[2]) / 2];
     const ax = v3norm(v3sub(at, into)), up: Vec3 = [0, 0, 1], side = v3norm(v3cross(up, ax));
     body.block(mid, ax, side, v3cross(ax, side), [Math.hypot(...v3sub(at, into)) / 2, 0.06 * hr, 0.04 * hr], PEARL);
-    glass.finish = BLUR_VEIL;
-    glass.arc(at[2] + 0.02 * hr, r - t, at[2] + 0.02 * hr, 0.09 * hr, 1, 0, 0, 2 * Math.PI, 24, BLUR);
-    // Shift the blur disc out to its duct (the arc is round the frame's z axis).
-    const n = glass.vertices, k0 = n - 50;
-    for (let v = k0; v < n; v++) { glass.pos[v * 3] += at[0]; glass.pos[v * 3 + 1] += at[1]; }
   }
+  // One fan's blades (each fan turns its own copy, `fans`): pitched blades from the hub out to just inside the duct,
+  // and the blur they make at speed (shown only then), both round the fan's axis (z) in its own frame.
+  const rotor = new Shape(12, true, true), blur = new Shape(24, true, true), r = CAP.duct * hr, inner = r - 0.05 * hr, hub = 0.09 * hr;
+  rotor.finish = FINISH.ceramic;
+  for (let k = 0; k < FAN_BLADES; k++) {
+    const a = (k / FAN_BLADES) * 2 * Math.PI, c = Math.cos(a), sn = Math.sin(a), pitch = 0.45;
+    const radial: Vec3 = [c, sn, 0], chord: Vec3 = v3norm([-sn * Math.cos(pitch), c * Math.cos(pitch), Math.sin(pitch)]);
+    const len = inner - 0.02 * hr - hub * 0.8, mid = hub * 0.8 + len / 2;
+    rotor.block([c * mid, sn * mid, 0], radial, chord, v3cross(radial, chord), [len / 2, 0.045 * hr, 0.006 * hr], GRAPHITE);
+  }
+  blur.finish = BLUR_VEIL;
+  blur.arc(0, inner, 0, hub, 1, 0, 0, 2 * Math.PI, 24, BLUR);
   // Four feet under the belly.
   body.finish = FINISH.bronze;
   for (const sx of [1, -1]) for (const sy of [1, -1]) {
-    const foot: Vec3 = m([sx * 0.95, sy * 0.52, CAP.belly / 2 + 0.02]);
-    body.block(foot, [1, 0, 0], [0, 1, 0], [0, 0, 1], [0.05 * hr, 0.05 * hr, (CAP.belly / 2 + 0.02) * hr], BRONZE);
+    // The leg stands in its pad (not on the ground's plane with it), up into the belly.
+    const foot: Vec3 = m([sx * 0.95, sy * 0.52, CAP.belly / 2 + 0.03]);
+    body.block(foot, [1, 0, 0], [0, 1, 0], [0, 0, 1], [0.05 * hr, 0.05 * hr, (CAP.belly / 2 + 0.01) * hr], BRONZE);
     body.block([foot[0], foot[1], 0.012 * hr], [1, 0, 0], [0, 1, 0], [0, 0, 1], [0.13 * hr, 0.09 * hr, 0.012 * hr], GRAPHITE);
   }
-  return { body, glass, doorBody, doorGlass };
+  return { body, glass, doorBody, doorGlass, rotor, blur };
 }
 
 

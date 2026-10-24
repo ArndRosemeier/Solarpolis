@@ -314,6 +314,17 @@ export const views = {
     { wheel: -1500 }, { wait: 1500 }, { look: [200, 60] }, { wait: 1000 }, { shot: 'eyes' }, { wheel: 600 },
     capsulePhase('alighting', 240000), { shot: 'landing' }, capsulePhase('parked', 30000), { wait: 1500 }, { shot: 'out' }, { run: logPeople }, heap('capsule'),
   ] },
+  // The passenger on the bench and the fans (Arnd 2026-10-23: z-fighting, not sitting on the seat, rotors not turning):
+  // seated, the camera turned round to the pod's side (-side) and front (-front), then from the eyes looking down at
+  // the lap (-eyes-down); on the ride, the fans spinning up before lift-off (-spinup), lifting off (-liftoff), climbing.
+  'capsule-seat': { query: 'view=inside', about: 'a called capsule boarded: seated, from the side (-side) and the front (-front), from the eyes looking down (-eyes-down); then on the ride the fans spinning up (-spinup), lifting off (-liftoff), climbing (-climb); logs the capsule line', settle: 6000, steps: [
+    { wheel: 600 }, { debug: 'Capsule: call one here' }, { wait: 15000 }, capsulePhase('waiting'), { debug: 'Capsule: walk up to it' }, { wait: 6000 },
+    { debug: 'Capsule: get in' }, capsulePhase('seated', 30000), { wait: 1500 },
+    { look: [450, 40] }, { wait: 1200 }, { shot: 'side' }, { look: [450, 0] }, { wait: 1200 }, { shot: 'front' }, { look: [-900, -40] },
+    { wheel: -1500 }, { wait: 1500 }, { look: [0, 260] }, { wait: 1000 }, { shot: 'eyes-down' }, { look: [0, -260] }, { wheel: 600 }, { wait: 1000 },
+    { debug: 'Capsule: ride to the nearest court' }, capsulePhase('riding', 30000), { wait: 1500 }, { shot: 'spinup' }, { wait: 2500 }, { shot: 'liftoff' }, { wait: 6000 }, { shot: 'climb' },
+    { run: logPeople },
+  ] },
   // The capsule waiting on the arrival's berth (render/view.ts prepareArrival → CapsuleView.parkAt): after the arrival,
   // stood beside its door (-near), wheeled out (-far), then from the eyes looking at it (-eyes).
   'arrival-capsule': { query: 'view=inside', about: 'the capsule that waits on the arrival berth: after the arrival, beside its door (-near), wheeled out (-far), from the eyes (-eyes); logs the capsule line', settle: 6000, steps: [

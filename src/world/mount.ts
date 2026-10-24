@@ -6,15 +6,21 @@
  * place. Timed by the real seconds of the clips the body plays (render/people.ts plays the same ones on the courts'
  * seats). Pure.
  */
-import { smoothstep, v3sub, type Vec3 } from '@futuremagic/core';
+import { smoothstep, v3madd, v3sub, type Vec3 } from '@futuremagic/core';
 import { apart } from '../blueprint';
 import { EYE_HEIGHT } from './walker';
 
-/** A seat: where one's feet are while sitting on it and the way one faces (the vehicle's frame, m and unit). */
+/**
+ * A seat: where one's hips rest on it, on the floor under them (the body's place while seated: the sitting clips keep
+ * the hips over it), and the way one faces (the vehicle's frame, m and unit).
+ */
 export interface Seat {
-  feet: Vec3;
+  hips: Vec3;
   front: Vec3;
 }
+
+/** Where one stands to sit down on a seat (and stands after getting up): `SIT_BACK` in front of where the hips rest. */
+export const sitFrom = (seat: Seat): Vec3 => v3madd(seat.hips, seat.front, SIT_BACK);
 
 /** A door: the doorway's middle on the floor inside, a step out from it on the ground, and the way out (unit). */
 export interface Door {
@@ -52,9 +58,14 @@ export interface MountPose {
 /** The clips' lengths (s): sitting down onto a seat, standing up from it (Actors' pack, as render/people.ts plays them). */
 export const SIT_DOWN = 1.33;
 export const STAND_UP = 1.07;
-/** Seated, the eyes are this high over the feet's floor and this far behind the feet (m: the hips sit back on the seat). */
+/**
+ * The sitting clips (Actors' pack): sitting down carries the hips this far back of where one stood (m; standing up
+ * carries them as far forward), and seated they are over the body's place. Seated, the eyes are this high over the
+ * floor and this far in front of the hips (m).
+ */
+export const SIT_BACK = 0.272;
 export const SEATED_EYE = 1.22;
-export const SEATED_BACK = 0.32;
+export const SEATED_AHEAD = 0.1;
 /** Turning round in front of a seat to sit (s), and how much slower one steps up into a doorway than one walks. */
 const TURN = 0.6;
 const STEP_UP = 1.4;
@@ -79,19 +90,19 @@ export function boarding(seat: Seat, door: Door, start: Vec3, walk: number, via:
   const inward: Vec3 = [-door.out[0], -door.out[1], -door.out[2]];
   const legs = [start, ...via, door.outside].slice(1).map((to, i, all) => walking(i ? all[i - 1] : start, to, walk, inward));
   const stepIn = walking(door.outside, door.inside, walk, inward, STEP_UP);
-  const toSeat = walking(door.inside, seat.feet, walk, seat.front);
+  const stand = sitFrom(seat), toSeat = walking(door.inside, stand, walk, seat.front);
   return [
     ...legs, stepIn, toSeat,
-    { posture: 'stand', from: seat.feet, to: seat.feet, faceFrom: toSeat.faceTo, faceTo: seat.front, seconds: TURN },
-    { posture: 'sitDown', from: seat.feet, to: seat.feet, faceFrom: seat.front, faceTo: seat.front, seconds: SIT_DOWN },
+    { posture: 'stand', from: stand, to: stand, faceFrom: toSeat.faceTo, faceTo: seat.front, seconds: TURN },
+    { posture: 'sitDown', from: stand, to: stand, faceFrom: seat.front, faceTo: seat.front, seconds: SIT_DOWN },
   ];
 }
 
 /** Getting out: standing up from the seat, to the doorway, stepping down out of it, then facing out. */
 export function alighting(seat: Seat, door: Door, walk: number): MountStep[] {
-  const toDoor = walking(seat.feet, door.inside, walk, door.out), stepOut = walking(door.inside, door.outside, walk, door.out, STEP_UP);
+  const stand = sitFrom(seat), toDoor = walking(stand, door.inside, walk, door.out), stepOut = walking(door.inside, door.outside, walk, door.out, STEP_UP);
   return [
-    { posture: 'standUp', from: seat.feet, to: seat.feet, faceFrom: seat.front, faceTo: seat.front, seconds: STAND_UP },
+    { posture: 'standUp', from: stand, to: stand, faceFrom: seat.front, faceTo: seat.front, seconds: STAND_UP },
     toDoor, stepOut,
     { posture: 'stand', from: door.outside, to: door.outside, faceFrom: stepOut.faceTo, faceTo: door.out, seconds: TURN / 2 },
   ];
@@ -121,12 +132,19 @@ export function mountPose(steps: readonly MountStep[], elapsed: number): MountPo
     const seated = s.posture === 'sitDown' ? smoothstep(0.15, 0.9, share) : s.posture === 'standUp' ? 1 - smoothstep(0.1, 0.85, share) : 0;
     const posture: Posture = done && s.posture === 'sitDown' ? 'sit' : done && s.posture !== 'standUp' ? 'stand' : s.posture;
     const speed = s.posture === 'walk' && !done ? apart(s.from, s.to) / s.seconds : 0;
-    return { feet, front, posture, share, eye: EYE_HEIGHT + (SEATED_EYE - EYE_HEIGHT) * seated, back: SEATED_BACK * seated, speed, done };
+    const eye = EYE_HEIGHT + (SEATED_EYE - EYE_HEIGHT) * seated;
+    // Sitting down the clip carries the hips back from where one stands; seated (and standing up) the body's place is
+    // under the hips, the clip carrying them forward again. The eyes go with the hips.
+    if (posture === 'sit' || posture === 'standUp') {
+      const hips = v3madd(feet, front, -SIT_BACK);
+      return { feet: hips, front, posture, share, eye, back: -(SEATED_AHEAD * seated + SIT_BACK * (1 - seated)), speed, done };
+    }
+    return { feet, front, posture, share, eye, back: (SIT_BACK - SEATED_AHEAD) * seated, speed, done };
   }
   return { feet: [0, 0, 0], front: [1, 0, 0], posture: 'stand', share: 1, eye: EYE_HEIGHT, back: 0, speed: 0, done: true };
 }
 
 /** Seated (held after getting in). */
 export function seatedPose(seat: Seat): MountPose {
-  return { feet: seat.feet, front: seat.front, posture: 'sit', share: 1, eye: SEATED_EYE, back: SEATED_BACK, speed: 0, done: true };
+  return { feet: seat.hips, front: seat.front, posture: 'sit', share: 1, eye: SEATED_EYE, back: -SEATED_AHEAD, speed: 0, done: true };
 }
