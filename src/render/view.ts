@@ -974,7 +974,7 @@ export class InteriorView {
       below.clock.value = this.time;
       below.day.value = dayOverhead(this.habitat, this.terrain, this.emission, emissionMean(this.emission), air.skyLight.value, this.norm, centre);
     }
-    else shineOn(this.habitat, this.terrain, this.emission, emissionMean(this.emission), air.skyLight.value, this.norm, centre, eye);
+    else shineOn(this.habitat, this.terrain, this.emission, emissionMean(this.emission), air.skyLight.value, this.norm, centre, eye, !!rider);
     this.adaptEyes(eye);
     if (!f) return;
     // The one rule for the body (the capsules' seat follows it too): on foot, or walking out on arrival, the body is

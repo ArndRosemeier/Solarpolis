@@ -19,6 +19,7 @@
  */
 import { AmbientLight, DirectionalLight, type DepthTexture, type Node, type NodeBuilder, type Scene } from 'three/webgpu';
 import { Fn, float, min, screenCoordinate, select, shadow, texture, uniform, uniformArray, vec2 } from 'three/tsl';
+import { angleDiff } from '@futuremagic/core';
 import { fromWorld, toView, toWorld, type Habitat, type Vec3 } from '../blueprint';
 import { horizonAt } from '../gen/horizon';
 import type { Terrain } from '../gen/terrain';
@@ -34,6 +35,11 @@ const SHADOW_TEXELS = 2048;
 const LIGHT_BACK = 200;
 /** How high above a point (m) things are looked for that shade it from the line. */
 const SHADOW_REACH = 6;
+/**
+ * The map turns with the light only in steps of this angle (rad), round the axis and along it, and only once the light
+ * has turned three quarters of a step past the last one, so a light that drifts or jitters does not turn it at all.
+ */
+export const SHADOW_TURN = (0.25 * Math.PI) / 180;
 
 export const key = new DirectionalLight(0xffffff, 0);
 export const sky = new AmbientLight(0xffffff, 0);
@@ -154,11 +160,27 @@ export function dayOverhead(h: Habitat, terrain: Terrain, emission: Float32Array
   return Math.hypot(v[0], v[1], v[2]) * (1 - skyShare) + skyShare * mean * Math.min(1, Math.max(0, (port + wild) / Math.PI));
 }
 
+/** The light's turn the map is drawn along: round the axis and along it (rad), held between steps. */
+let turn: { around: number; along: number } | null = null;
+
+/**
+ * The turn to draw the shadow map along for a light at `around` (round the axis) and `along` (toward +z): the last one
+ * while the light stays within three quarters of a `SHADOW_TURN` of it, else the light's own, on whole steps.
+ */
+export function heldTurn(around: number, along: number): { around: number; along: number } {
+  if (!turn || Math.abs(angleDiff(turn.around, around)) > 0.75 * SHADOW_TURN || Math.abs(along - turn.along) > 0.75 * SHADOW_TURN) {
+    turn = { around: Math.round(around / SHADOW_TURN) * SHADOW_TURN, along: Math.round(along / SHADOW_TURN) * SHADOW_TURN };
+  }
+  return turn;
+}
+
 /**
  * Light and shade around the world point `p` (the player's middle), seen from the camera's world eye: the hour's
- * emission and mean, the share of sky light, the sunline's scale (`sunlineNorm`).
+ * emission and mean, the share of sky light, the sunline's scale (`sunlineNorm`). `riding`: the player rides in
+ * something that carries them (a capsule), whose own shadows (its seat, its frame, on its passenger) are kept still in
+ * the map rather than the land's, which streams past.
  */
-export function shineOn(h: Habitat, terrain: Terrain, emission: Float32Array, mean: number, skyShare: number, norm: number, p: Vec3, eye: Vec3): void {
+export function shineOn(h: Habitat, terrain: Terrain, emission: Float32Array, mean: number, skyShare: number, norm: number, p: Vec3, eye: Vec3, riding = false): void {
   const at = fromWorld(h.profile, p[0], p[1], p[2]);
   const [port, wild] = horizonAt(terrain, at.theta, at.s);
   const v = lightVector(h, emission, p, port, wild, norm);
@@ -169,20 +191,30 @@ export function shineOn(h: Habitat, terrain: Terrain, emission: Float32Array, me
   const open = Math.min(1, Math.max(0, (port + wild) / Math.PI));
   sky.intensity = Math.PI * skyShare * mean * open;
   if (strength < 1e-9) return;
-  const d: Vec3 = [v[0] / strength, v[1] / strength, v[2] / strength];
 
-  // The rays: the light's equal shares along the axis, as tilts from the key direction.
-  const r = Math.hypot(p[0], p[1]) || 1, inward: Vec3 = [-p[0] / r, -p[1] / r, 0];
-  const a0 = Math.atan2(d[2], d[0] * inward[0] + d[1] * inward[1]);
-  const shares = lightShares(h, emission, p, inward, SHADOW_RAYS, port, wild);
+  // The light comes from the axis: straight in (`inward`) and turned along the axis by a0. The map is drawn along
+  // that direction held in steps (`heldTurn`): every frame it turns, every shadow edge in it is drawn anew, and the
+  // snapping below holds only for a map that does not turn. Near the axis (the arrival terrace is 160 m from it) a
+  // step of walking turns the light forty times as far as on the floor, and the map's grid, laid from the world's
+  // origin tens of kilometres away, slid by whole texels with every hundredth of a degree: the shadows flickered.
+  const r = Math.hypot(p[0], p[1]) || 1;
+  const held = heldTurn(Math.atan2(-p[1], -p[0]), Math.atan2(v[2], Math.hypot(v[0], v[1])));
+  const inward: Vec3 = [Math.cos(held.around), Math.sin(held.around), 0], a0 = held.along;
+  const d: Vec3 = [inward[0] * Math.cos(a0), inward[1] * Math.cos(a0), Math.sin(a0)];
+
+  // The rays: the light's equal shares along the axis, as tilts from the map's direction (the held turn along the
+  // axis is folded into them, so the soft shadow keeps the light's own angles).
+  const shares = lightShares(h, emission, p, [-p[0] / r, -p[1] / r, 0], SHADOW_RAYS, port, wild);
   for (let k = 0; k < SHADOW_RAYS; k++) tilts.array[k] = Math.tan((shares[k] ?? a0) - a0);
 
-  // The map's centre, snapped to whole texels across the light so the shadows do not crawl as the player moves.
+  // The map's centre, snapped to whole texels across the light so the land's shadows do not crawl as the player moves;
+  // riding, it moves with them, so what carries them keeps its shadows on the same texels (snapped to the land, the
+  // capsule's own shadow edges were drawn on new texels every frame of the ride and flickered).
   const upZ = 1 - d[2] * d[2] > 1e-6 ? [-d[2] * d[0], -d[2] * d[1], 1 - d[2] * d[2]] : [1, 0, 0];
   const ul = Math.hypot(upZ[0], upZ[1], upZ[2]), up: Vec3 = [upZ[0] / ul, upZ[1] / ul, upZ[2] / ul];
   const right: Vec3 = [up[1] * d[2] - up[2] * d[1], up[2] * d[0] - up[0] * d[2], up[0] * d[1] - up[1] * d[0]];
   const texel = (2 * SHADOW_HALF) / SHADOW_TEXELS;
-  const snap = (x: number): number => Math.round(x / texel) * texel - x;
+  const snap = (x: number): number => (riding ? 0 : Math.round(x / texel) * texel - x);
   const pr = p[0] * right[0] + p[1] * right[1] + p[2] * right[2], pu = p[0] * up[0] + p[1] * up[1] + p[2] * up[2];
   const a = snap(pr), b = snap(pu);
   const centre: Vec3 = [p[0] + right[0] * a + up[0] * b, p[1] + right[1] * a + up[1] * b, p[2] + right[2] * a + up[2] * b];
