@@ -1,5 +1,21 @@
 [
   {
+    "id": "20261105-001238-claude-base",
+    "request": "shots-req/claude-base/inside,title",
+    "ref": "93851b5aa7253ad8dd5ba856767e61448773c8e2",
+    "sha": "93851b5aa7253ad8dd5ba856767e61448773c8e2",
+    "ok": true,
+    "failure": null,
+    "views": [
+      "inside",
+      "title"
+    ],
+    "files": [
+      "inside.png",
+      "title.png"
+    ]
+  },
+  {
     "id": "20261105-000658-claude",
     "request": "shots-req/claude/title,inside,outside,commonwear,court-seat,memory-inside",
     "ref": "e894722643ee9a5b1d45e79bc9a147cd73af96d4",
@@ -393,23 +409,6 @@
     "ref": "82cc732afe1f6e0c85939e185950de49c197bb22",
     "sha": "82cc732afe1f6e0c85939e185950de49c197bb22",
     "ok": true,
-    "failure": null,
-    "views": [
-      "cabin"
-    ],
-    "files": [
-      "cabin-in.png",
-      "cabin-mid.png",
-      "cabin-late.png",
-      "cabin.png"
-    ]
-  },
-  {
-    "id": "20261023-215433-arrival",
-    "request": "shots-req/arrival/cabin",
-    "ref": "c940dfe475b19ff7fff66c5fea8de000a4d0583e",
-    "sha": "c940dfe475b19ff7fff66c5fea8de000a4d0583e",
-    "ok": false,
     "failure": null,
     "views": [
       "cabin"

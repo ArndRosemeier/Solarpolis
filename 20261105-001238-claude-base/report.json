@@ -1,0 +1,94 @@
+{
+  "id": "20261105-001238-claude-base",
+  "request": "shots-req/claude-base/inside,title",
+  "ref": "93851b5aa7253ad8dd5ba856767e61448773c8e2",
+  "sha": "93851b5aa7253ad8dd5ba856767e61448773c8e2",
+  "dirty": false,
+  "subject": "changelog: v0.191",
+  "size": [
+    1600,
+    900
+  ],
+  "adapter": {
+    "vendor": "nvidia",
+    "architecture": "blackwell",
+    "device": "",
+    "description": "",
+    "fallback": false
+  },
+  "totalMs": 66106,
+  "ok": true,
+  "failure": null,
+  "views": [
+    {
+      "view": "inside",
+      "about": "standing on the floor, first look",
+      "query": "view=inside",
+      "ok": true,
+      "failure": null,
+      "readyMs": 19986,
+      "debugInfo": "Solarpolis v0.191\nhabitat R 4000 m, L 30000 m, seed 1, 0.47 rpm\nmemory 532 MB of 2560 MB/3584 MB (desktop), heap 271 MB, terrain tiles 202 MB, drones 29 MB, player body 16 MB, +1247 MB/min\nsound: 0.0 MB decoded, 0 beds, 0 calls · birds-wood 0.52, wind-soft 0.31, leaves-broad 0.24, birds-meadow 0.08, grass 0.04, air ×1.00, light 0.50, birds 0.80 · 1 near, 0 hums, 0 cues · steps on litter (1) · moment -\n52 fps, slowest frame 54 ms\narrival: title not yet · not started\narrival's loading: 0.2 interior renderer … · 0.8 interior renderer ✓ · 0.9 interior warm-up … · 17.5 interior warm-up ✓ · 17.5 interior build … · 17.6 human pack … · 17.6 squirrel pack … · 17.6 deer pack … · 17.7 squirrel pack ✓ · 17.7 deer pack ✓ · 17.9 human pack ✓ · 19.6 interior build ✓ · 19.6 player body … · 20.4 player body ✓ · 20.4 player body shaders … · 20.6 player body shaders ✓\nshaders 35 warm-up + 26 later · worst 38 ms · 3 POLICY VIOLATIONS (shaders.report()) · 2 built again alike (shaders.repeats())\nterrain 206 tiles drawn (0 new last frame, 259 built so far), 136 MB in use, 259 cached (136 MB), 16 building · 8 bands, 47 roots of 4.4 km, 8 levels · 4 workers\nplants (plants/cells) full 113/52, lite 161/23, hull 707/27; 1570 tufts; 1666 stones and fallen wood; 91 draws, 156 cached (0.2 MB; shapes and atlases 21.0 MB), 12 planting, 20 forms\nplant LOD: 0 holes (0 frames with holes so far), 46 levels standing in for a finer one being planted, 2441 far cells coming in\nlandmarks: pavilion (far; 0.2 MB), hut (far; 0.0 MB)\nlift stair: 16 tiles drawn, 16 kept (4.9 MB), 0 building\nentrance courts: 134 tiles drawn, 160 kept (21.7 MB), 8 building\nriver crossings: 123 tiles drawn, 152 kept (1.2 MB), 8 building\ngrown halls: 120 tiles drawn, 152 kept (0.3 MB), 8 building\nharbours: 111 tiles drawn, 152 kept (0.2 MB), 8 building\nunderstorey: 0 tiles drawn, 0 kept (0.0 MB), 0 building\nhome furniture: 0 homes (0 near, 0 mid), 0 of 8192 pieces drawn\nglass deck: none near\npeople: 158 up within 1.5 km · neighbourhood cache 0.00 MB · 0 figures (0 loading) · 17 stand-ins · 128 specks · 0 waiting for their look · handover holes 0, frames with holes 0 · figure levels made in 0 ms at most\nspecks: 6795 up on the land, 158 drawn nearer · list 1.5 s old, 2 lists, slowest 1959 ms\ndrones: 651 and 13 people in drone bodies (20 designs, built in 1314 ms) · 0 near · 0 coarse · 664 specks · handover holes 0, frames with holes 0\ntalk: 0 parties kept, 0 conversations; news heard here in 6 d: 2, latest flare--1 from sun after 8.2 min, 0 bubbles\nsquirrels: 77 within 250 m from 77 homes (0 getting ready, 0 away) · 0 figures (0 loading) · 77 specks · handover holes 0, frames with holes 0\ndeer: 58 within 2000 m from 7 homes (0 getting ready, 0 away) · 0 figures (0 loading) · 58 specks · handover holes 0, frames with holes 0\nbirds: 93 round the eye (6 woodpecker, 14 wren, 18 pigeon, 6 lark, 27 blackbird, 11 robin, 10 thrush, 1 owl; bodies built in 1306 ms) · flocks: 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 2500 starlings (360 in sight), 2500 starlings (2500 in sight) · 19 singing · 0 near · 3 coarse · 2950 specks · handover holes 0, frames with holes 0\nboats: 89, 3 under sail (3 designs, built in 1382 ms) · 0 near · 0 coarse · 89 specks · handover holes 0, frames with holes 0\ncapsule: idle (not built yet)\ncatches: 0\nθ 17.2°, s 13.30 of 34.91 km, ground 19.0 m, on foot, standing, gravity 0.99 g, eyes ×1.58\nwind: 3.6 m/s from against the spin; boats under sail: 3 of 89; 254 residents crew them\nday 1, 09:54 (dawn at 06:00), sun 25% of the way to the port end, clouds 32%, clock ×1\noutside: not started\nphysics: 0 bodies, 1154 trunk pieces",
+      "shaderReport": "shaders: 35 built in warm-up, 26 after, worst block 38 ms, 3 violations, 2 built again alike\nrun: \"MeshStandardNodeMaterial\" started 1 ms after a build of 10 ms ended (minimum 20 ms)\nrun: \"MeshStandardNodeMaterial\" started 3 ms after a build of 6 ms ended (minimum 12 ms)\nrun: \"MeshPhysicalNodeMaterial\" started 1 ms after a build of 6 ms ended (minimum 11 ms)\nbuilt 2× alike (2 after warm-up, 31 ms): activity prop (instanced)\nbuilt 2× alike (2 after warm-up, 25 ms): ShadowMaterial (instanced) of Mesh adaptive domestic fittings (near)<Shadow Map [ sunline key ] (shadow warm-up)",
+      "shots": [
+        {
+          "file": "inside.png",
+          "ms": 287
+        }
+      ],
+      "totalMs": 24678,
+      "adapter": {
+        "vendor": "nvidia",
+        "architecture": "blackwell",
+        "device": "",
+        "description": "",
+        "fallback": false
+      },
+      "wgsl": {
+        "modules": 107,
+        "unique": 107,
+        "withMessages": []
+      },
+      "gpuErrors": [],
+      "pipelineErrors": [],
+      "deviceLost": null,
+      "console": [
+        "warning: THREE.TSL: Return statement used in an inline 'Fn()'. Define a layout struct to allow return values. Stack trace not available. Enable \"THREE.Node.captureStackTrace\" to capture stack traces.",
+        "warning: THREE.TSL: Return statement used in an inline 'Fn()'. Define a layout struct to allow return values. Stack trace not available. Enable \"THREE.Node.captureStackTrace\" to capture stack traces.",
+        "warning: using deprecated parameters for the initialization function; pass a single object instead"
+      ]
+    },
+    {
+      "view": "title",
+      "about": "the title card over the attract flight",
+      "query": "",
+      "ok": true,
+      "failure": null,
+      "readyMs": 4367,
+      "debugInfo": "Solarpolis v0.191\nhabitat R 4000 m, L 30000 m, seed 1, 0.47 rpm\nmemory 413 MB of 2560 MB/3584 MB (desktop), heap 273 MB, sky maps, stars and skin detail 140 MB, first light 0 MB, sound 0 MB, +2849 MB/min\nsound: 0.0 MB decoded, 0 beds, 0 calls · none · 0 near, 0 hums, 0 cues · steps on - (0) · moment -\n53 fps, slowest frame 36 ms\narrival: first light 0.5 s, title 3.8 s after opening, the opening cut to it at 7.6 s (394 frames, slowest 299 ms, 2 stutters) · not started\narrival's loading: 3.8 passengers … · 3.8 human pack … · 3.8 interior view … · 3.9 interior renderer … · 3.9 interior renderer ✓ · 4.0 interior warm-up … · 4.2 human pack ✓ · 4.9 passengers ✓\ninside: not started\nshaders 17 warm-up + 1 later · worst 6 ms · policy ok · 1 built again alike (shaders.repeats())\n3026-01-01 05:50 UT · clock ×1 · exposure 1.2e+0\nsunlight 100% · Earth 16.6° across · looking at habitat\n2,016 km from the nearest surface · nearest neighbour 11,599 km away\nskin detail: none near\nhome ships: 2 berthed, 0 on thrusters, 0 braking or leaving on the torch; 0 tugs out, 6 inspectors",
+      "shaderReport": "shaders: 10 built in warm-up, 0 after, worst block 1 ms, 0 violations, 0 built again alike",
+      "shots": [
+        {
+          "file": "title.png",
+          "ms": 61
+        }
+      ],
+      "totalMs": 8541,
+      "adapter": {
+        "vendor": "nvidia",
+        "architecture": "blackwell",
+        "device": "",
+        "description": "",
+        "fallback": false
+      },
+      "wgsl": {
+        "modules": 55,
+        "unique": 55,
+        "withMessages": []
+      },
+      "gpuErrors": [],
+      "pipelineErrors": [],
+      "deviceLost": null,
+      "console": []
+    }
+  ]
+}
