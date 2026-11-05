@@ -1,0 +1,17 @@
+{
+  "id": "20261105-000542-claude",
+  "request": "shots-req/claude/default,commonwear,court-seat",
+  "ref": "e894722643ee9a5b1d45e79bc9a147cd73af96d4",
+  "sha": "e894722643ee9a5b1d45e79bc9a147cd73af96d4",
+  "dirty": false,
+  "subject": "Actors 0.33.4 and the newest AssetGenerator",
+  "size": [
+    1600,
+    900
+  ],
+  "adapter": null,
+  "totalMs": 29731,
+  "ok": false,
+  "failure": "unknown view(s): default. Known: ship-tour, title, arrival, flight-lights, opening, arrival-timing, arrival-timing-late, cabin, docking, bore-hall, arrival-terrace, threshold-still, threshold, notice, lab, lab-under, inside, inside-up, inside-wild-endcap, inside-port-endcap, inside-fly, ground-down, ground-wood, ground-meadow, ground-log, ground-boulder, ground-river, ground-falls, river-above, body-chase, arrival-body, walk-meadow, walk-wood, run-meadow, bushes-levels, bushes-meadow, bushes-above, ground-endcap, clouds-up, gravity-run, clouds-side, clouds-overcast, clouds-under, clouds-drift, clouds-in, pavilion-bridge, pavilion-floor, pavilion-by, pavilion-far, stair-foot, stair-landing, stair-floor, stair-beside, stair-close, stair-hub, hut-terrace, hut-beside, hut-under, hut-far, under-dim, under-hamlet, under-skies, link, names, under-life, adaptive-home-walk, adaptive-home, under-homes, home-street-walk, under-halls, under-glass, under-screen-panels, lift-ride, court-floor, court-rim, court-over, court-far, court-letgo, grove-in, grove-over, grove-far, inside-wild-tip, inside-port-hub, far-low, far-across, far-side, far-down, far-tube, far-tube-clear, far-endcap, snow-line, snow-over, far-gate, path-sunwalk, path-way, path-sunwalk-high, place-vineyard, place-orchard, place-vine-face, crossing-arch, crossing-timber, crossing-stepping, crossing-log, crossing-on, hall-nave, hall-dais, hall-beside, hall-far, ring-front, ring-far, height-far, height-top, ring-fall-volume, ring-fall, lakes, catch, capsule, capsule-frames, capsule-seat, arrival-capsule, boats, harbours, crews, works, signature, far-meadow-up, outside, exploration-ship, solar-system, system-habitats, visit, outside-earth, outside-moon, outside-neighbour, outside-night-eyes, outside-close, people-crowd, people-court, people-drones, people-beats, activity-props, people-places, people-talk, court-seat, commonwear, stockings, people-above, people-far, people-handover, people-stair, watchers, drones, squirrels, birds, flocks, deer, memory-people, memory-title, memory-inside, memory-gate",
+  "views": []
+}
