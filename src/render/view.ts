@@ -133,9 +133,10 @@ const FIRST_PERSON_BACK = 0.3;
 /**
  * The mirror (the creator of one's own look, app/creator.ts): the camera in front of the body, `MIRROR_BACK` × its
  * height off at first and looking down at it by `MIRROR_PITCH` (rad); the wheel brings it from `MIRROR_NEAR` to
- * `MIRROR_FAR` × the height. It looks at the middle of the body from afar and at the face from close by.
+ * `MIRROR_FAR` × the height. It looks at the middle of the body from afar and at the face from close by; nearer than
+ * `MIRROR_NEAR` the face would come inside the camera's near plane (0.3 m) and be cut open.
  */
-const MIRROR_BACK = 1.6, MIRROR_PITCH = -0.12, MIRROR_NEAR = 0.3, MIRROR_FAR = 3;
+const MIRROR_BACK = 1.6, MIRROR_PITCH = -0.12, MIRROR_NEAR = 0.5, MIRROR_FAR = 3;
 /** The keys while the mirror is open: none, the body stands still. */
 const STILL = { forward: 0, right: 0, up: 0, fast: false };
 /** How far (in handrails) one steps out of a lift's doors on arriving (`outside`). */
