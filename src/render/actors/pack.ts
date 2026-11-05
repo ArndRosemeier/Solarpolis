@@ -5,7 +5,7 @@
  * tools/actors/pack.mjs fetches it), and the one place its files are fetched.
  */
 import type { Fetcher } from '@actors/core';
-import { Character, buildCatalog, defaultConfig, filterCatalog, type CharacterCatalog, type CharacterConfig, type ThemeFilter } from '@actors/generator';
+import { Character, allowCatalog, buildCatalog, defaultConfig, filterCatalog, type AllowOptions, type CharacterCatalog, type CharacterConfig, type ThemeFilter } from '@actors/generator';
 import { Human } from '@actors/human';
 import { IRIS_PRESETS, type ActorMaterialKit } from '@actors/three';
 import { nodeMaterials } from '@actors/three/webgpu';
@@ -46,19 +46,34 @@ export const packFetch: Fetcher = async (url) => {
 let catalog: Promise<{ catalog: CharacterCatalog; base: CharacterConfig; human: Human }> | undefined;
 
 /**
- * What people of 3026 wear and look like, by Actors' theme tags: today's clothes and older cuts, the Commonwear of the
- * future, the kimono; nothing medieval, antique or fantastic (no leaf hair, no elves), and no real-world faith's signs.
+ * What people of 3026 are, by Actors' `allow` (Arnd, 2026-11-05: "restrict it to humans and robots"): humans, and robots
+ * (the shells some live in); no elves or other races of fantasy, no skeletons. Residents and the player alike.
+ */
+export const PEOPLE_3026: AllowOptions = { races: ['human', 'robot'] };
+
+/**
+ * What residents of 3026 wear and look like, by Actors' theme tags: today's clothes and older cuts, the Commonwear of
+ * the future, the kimono; nothing medieval, antique or fantastic (no leaf hair), and no real-world faith's signs. Only
+ * for residents: the player may wear anything (Arnd, 2026-11-05: "the full clothing palette is only for the main
+ * character").
  */
 export const THEMES_3026: ThemeFilter = { themes: ['modern', 'vintage', 'future', 'eastern'], without: ['real-faith'] };
 
-/**
- * The pack's catalog as residents draw from it: what fits `THEMES_3026`, and only what is free to ship without a
- * credit line (garments and hair under CC-BY are left out).
- */
-export function residentsCatalog(human: Human): CharacterCatalog {
-  const all = filterCatalog(buildCatalog(human, Object.keys(IRIS_PRESETS)), THEMES_3026);
-  return { ...all, garments: all.garments.filter((g) => !g.credit), hair: all.hair.filter((h) => !h.credit) };
+/** Only what is free to ship without a credit line: garments and hair under CC-BY are left out. */
+export function freeToShip(catalog: CharacterCatalog): CharacterCatalog {
+  return { ...catalog, garments: catalog.garments.filter((g) => !g.credit), hair: catalog.hair.filter((h) => !h.credit) };
 }
+
+/** The pack's catalog as residents draw from it: humans and robots (`PEOPLE_3026`) in what fits `THEMES_3026`, free to ship. */
+export function residentsCatalog(human: Human): CharacterCatalog {
+  return freeToShip(allowCatalog(filterCatalog(buildCatalog(human, Object.keys(IRIS_PRESETS)), THEMES_3026), PEOPLE_3026));
+}
+
+/**
+ * What the player may make of themselves in the creator (app/creator.ts), as `Figure.load` options: humans and robots
+ * (`PEOPLE_3026`) in every clothing category Actors has, medieval and fantastic too, free to ship.
+ */
+export const PLAYER_OFFER = { allow: PEOPLE_3026, catalog: freeToShip } as const;
 
 /**
  * What the pack offers residents (`residentsCatalog`) and the default look, loaded once, with the loaded human

@@ -1,0 +1,17 @@
+/*
+ * The creator of one's own look (app/creator.ts): Actors' editor panel on the right, in the link's colours (its smoked
+ * glass, warm-white type and mint), so it reads as part of the link. On a narrow screen it takes the lower half.
+ */
+.creator {
+  position: absolute; right: 14px; top: 12px; bottom: 12px; width: min(360px, calc(100% - 28px)); z-index: 9;
+  pointer-events: auto; display: flex;
+}
+.creator[hidden] { display: none; }
+.creator .actors-editor {
+  --ae-panel: #0b1a1ad9; --ae-text: #eef6f2; --ae-muted: #a9bdb6; --ae-accent: #9de9cd; --ae-border: #9de9cd40;
+  flex: 1; min-height: 0; border: 1px solid var(--ae-border); border-radius: 10px; backdrop-filter: blur(6px);
+}
+.creator .actors-editor select, .creator .actors-editor button, .creator .actors-editor input[type="search"], .creator .actors-editor input[type="text"] { background: #10282699; }
+@media (max-width: 640px) {
+  .creator { top: 52%; left: 14px; width: auto; }
+}

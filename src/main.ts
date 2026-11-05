@@ -11,6 +11,7 @@ import { postsNear, type Post } from './world/posts';
 import { Link } from './app/link/link';
 import { Ways } from './app/link/ways';
 import { LinkSettings } from './app/link/settings';
+import { LookCreator } from './app/creator';
 import type { LinkChoice } from './link/service';
 import { SpeechBubbles } from './app/bubbles';
 import { ArrivalCard } from './app/arrivalCard';
@@ -211,6 +212,10 @@ const insideSlot = new ViewSlot('Hold the right mouse button to look around · W
   // Names on hover (the link's L2): what the pointer rests on, named beside it; a toggle in the link turns it off.
   v.onNamed = (named, x, y) => link.showName(named, [x, y]);
   link.serve(new LinkSettings((on) => { v.naming = on; }, (text) => link.say({ from: 'Link', text })));
+  // Your own look (Arnd, 2026-11-05): Actors' creator in the link, over a mirror; a human or a robot, in any clothes.
+  const creator = new LookCreator(v, (text) => link.say({ from: 'Link', text }));
+  insideSlot.box.append(creator.root);
+  link.serve(creator);
   // People talk in silent speech bubbles (Arnd, 2026-10-23).
   const speech = new SpeechBubbles(() => h.params.life.talk.words);
   insideSlot.box.append(speech.box);

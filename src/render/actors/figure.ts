@@ -5,7 +5,7 @@
  * A drawn person or humanoid of Actors: its Character (body, skin, hair, clothes, face) and the game's animator.
  */
 import { DoubleSide, FrontSide, Group, Matrix4, Vector3, type Material, type Mesh, type Object3D, type WebGPURenderer } from 'three/webgpu';
-import type { CharacterPatch } from '@actors/generator';
+import type { AllowOptions, CharacterCatalog, CharacterPatch } from '@actors/generator';
 import type { Human } from '@actors/human';
 import type { Vec3 } from '../../blueprint';
 import { Character, HUMAN_PACK, actorKit, packFetch } from './pack';
@@ -66,6 +66,13 @@ export function castAsWorn(root: Object3D): void {
   });
 }
 
+/** `Figure.load`'s options. */
+export interface FigureOptions {
+  share?: Human;
+  allow?: AllowOptions;
+  catalog?: (catalog: CharacterCatalog) => CharacterCatalog;
+}
+
 export class Figure {
   /** The scene object: at the feet, standing along up, facing front. */
   readonly object = new Group();
@@ -75,14 +82,18 @@ export class Figure {
     this.object.name = 'actors-figure';
     this.object.add(character.object);
     this.animator = new FigureAnimator(character);
+    // A new shape (the creator) has its eyes elsewhere: measured again.
+    this.unshape = character.onShape(() => { this.eyes = undefined; });
   }
+  private readonly unshape: () => void;
 
   /**
    * Builds a figure with a look (missing fields: Actors' defaults) and loads its clips. `renderer` is the one it is
    * drawn with (Actors lays its clothes over the skin by its reversed depth). `share`: an already loaded human (pack.ts
-   * `humanCatalog`) whose pack, targets and worker the figure uses instead of loading its own.
+   * `humanCatalog`) whose pack, targets and worker the figure uses instead of loading its own. `allow` and `catalog`:
+   * what the figure's own catalog offers, for a figure that is changed later (the player's, pack.ts `PLAYER_OFFER`).
    */
-  static async load(look: CharacterPatch, renderer: WebGPURenderer, share?: Human): Promise<Figure> {
+  static async load(look: CharacterPatch, renderer: WebGPURenderer, opts: FigureOptions = {}): Promise<Figure> {
     const config = { anatomy: false, ...look, animation: null };
     const character = await Character.load({
       pack: HUMAN_PACK,
@@ -92,8 +103,10 @@ export class Figure {
       clipLibraries: false,
       fetcher: packFetch,
       config,
+      allow: opts.allow,
+      catalog: opts.catalog,
       // Actors reads only the other character's human (and its kit, given here as `materials`).
-      ...(share ? { shareWith: { human: share } as unknown as Character } : {}),
+      ...(opts.share ? { shareWith: { human: opts.share } as unknown as Character } : {}),
     });
     // Actors swings loose clothes on a spring over the world's x and z, as if up were +Y and the world stood still. Here
     // up turns with the floor and the world moves with the eye (it is drawn relative to it), so a skirt would swing
@@ -144,6 +157,7 @@ export class Figure {
   }
 
   dispose(): void {
+    this.unshape();
     this.animator.stop();
     this.character.dispose();
     this.object.removeFromParent();

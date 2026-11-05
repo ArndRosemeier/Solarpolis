@@ -25,6 +25,9 @@ import type { ArrivalTerrace } from '../gen/arrivalTerrace';
 import { HUMAN, type Character } from '../physics/character';
 import { Figure, castAsWorn, type AnimState, type MoveState } from './actors/figure';
 import { playerLook } from './actors/looks';
+import { PLAYER_OFFER } from './actors/pack';
+import { readLook } from '../persist/look';
+import type { CharacterPatch } from '@actors/generator';
 import { addLights, dayOverhead, key, shineBelow, shineOn, sky } from './lights';
 import { BELOW_MAKES_UP, adapt, glareOf, insideExposure, insideRayLuminance, landAlbedo, meterRays, underCrowns, type InsideMeterable } from './exposure';
 import { sharedPool } from '../workers/pool';
@@ -127,6 +130,15 @@ const HEAD_PARTS = /^(teeth|tongue|eyes|eyelashes|brows-.*|hair-.*|.*-hat|.*glas
  * the face and chest: looking down one sees their front, not the inside of the neck.
  */
 const FIRST_PERSON_BACK = 0.3;
+/**
+ * The mirror (the creator of one's own look, app/creator.ts): the camera in front of the body, `MIRROR_BACK` × its
+ * height off at first and looking down at it by `MIRROR_PITCH` (rad); the wheel brings it from `MIRROR_NEAR` to
+ * `MIRROR_FAR` × the height. It looks at the middle of the body from afar and at the face from close by; nearer than
+ * `MIRROR_NEAR` the face would come inside the camera's near plane (0.3 m) and be cut open.
+ */
+const MIRROR_BACK = 1.6, MIRROR_PITCH = -0.12, MIRROR_NEAR = 0.5, MIRROR_FAR = 3;
+/** The keys while the mirror is open: none, the body stands still. */
+const STILL = { forward: 0, right: 0, up: 0, fast: false };
 /** How far (in handrails) one steps out of a lift's doors on arriving (`outside`). */
 const STEP_OUT = 1.5;
 /** The glass deck's views: how far over the tallest trees' height (×). */
@@ -320,22 +332,104 @@ export class InteriorView {
     return this.stage.monitor;
   }
 
-  /** Load the player's body (the same person for the same world seed) and put it in, hidden until seen. */
+  /**
+   * Load the player's body and put it in, hidden until seen: the look they made in the creator (kept for the next
+   * visit, src/persist/look.ts), or else the person the world's seed makes (the same for the same seed).
+   */
   private async loadPlayer(): Promise<void> {
-    const figure = await logged('player body', async () => Figure.load(await playerLook(deriveSeed(this.habitat.params.seed, 'player')), this.stage.renderer));
+    const kept = readLook() as CharacterPatch | null;
+    const figure = await logged('player body', async () => Figure.load(kept ?? await this.firstLook(), this.stage.renderer, PLAYER_OFFER));
     figure.object.visible = false;
-    figure.object.traverse((o) => o.layers.set(HEAD_PARTS.test(o.name) ? HEAD_LAYER : BODY_LAYER));
-    castAsWorn(figure.object);
     key.shadow.camera.layers.enable(BODY_LAYER);
     key.shadow.camera.layers.enable(HEAD_LAYER);
     this.camera.layers.enable(BODY_LAYER);
-    // Every part's shadow is warmed, not one per kind of part: a figure's shadow shaders are its own (Stage.prepare).
-    // The head's parts are compiled too (the camera sees them only from behind).
-    const head = this.camera.layers.isEnabled(HEAD_LAYER);
-    this.camera.layers.enable(HEAD_LAYER);
-    await logged('player body shaders', () => this.stage.prepare(figure.object, { everyCaster: true })).finally(() => { if (!head) this.camera.layers.disable(HEAD_LAYER); });
+    await logged('player body shaders', () => this.preparePlayer(figure));
     this.scene.add(figure.object);
     this.figure = figure;
+    // A change in the creator: its new parts laid out and built like the first ones.
+    figure.character.onChange(() => this.refitPlayer());
+  }
+
+  /** The person the world's seed makes the player: their look before they make their own (and the creator's Start over). */
+  firstLook(): Promise<CharacterPatch> {
+    return playerLook(deriveSeed(this.habitat.params.seed, 'player'));
+  }
+
+  /**
+   * Ready the player's body to be drawn: its head's parts on their layer, casting as worn, and every part's shaders and
+   * shadow built under the cap, not one per kind of part (a figure's shadow shaders are its own: Stage.prepare). The
+   * head's parts are compiled too (the camera sees them only from behind).
+   */
+  private async preparePlayer(figure: Figure): Promise<void> {
+    figure.object.traverse((o) => o.layers.set(HEAD_PARTS.test(o.name) ? HEAD_LAYER : BODY_LAYER));
+    castAsWorn(figure.object);
+    const head = this.camera.layers.isEnabled(HEAD_LAYER);
+    this.camera.layers.enable(HEAD_LAYER);
+    await this.stage.prepare(figure.object, { everyCaster: true }).finally(() => { if (!head) this.camera.layers.disable(HEAD_LAYER); });
+  }
+
+  /** The player's body changed (the creator): prepared again, once at a time, the last change after the one in hand. */
+  private refitting = false;
+  private refitAgain = false;
+  private refitPlayer(): void {
+    const f = this.figure;
+    if (!f) return;
+    if (this.refitting) { this.refitAgain = true; return; }
+    this.refitting = true;
+    void this.preparePlayer(f).catch((e: unknown) => console.warn('player body shaders', e)).finally(() => {
+      this.refitting = false;
+      if (this.refitAgain) { this.refitAgain = false; this.refitPlayer(); }
+    });
+  }
+
+  /**
+   * The mirror, while the creator is open (app/creator.ts): the body stands still, facing `front`, and the camera looks
+   * at it from the front (right-drag swings round it, the wheel comes closer). `heading`, `pitch`, `chase`: the
+   * walker's and the wheel's, given back when it closes; `closed`: told when it closes.
+   */
+  private mirrorState: { front: Vec3; heading: number; pitch: number; chase: number; closed: () => void } | null = null;
+
+  /** Whether the mirror can open now: on foot on the ground, not walking out on arrival, nor in a lift, capsule or a catch. */
+  canMirror(): boolean {
+    return this.loop.running && !!this.figure && !!this.character && !this.flyer && !this.arrivalReveal && !this.cabin?.aboard
+      && !this.caps?.carrying && !this.caps?.passenger() && !this.guards?.holding;
+  }
+
+  /**
+   * Open the mirror: the player's Actors character, for the creator to change, or null where it cannot open now
+   * (`canMirror`). `closed` is told when it closes (`closeMirror`, or the player no longer on foot).
+   */
+  openMirror(closed: () => void): Figure['character'] | null {
+    if (this.mirrorState || !this.canMirror()) return null;
+    const c = this.character!, look = this.walker.view().look, ahead = v3madd(look, c.up, -v3dot(look, c.up));
+    this.mirrorState = { front: v3norm(ahead), heading: this.walker.heading, pitch: this.walker.pitch, chase: this.chaseGoal, closed };
+    // Turned round toward the body (the camera stands where it looks from: `mirrorView`).
+    this.walker.turn(Math.PI, MIRROR_PITCH - this.walker.pitch);
+    this.chaseGoal = MIRROR_BACK * this.figure!.height;
+    this.unname();
+    return this.figure!.character;
+  }
+
+  /** Close the mirror: the look and the wheel as they were before. */
+  closeMirror(): void {
+    const m = this.mirrorState;
+    if (!m) return;
+    this.mirrorState = null;
+    this.walker.heading = m.heading;
+    this.walker.pitch = m.pitch;
+    this.chaseGoal = m.chase;
+    m.closed();
+  }
+
+  /**
+   * The camera in the mirror: `d` m from the body along the way the walker looks, aimed at the middle of the body from
+   * afar and at the face from close by; never under the ground.
+   */
+  private mirrorView(v: View, d: number): View {
+    const h = this.figure?.height ?? HUMAN.height, eye = this.figure?.eyeHeight ?? EYE_HEIGHT;
+    const aim = eye + (h * 0.55 - eye) * smoothstep(0.5 * h, 1.4 * h, d);
+    const at = v3madd(this.walker.feetAt(), v.up, aim);
+    return { eye: this.aboveFloor(v3madd(at, v.look, -d)), look: v.look, up: v.up };
   }
 
   /** Bytes the player's body holds (memory watchdog). */
@@ -860,6 +954,7 @@ export class InteriorView {
     // In a capsule: from the passenger's eyes (seated lower and further back), looking round from the way they face.
     const rider = this.caps?.passenger();
     if (rider) return this.behind(this.riderView(rider), this.chase);
+    if (this.mirrorState) return this.mirrorView(v, this.chase);
     // From the eyes, at the body's own eye height (it differs from person to person), so one looks down at its front.
     const f = this.figure, own = f && this.character ? (f.eyeHeight - EYE_HEIGHT) * Math.max(0, 1 - this.chase / HEAD_CLEAR) : 0;
     return this.behind(own ? { ...v, eye: v3madd(v.eye, v.up, own) } : v, this.chase);
@@ -890,15 +985,23 @@ export class InteriorView {
   /** The camera `d` m behind the eyes of `v` and a little above the head, looking the same way; never under the ground. */
   private behind(v: View, d: number): View {
     if (d < 0.01) return { eye: v.eye, look: v.look, up: v.up };
-    let eye = v3madd(v3madd(v.eye, v.look, -d), v.up, CHASE_UP * Math.min(1, d / CHASE_RISE));
+    return { eye: this.aboveFloor(v3madd(v3madd(v.eye, v.look, -d), v.up, CHASE_UP * Math.min(1, d / CHASE_RISE))), look: v.look, up: v.up };
+  }
+
+  /** A camera's place, raised to stay 0.3 m over what stands there. */
+  private aboveFloor(eye: Vec3): Vec3 {
     const at = fromWorld(this.habitat.profile, ...eye), floor = this.standOn(at.theta, at.s) + 0.3;
-    if (at.h < floor) eye = toWorld(this.habitat.profile, { ...at, h: floor });
-    return { eye, look: v.look, up: v.up };
+    return at.h < floor ? toWorld(this.habitat.profile, { ...at, h: floor }) : eye;
   }
 
   /** Move the camera on foot out (positive) or in by wheel steps (`WheelEvent.deltaY`). */
   zoom(deltaY: number): void {
     if (deltaY === 0) return;
+    if (this.mirrorState) {
+      const h = this.figure?.height ?? HUMAN.height;
+      this.chaseGoal = Math.max(MIRROR_NEAR * h, Math.min(MIRROR_FAR * h, this.chaseGoal * Math.exp(deltaY * CHASE_STEP)));
+      return;
+    }
     if (this.chaseGoal === 0) { if (deltaY > 0) this.chaseGoal = CHASE_NEAR; return; }
     const to = this.chaseGoal * Math.exp(deltaY * CHASE_STEP);
     this.chaseGoal = to < CHASE_NEAR * 0.95 ? 0 : Math.min(CHASE_FAR, to);
@@ -1004,7 +1107,8 @@ export class InteriorView {
       feet = this.walker.feetAt(); up = ch.up; speed = Math.hypot(...flat);
       const look = this.walker.view().look, ahead = v3madd(look, up, -v3dot(look, up));
       // From the eyes the body faces where they look (it stands back from them along that line); from behind, the way it goes.
-      front = v3norm(speed > 0.5 && chase >= HEAD_CLEAR ? flat : ahead);
+      // In the mirror it stands as it stood when the mirror opened.
+      front = this.mirrorState ? this.mirrorState.front : v3norm(speed > 0.5 && chase >= HEAD_CLEAR ? flat : ahead);
       move = ch.swimming ? 'swim' : !ch.grounded ? (v3dot(v, up) > 0.5 ? 'jump' : 'fall') : speed < 0.3 ? 'idle' : speed < 2.5 ? 'walk' : speed < 5.5 ? 'run' : 'sprint';
     }
     // From the eyes the body stands back of them, so one looks down at its front; a passenger's body stays where it is
@@ -1378,7 +1482,9 @@ export class InteriorView {
       this.camera.updateProjectionMatrix();
     }
     this.glide(dt);
-    const { forward, right, up, fast } = moveKeys(this.loop.keys);
+    // The mirror closes once the player is no longer on foot (a fall, a capsule); while open the body stands still.
+    if (this.mirrorState && !this.canMirror()) this.closeMirror();
+    const { forward, right, up, fast } = this.mirrorState ? STILL : moveKeys(this.loop.keys);
     const run = this.boost * (fast ? RUN : 1);
     if (this.arrivalReveal || this.cabin?.aboard || this.caps?.carrying || this.guards?.holding) {
       // In a lift the keys wait for its doors; in a capsule, for its Mind to set one down; caught, for the ground.
@@ -1391,7 +1497,7 @@ export class InteriorView {
       if (this.character) {
         this.character.stride.walk = this.walker.stride({ forward, right });
         this.character.legs = this.boost;
-        if (this.jump) this.character.stride.jump = true;
+        if (this.jump && !this.mirrorState) this.character.stride.jump = true;
       } else {
         this.walker.step({ forward, right }, dt);
       }
