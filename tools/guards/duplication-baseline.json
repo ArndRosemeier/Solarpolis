@@ -96,6 +96,14 @@
     "reason": "Rectangle extents shared by independent house layout, hall construction and interior fitting plans."
   },
   {
+    "key": "same name: solarpolis/app/creator.ts#offers + solarpolis/app/link/settings.ts#offers",
+    "reason": "Each LinkService's own offers() (src/link): the link's one seam, implemented per service."
+  },
+  {
+    "key": "same name: solarpolis/app/creator.ts#take + solarpolis/render/capsules.ts#take",
+    "reason": "Each LinkOffer's own take() (src/link): what taking that service's offer does."
+  },
+  {
     "key": "same name: solarpolis/app/arrivalCard.ts#show + solarpolis/app/title.ts#show",
     "reason": "Independent UI visibility methods for different panels."
   },
