@@ -4,8 +4,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Human, sanitizeRace } from '@actors/human';
-import { buildCatalog, defaultConfig, resolveOutfit } from '@actors/generator';
-import { IRIS_PRESETS } from '@actors/three';
+import { defaultConfig, resolveOutfit } from '@actors/generator';
+import { residentsCatalog } from '../../src/render/actors/pack';
 import { Residents } from '../../src/render/actors/residents';
 import { REFERENCE, derive } from '../../src/blueprint';
 import { residentOf } from '../../src/sim';
@@ -17,8 +17,7 @@ const pack = join('.actors-pack', version, 'human');
 test('residents: a stand-in is exactly as tall as the figure Actors builds from the same look', { skip: !existsSync(join(pack, 'manifest.json')) && 'no Actors pack' }, async () => {
   const fetcher = async (url: string): Promise<ArrayBuffer> => { const b = await readFile(join(pack, url.replace(/^.*human\//, ''))); return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer; };
   const human = await Human.load(join(pack, 'manifest.json'), fetcher);
-  const all = buildCatalog(human, Object.keys(IRIS_PRESETS));
-  const catalog = { ...all, garments: all.garments.filter((g) => !g.credit), hair: all.hair.filter((x) => !x.credit) };
+  const catalog = residentsCatalog(human);
   const residents = new Residents(catalog, defaultConfig(catalog), human, fetcher), h = derive(REFERENCE);
   const body = human.runtime.meshes.find((m) => m.def.role === 'body' && !(m as { stencil?: unknown }).stencil) as unknown as { map: ArrayLike<number> };
   let shells = 0, grown = 0, commonwear = 0, screens = 0;
@@ -44,6 +43,8 @@ test('residents: a stand-in is exactly as tall as the figure Actors builds from 
     grown++;
     for (const g of look.outfit) assert.ok(known.has(g), `resident ${r.id} wears ${g}, which the pack lacks`);
     assert.deepEqual(resolveOutfit(catalog, look.outfit), look.outfit, `resident ${r.id}: ${look.outfit}`);
+    // Nothing from another age or a fairy tale (THEMES_3026): their hair is the 3026 catalogue's too.
+    assert.ok(!look.hair || catalog.hair.some((x) => x.id === look.hair), `resident ${r.id}: hair ${look.hair}`);
     if (look.outfit.includes('future-halo')) assert.ok(!['hair-afro01', 'hair-cloud', 'hair-jungle', 'hair-80s'].includes(look.hair ?? ''), `${look.hair} under a halo`);
     if (look.outfit.some((g) => g.startsWith('future-'))) commonwear++;
     if (look.outfit.some((g) => ['future-mantle', 'future-screen', 'future-screen-leggings', 'future-cuffs', 'future-sash', 'future-halo'].includes(g))) screens++;

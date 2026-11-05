@@ -45,7 +45,7 @@ export class Passengers {
   private async loadCast(seed: number, count: number): Promise<void> {
     const { catalog, base, human } = await humanCatalog(), looks = new Residents(catalog, base, human);
     for (let k = 0; k < count && !this.disposed; k++) {
-      const figure = await Figure.load(looks.lookFrom(deriveSeed(seed, 'passenger', k)), human);
+      const figure = await Figure.load(looks.lookFrom(deriveSeed(seed, 'passenger', k)), this.stage.renderer, human);
       if (this.disposed) { figure.dispose(); return; }
       figure.object.visible = false;
       await this.stage.add(figure.object);

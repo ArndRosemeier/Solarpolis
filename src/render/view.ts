@@ -322,7 +322,7 @@ export class InteriorView {
 
   /** Load the player's body (the same person for the same world seed) and put it in, hidden until seen. */
   private async loadPlayer(): Promise<void> {
-    const figure = await logged('player body', async () => Figure.load(await playerLook(deriveSeed(this.habitat.params.seed, 'player'))));
+    const figure = await logged('player body', async () => Figure.load(await playerLook(deriveSeed(this.habitat.params.seed, 'player')), this.stage.renderer));
     figure.object.visible = false;
     figure.object.traverse((o) => o.layers.set(HEAD_PARTS.test(o.name) ? HEAD_LAYER : BODY_LAYER));
     castAsWorn(figure.object);

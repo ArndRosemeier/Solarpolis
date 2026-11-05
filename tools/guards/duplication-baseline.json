@@ -92,10 +92,6 @@
     "reason": "The views that draw creatures (people, drones, squirrels) name the same things the same way (stage, camera, screen, specks, each one's horizon and litAt, a start promise, a group): their shared steps are seams (ownSpecks, roomForSpecks, drawSpecks, pxPerMetre in render/specks.ts; FigureLoads in render/actors/slots.ts; standAt in render/actors/figure.ts); what is left is each view's own."
   },
   {
-    "key": "idiom: [.setLayout] in solarpolis/render/builtShaders.ts + solarpolis/render/hamletSkies.ts + solarpolis/render/hullShaders.ts",
-    "reason": "Independent TSL function layouts describe different shader formulas; explicit layouts are required by the shader policy."
-  },
-  {
     "key": "idiom: [.x0 .x1 .y0] in solarpolis/gen/hallMesh.ts + solarpolis/gen/homeInterior.ts + solarpolis/gen/homes.ts",
     "reason": "Rectangle extents shared by independent house layout, hall construction and interior fitting plans."
   },
@@ -330,10 +326,6 @@
   {
     "key": "same name: solarpolis/render/activityProps.ts#make + solarpolis/render/bore.ts#make",
     "reason": "ActivityProps owns its mesh pool; conventional creation and disposal names operate on different resources. Mesh disposal uses freeMesh and shader preparation uses the Stage."
-  },
-  {
-    "key": "same name: solarpolis/render/activityProps.ts#prepare + stage/stage.ts#prepare",
-    "reason": "ActivityProps owns its small mesh pool; standard prepare, dispose and bytes lifecycle methods operate on different resources. Disposal uses the shared freeMesh seam."
   },
   {
     "key": "same name: solarpolis/render/activityProps.ts#update + solarpolis/render/homes.ts#update",
@@ -1852,54 +1844,6 @@
     "reason": "Pre-existing per-level size halving in the gen mesh builders, resurfaced by word weights when the whole-system files were added; each sizes a different structure."
   },
   {
-    "key": "idiom: [.add .mul] in solarpolis/render/birdShaders.ts + solarpolis/render/celestialShaders.ts + solarpolis/render/materials.ts + solarpolis/render/vesselShaders.ts",
-    "reason": "TSL shader node chains (`.add(…).mul(…)`) are how every kind's shader is written in three's node language; this cluster only crossed the idiom finder's information floor because more files raised its weights (neural link files, 2026-10-23), not by a new copy."
-  },
-  {
-    "key": "idiom: [.add .mul] in solarpolis/render/birdShaders.ts + solarpolis/render/cloudShaders.ts + solarpolis/render/materials.ts",
-    "reason": "TSL shader node chains (`.add(…).mul(…)`) are how every kind's shader is written in three's node language; this cluster only crossed the idiom finder's information floor because more files raised its weights (neural link files, 2026-10-23), not by a new copy."
-  },
-  {
-    "key": "idiom: [.add .mul] in solarpolis/render/builtShaders.ts + solarpolis/render/groundShaders.ts + solarpolis/render/hamletSkies.ts",
-    "reason": "TSL shader node chains (`.add(…).mul(…)`) are how every kind's shader is written in three's node language; this cluster only crossed the idiom finder's information floor because more files raised its weights (neural link files, 2026-10-23), not by a new copy."
-  },
-  {
-    "key": "idiom: [.add .mul] in solarpolis/render/builtShaders.ts + solarpolis/render/groundShaders.ts + solarpolis/render/hamletSkies.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
-    "reason": "TSL shader node chains (`.add(…).mul(…)`) are how every kind's shader is written in three's node language; this cluster only crossed the idiom finder's information floor because more files raised its weights (neural link files, 2026-10-23), not by a new copy."
-  },
-  {
-    "key": "idiom: [.add .mul] in solarpolis/render/builtShaders.ts + solarpolis/render/groundShaders.ts + solarpolis/render/materials.ts",
-    "reason": "TSL shader node chains (`.add(…).mul(…)`) are how every kind's shader is written in three's node language; this cluster only crossed the idiom finder's information floor because more files raised its weights (neural link files, 2026-10-23), not by a new copy."
-  },
-  {
-    "key": "idiom: [.add .mul] in solarpolis/render/celestialShaders.ts + solarpolis/render/cloudShaders.ts + solarpolis/render/crowdShaders.ts + solarpolis/render/materials.ts",
-    "reason": "TSL shader node chains (`.add(…).mul(…)`) are how every kind's shader is written in three's node language; this cluster only crossed the idiom finder's information floor because more files raised its weights (neural link files, 2026-10-23), not by a new copy."
-  },
-  {
-    "key": "idiom: [.add .mul] in solarpolis/render/celestialShaders.ts + solarpolis/render/groundShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
-    "reason": "TSL shader node chains (`.add(…).mul(…)`) are how every kind's shader is written in three's node language; this cluster only crossed the idiom finder's information floor because more files raised its weights (neural link files, 2026-10-23), not by a new copy."
-  },
-  {
-    "key": "idiom: [.add .mul] in solarpolis/render/celestialShaders.ts + solarpolis/render/hamletSkies.ts + solarpolis/render/materials.ts",
-    "reason": "TSL shader node chains (`.add(…).mul(…)`) are how every kind's shader is written in three's node language; this cluster only crossed the idiom finder's information floor because more files raised its weights (neural link files, 2026-10-23), not by a new copy."
-  },
-  {
-    "key": "idiom: [.add .mul] in solarpolis/render/celestialShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
-    "reason": "TSL shader node chains (`.add(…).mul(…)`) are how every kind's shader is written in three's node language; this cluster only crossed the idiom finder's information floor because more files raised its weights (neural link files, 2026-10-23), not by a new copy."
-  },
-  {
-    "key": "idiom: [.add .mul] in solarpolis/render/hamletSkies.ts + solarpolis/render/hullShaders.ts + solarpolis/render/materials.ts",
-    "reason": "TSL shader node chains (`.add(…).mul(…)`) are how every kind's shader is written in three's node language; this cluster only crossed the idiom finder's information floor because more files raised its weights (neural link files, 2026-10-23), not by a new copy."
-  },
-  {
-    "key": "idiom: [.add .mul] in solarpolis/render/hamletSkies.ts + solarpolis/render/hullShaders.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
-    "reason": "TSL shader node chains (`.add(…).mul(…)`) are how every kind's shader is written in three's node language; this cluster only crossed the idiom finder's information floor because more files raised its weights (neural link files, 2026-10-23), not by a new copy."
-  },
-  {
-    "key": "idiom: [.add .mul] in solarpolis/render/hamletSkies.ts + solarpolis/render/materials.ts + solarpolis/render/skyShaders.ts",
-    "reason": "TSL shader node chains (`.add(…).mul(…)`) are how every kind's shader is written in three's node language; this cluster only crossed the idiom finder's information floor because more files raised its weights (neural link files, 2026-10-23), not by a new copy."
-  },
-  {
     "key": "idiom: [.at .max .r .s Math] in solarpolis/gen/capsules.ts + solarpolis/link/naming.ts + solarpolis/sim/birds.ts + solarpolis/sim/flocks.ts + solarpolis/sim/specks.ts + solarpolis/world/capFlight.ts",
     "reason": "The radius at a point of the profile, kept off zero, to turn metres round the axis into an angle: a coordinate conversion each module does in its own expression, not shared behaviour."
   },
@@ -2292,10 +2236,6 @@
     "reason": "each view has its own renderer and Stage; both hand out their Stage's monitor for the arrival's timing line (app/arrivalTiming.ts)."
   },
   {
-    "key": "idiom: [.add .mul] in solarpolis/render/crowdShaders.ts + solarpolis/render/groundShaders.ts + solarpolis/render/loungeShaders.ts",
-    "reason": "TSL shader node chains (`.add(…).mul(…)`) are how every kind's shader is written in three's node language; the lounge's lighting (lamps, windows, the Sun through the glass) is its own, not a copy (2026-10-23)."
-  },
-  {
     "key": "idiom: [.max .min .pitch Math] in solarpolis/render/outside.ts + solarpolis/render/vesselVisit.ts + solarpolis/space/flyer.ts",
     "reason": "Clamping a dragged camera's pitch (`Math.max(-1.5, Math.min(1.5, pitch + dy))`) in three controllers that each own their look; unchanged code that crossed the idiom finder's floor when the lounge's lines were added to outside.ts (2026-10-23), not a new copy."
   },
@@ -2374,5 +2314,17 @@
   {
     "key": "idiom: [.max .min .pitch Math] in solarpolis/render/outside.ts + solarpolis/render/vesselVisit.ts + solarpolis/space/flyer.ts",
     "reason": "Each clamps its own camera's look up and down (the outside view, a vessel visit, the space flyer): the same one-line clamp, not a copy to fold. It only crossed the idiom finder's floor because the names-on-hover files raised the file count (2026-10-23)."
+  },
+  {
+    "key": "idiom: [.setLayout] in solarpolis/render/builtShaders.ts + solarpolis/render/hamletSkies.ts + solarpolis/render/hullShaders.ts + stage/grade.ts",
+    "reason": "Independent TSL function layouts describe different shader formulas; explicit layouts are required by the shader policy. The shared stage package declares its own colour-grade function the same way (stage/grade.ts)."
+  },
+  {
+    "key": "same name: core/ground.ts#seat + solarpolis/render/habitatCatalogue.ts#seat",
+    "reason": "Different things under one word: core's `seat` sets a thing down on uneven ground so no edge floats (the shared package's towns); the catalogue's is the habitat picked (a polity's seat, its first habitat)."
+  },
+  {
+    "key": "same name: solarpolis/world/walker.ts#place + stage/origin.ts#place",
+    "reason": "Different things under one word: the walker's `place` is where the player stands on the curved floor; the stage's floating origin's `place` keeps the objects placed on the GPU at the origin as it moves. Solarpolis draws relative to the eye its own way."
   }
 ]

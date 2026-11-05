@@ -5,7 +5,7 @@
  * tools/actors/pack.mjs fetches it), and the one place its files are fetched.
  */
 import type { Fetcher } from '@actors/core';
-import { Character, buildCatalog, defaultConfig, type CharacterCatalog, type CharacterConfig } from '@actors/generator';
+import { Character, buildCatalog, defaultConfig, filterCatalog, type CharacterCatalog, type CharacterConfig, type ThemeFilter } from '@actors/generator';
 import { Human } from '@actors/human';
 import { IRIS_PRESETS, type ActorMaterialKit } from '@actors/three';
 import { nodeMaterials } from '@actors/three/webgpu';
@@ -46,14 +46,27 @@ export const packFetch: Fetcher = async (url) => {
 let catalog: Promise<{ catalog: CharacterCatalog; base: CharacterConfig; human: Human }> | undefined;
 
 /**
- * What the pack offers (races, garments, hair, clips...) and the default look, loaded once, with the loaded human
- * (residents' figures share it: `Figure.load`'s `share`). Only what is free to ship without a credit line: garments
- * and hair under CC-BY are left out.
+ * What people of 3026 wear and look like, by Actors' theme tags: today's clothes and older cuts, the Commonwear of the
+ * future, the kimono; nothing medieval, antique or fantastic (no leaf hair, no elves), and no real-world faith's signs.
+ */
+export const THEMES_3026: ThemeFilter = { themes: ['modern', 'vintage', 'future', 'eastern'], without: ['real-faith'] };
+
+/**
+ * The pack's catalog as residents draw from it: what fits `THEMES_3026`, and only what is free to ship without a
+ * credit line (garments and hair under CC-BY are left out).
+ */
+export function residentsCatalog(human: Human): CharacterCatalog {
+  const all = filterCatalog(buildCatalog(human, Object.keys(IRIS_PRESETS)), THEMES_3026);
+  return { ...all, garments: all.garments.filter((g) => !g.credit), hair: all.hair.filter((h) => !h.credit) };
+}
+
+/**
+ * What the pack offers residents (`residentsCatalog`) and the default look, loaded once, with the loaded human
+ * (residents' figures share it: `Figure.load`'s `share`).
  */
 export function humanCatalog(): Promise<{ catalog: CharacterCatalog; base: CharacterConfig; human: Human }> {
   catalog ??= logged('human pack', () => Human.load(HUMAN_PACK, packFetch)).then((human) => {
-    const all = buildCatalog(human, Object.keys(IRIS_PRESETS));
-    const c: CharacterCatalog = { ...all, garments: all.garments.filter((g) => !g.credit), hair: all.hair.filter((h) => !h.credit) };
+    const c = residentsCatalog(human);
     return { catalog: c, base: defaultConfig(c), human };
   });
   return catalog;
