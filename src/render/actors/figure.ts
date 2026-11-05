@@ -4,7 +4,7 @@
  *
  * A drawn person or humanoid of Actors: its Character (body, skin, hair, clothes, face) and the game's animator.
  */
-import { DoubleSide, FrontSide, Group, Matrix4, Vector3, type Material, type Mesh, type Object3D } from 'three/webgpu';
+import { DoubleSide, FrontSide, Group, Matrix4, Vector3, type Material, type Mesh, type Object3D, type WebGPURenderer } from 'three/webgpu';
 import type { CharacterPatch } from '@actors/generator';
 import type { Human } from '@actors/human';
 import type { Vec3 } from '../../blueprint';
@@ -47,25 +47,6 @@ export function standAt(object: Object3D, f: Stance): void {
 }
 
 /**
- * Actors layers clothes over skin with a depth bias toward the camera (negative polygon offset). The renderer uses a
- * reversed depth buffer (larger is nearer), and three r186 reverses the depth test for it but not the bias, so the
- * bias would push the clothes behind the skin. Turn it round on every biased material, before anything compiles.
- * (The Stage in @futuremagic/stage is the better home for this, for every material; until then it is done here.)
- */
-function reverseDepthBias(root: Object3D): void {
-  const done = new Set<Material>();
-  root.traverse((o) => {
-    const m = (o as Mesh).material;
-    for (const mat of Array.isArray(m) ? m : m ? [m] : []) {
-      if (!mat.polygonOffset || done.has(mat)) continue;
-      done.add(mat);
-      mat.polygonOffsetFactor = -mat.polygonOffsetFactor;
-      mat.polygonOffsetUnits = -mat.polygonOffsetUnits;
-    }
-  });
-}
-
-/**
  * Parts too small or too deep in the face to show in a shadow: teeth, tongue, eyes, lashes, brows. Each caster costs a
  * figure a shadow build of its own under the shader cap (docs/SHADERS.md), a fifth of a second before it can be drawn.
  */
@@ -97,14 +78,15 @@ export class Figure {
   }
 
   /**
-   * Builds a figure with a look (missing fields: Actors' defaults) and loads its clips. `share`: an already loaded
-   * human (pack.ts `humanCatalog`) whose pack, targets and worker the figure uses instead of loading its own.
+   * Builds a figure with a look (missing fields: Actors' defaults) and loads its clips. `renderer` is the one it is
+   * drawn with (Actors lays its clothes over the skin by its reversed depth). `share`: an already loaded human (pack.ts
+   * `humanCatalog`) whose pack, targets and worker the figure uses instead of loading its own.
    */
-  static async load(look: CharacterPatch, share?: Human): Promise<Figure> {
+  static async load(look: CharacterPatch, renderer: WebGPURenderer, share?: Human): Promise<Figure> {
     const config = { anatomy: false, ...look, animation: null };
     const character = await Character.load({
       pack: HUMAN_PACK,
-      renderer: null,
+      renderer,
       materials: actorKit,
       screenTextures,
       clipLibraries: false,
@@ -113,7 +95,10 @@ export class Figure {
       // Actors reads only the other character's human (and its kit, given here as `materials`).
       ...(share ? { shareWith: { human: share } as unknown as Character } : {}),
     });
-    reverseDepthBias(character.object);
+    // Actors swings loose clothes on a spring over the world's x and z, as if up were +Y and the world stood still. Here
+    // up turns with the floor and the world moves with the eye (it is drawn relative to it), so a skirt would swing
+    // when the player walks: kept still, as before.
+    character.actor.clothMotion = false;
     const figure = new Figure(character);
     await figure.animator.load();
     return figure;

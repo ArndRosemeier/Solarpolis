@@ -359,7 +359,7 @@ export class PeopleView {
 
   /** A resident's figure, compiled at every level of detail and its shadows warmed, not yet in the scene. */
   private async loadFigure(r: Residents, who: Resident): Promise<Figure | null> {
-    const figure = await Figure.load(r.figureLook(who), r.human);
+    const figure = await Figure.load(r.figureLook(who), this.stage.renderer, r.human);
     if (this.disposed) { figure.dispose(); return null; }
     castAsWorn(figure.object);
     // Every level is compiled now (Actors makes the crowd level's merged mesh when first asked for it), so a switch
