@@ -1,0 +1,413 @@
+{
+  "id": "20261105-000658-claude",
+  "request": "shots-req/claude/title,inside,outside,commonwear,court-seat,memory-inside",
+  "ref": "e894722643ee9a5b1d45e79bc9a147cd73af96d4",
+  "sha": "e894722643ee9a5b1d45e79bc9a147cd73af96d4",
+  "dirty": false,
+  "subject": "Actors 0.33.4 and the newest AssetGenerator",
+  "size": [
+    1600,
+    900
+  ],
+  "adapter": {
+    "vendor": "nvidia",
+    "architecture": "blackwell",
+    "device": "",
+    "description": "",
+    "fallback": false
+  },
+  "totalMs": 264618,
+  "ok": true,
+  "failure": null,
+  "views": [
+    {
+      "view": "title",
+      "about": "the title card over the attract flight",
+      "query": "",
+      "ok": true,
+      "failure": null,
+      "readyMs": 4319,
+      "debugInfo": "Solarpolis v0.191\nhabitat R 4000 m, L 30000 m, seed 1, 0.47 rpm\nmemory 220 MB of 2560 MB/3584 MB (desktop), heap 143 MB, sky maps, stars and skin detail 77 MB, first light 0 MB, sound 0 MB, +1398 MB/min\nsound: 0.0 MB decoded, 0 beds, 0 calls · none · 0 near, 0 hums, 0 cues · steps on - (0) · moment -\n54 fps, slowest frame 54 ms\narrival: first light 0.7 s, title 4.2 s after opening, the opening cut to it at 7.7 s (393 frames, slowest 137 ms, 3 stutters) · not started\narrival's loading: 4.2 passengers … · 4.2 human pack … · 4.2 interior view … · 4.3 interior renderer … · 4.5 human pack ✓ · 4.5 interior renderer ✓ · 4.6 interior warm-up …\ninside: not started\nshaders 17 warm-up + 7 later · worst 6 ms · policy ok · 1 built again alike (shaders.repeats())\n3026-01-01 05:50 UT · clock ×1 · exposure 1.2e+0\nsunlight 100% · Earth 16.6° across · looking at habitat\n2,016 km from the nearest surface · nearest neighbour 11,599 km away\nskin detail: none near\nhome ships: 2 berthed, 0 on thrusters, 0 braking or leaving on the torch; 0 tugs out, 6 inspectors",
+      "shaderReport": "shaders: 8 built in warm-up, 0 after (0 drawn late), worst block 1 ms, 0 violations, 0 built again alike",
+      "shots": [
+        {
+          "file": "title.png",
+          "ms": 80
+        }
+      ],
+      "totalMs": 8648,
+      "adapter": {
+        "vendor": "nvidia",
+        "architecture": "blackwell",
+        "device": "",
+        "description": "",
+        "fallback": false
+      },
+      "wgsl": {
+        "modules": 66,
+        "unique": 65,
+        "withMessages": []
+      },
+      "gpuErrors": [],
+      "pipelineErrors": [],
+      "deviceLost": null,
+      "console": []
+    },
+    {
+      "view": "inside",
+      "about": "standing on the floor, first look",
+      "query": "view=inside",
+      "ok": true,
+      "failure": null,
+      "readyMs": 19752,
+      "debugInfo": "Solarpolis v0.191\nhabitat R 4000 m, L 30000 m, seed 1, 0.47 rpm\nmemory 481 MB of 2560 MB/3584 MB (desktop), heap 295 MB, terrain tiles 144 MB, drones 29 MB, people 5 MB, +1219 MB/min\nsound: 0.0 MB decoded, 0 beds, 0 calls · birds-wood 0.52, wind-soft 0.31, leaves-broad 0.24, birds-meadow 0.08, grass 0.04, air ×1.00, light 0.50, birds 0.80 · 1 near, 0 hums, 0 cues · steps on litter (1) · moment -\n54 fps, slowest frame 36 ms\narrival: title not yet · not started\narrival's loading: 0.2 interior renderer … · 0.8 interior renderer ✓ · 0.9 interior warm-up … · 17.3 interior warm-up ✓ · 17.3 interior build … · 17.3 human pack … · 17.3 squirrel pack … · 17.3 deer pack … · 17.5 squirrel pack ✓ · 17.7 human pack ✓ · 17.7 deer pack ✓ · 19.3 interior build ✓ · 19.3 player body … · 20.3 player body ✓ · 20.3 player body shaders … · 22.9 player body shaders ✓\nshaders 35 warm-up + 28 later · worst 15 ms · policy ok · 2 built again alike (shaders.repeats())\nterrain 200 tiles drawn (0 new last frame, 251 built so far), 132 MB in use, 251 cached (132 MB), 16 building · 8 bands, 47 roots of 4.4 km, 8 levels · 4 workers\nplants (plants/cells) full 113/52, lite 161/23, hull 707/27; 1570 tufts; 1666 stones and fallen wood; 91 draws, 156 cached (0.2 MB; shapes and atlases 21.0 MB), 12 planting, 20 forms\nplant LOD: 0 holes (0 frames with holes so far), 46 levels standing in for a finer one being planted, 2441 far cells coming in\nlandmarks: pavilion (far; 0.2 MB), hut (far; 0.0 MB)\nlift stair: 16 tiles drawn, 16 kept (4.9 MB), 0 building\nentrance courts: 122 tiles drawn, 154 kept (20.6 MB), 8 building\nriver crossings: 111 tiles drawn, 144 kept (1.2 MB), 8 building\ngrown halls: 111 tiles drawn, 144 kept (0.3 MB), 8 building\nharbours: 108 tiles drawn, 144 kept (0.2 MB), 8 building\nunderstorey: 0 tiles drawn, 0 kept (0.0 MB), 0 building\nhome furniture: 0 homes (0 near, 0 mid), 0 of 8192 pieces drawn\nglass deck: none near\npeople: 158 up within 1.5 km · neighbourhood cache 0.00 MB · 0 figures (0 loading) · 17 stand-ins · 128 specks · 0 waiting for their look · handover holes 0, frames with holes 0 · figure levels made in 0 ms at most\nspecks: 6795 up on the land, 158 drawn nearer · list 1.5 s old, 2 lists, slowest 1935 ms\ndrones: 651 and 13 people in drone bodies (20 designs, built in 1266 ms) · 0 near · 0 coarse · 664 specks · handover holes 0, frames with holes 0\ntalk: 0 parties kept, 0 conversations; news heard here in 6 d: 2, latest flare--1 from sun after 8.2 min, 0 bubbles\nsquirrels: 77 within 250 m from 77 homes (0 getting ready, 0 away) · 0 figures (0 loading) · 77 specks · handover holes 0, frames with holes 0\ndeer: 58 within 2000 m from 7 homes (0 getting ready, 0 away) · 0 figures (0 loading) · 58 specks · handover holes 0, frames with holes 0\nbirds: 93 round the eye (6 woodpecker, 14 wren, 18 pigeon, 6 lark, 27 blackbird, 11 robin, 10 thrush, 1 owl; bodies built in 1329 ms) · flocks: 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 2500 starlings (360 in sight), 2500 starlings (2500 in sight) · 19 singing · 0 near · 3 coarse · 2950 specks · handover holes 0, frames with holes 0\nboats: 89, 3 under sail (3 designs, built in 1354 ms) · 0 near · 0 coarse · 89 specks · handover holes 0, frames with holes 0\ncapsule: idle (not built yet)\ncatches: 0\nθ 17.2°, s 13.30 of 34.91 km, ground 19.0 m, on foot, standing, gravity 0.99 g, eyes ×1.59\nwind: 3.6 m/s from against the spin; boats under sail: 3 of 89; 254 residents crew them\nday 1, 09:54 (dawn at 06:00), sun 25% of the way to the port end, clouds 32%, clock ×1\noutside: not started\nphysics: 0 bodies, 1154 trunk pieces",
+      "shaderReport": "shaders: 35 built in warm-up, 28 after (10 drawn late), worst block 15 ms, 0 violations, 2 built again alike\nbuilt 2× alike (2 after warm-up, 33 ms): activity prop (instanced)\nbuilt 2× alike (2 after warm-up, 20 ms): ShadowMaterial (instanced) of Mesh adaptive domestic fittings (near)<Shadow Map [ sunline key ]",
+      "shots": [
+        {
+          "file": "inside.png",
+          "ms": 271
+        }
+      ],
+      "totalMs": 24326,
+      "adapter": {
+        "vendor": "nvidia",
+        "architecture": "blackwell",
+        "device": "",
+        "description": "",
+        "fallback": false
+      },
+      "wgsl": {
+        "modules": 112,
+        "unique": 112,
+        "withMessages": []
+      },
+      "gpuErrors": [],
+      "pipelineErrors": [],
+      "deviceLost": null,
+      "console": [
+        "warning: THREE.TSL: Return statement used in an inline 'Fn()'. Define a layout struct to allow return values. Stack trace not available. Enable \"THREE.Node.captureStackTrace\" to capture stack traces.",
+        "warning: THREE.TSL: Return statement used in an inline 'Fn()'. Define a layout struct to allow return values. Stack trace not available. Enable \"THREE.Node.captureStackTrace\" to capture stack traces.",
+        "warning: using deprecated parameters for the initialization function; pass a single object instead"
+      ]
+    },
+    {
+      "view": "outside",
+      "about": "the home habitat from outside",
+      "query": "view=outside",
+      "ok": true,
+      "failure": null,
+      "readyMs": 4006,
+      "debugInfo": "Solarpolis v0.191\nhabitat R 4000 m, L 30000 m, seed 1, 0.47 rpm\nmemory 283 MB of 2560 MB/3584 MB (desktop), heap 207 MB, sky maps, stars and skin detail 76 MB, first light 0 MB, sound 0 MB, +2496 MB/min\nsound: 0.0 MB decoded, 0 beds, 0 calls · none · 0 near, 0 hums, 0 cues · steps on - (0) · moment -\n58 fps, slowest frame 18 ms\narrival: title not yet · not started\ninside: not started\nshaders 17 warm-up + 0 later · worst 6 ms · policy ok\n3026-03-01 14:30 UT · clock ×1 · exposure 1.8e+0\nsunlight 100% · Earth 17.4° across · looking at habitat\n77 km from the nearest surface · nearest neighbour 11,399 km away\nskin detail: none near\nhome ships: 6 berthed, 0 on thrusters, 0 braking or leaving on the torch; 0 tugs out, 18 inspectors",
+      "shaderReport": "shaders: 17 built in warm-up, 0 after (0 drawn late), worst block 6 ms, 0 violations, 0 built again alike",
+      "shots": [
+        {
+          "file": "outside.png",
+          "ms": 61
+        }
+      ],
+      "totalMs": 8164,
+      "adapter": {
+        "vendor": "nvidia",
+        "architecture": "blackwell",
+        "device": "",
+        "description": "",
+        "fallback": false
+      },
+      "wgsl": {
+        "modules": 34,
+        "unique": 34,
+        "withMessages": []
+      },
+      "gpuErrors": [],
+      "pipelineErrors": [],
+      "deviceLost": null,
+      "console": []
+    },
+    {
+      "view": "commonwear",
+      "about": "Commonwear 3026 (Actors 0.7.0): two hours into the morning, 4 m from the nearest one in a screen garment (-near), again 3 s later (-near2: the aurora moves), then flown 25 m back up (-crowd: figures and stand-ins in the same colours); a heap snapshot at the end; logs the people and shader lines",
+      "query": "view=inside",
+      "ok": true,
+      "failure": null,
+      "readyMs": 19870,
+      "debugInfo": "Solarpolis v0.191\nhabitat R 4000 m, L 30000 m, seed 1, 0.47 rpm\nmemory 1086 MB of 2560 MB/3584 MB (desktop), heap 397 MB, terrain tiles 416 MB, people 194 MB, drones 29 MB, +853 MB/min\nsound: 23.7 MB decoded, 4 beds, 4 calls · leaves-broad 0.37, birds-wood 0.30, wind-soft 0.21, wind-open 0.10, air ×1.00, light 0.99, birds 0.35 · 16 near, 2 hums, 0 cues · steps on stone (2) · moment -\n39 fps, slowest frame 36 ms\narrival: title not yet · not started\narrival's loading: 0.2 interior renderer … · 0.8 interior renderer ✓ · 0.8 interior warm-up … · 17.4 interior warm-up ✓ · 17.4 interior build … · 17.4 human pack … · 17.4 squirrel pack … · 17.4 deer pack … · 17.6 squirrel pack ✓ · 17.6 deer pack ✓ · 17.8 human pack ✓ · 19.5 interior build ✓ · 19.5 player body … · 20.4 player body ✓ · 20.4 player body shaders … · 22.2 player body shaders ✓\nshaders 35 warm-up + 45 later · worst 14 ms · policy ok · 2 built again alike (shaders.repeats())\nterrain 417 tiles drawn (0 new last frame, 642 built so far), 283 MB in use, 642 cached (333 MB), 0 building · 8 bands, 47 roots of 4.4 km, 8 levels · 4 workers\nplants (plants/cells) full 1059/505, lite 3636/714, hull 31421/2035; 2926 tufts; 22091 stones and fallen wood; 1642 draws, 5460 cached (4.6 MB; shapes and atlases 21.0 MB), 0 planting, 20 forms\nplant LOD: 0 holes (0 frames with holes so far), 4 levels standing in for a finer one being planted, 0 far cells coming in\nlandmarks: pavilion (far; 0.2 MB), hut (far; 0.0 MB)\nlift stair: 16 tiles drawn, 16 kept (4.9 MB), 0 building\nentrance courts: 243 tiles drawn, 326 kept (25.2 MB), 0 building\nriver crossings: 239 tiles drawn, 324 kept (1.2 MB), 0 building\ngrown halls: 220 tiles drawn, 308 kept (0.3 MB), 0 building\nharbours: 254 tiles drawn, 348 kept (0.2 MB), 0 building\nunderstorey: 0 tiles drawn, 0 kept (0.0 MB), 0 building\nhome furniture: 0 homes (0 near, 0 mid), 0 of 8192 pieces drawn\nglass deck: none near\npeople: 231 up within 1.5 km · neighbourhood cache 0.00 MB · 8 figures (0 loading) · 31 stand-ins · 171 specks · 0 waiting for their look · handover holes 0, frames with holes 0 · figure levels made in 14 ms at most\nspecks: 11914 up on the land, 231 drawn nearer · list 1.5 s old, 19 lists, slowest 2024 ms\ndrones: 651 and 21 people in drone bodies (20 designs, built in 1326 ms) · 0 near · 6 coarse · 666 specks · handover holes 0, frames with holes 0\ntalk: 1 parties kept, 3 conversations; news heard here in 6 d: 2, latest flare--1 from sun after 8.2 min, 1 bubbles\nsquirrels: 92 within 250 m from 92 homes (0 getting ready, 0 away) · 0 figures (0 loading) · 92 specks · handover holes 0, frames with holes 0\ndeer: 46 within 2000 m from 5 homes (0 getting ready, 0 away) · 0 figures (0 loading) · 46 specks · handover holes 0, frames with holes 0\nbirds: 97 round the eye (14 wren, 18 pigeon, 5 lark, 12 thrush, 14 robin, 28 blackbird, 5 woodpecker, 1 owl; bodies built in 1395 ms) · flocks: 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 2500 starlings (360 in sight), 2500 starlings (2500 in sight) · 13 singing · 0 near · 7 coarse · 2950 specks · handover holes 0, frames with holes 0\nboats: 89, 5 under sail (3 designs, built in 1411 ms) · 0 near · 0 coarse · 89 specks · handover holes 0, frames with holes 0\ncapsule: idle (not built yet)\ncatches: 0\nθ 16.0°, s 13.46 of 34.91 km, ground 15.7 m, flying 11 m up, eyes ×1.94\nwind: 5.3 m/s from the wild end; boats under sail: 5 of 89; 254 residents crew them\nday 1, 11:54 (dawn at 06:00), sun 38% of the way to the port end, clouds 32%, clock ×1\noutside: not started\nphysics: 0 bodies, 1772 trunk pieces\nmemory by owner:\n  terrain tiles: 416 MB\n  people: 194 MB\n  drones: 29 MB\n  sound: 24 MB\n  player body: 18 MB\n  animals: 5 MB\n  boats: 2 MB\n  birds: 1 MB\n  talk: 0 MB\n  first light: 0 MB\nlast totals (MB): 1165 1196 1240 1045 1094 1145 1247 1283 1285 1297 1035 1059 1064 1068 1086",
+      "shaderReport": "shaders: 35 built in warm-up, 45 after (11 drawn late), worst block 14 ms, 0 violations, 2 built again alike\nbuilt 2× alike (2 after warm-up, 29 ms): activity prop (instanced)\nbuilt 2× alike (2 after warm-up, 21 ms): ShadowMaterial (instanced) of Mesh adaptive domestic fittings (near)<Shadow Map [ sunline key ]",
+      "shots": [
+        {
+          "file": "commonwear-near.png",
+          "ms": 362
+        },
+        {
+          "file": "commonwear-near2.png",
+          "ms": 336
+        },
+        {
+          "file": "commonwear-crowd.png",
+          "ms": 318
+        },
+        {
+          "file": "commonwear.png",
+          "ms": 325
+        }
+      ],
+      "totalMs": 74807,
+      "adapter": {
+        "vendor": "nvidia",
+        "architecture": "blackwell",
+        "device": "",
+        "description": "",
+        "fallback": false
+      },
+      "wgsl": {
+        "modules": 145,
+        "unique": 145,
+        "withMessages": []
+      },
+      "gpuErrors": [],
+      "pipelineErrors": [],
+      "deviceLost": null,
+      "console": [
+        "warning: THREE.TSL: Return statement used in an inline 'Fn()'. Define a layout struct to allow return values. Stack trace not available. Enable \"THREE.Node.captureStackTrace\" to capture stack traces.",
+        "warning: THREE.TSL: Return statement used in an inline 'Fn()'. Define a layout struct to allow return values. Stack trace not available. Enable \"THREE.Node.captureStackTrace\" to capture stack traces.",
+        "warning: using deprecated parameters for the initialization function; pass a single object instead",
+        "warning: memory 1094 MB of 2560 MB/3584 MB (desktop), heap 415 MB, terrain tiles 407 MB, people 195 MB, drones 29 MB, +1223 MB/min",
+        "warning: sound: 21.7 MB decoded, 3 beds, 4 calls · leaves-broad 0.31, birds-wood 0.30, wind-soft 0.21, air ×1.00, light 0.99, birds 0.35 · echo 0.5 s ×0.35 · 19 near, 1 hums, 4 cues · steps on stone (2) · moment -",
+        "warning: 38 fps, slowest frame 36 ms",
+        "warning: shaders 35 warm-up + 42 later · worst 14 ms · policy ok · 2 built again alike (shaders.repeats())",
+        "warning: terrain 405 tiles drawn (0 new last frame, 626 built so far), 275 MB in use, 626 cached (325 MB), 0 building · 8 bands, 47 roots of 4.4 km, 8 levels · 4 workers",
+        "warning: plants (plants/cells) full 1072/504, lite 3650/711, hull 31075/2013; 2332 tufts; 20797 stones and fallen wood; 1637 draws, 5212 cached (4.4 MB; shapes and atlases 21.0 MB), 12 planting, 20 forms",
+        "warning: landmarks: pavilion (far; 0.2 MB), hut (far; 0.0 MB)",
+        "warning: lift stair: 16 tiles drawn, 16 kept (4.9 MB), 0 building",
+        "warning: entrance courts: 237 tiles drawn, 326 kept (25.2 MB), 0 building",
+        "warning: river crossings: 233 tiles drawn, 324 kept (1.2 MB), 0 building",
+        "warning: grown halls: 221 tiles drawn, 308 kept (0.3 MB), 0 building",
+        "warning: harbours: 254 tiles drawn, 348 kept (0.2 MB), 0 building",
+        "warning: understorey: 0 tiles drawn, 0 kept (0.0 MB), 0 building",
+        "warning: home furniture: 0 homes (0 near, 0 mid), 0 of 8192 pieces drawn",
+        "warning: people: 231 up within 1.5 km · neighbourhood cache 0.00 MB · 8 figures (0 loading) · 31 stand-ins · 171 specks · 0 waiting for their look · handover holes 0, frames with holes 0 · figure levels made in 14 ms at most",
+        "warning: specks: 11885 up on the land, 231 drawn nearer · list 2.2 s old, 13 lists, slowest 2024 ms",
+        "warning: drones: 651 and 21 people in drone bodies (20 designs, built in 1326 ms) · 2 near · 4 coarse · 666 specks · handover holes 0, frames with holes 0",
+        "warning: talk: 1 parties kept, 3 conversations; news heard here in 6 d: 2, latest flare--1 from sun after 8.2 min, 1 bubbles",
+        "warning: squirrels: 89 within 250 m from 89 homes (0 getting ready, 0 away) · 0 figures (0 loading) · 89 specks · handover holes 0, frames with holes 0",
+        "warning: deer: 46 within 2000 m from 5 homes (0 getting ready, 0 away) · 0 figures (0 loading) · 46 specks · handover holes 0, frames with holes 0",
+        "warning: birds: 99 round the eye (14 wren, 18 pigeon, 6 lark, 14 thrush, 14 robin, 28 blackbird, 4 woodpecker, 1 owl; bodies built in 1395 ms) · flocks: 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 2500 starlings (360 in sight), 2500 starlings (2500 in sight) · 16 singing · 0 near · 3 coarse · 2956 specks · handover holes 0, frames with holes 0",
+        "warning: capsule: idle (not built yet)",
+        "warning: catches: 0",
+        "warning: θ 15.9°, s 13.48 of 34.91 km, ground 11.1 m, on foot, standing, gravity 1.00 g, eyes ×1.00",
+        "warning: memory by owner:",
+        "warning:   terrain tiles: 407 MB",
+        "warning:   people: 195 MB",
+        "warning:   drones: 29 MB",
+        "warning:   sound: 22 MB",
+        "warning:   player body: 18 MB",
+        "warning:   animals: 5 MB",
+        "warning:   boats: 2 MB",
+        "warning:   birds: 1 MB",
+        "warning:   talk: 0 MB",
+        "warning:   first light: 0 MB",
+        "warning: last totals (MB): 728 728 623 679 860 856 1096 1150 1060 1128 1165 1196 1240 1045 1094",
+        "warning: drawn uncompiled: \"ShadowMaterial (instanced) of Mesh adaptive domestic fittings (near)<Shadow Map [ sunline key ]\" (11 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial (instanced) of Mesh adaptive domestic fittings (mid)<Shadow Map [ sunline key ]\" (10 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial (instanced) of Mesh activity ball<people<Shadow Map [ sunline key ]\" (9 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial (instanced) of Mesh activity saw<people<Shadow Map [ sunline key ]\" (13 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial (instanced) of Mesh activity block<people<Shadow Map [ sunline key ]\" (13 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial (instanced) of Mesh activity axe<people<Shadow Map [ sunline key ]\" (13 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial (instanced) of Mesh activity bench<people<Shadow Map [ sunline key ]\" (11 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial (instanced) of Mesh airbag<guardians<Shadow Map [ sunline key ]\" (10 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial of SkinnedMesh hair-bob-curled<actors-figure<Shadow Map [ sunline key ]\" (1 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial of SkinnedMesh shift-dress<actors-figure<Shadow Map [ sunline key ]\" (12 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial of SkinnedMesh body<actors-figure<Shadow Map [ sunline key ]\" (10 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial of SkinnedMesh stockings<actors-figure<Shadow Map [ sunline key ]\" (1 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial of SkinnedMesh future-halo<actors-figure<people\" (1 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial of SkinnedMesh future-mantle<actors-figure<people\" (1 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial of SkinnedMesh robot-glow<actors-figure<people\" (1 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial of SkinnedMesh beard<actors-figure<people\" (1 ms)",
+        "warning: memory 1285 MB of 2560 MB/3584 MB (desktop), heap 596 MB, terrain tiles 416 MB, people 194 MB, drones 29 MB, +1250 MB/min",
+        "warning: sound: 23.7 MB decoded, 4 beds, 4 calls · leaves-broad 0.37, birds-wood 0.30, wind-soft 0.21, wind-open 0.10, air ×1.00, light 0.99, birds 0.35 · 16 near, 2 hums, 0 cues · steps on stone (2) · moment -",
+        "warning: 43 fps, slowest frame 36 ms",
+        "warning: shaders 35 warm-up + 45 later · worst 14 ms · policy ok · 2 built again alike (shaders.repeats())",
+        "warning: terrain 417 tiles drawn (0 new last frame, 642 built so far), 283 MB in use, 642 cached (333 MB), 0 building · 8 bands, 47 roots of 4.4 km, 8 levels · 4 workers",
+        "warning: plants (plants/cells) full 1059/505, lite 3636/714, hull 31421/2035; 2926 tufts; 22091 stones and fallen wood; 1642 draws, 5460 cached (4.6 MB; shapes and atlases 21.0 MB), 0 planting, 20 forms",
+        "warning: landmarks: pavilion (far; 0.2 MB), hut (far; 0.0 MB)",
+        "warning: lift stair: 16 tiles drawn, 16 kept (4.9 MB), 0 building",
+        "warning: entrance courts: 243 tiles drawn, 326 kept (25.2 MB), 0 building",
+        "warning: river crossings: 239 tiles drawn, 324 kept (1.2 MB), 0 building",
+        "warning: grown halls: 220 tiles drawn, 308 kept (0.3 MB), 0 building",
+        "warning: harbours: 254 tiles drawn, 348 kept (0.2 MB), 0 building",
+        "warning: understorey: 0 tiles drawn, 0 kept (0.0 MB), 0 building",
+        "warning: home furniture: 0 homes (0 near, 0 mid), 0 of 8192 pieces drawn",
+        "warning: people: 231 up within 1.5 km · neighbourhood cache 0.00 MB · 8 figures (0 loading) · 31 stand-ins · 171 specks · 0 waiting for their look · handover holes 0, frames with holes 0 · figure levels made in 14 ms at most",
+        "warning: specks: 11910 up on the land, 231 drawn nearer · list 1.9 s old, 16 lists, slowest 2024 ms",
+        "warning: drones: 651 and 21 people in drone bodies (20 designs, built in 1326 ms) · 0 near · 6 coarse · 666 specks · handover holes 0, frames with holes 0",
+        "warning: talk: 1 parties kept, 3 conversations; news heard here in 6 d: 2, latest flare--1 from sun after 8.2 min, 1 bubbles",
+        "warning: squirrels: 92 within 250 m from 92 homes (0 getting ready, 0 away) · 0 figures (0 loading) · 92 specks · handover holes 0, frames with holes 0",
+        "warning: deer: 46 within 2000 m from 5 homes (0 getting ready, 0 away) · 0 figures (0 loading) · 46 specks · handover holes 0, frames with holes 0",
+        "warning: birds: 97 round the eye (14 wren, 18 pigeon, 5 lark, 12 thrush, 14 robin, 28 blackbird, 5 woodpecker, 1 owl; bodies built in 1395 ms) · flocks: 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 2500 starlings (360 in sight), 2500 starlings (2500 in sight) · 11 singing · 0 near · 6 coarse · 2951 specks · handover holes 0, frames with holes 0",
+        "warning: capsule: idle (not built yet)",
+        "warning: catches: 0",
+        "warning: θ 16.0°, s 13.46 of 34.91 km, ground 15.7 m, flying 11 m up, eyes ×1.70",
+        "warning: memory by owner:",
+        "warning:   terrain tiles: 416 MB",
+        "warning:   people: 194 MB",
+        "warning:   drones: 29 MB",
+        "warning:   sound: 24 MB",
+        "warning:   player body: 18 MB",
+        "warning:   animals: 5 MB",
+        "warning:   boats: 2 MB",
+        "warning:   birds: 1 MB",
+        "warning:   talk: 0 MB",
+        "warning:   first light: 0 MB",
+        "warning: last totals (MB): 860 856 1096 1150 1060 1128 1165 1196 1240 1045 1094 1145 1247 1283 1285",
+        "warning: drawn uncompiled: \"ShadowMaterial (instanced) of Mesh adaptive domestic fittings (near)<Shadow Map [ sunline key ]\" (11 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial (instanced) of Mesh adaptive domestic fittings (mid)<Shadow Map [ sunline key ]\" (10 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial (instanced) of Mesh activity ball<people<Shadow Map [ sunline key ]\" (9 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial (instanced) of Mesh activity saw<people<Shadow Map [ sunline key ]\" (13 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial (instanced) of Mesh activity block<people<Shadow Map [ sunline key ]\" (13 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial (instanced) of Mesh activity axe<people<Shadow Map [ sunline key ]\" (13 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial (instanced) of Mesh activity bench<people<Shadow Map [ sunline key ]\" (11 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial (instanced) of Mesh airbag<guardians<Shadow Map [ sunline key ]\" (10 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial of SkinnedMesh hair-bob-curled<actors-figure<Shadow Map [ sunline key ]\" (1 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial of SkinnedMesh shift-dress<actors-figure<Shadow Map [ sunline key ]\" (12 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial of SkinnedMesh body<actors-figure<Shadow Map [ sunline key ]\" (10 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial of SkinnedMesh stockings<actors-figure<Shadow Map [ sunline key ]\" (1 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial of SkinnedMesh future-halo<actors-figure<people\" (1 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial of SkinnedMesh future-mantle<actors-figure<people\" (1 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial of SkinnedMesh robot-glow<actors-figure<people\" (1 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial of SkinnedMesh beard<actors-figure<people\" (1 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial of SkinnedMesh body<animal squirrel<squirrels\" (2 ms)",
+        "warning: HEAP commonwear\nnodes 2219937, reachable 383.6 MB, unreachable 0.0 MB; {\"usage\":{\"usedSize\":80474028,\"totalSize\":85565440,\"embedderHeapUsedSize\":7288320,\"backingStorageSize\":284275704},\"perf\":{\"usedJSHeapSize\":365781244,\"totalJSHeapSize\":370101240},\"snapshotMs\":4085}\nby node type: native 313.1 MB, object 25.3 MB, code 16.9 MB, array 15.7 MB, string 5.3 MB, number 4.2 MB, object shape 1.5 MB, closure 1.4 MB, concatenated string 0.2 MB, sliced string 0.0 MB, regexp 0.0 MB, symbol 0.0 MB, synthetic 0.0 MB\ntop classes (self size):\n  290.0 MB  ×19867  native:system / JSArrayBufferData\n  16.9 MB  ×137563  code:\n  11.4 MB  ×112758  array:(object elements)\n  10.9 MB  ×847  native:system / ExternalStringData\n  6.3 MB  ×240246  object:Object\n  5.3 MB  ×547554  string:\n  4.2 MB  ×475850  number:\n  4.0 MB  ×14193  array:\n  3.8 MB  ×77947  object:e\n  2.9 MB  ×20317  native:GPUBuffer\n  2.5 MB  ×30121  object:Lg\n  2.1 MB  ×137575  object:Array\n  2.1 MB  ×18868  native:ArrayBuffer\n  1.9 MB  ×1  native:system / CppGCManaged (WasmNativeModule)\n  1.5 MB  ×28532  object shape:\n  1.4 MB  ×25185  object:Float32Array\n  1.4 MB  ×28689  object:ArrayBuffer\n  1.1 MB  ×36051  native:system / PropertyArray\n  0.8 MB  ×12652  object:gI\n  0.6 MB  ×5499  native:system / WeakArrayList\n  0.6 MB  ×5303  native:Float32Array\n  0.6 MB  ×4215  object:pE\n  0.6 MB  ×12421  object:SL\n  0.6 MB  ×20716  closure:\n  0.5 MB  ×9816  object:ti\n  0.5 MB  ×3340  object:Ki\n  0.5 MB  ×5434  object:Pf\n  0.4 MB  ×7213  object:Int32Array\n  0.4 MB  ×1382  native:blink::NetworkResourcesData::ResourceData\n  0.4 MB  ×5908  native:system / FunctionTemplateInfo\n  0.4 MB  ×4225  native:GPUBindGroup\n  0.3 MB  ×272  array:(object properties)\n  0.3 MB  ×4303  object:fI\n  0.3 MB  ×4998  object:Float64Array\n  0.3 MB  ×5088  object:sI\n  0.2 MB  ×2391  object:as\n  0.2 MB  ×12197  object:WeakMap\n  0.2 MB  ×3092  object:Uint8Array\n  0.2 MB  ×2149  object:kf\n  0.2 MB  ×8791  concatenated string:\ntyped array data 290.0 MB, by the path that holds it (shortest retainers):\n  27.2 MB  ×1  now.context.t2.view.physics.R.KinematicCharacterController.context.u\n  8.9 MB  ×2  now.context.t2.view.animals.pack.base.runtime.basePositions\n  8.0 MB  ×1  72 / blink::ScriptStateProtectingContext.global_object.shaders.now.context.wI.source.data.data\n  8.0 MB  ×1  72 / blink::ScriptStateProtectingContext.global_object.shaders.now.context.TI.source.data.data\n  7.5 MB  ×20  now.context.t2.view.drones.drawn.design.body.index\n  6.1 MB  ×20  now.context.t2.view.drones.drawn.design.body.spin\n  5.3 MB  ×32  people.people.figure.figure.character.actor.lastDeltas.meshes.normals\n  5.3 MB  ×32  people.people.figure.figure.character.actor.lastDeltas.meshes.positions\n  5.1 MB  ×1  now.context.$M.parent.1 / part of key (_r @294771) -> value (H.103 / part of key (Hj @239403) -> value .geometry.index.array\n  5.0 MB  ×571  shaders.now.context.t2.view.plants.shapes.attributes.array\n  4.9 MB  ×8  view.people.people.figure.figure.character.shape.meshes.positions\n  4.9 MB  ×8  view.people.people.figure.figure.character.shape.meshes.normals\n  4.6 MB  ×20  now.context.t2.view.drones.drawn.design.body.positions\n  4.6 MB  ×20  now.context.t2.view.drones.drawn.design.body.normals\n  4.1 MB  ×37  context.t2.view.people.residents.human.runtime.targets.deltas\n  4.0 MB  ×1  72 / blink::ScriptStateProtectingContext.global_object.shaders.now.context.pH.source.data.data\n  3.6 MB  ×10  shaders.now.context.t2.view.animals.coats.looks.coat\n  3.4 MB  ×5  shaders.now.context.$M.parent.1 / part of key (_r @294771) -> value (H.6 / part of key (Hj @239403) -> value (p.attributes.array\n  3.4 MB  ×5  shaders.now.context.$M.parent.1 / part of key (_r @294771) -> value (H.220 / part of key (Hj @239403) -> value .attributes.array\n  3.1 MB  ×5  shaders.now.context.$M.parent.1 / part of key (_r @294771) -> value (H.214 / part of key (Hj @239403) -> value .attributes.array\n  3.0 MB  ×4  shaders.now.context.$M.parent.1 / part of key (_r @294771) -> value (H.398 / part of key (Hj @239403) -> value .attributes.array\n  3.0 MB  ×4  shaders.now.context.$M.parent.1 / part of key (_r @294771) -> value (H.229 / part of key (Hj @239403) -> value .attributes.array\n  2.9 MB  ×4  shaders.now.context.$M.parent.1 / part of key (_r @294771) -> value (H.217 / part of key (Hj @239403) -> value .attributes.array\n  2.7 MB  ×4  shaders.now.context.$M.parent.1 / part of key (_r @294771) -> value (H.1123 / part of key (Hj @239403) -> value.attributes.array\n  2.6 MB  ×146  context.t2.view.people.residents.human.runtime.targets.indices\n  2.6 MB  ×1  shaders.now.context.$M.parent.1 / part of key (_r @294771) -> value (H.446 / part of key (Hj @239403) -> value .vertexBuffers.array\n  2.6 MB  ×1  shaders.now.context.$M.parent.1 / part of key (_r @294771) -> value (H.1986 / part of key (Hj @239403) -> value.vertexBuffers.array\n  2.6 MB  ×1  shaders.now.context.$M.parent.1 / part of key (_r @294771) -> value (H.4191 / part of key (Hj @239403) -> value.vertexBuffers.array\n  2.6 MB  ×1  shaders.now.context.$M.parent.1 / part of key (_r @294771) -> value (H.220 / part of key (Hj @239403) -> value .vertexBuffers.array\n  2.6 MB  ×1  shaders.now.context.$M.parent.1 / part of key (_r @294771) -> value (H.1342 / part of key (Hj @239403) -> value.vertexBuffers.array\n  2.6 MB  ×1  shaders.now.context.$M.parent.1 / part of key (_r @294771) -> value (H.2043 / part of key (Hj @239403) -> value.vertexBuffers.array\n  2.6 MB  ×1  shaders.now.context.$M.parent.1 / part of key (_r @294771) -> value (H.2581 / part of key (Hj @239403) -> value.vertexBuffers.array\n  2.6 MB  ×1  shaders.now.context.$M.parent.1 / part of key (_r @294771) -> value (H.3129 / part of key (Hj @239403) -> value.vertexBuffers.array\n  2.6 MB  ×1  shaders.now.context.$M.parent.1 / part of key (_r @294771) -> value (H.296 / part of key (Hj @239403) -> value .vertexBuffers.array\n  2.5 MB  ×10  people.people.figure.figure.character.human.robotParts.parts.joints\n  2.1 MB  ×3  shaders.now.context.$M.parent.1 / part of key (_r @294771) -> value (H.446 / part of key (Hj @239403) -> value .attributes.array\n  2.1 MB  ×3  shaders.now.context.$M.parent.1 / part of key (_r @294771) -> value (H.1986 / part of key (Hj @239403) -> value.attributes.array\n  2.1 MB  ×3  shaders.now.context.$M.parent.1 / part of key (_r @294771) -> value (H.296 / part of key (Hj @239403) -> value .attributes.array\n  2.1 MB  ×3  shaders.now.context.$M.parent.1 / part of key (_r @294771) -> value (H.2751 / part of key (Hj @239403) -> value.attributes.array\n  2.1 MB  ×3  shaders.now.context.$M.parent.1 / part of key (_r @294771) -> value (H.1265 / part of key (Hj @239403) -> value.attributes.array\ndominator tree (retained ≥ 4 MB):\n383.6 MB  .[1]  synthetic \"(GC roots)\"\n  96.6 MB  (via object \"system / Context / scope @225069\").this  object \"e\"\n    38.3 MB  .people  object \"Mq\"\n      36.7 MB  .people  object \"Map\"\n        36.7 MB  .table  array \"\"\n          6.0 MB  .365  object \"Object\"\n            6.0 MB  .figure  object \"Object\"\n              6.0 MB  .figure  object \"e\"\n                5.7 MB  .character  object \"e\"\n          5.7 MB  .350  object \"Object\"\n            5.7 MB  .figure  object \"Object\"\n              5.7 MB  .figure  object \"e\"\n                5.6 MB  .character  object \"e\"\n          4.3 MB  .356  object \"Object\"\n            4.3 MB  .figure  object \"Object\"\n              4.3 MB  .figure  object \"e\"\n                4.0 MB  .character  object \"e\"\n          4.2 MB  .359  object \"Object\"\n            4.2 MB  .figure  object \"Object\"\n              4.2 MB  .figure  object \"e\"\n          4.2 MB  .368  object \"Object\"\n            4.2 MB  .figure  object \"Object\"\n              4.2 MB  .figure  object \"e\"\n          4.1 MB  .347  object \"Object\"\n            4.1 MB  .figure  object \"Object\"\n              4.1 MB  .figure  object \"e\"\n                4.0 MB  .character  object \"e\"\n          4.0 MB  .362  object \"Object\"\n            4.0 MB  .figure  object \"Object\"\n              4.0 MB  .figure  object \"e\"\n          4.0 MB  .371  object \"Object\"\n            4.0 MB  .figure  object \"Object\"\n              4.0 MB  .figure  object \"e\"\n    29.4 MB  .drones  object \"oJ\"\n      29.1 MB  .drawn  object \"Array\"\n    15.3 MB  .plants  object \"_G\"\n      6.2 MB  .shapes  object \"Map\"\n        6.2 MB  .table  array \"\"\n    4.9 MB  .animals  object \"Array\"\n    4.1 MB  .figure  object \"e\"\n      4.0 MB  .character  object \"e\"\n  29.4 MB  (via closure \"\").context  object \"system / Context / scope @858367\"\n    27.2 MB  (via object \"Memory\").[2]  object \"ArrayBuffer\"\n      27.2 MB  .backing_store  native \"system / JSArrayBufferData\"  (self 27.2 MB)\n  8.8 MB  (via object \"e\").runtime  object \"e\"\n    6.7 MB  .targets  object \"Map\"\n      6.7 MB  .table  array \"\"\n  8.0 MB  (via object \"system / Context / scope @258523\").wI  object \"Pn\"\n    8.0 MB  .source  object \"En\"\n      8.0 MB  .data  object \"Object\"\n        8.0 MB  .data  native \"Uint8Array\"\n          8.0 MB  .buffer  native \"ArrayBuffer\"\n            8.0 MB  .backing_store  native \"system / JSArrayBufferData\"  (self 8.0 MB)\n  8.0 MB  (via object \"system / Context / scope @258523\").TI  object \"Pn\"\n    8.0 MB  .source  object \"En\"\n      8.0 MB  .data  object \"Object\"\n        8.0 MB  .data  native \"Uint8Array\"\n          8.0 MB  .buffer  native \"ArrayBuffer\"\n            8.0 MB  .backing_store  native \"system / JSArrayBufferData\"  (self 8.0 MB)\n  5.7 MB  (via object \"Promise\").reactions_or_result  object \"e\"\n    5.0 MB  (via object \"Uint32Array\").buffer  object \"ArrayBuffer\"\n      5.0 MB  .backing_store  native \"system / JSArrayBufferData\"  (self 5.0 MB)\n  5.1 MB  (via object \"Uint32Array\").buffer  object \"ArrayBuffer\"\n    5.1 MB  .backing_store  native \"system / JSArrayBufferData\"  (self 5.1 MB)\n  4.0 MB  (via object \"system / Context / scope @258523\").pH  object \"oa\"\n    4.0 MB  .source  object \"En\"\n      4.0 MB  .data  object \"Object\"\n        4.0 MB  .data  native \"Uint8Array\"\n          4.0 MB  .buffer  native \"ArrayBuffer\"\n            4.0 MB  .backing_store  native \"system / JSArrayBufferData\"  (self 4.0 MB)"
+      ]
+    },
+    {
+      "view": "court-seat",
+      "about": "two hours into the morning, 6 m from the nearest party on a court's light-well seat (-near), 20 s on (-near2), then flown 3 m up and back (-above); logs the people lines",
+      "query": "view=inside",
+      "ok": true,
+      "failure": null,
+      "readyMs": 20026,
+      "debugInfo": "Solarpolis v0.191\nhabitat R 4000 m, L 30000 m, seed 1, 0.47 rpm\nmemory 1274 MB of 2560 MB/3584 MB (desktop), heap 589 MB, terrain tiles 412 MB, people 194 MB, drones 29 MB, +1034 MB/min\nsound: 24.0 MB decoded, 4 beds, 0 calls · leaves-broad 0.33, birds-wood 0.30, wind-soft 0.21, wind-open 0.05, air ×1.00, light 0.99, birds 0.35 · echo 0.5 s ×0.35 · 21 near, 2 hums, 2 cues · steps on stone (2) · moment -\n44 fps, slowest frame 36 ms\narrival: title not yet · not started\narrival's loading: 0.2 interior renderer … · 0.8 interior renderer ✓ · 0.8 interior warm-up … · 17.6 interior warm-up ✓ · 17.6 interior build … · 17.6 human pack … · 17.6 squirrel pack … · 17.6 deer pack … · 17.7 deer pack ✓ · 17.7 squirrel pack ✓ · 18.0 human pack ✓ · 19.6 interior build ✓ · 19.6 player body … · 20.5 player body ✓ · 20.5 player body shaders … · 22.2 player body shaders ✓\nshaders 35 warm-up + 42 later · worst 18 ms · policy ok · 2 built again alike (shaders.repeats())\nterrain 408 tiles drawn (0 new last frame, 634 built so far), 277 MB in use, 634 cached (329 MB), 0 building · 8 bands, 47 roots of 4.4 km, 8 levels · 4 workers\nplants (plants/cells) full 1033/495, lite 3586/703, hull 31334/2025; 2376 tufts; 20765 stones and fallen wood; 1621 draws, 5318 cached (4.4 MB; shapes and atlases 21.0 MB), 0 planting, 20 forms\nplant LOD: 0 holes (0 frames with holes so far), 7 levels standing in for a finer one being planted, 0 far cells coming in\nlandmarks: pavilion (far; 0.2 MB), hut (far; 0.0 MB)\nlift stair: 16 tiles drawn, 16 kept (4.9 MB), 0 building\nentrance courts: 243 tiles drawn, 330 kept (25.5 MB), 0 building\nriver crossings: 245 tiles drawn, 332 kept (1.3 MB), 0 building\ngrown halls: 224 tiles drawn, 312 kept (0.3 MB), 0 building\nharbours: 260 tiles drawn, 356 kept (0.2 MB), 0 building\nunderstorey: 0 tiles drawn, 0 kept (0.0 MB), 0 building\nhome furniture: 0 homes (0 near, 0 mid), 0 of 8192 pieces drawn\nglass deck: none near\npeople: 227 up within 1.5 km · neighbourhood cache 0.00 MB · 8 figures (0 loading) · 31 stand-ins · 167 specks · 0 waiting for their look · handover holes 0, frames with holes 0 · figure levels made in 15 ms at most\nspecks: 11911 up on the land, 227 drawn nearer · list 1.9 s old, 20 lists, slowest 1909 ms\ndrones: 651 and 21 people in drone bodies (20 designs, built in 1259 ms) · 0 near · 6 coarse · 666 specks · handover holes 0, frames with holes 0\ntalk: 1 parties kept, 3 conversations; news heard here in 6 d: 2, latest flare--1 from sun after 8.2 min, 1 bubbles\nsquirrels: 88 within 250 m from 88 homes (0 getting ready, 0 away) · 0 figures (0 loading) · 88 specks · handover holes 0, frames with holes 0\ndeer: 46 within 2000 m from 5 homes (0 getting ready, 0 away) · 0 figures (0 loading) · 46 specks · handover holes 0, frames with holes 0\nbirds: 97 round the eye (14 wren, 18 pigeon, 5 lark, 14 thrush, 14 robin, 27 blackbird, 4 woodpecker, 1 owl; bodies built in 1319 ms) · flocks: 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 2500 starlings (360 in sight), 2500 starlings (2500 in sight) · 10 singing · 0 near · 3 coarse · 2954 specks · handover holes 0, frames with holes 0\nboats: 89, 5 under sail (3 designs, built in 1341 ms) · 0 near · 0 coarse · 89 specks · handover holes 0, frames with holes 0\ncapsule: idle (not built yet)\ncatches: 0\nθ 15.9°, s 13.47 of 34.91 km, ground 11.1 m, flying 8 m up, eyes ×1.00\nwind: 4.7 m/s from the wild end; boats under sail: 5 of 89; 254 residents crew them\nday 1, 11:54 (dawn at 06:00), sun 38% of the way to the port end, clouds 32%, clock ×1\noutside: not started\nphysics: 0 bodies, 1770 trunk pieces",
+      "shaderReport": "shaders: 35 built in warm-up, 42 after (10 drawn late), worst block 18 ms, 0 violations, 2 built again alike\nbuilt 2× alike (2 after warm-up, 31 ms): activity prop (instanced)\nbuilt 2× alike (2 after warm-up, 20 ms): ShadowMaterial (instanced) of Mesh adaptive domestic fittings (near)<Shadow Map [ sunline key ]",
+      "shots": [
+        {
+          "file": "court-seat-near.png",
+          "ms": 333
+        },
+        {
+          "file": "court-seat-near2.png",
+          "ms": 338
+        },
+        {
+          "file": "court-seat-above.png",
+          "ms": 367
+        },
+        {
+          "file": "court-seat.png",
+          "ms": 369
+        }
+      ],
+      "totalMs": 74222,
+      "adapter": {
+        "vendor": "nvidia",
+        "architecture": "blackwell",
+        "device": "",
+        "description": "",
+        "fallback": false
+      },
+      "wgsl": {
+        "modules": 139,
+        "unique": 139,
+        "withMessages": []
+      },
+      "gpuErrors": [],
+      "pipelineErrors": [],
+      "deviceLost": null,
+      "console": [
+        "warning: THREE.TSL: Return statement used in an inline 'Fn()'. Define a layout struct to allow return values. Stack trace not available. Enable \"THREE.Node.captureStackTrace\" to capture stack traces.",
+        "warning: THREE.TSL: Return statement used in an inline 'Fn()'. Define a layout struct to allow return values. Stack trace not available. Enable \"THREE.Node.captureStackTrace\" to capture stack traces.",
+        "warning: using deprecated parameters for the initialization function; pass a single object instead",
+        "warning: memory 1080 MB of 2560 MB/3584 MB (desktop), heap 410 MB, terrain tiles 408 MB, people 184 MB, drones 29 MB, +951 MB/min",
+        "warning: sound: 22.7 MB decoded, 3 beds, 5 calls · leaves-broad 0.31, birds-wood 0.30, wind-soft 0.21, air ×1.00, light 0.99, birds 0.35 · echo 0.5 s ×0.35 · 20 near, 2 hums, 4 cues · steps on stone (2) · moment -",
+        "warning: 41 fps, slowest frame 36 ms",
+        "warning: shaders 35 warm-up + 42 later · worst 18 ms · policy ok · 2 built again alike (shaders.repeats())",
+        "warning: terrain 405 tiles drawn (0 new last frame, 626 built so far), 275 MB in use, 626 cached (325 MB), 0 building · 8 bands, 47 roots of 4.4 km, 8 levels · 4 workers",
+        "warning: plants (plants/cells) full 985/498, lite 3604/709, hull 30930/2017; 2108 tufts; 20858 stones and fallen wood; 1609 draws, 5219 cached (4.3 MB; shapes and atlases 21.0 MB), 0 planting, 20 forms",
+        "warning: landmarks: pavilion (far; 0.2 MB), hut (far; 0.0 MB)",
+        "warning: lift stair: 16 tiles drawn, 16 kept (4.9 MB), 0 building",
+        "warning: entrance courts: 240 tiles drawn, 330 kept (25.5 MB), 0 building",
+        "warning: river crossings: 239 tiles drawn, 332 kept (1.3 MB), 0 building",
+        "warning: grown halls: 221 tiles drawn, 312 kept (0.3 MB), 0 building",
+        "warning: harbours: 260 tiles drawn, 356 kept (0.2 MB), 0 building",
+        "warning: understorey: 0 tiles drawn, 0 kept (0.0 MB), 0 building",
+        "warning: home furniture: 0 homes (0 near, 0 mid), 0 of 8192 pieces drawn",
+        "warning: people: 230 up within 1.5 km · neighbourhood cache 0.00 MB · 8 figures (0 loading) · 31 stand-ins · 170 specks · 0 waiting for their look · handover holes 0, frames with holes 0 · figure levels made in 15 ms at most",
+        "warning: specks: 11917 up on the land, 230 drawn nearer · list 1.2 s old, 18 lists, slowest 1909 ms",
+        "warning: drones: 651 and 21 people in drone bodies (20 designs, built in 1259 ms) · 3 near · 3 coarse · 666 specks · handover holes 0, frames with holes 0",
+        "warning: talk: 1 parties kept, 3 conversations; news heard here in 6 d: 2, latest flare--1 from sun after 8.2 min, 0 bubbles",
+        "warning: squirrels: 88 within 250 m from 88 homes (0 getting ready, 0 away) · 0 figures (0 loading) · 88 specks · handover holes 0, frames with holes 0",
+        "warning: deer: 46 within 2000 m from 5 homes (0 getting ready, 0 away) · 0 figures (0 loading) · 46 specks · handover holes 0, frames with holes 0",
+        "warning: birds: 97 round the eye (14 wren, 18 pigeon, 4 lark, 14 thrush, 14 robin, 28 blackbird, 4 woodpecker, 1 owl; bodies built in 1319 ms) · flocks: 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 8 swallows (0 in sight), 2500 starlings (360 in sight), 2500 starlings (2500 in sight) · 14 singing · 0 near · 4 coarse · 2953 specks · handover holes 0, frames with holes 0",
+        "warning: capsule: idle (not built yet)",
+        "warning: catches: 0",
+        "warning: θ 15.8°, s 13.48 of 34.91 km, ground 11.1 m, on foot, standing, gravity 1.00 g, eyes ×1.00",
+        "warning: drawn uncompiled: \"ShadowMaterial (instanced) of Mesh adaptive domestic fittings (near)<Shadow Map [ sunline key ]\" (9 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial (instanced) of Mesh adaptive domestic fittings (mid)<Shadow Map [ sunline key ]\" (12 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial (instanced) of Mesh activity ball<people<Shadow Map [ sunline key ]\" (12 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial (instanced) of Mesh activity saw<people<Shadow Map [ sunline key ]\" (14 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial (instanced) of Mesh activity block<people<Shadow Map [ sunline key ]\" (11 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial (instanced) of Mesh activity axe<people<Shadow Map [ sunline key ]\" (13 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial (instanced) of Mesh activity bench<people<Shadow Map [ sunline key ]\" (9 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial (instanced) of Mesh airbag<guardians<Shadow Map [ sunline key ]\" (11 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial of SkinnedMesh hair-bob-curled<actors-figure<Shadow Map [ sunline key ]\" (1 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial of SkinnedMesh shift-dress<actors-figure<Shadow Map [ sunline key ]\" (12 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial of SkinnedMesh body<actors-figure<Shadow Map [ sunline key ]\" (12 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial of SkinnedMesh stockings<actors-figure<Shadow Map [ sunline key ]\" (1 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial of SkinnedMesh future-bolero<actors-figure<people\" (1 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial of SkinnedMesh socks<actors-figure<people\" (1 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial of SkinnedMesh robot-glow<actors-figure<people\" (1 ms)",
+        "warning: drawn uncompiled: \"ShadowMaterial of SkinnedMesh beard<actors-figure<people\" (1 ms)"
+      ]
+    },
+    {
+      "view": "memory-inside",
+      "about": "up the wild endcap and flying toward the sunline, looking around, then a heap snapshot",
+      "query": "view=inside",
+      "ok": true,
+      "failure": null,
+      "readyMs": 19897,
+      "debugInfo": "Solarpolis v0.191\nhabitat R 4000 m, L 30000 m, seed 1, 0.47 rpm\nmemory 805 MB of 2560 MB/3584 MB (desktop), heap 240 MB, terrain tiles 482 MB, drones 29 MB, sound 22 MB, +681 MB/min\nsound: 22.3 MB decoded, 6 beds, 0 calls · wind-high 0.74, wind-open 0.33, falls 0.13, leaves-conifer 0.12, birds-wood 0.06, air ×0.92, light 0.62, birds 0.35 · 0 near, 0 hums, 0 cues · steps on litter (3) · moment -\n57 fps, slowest frame 19 ms\narrival: title not yet · not started\narrival's loading: 0.2 interior renderer … · 0.8 interior renderer ✓ · 0.8 interior warm-up … · 17.4 interior warm-up ✓ · 17.4 interior build … · 17.5 human pack … · 17.5 squirrel pack … · 17.5 deer pack … · 17.6 squirrel pack ✓ · 17.8 human pack ✓ · 17.8 deer pack ✓ · 19.5 interior build ✓ · 19.5 player body … · 20.3 player body ✓ · 20.3 player body shaders … · 22.2 player body shaders ✓\nshaders 35 warm-up + 28 later · worst 14 ms · policy ok · 2 built again alike (shaders.repeats())\nterrain 416 tiles drawn (0 new last frame, 1209 built so far), 301 MB in use, coarser ×1.1 to stay in budget, 710 cached (384 MB), 0 building · 8 bands, 47 roots of 4.4 km, 8 levels · 4 workers\nplants (plants/cells) full 16/356, lite 61/688, hull 15319/1995; 0 tufts; 319718 stones and fallen wood; 656 draws, 6000 cached (21.2 MB; shapes and atlases 21.0 MB), 0 planting, 20 forms\nplant LOD: 0 holes (0 frames with holes so far), 3 levels standing in for a finer one being planted, 0 far cells coming in\nlandmarks: pavilion (far; 0.2 MB), hut (far; 0.0 MB)\nlift stair: 16 tiles drawn, 16 kept (4.9 MB), 0 building\nentrance courts: 56 tiles drawn, 304 kept (24.5 MB), 0 building\nriver crossings: 48 tiles drawn, 300 kept (1.2 MB), 0 building\ngrown halls: 48 tiles drawn, 276 kept (0.3 MB), 0 building\nharbours: 48 tiles drawn, 324 kept (0.2 MB), 0 building\nunderstorey: 0 tiles drawn, 0 kept (0.0 MB), 0 building\nhome furniture: 0 homes (0 near, 0 mid), 0 of 8192 pieces drawn\nglass deck: none near\npeople: 0 up within 1.5 km · neighbourhood cache 0.00 MB · 0 figures (0 loading) · 0 stand-ins · 0 specks · 0 waiting for their look · handover holes 0, frames with holes 0 · figure levels made in 0 ms at most\nspecks: 6829 up on the land, 0 drawn nearer · list 1.4 s old, 16 lists, slowest 1956 ms\ndrones: 651 and 0 people in drone bodies (20 designs, built in 1245 ms) · 0 near · 0 coarse · 651 specks · handover holes 0, frames with holes 0\ntalk: 0 parties kept, 0 conversations; news heard here in 6 d: 2, latest flare--1 from sun after 8.2 min, 0 bubbles\nsquirrels: 4 within 250 m from 4 homes (0 getting ready, 0 away) · 0 figures (0 loading) · 4 specks · handover holes 0, frames with holes 0\ndeer: 0 within 2000 m from 0 homes (0 getting ready, 0 away) · 0 figures (0 loading) · 0 specks · handover holes 0, frames with holes 0\nbirds: 11 round the eye (1 blackbird, 3 wren, 1 woodpecker, 4 lark, 1 pigeon, 1 owl; bodies built in 1303 ms) · flocks: 2500 starlings (1540 in sight), 2500 starlings (2060 in sight) · 0 singing · 0 near · 0 coarse · 3611 specks · handover holes 0, frames with holes 0\nboats: 89, 3 under sail (3 designs, built in 1327 ms) · 0 near · 0 coarse · 89 specks · handover holes 0, frames with holes 0\ncapsule: idle (not built yet)\ncatches: 0\nθ 17.2°, s 2.31 of 34.91 km, ground 2.8 m, flying 38 m up, eyes ×1.00\nwind: 7.3 m/s from the wild end; boats under sail: 3 of 89; 254 residents crew them\nday 1, 09:54 (dawn at 06:00), sun 25% of the way to the port end, clouds 32%, clock ×1\noutside: not started\nphysics: 0 bodies, 0 trunk pieces\nmemory by owner:\n  terrain tiles: 482 MB\n  drones: 29 MB\n  sound: 22 MB\n  player body: 18 MB\n  people: 6 MB\n  animals: 5 MB\n  boats: 2 MB\n  birds: 1 MB\n  talk: 0 MB\n  first light: 0 MB\nlast totals (MB): 842 889 847 883 882 926 932 958 962 990 997 790 807 806 805",
+      "shaderReport": "shaders: 35 built in warm-up, 28 after (10 drawn late), worst block 14 ms, 0 violations, 2 built again alike\nbuilt 2× alike (2 after warm-up, 30 ms): activity prop (instanced)\nbuilt 2× alike (2 after warm-up, 18 ms): ShadowMaterial (instanced) of Mesh adaptive domestic fittings (near)<Shadow Map [ sunline key ]",
+      "shots": [
+        {
+          "file": "memory-inside-before-heap.png",
+          "ms": 233
+        },
+        {
+          "file": "memory-inside.png",
+          "ms": 257
+        }
+      ],
+      "totalMs": 69704,
+      "adapter": {
+        "vendor": "nvidia",
+        "architecture": "blackwell",
+        "device": "",
+        "description": "",
+        "fallback": false
+      },
+      "wgsl": {
+        "modules": 112,
+        "unique": 112,
+        "withMessages": []
+      },
+      "gpuErrors": [],
+      "pipelineErrors": [],
+      "deviceLost": null,
+      "console": [
+        "warning: THREE.TSL: Return statement used in an inline 'Fn()'. Define a layout struct to allow return values. Stack trace not available. Enable \"THREE.Node.captureStackTrace\" to capture stack traces.",
+        "warning: THREE.TSL: Return statement used in an inline 'Fn()'. Define a layout struct to allow return values. Stack trace not available. Enable \"THREE.Node.captureStackTrace\" to capture stack traces.",
+        "warning: using deprecated parameters for the initialization function; pass a single object instead",
+        "warning: HEAP inside\nnodes 1953712, reachable 260.7 MB, unreachable 0.0 MB; {\"usage\":{\"usedSize\":69619820,\"totalSize\":72720384,\"embedderHeapUsedSize\":6820768,\"backingStorageSize\":165917797},\"perf\":{\"usedJSHeapSize\":235216705,\"totalJSHeapSize\":238638181},\"snapshotMs\":3506}\nby node type: native 199.3 MB, object 21.8 MB, code 15.0 MB, array 13.1 MB, string 5.0 MB, number 3.7 MB, object shape 1.4 MB, closure 1.2 MB, concatenated string 0.1 MB, sliced string 0.0 MB, regexp 0.0 MB, symbol 0.0 MB, synthetic 0.0 MB\ntop classes (self size):\n  177.5 MB  ×14827  native:system / JSArrayBufferData\n  15.0 MB  ×129349  code:\n  10.4 MB  ×785  native:system / ExternalStringData\n  9.1 MB  ×93637  array:(object elements)\n  5.3 MB  ×202350  object:Object\n  5.0 MB  ×495648  string:\n  3.7 MB  ×429235  number:\n  3.6 MB  ×11207  array:\n  3.5 MB  ×62683  object:e\n  2.7 MB  ×18484  native:GPUBuffer\n  2.5 MB  ×29661  object:Lg\n  2.1 MB  ×19096  native:ArrayBuffer\n  1.9 MB  ×1  native:system / CppGCManaged (WasmNativeModule)\n  1.8 MB  ×116629  object:Array\n  1.4 MB  ×27216  object shape:\n  1.4 MB  ×24750  object:Float32Array\n  1.3 MB  ×25507  object:ArrayBuffer\n  0.9 MB  ×31318  native:system / PropertyArray\n  0.6 MB  ×9290  object:gI\n  0.5 MB  ×9918  object:ti\n  0.5 MB  ×4501  native:Float32Array\n  0.5 MB  ×5089  native:system / WeakArrayList\n  0.5 MB  ×3436  object:pE\n  0.5 MB  ×16784  closure:\n  0.4 MB  ×5234  object:Pf\n  0.4 MB  ×9249  object:SL\n  0.4 MB  ×2757  object:Ki\n  0.4 MB  ×7173  object:Int32Array\n  0.4 MB  ×1429  native:blink::NetworkResourcesData::ResourceData\n  0.4 MB  ×5883  native:system / FunctionTemplateInfo\n  0.3 MB  ×231  array:(object properties)\n  0.3 MB  ×3446  native:GPUBindGroup\n  0.2 MB  ×3509  object:fI\n  0.2 MB  ×4294  object:sI\n  0.2 MB  ×3386  object:Float64Array\n  0.2 MB  ×3112  object:Uint8Array\n  0.2 MB  ×1955  object:kf\n  0.2 MB  ×9887  object:WeakMap\n  0.2 MB  ×1714  object:as\n  0.1 MB  ×7597  concatenated string:\ntyped array data 177.5 MB, by the path that holds it (shortest retainers):\n  27.1 MB  ×1  now.context.t2.view.physics.R.KinematicCharacterController.context.u\n  8.9 MB  ×638  shaders.now.context.t2.view.plants.drawn.cell.instances\n  8.9 MB  ×2  now.context.t2.view.animals.pack.base.runtime.basePositions\n  8.0 MB  ×1  23 / blink::ScriptStateProtectingContext.global_object.shaders.now.context.wI.source.data.data\n  8.0 MB  ×1  23 / blink::ScriptStateProtectingContext.global_object.shaders.now.context.TI.source.data.data\n  7.5 MB  ×20  now.context.t2.view.drones.drawn.design.body.index\n  6.1 MB  ×20  now.context.t2.view.drones.drawn.design.body.spin\n  5.1 MB  ×1  now.context.$M.parent.48 / part of key (_r @350265) -> value (.30 / part of key (Hj @350269) -> value (.geometry.index.array\n  4.6 MB  ×20  now.context.t2.view.drones.drawn.design.body.positions\n  4.6 MB  ×20  now.context.t2.view.drones.drawn.design.body.normals\n  4.1 MB  ×37  context.t2.view.people.residents.human.runtime.targets.deltas\n  4.0 MB  ×1  23 / blink::ScriptStateProtectingContext.global_object.shaders.now.context.pH.source.data.data\n  3.6 MB  ×436  shaders.now.context.t2.view.plants.shapes.attributes.array\n  3.6 MB  ×10  shaders.now.context.t2.view.animals.coats.looks.coat\n  3.4 MB  ×5  shaders.now.context.$M.parent.48 / part of key (_r @350265) -> value (.275 / part of key (Hj @350269) -> value .attributes.array\n  2.6 MB  ×146  context.t2.view.people.residents.human.runtime.targets.indices\n  2.6 MB  ×1  shaders.now.context.$M.parent.48 / part of key (_r @350265) -> value (.275 / part of key (Hj @350269) -> value .vertexBuffers.array\n  2.0 MB  ×1  23 / blink::ScriptStateProtectingContext.global_object.shaders.now.context.dH.source.data.data\n  2.0 MB  ×1  23 / blink::ScriptStateProtectingContext.global_object.shaders.now.context.fH.source.data.data\n  1.7 MB  ×759  now.context.t2.view.plants.cache.built.cell.instances\n  1.5 MB  ×20  now.context.t2.view.drones.drawn.design.body.paint\n  1.4 MB  ×3442  global_object.shaders.now.context.yV.42 / part of key (oa @131361) -> value (.bindGroups.bindings._buffer\n  1.4 MB  ×1080  global_object.shaders.now.context.t2.view.people.residents.rise\n  1.3 MB  ×2  context.t2.view.figure.character.actor.rendered.stencil.weights\n  1.3 MB  ×2  context.t2.view.figure.character.actor.rendered.stencil.cols\n  1.2 MB  ×1  now.context.t2.view.figure.character.actor.rendered.indices\n  1.2 MB  ×3  shaders.now.context.t2.view.animals.coats.looks.dapple\n  1.1 MB  ×53  now.context.t2.view.figure.character.actor.rendered.joints\n  1.1 MB  ×31  shaders.now.context.t2.view.figure.animator.loaded.data\n  1.1 MB  ×1  now.context.$M.parent.48 / part of key (_r @350265) -> value (.275 / part of key (Hj @350269) -> value .geometry.index.array\n  1.1 MB  ×41  now.context.t2.view.figure.character.actor.rendered.weights\n  1.0 MB  ×1  global_object.shaders.now.context.K0.life.base.floor.data\n  1.0 MB  ×1  now.context.Kj.__proto__.context.Kl.source.data.data\n  0.8 MB  ×20  now.context.t2.view.drones.drawn.design.veil.index\n  0.8 MB  ×1  global_object.shaders.now.context.t2.view.physics.patch.index\n  0.8 MB  ×30  context.t2.view.people.residents.human.runtime.proxySkins.weights\n  0.8 MB  ×345  23 / blink::ScriptStateProtectingContext.global_object.shaders.now.context.Ep.1 / part of key (Object @1555331) -> val.days.start\n  0.7 MB  ×85  shaders.now.context.t2.view.plants.shapes.index.array\n  0.7 MB  ×4  context.t2.view.animals.pack.base.runtime.meshes.weights\n  0.7 MB  ×111  global_object.shaders.now.context.K0.habitat.13 / part of key (Object @1555331) -> va.byKey.legs\ndominator tree (retained ≥ 4 MB):\n260.7 MB  .[1]  synthetic \"(GC roots)\"\n  66.0 MB  (via object \"system / Context / scope @979191\").this  object \"e\"\n    29.4 MB  .drones  object \"oJ\"\n      29.1 MB  .drawn  object \"Array\"\n    21.9 MB  .plants  object \"_G\"\n      4.5 MB  .shapes  object \"Map\"\n        4.5 MB  .table  array \"\"\n    4.8 MB  .animals  object \"Array\"\n    4.2 MB  .figure  object \"e\"\n      4.0 MB  .character  object \"e\"\n  29.3 MB  (via closure \"numComputedCollisions\").context  object \"system / Context / scope @634047\"\n    27.1 MB  (via object \"DataView\").buffer  object \"ArrayBuffer\"\n      27.1 MB  .backing_store  native \"system / JSArrayBufferData\"  (self 27.1 MB)\n  8.3 MB  (via object \"e\").runtime  object \"e\"\n    6.7 MB  .targets  object \"Map\"\n      6.7 MB  .table  array \"\"\n  8.0 MB  (via object \"SL\")._texture  object \"Pn\"\n    8.0 MB  .source  object \"En\"\n      8.0 MB  .data  object \"Object\"\n        8.0 MB  .data  native \"Uint8Array\"\n          8.0 MB  .buffer  native \"ArrayBuffer\"\n            8.0 MB  .backing_store  native \"system / JSArrayBufferData\"  (self 8.0 MB)\n  8.0 MB  (via object \"SL\")._texture  object \"Pn\"\n    8.0 MB  .source  object \"En\"\n      8.0 MB  .data  object \"Object\"\n        8.0 MB  .data  native \"Uint8Array\"\n          8.0 MB  .buffer  native \"ArrayBuffer\"\n            8.0 MB  .backing_store  native \"system / JSArrayBufferData\"  (self 8.0 MB)\n  5.7 MB  (via object \"e\").runtime  object \"e\"\n    5.0 MB  (via object \"Float32Array\").buffer  object \"ArrayBuffer\"\n      5.0 MB  .backing_store  native \"system / JSArrayBufferData\"  (self 5.0 MB)\n  5.1 MB  (via object \"Float32Array\").buffer  object \"ArrayBuffer\"\n    5.1 MB  .backing_store  native \"system / JSArrayBufferData\"  (self 5.1 MB)\n  4.8 MB  (via array \"(object elements)\").1  object \"Object\"\n  4.4 MB  (via object \"e\").runtime  object \"e\"\n  4.0 MB  (via object \"SL\")._texture  object \"oa\"\n    4.0 MB  .source  object \"En\"\n      4.0 MB  .data  object \"Object\"\n        4.0 MB  .data  native \"Uint8Array\"\n          4.0 MB  .buffer  native \"ArrayBuffer\"\n            4.0 MB  .backing_store  native \"system / JSArrayBufferData\"  (self 4.0 MB)"
+      ]
+    }
+  ]
+}

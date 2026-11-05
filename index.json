@@ -1,5 +1,36 @@
 [
   {
+    "id": "20261105-000658-claude",
+    "request": "shots-req/claude/title,inside,outside,commonwear,court-seat,memory-inside",
+    "ref": "e894722643ee9a5b1d45e79bc9a147cd73af96d4",
+    "sha": "e894722643ee9a5b1d45e79bc9a147cd73af96d4",
+    "ok": true,
+    "failure": null,
+    "views": [
+      "title",
+      "inside",
+      "outside",
+      "commonwear",
+      "court-seat",
+      "memory-inside"
+    ],
+    "files": [
+      "title.png",
+      "inside.png",
+      "outside.png",
+      "commonwear-near.png",
+      "commonwear-near2.png",
+      "commonwear-crowd.png",
+      "commonwear.png",
+      "court-seat-near.png",
+      "court-seat-near2.png",
+      "court-seat-above.png",
+      "court-seat.png",
+      "memory-inside-before-heap.png",
+      "memory-inside.png"
+    ]
+  },
+  {
     "id": "20261105-000542-claude",
     "request": "shots-req/claude/default,commonwear,court-seat",
     "ref": "e894722643ee9a5b1d45e79bc9a147cd73af96d4",
@@ -388,40 +419,6 @@
       "cabin-mid.png",
       "cabin-late.png",
       "cabin.png"
-    ]
-  },
-  {
-    "id": "20261023-214007-arrival",
-    "request": "shots-req/arrival/cabin,docking,arrival",
-    "ref": "5c897e8a25bdfd2d0f9d4a0b36001f776a149066",
-    "sha": "5c897e8a25bdfd2d0f9d4a0b36001f776a149066",
-    "ok": true,
-    "failure": null,
-    "views": [
-      "cabin",
-      "docking",
-      "arrival"
-    ],
-    "files": [
-      "cabin-in.png",
-      "cabin-mid.png",
-      "cabin-late.png",
-      "cabin.png",
-      "docking-corridor.png",
-      "docking-open.png",
-      "docking-clamps.png",
-      "docking-green.png",
-      "docking-held.png",
-      "docking.png",
-      "arrival-corridor.png",
-      "arrival-cabin.png",
-      "arrival-berth.png",
-      "arrival-bore.png",
-      "arrival-sleeve.png",
-      "arrival-welcome.png",
-      "arrival-reveal.png",
-      "arrival-terrace.png",
-      "arrival.png"
     ]
   }
 ]
