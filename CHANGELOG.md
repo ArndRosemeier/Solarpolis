@@ -2,6 +2,12 @@
 
 Every merge to main is the next version, v0.001 and up by 0.001. The notes come from `changes/` (see changes/README.md); never edit this file by hand.
 
+## v0.192 — Newest Actors and AssetGenerator
+
+- People are drawn with Actors 0.33: fuller hair and beards, livelier skin up close (a flush on the cheeks, pores, ears that glow in backlight), clothes that no longer show what is under them, steadier figures far from the middle of the habitat, and cheaper crowds.
+- Residents only wear and look like what fits 3026: nothing medieval, antique or from a fairy tale.
+- The shared AssetGenerator packages are updated to their newest version.
+
 ## v0.191 — Steady shadows on the Threshold and in a capsule
 
 - Shadows no longer flicker round the arrival terrace or while you ride a capsule. Near the axis every small step turned the sun's shadow map a little, so every shadow edge was drawn anew each frame; the map now turns only in small held steps. In a moving capsule the map now moves with you instead of jumping from one land texel to the next.
